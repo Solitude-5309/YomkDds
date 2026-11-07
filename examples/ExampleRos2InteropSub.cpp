@@ -7,7 +7,7 @@
  */
 
 #include <YomkRpc/YomkRpcAPI.h>
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
@@ -29,14 +29,14 @@ static void onSignal(int)
 
 int main()
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcService>().create();
 
     // 创建节点（域 0 对齐 ROS2 默认域）
     auto resp = YOMKRPC_NODE("interop_sub", 0);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleRos2InteropSub", "create node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleRos2InteropSub").error("create node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -48,15 +48,15 @@ int main()
     {
         auto* msg = static_cast<const YomkRpc::MString*>(data);
         received++;
-        YOMK_INFO_TAG("ExampleRos2InteropSub", "[RECV] ", msg->data());
+        ::yomk::log().tag("ExampleRos2InteropSub").info("[RECV] ", msg->data());
     };
     // QoS 用 ROS2 订阅端默认底座：BEST_EFFORT requested 对任意 offered（含 ros2 topic
     // pub 与 YomkRpc pub 的 RELIABLE）均可匹配（头文件 YOMKRPC_SUB_TOPIC 注释同口径）
     resp =
         YOMKRPC_SUB_TOPIC("interop_sub", "rt/chatter_interop", type, onMessage, DDSQosProfile::ros2DefaultSubscriber());
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleRos2InteropSub", "register sub topic failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleRos2InteropSub").error("register sub topic failed: ", resp.m_msg);
         YOMKRPC_DEL_NODE("interop_sub");
         return 1;
     }
@@ -71,9 +71,9 @@ int main()
 
     // 退出前显式销毁节点，打印总收条数
     resp = YOMKRPC_DEL_NODE("interop_sub");
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleRos2InteropSub", "delete node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleRos2InteropSub").error("delete node failed: ", resp.m_msg);
         return 1;
     }
     std::cout << "[QUIT] received total=" << received.load() << std::endl;

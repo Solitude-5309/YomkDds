@@ -43,6 +43,7 @@
  */
 
 #include "TestCheck.h"
+#include "TestServiceAccess.h"
 #include "YomkRpcService.h" // 服务/DDSNode/String/YOMK_* 宏
 #include "FastDDSNode.h"    // Part B 直接单元测试 setDomainId
 #include "YomkRpcDebugService.h" // C-2d：DDSDebugNode 无参全缺省聚合初始化 env 读回
@@ -71,75 +72,75 @@ namespace
       constexpr uint32_t TEST_DOMAIN = 200;
 
       // 构造 /create_node 请求包
-      YomkPkgPtr mkNode(uint32_t domainId, const std::string &nodeName)
+      YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName)
       {
-            return YomkMkPtr(DDSNode, DDSNode{nodeName, domainId});
+            return ::yomk::msgs::DDSNode::shared(DDSNode{nodeName, domainId});
       }
 
       // Part A-1：生命周期——创建/重名/同域共存/删除/重复删除
       void testLifecycle(YomkRpcService *svc)
       {
-            CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, "node_a")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "node_a")).m_status == yomk::payload::ResStatus::Succeeded,
                   "创建 node_a(domain 200) → eOk（真实创建 participant）");
 
-            auto dup = svc->invoke("/create_node", mkNode(TEST_DOMAIN, "node_a"));
-            CHECK(dup.m_status == YomkResponse::eNo && dup.m_msg.find("already exists") != std::string::npos,
+            auto dup = testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "node_a"));
+            CHECK(dup.m_status == yomk::payload::ResStatus::Failed && dup.m_msg.find("already exists") != std::string::npos,
                   "重名 node_a → eNo already exists（服务层前置校验，不新建 participant）");
 
-            CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, "node_b")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "node_b")).m_status == yomk::payload::ResStatus::Succeeded,
                   "创建 node_b → eOk（与 node_a 同域共存，各自独立 participant）");
 
-            CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "node_a")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_a")).m_status == yomk::payload::ResStatus::Succeeded,
                   "删除 node_a → eOk（析构清理 participant）");
 
-            auto del2 = svc->invoke("/delete_node", YomkMkPtr(String, "node_a"));
-            CHECK(del2.m_status == YomkResponse::eNo && del2.m_msg.find("not exists") != std::string::npos,
+            auto del2 = testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_a"));
+            CHECK(del2.m_status == yomk::payload::ResStatus::Failed && del2.m_msg.find("not exists") != std::string::npos,
                   "重复删除 node_a → eNo not exists");
 
-            CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "node_b")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_b")).m_status == yomk::payload::ResStatus::Succeeded,
                   "删除 node_b → eOk");
       }
 
       // Part A-2：domainId 边界——有效域 [0,232]（O1 前置校验）；越界 233/UINT32_MAX 直接 eNo
       void testDomainIdBoundary(YomkRpcService *svc)
       {
-            CHECK(svc->invoke("/create_node", mkNode(0, "node_d0")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/create_node", mkNode(0, "node_d0")).m_status == yomk::payload::ResStatus::Succeeded,
                   "domainId=0 → eOk（有效域下界）");
-            CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "node_d0")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_d0")).m_status == yomk::payload::ResStatus::Succeeded,
                   "删除 node_d0 → eOk");
 
-            CHECK(svc->invoke("/create_node", mkNode(232, "node_d232")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/create_node", mkNode(232, "node_d232")).m_status == yomk::payload::ResStatus::Succeeded,
                   "domainId=232 → eOk（有效域上界，FastDDS 端口算术上限）");
-            CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "node_d232")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_d232")).m_status == yomk::payload::ResStatus::Succeeded,
                   "删除 node_d232 → eOk");
 
-            auto r233 = svc->invoke("/create_node", mkNode(233, "node_d233"));
-            CHECK(r233.m_status == YomkResponse::eNo && r233.m_msg.find("out of valid range") != std::string::npos,
+            auto r233 = testInvoke(svc, "/create_node", mkNode(233, "node_d233"));
+            CHECK(r233.m_status == yomk::payload::ResStatus::Failed && r233.m_msg.find("out of valid range") != std::string::npos,
                   "domainId=233 → eNo out of valid range（O1 越界拒绝，不建 participant）");
 
-            auto rmax = svc->invoke("/create_node", mkNode(UINT32_MAX, "node_dmax"));
-            CHECK(rmax.m_status == YomkResponse::eNo && rmax.m_msg.find("out of valid range") != std::string::npos,
+            auto rmax = testInvoke(svc, "/create_node", mkNode(UINT32_MAX, "node_dmax"));
+            CHECK(rmax.m_status == yomk::payload::ResStatus::Failed && rmax.m_msg.find("out of valid range") != std::string::npos,
                   "domainId=UINT32_MAX → eNo out of valid range（O1 前置拦截，不再回绕深入 setDomainId）");
-            std::cout << "[OBSERVE] domainId=UINT32_MAX status=" << rmax.m_status
+            std::cout << "[OBSERVE] domainId=UINT32_MAX status=" << static_cast<int>(rmax.m_status)
                       << " msg=\"" << rmax.m_msg << "\"" << std::endl;
       }
 
       // Part A-3：nodeName 边界——空串（O2 拒绝）/单字符/超长（后两者创建后显式删除）
       void testNodeNameBoundary(YomkRpcService *svc)
       {
-            auto rempty = svc->invoke("/create_node", mkNode(TEST_DOMAIN, ""));
-            CHECK(rempty.m_status == YomkResponse::eNo && rempty.m_msg.find("node name is empty") != std::string::npos,
+            auto rempty = testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, ""));
+            CHECK(rempty.m_status == yomk::payload::ResStatus::Failed && rempty.m_msg.find("node name is empty") != std::string::npos,
                   "nodeName 空串 → eNo node name is empty（O2 拒绝，不建节点/不建 participant）");
 
-            CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, "x")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "x")).m_status == yomk::payload::ResStatus::Succeeded,
                   "nodeName 单字符 x → eOk");
-            CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "x")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("x")).m_status == yomk::payload::ResStatus::Succeeded,
                   "删除单字符节点 → eOk");
 
             const std::string longName(1024, 'N');
-            CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, longName)).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, longName)).m_status == yomk::payload::ResStatus::Succeeded,
                   "nodeName 1024B 超长 → eOk（无长度校验）");
-            CHECK(svc->invoke("/delete_node", YomkMkPtr(String, longName)).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(longName)).m_status == yomk::payload::ResStatus::Succeeded,
                   "删除超长名节点 → eOk");
       }
 
@@ -656,22 +657,20 @@ namespace
                   "Part G: DDSNode 缺省尾参聚合初始化 → udp 串 127.0.0.1:11812 / tcp 空");
 
             // 服务级创建（无 locator）：聚合初始化器读 env → 双节点直配 CLIENT 连 11812 server
-            CHECK(svc->invoke("/create_node", mkNode(203, "env_pub_node")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/create_node", mkNode(203, "env_pub_node")).m_status == yomk::payload::ResStatus::Succeeded,
                   "Part G: 创建 env_pub_node（域 203，请求无 locator）→ eOk（env 直配 CLIENT）");
-            CHECK(svc->invoke("/create_node", mkNode(204, "env_sub_node")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/create_node", mkNode(204, "env_sub_node")).m_status == yomk::payload::ResStatus::Succeeded,
                   "Part G: 创建 env_sub_node（域 204，请求无 locator）→ eOk（env 直配 CLIENT）");
 
             std::atomic<int> recvCount{0};
-            CHECK(svc->invoke("/register_sub_topic",
-                      YomkMkPtr(DDSSubRequest,
-                          DDSSubRequest{"env_sub_node", "env_conn_topic", new YomkRpc::MStringPubSubType(),
+            CHECK(testInvoke(svc, "/register_sub_topic",
+                      ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"env_sub_node", "env_conn_topic", new YomkRpc::MStringPubSubType(),
                               [&recvCount](const void *) { recvCount.fetch_add(1, std::memory_order_relaxed); }}))
-                      .m_status == YomkResponse::eOk,
+                      .m_status == yomk::payload::ResStatus::Succeeded,
                   "Part G: env_sub_node 登记 env_conn_topic 订阅（收到即计数）");
-            CHECK(svc->invoke("/register_pub_topic",
-                      YomkMkPtr(DDSTopic,
-                          DDSTopic{"env_pub_node", "env_conn_topic", new YomkRpc::MStringPubSubType()}))
-                      .m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/register_pub_topic",
+                      ::yomk::msgs::DDSTopic::shared(DDSTopic{"env_pub_node", "env_conn_topic", new YomkRpc::MStringPubSubType()}))
+                      .m_status == yomk::payload::ResStatus::Succeeded,
                   "Part G: env_pub_node 登记 env_conn_topic 发布");
 
             // 主线程同步发布（100ms×60=6s 收流窗 ≥5s server 发现收敛；不经发布线程，
@@ -681,8 +680,8 @@ namespace
             for (int i = 0; i < 60 && !received; ++i)
             {
                   msg.data("env-conn-" + std::to_string(i));
-                  (void)svc->invoke("/publish",
-                        YomkMkPtr(DDSPublish, DDSPublish{"env_pub_node", "env_conn_topic", &msg}));
+                  (void)testInvoke(svc, "/publish",
+                        ::yomk::msgs::DDSPublish::shared(DDSPublish{"env_pub_node", "env_conn_topic", &msg}));
                   std::this_thread::sleep_for(std::chrono::milliseconds(100));
                   received = recvCount.load(std::memory_order_relaxed) > 0;
             }
@@ -694,9 +693,9 @@ namespace
             }
 
             // 收尾：删节点（关键不变式）→ 清 env → 组杀 server 整组（模式同 Part F）
-            CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "env_pub_node")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("env_pub_node")).m_status == yomk::payload::ResStatus::Succeeded,
                   "Part G: 删除 env_pub_node → eOk");
-            CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "env_sub_node")).m_status == YomkResponse::eOk,
+            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("env_sub_node")).m_status == yomk::payload::ResStatus::Succeeded,
                   "Part G: 删除 env_sub_node → eOk");
             unsetenv("YOMKRPC_USE_DISCOVER_SERVER");
             unsetenv("YOMKRPC_UDP_DISCOVER_SERVERS");
@@ -708,10 +707,10 @@ namespace
 
 int main()
 {
-      YOMK_INIT();
+      ::yomk::server().init();
 
-      auto *svc = new YomkRpcService(YOMK_SERVER_P);
-      CHECK(YOMK_ADD_SERVICE(svc) == 0, "YomkRpcService 注册成功（所有权移交框架，init() 已内部调用）");
+      auto *svc = new YomkRpcService(::yomk::server().instance().get());
+      CHECK(::yomk::server().srv_ptr(svc).add() == 0, "YomkRpcService 注册成功（所有权移交框架，init() 已内部调用）");
 
       testLifecycle(svc);
       testDomainIdBoundary(svc);

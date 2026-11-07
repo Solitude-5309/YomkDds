@@ -3,19 +3,19 @@
 #include <YomkRpc/YomkRpcService.h>
 
 // YomkRpc 对外 API 宏：每个宏封装一次对 /YomkRpcService/*（RPC 服务）或 /YomkRpcDebugService/*
-// （调试服务）端点的 YOMK_REQUEST 调用。
-// 除 YOMKRPC_VERSION（无返回值）外，其余宏均返回 YomkResponse，调用后须判 m_status==YomkResponse::eOk。
+// （调试服务）端点的 yomk::server().url().msg().request() 调用。
+// 除 YOMKRPC_VERSION（无返回值）外，其余宏均返回 yomk::payload::Response，调用后须判 m_status==yomk::payload::ResStatus::Succeeded。
 
 /// @brief 加载 Fast DDS XML profiles（经 /YomkRpcService/load_xml 缓存 raw 串；须在 create_node
 ///   前调用，再次调用以最新成功文件整体替换）。
 /// @param xmlPath 可缺省：显式路径（相对/绝对均可）；缺省时读环境变量 YOMKRPC_XML_PROFILE_PATH
 ///   （总开关 YOMKRPC_USE_XML_PROFILE=true 才生效）。
-/// @retval eOk 文件可解析并缓存（仅证明文件可解析；后续 create_node 按三级提取链叠加：
+/// @retval Succeeded 文件可解析并缓存（仅证明文件可解析；后续 create_node 按三级提取链叠加：
 ///   节点名 profile → is_default_profile 默认档 → 均未命中保持默认底座）。
-/// @retval eNo 路径不存在/文件为空/格式非法（m_msg 携带原因与 rc）。
+/// @retval Failed 路径不存在/文件为空/格式非法（m_msg 携带原因与 rc）。
 /// 详见 docs/features/xml-profiles.md
 #define YOMKRPC_LOAD_XML(...) \
-    YOMK_REQUEST("/YomkRpcService/load_xml", YomkMkPtr(DDSXmlLoad, DDSXmlLoad{##__VA_ARGS__}))
+    ::yomk::server().url("/YomkRpcService/load_xml").msg(::yomk::msgs::DDSXmlLoad::shared(DDSXmlLoad{##__VA_ARGS__})).request()
 
 /// @brief 创建 DDS 节点（每节点一个独立 DDS 参与者；nodeName 唯一，仅同域节点可互通）。
 /// @param nodeName 节点唯一名。
@@ -28,24 +28,24 @@
 ///   发现（仅 TCP 直配时 UDP 通道传空串占位）。
 /// 详见 docs/features/core-communication.md、discovery-server.md
 #define YOMKRPC_NODE(nodeName, ...) \
-    YOMK_REQUEST("/YomkRpcService/create_node", YomkMkPtr(DDSNode, DDSNode{nodeName, ##__VA_ARGS__}))
+    ::yomk::server().url("/YomkRpcService/create_node").msg(::yomk::msgs::DDSNode::shared(DDSNode{nodeName, ##__VA_ARGS__})).request()
 
-/// @brief 查询扩展版本并打印（成功走 YOMK_INFO_TAG、失败走 YOMK_ERROR_TAG）；无返回值。
+/// @brief 查询扩展版本并打印（成功走 yomk::log().tag().info()、失败走 yomk::log().tag().error()）；无返回值。
 #define YOMKRPC_VERSION()                                                          \
     do                                                                             \
     {                                                                              \
-        auto __resp = YOMK_REQUEST("/YomkRpcService/version", nullptr);            \
-        if (__resp.m_status == YomkResponse::eOk)                                  \
+        auto __resp = ::yomk::server().url("/YomkRpcService/version").msg(nullptr).request();            \
+        if (__resp.m_status == yomk::payload::ResStatus::Succeeded)                                  \
         {                                                                          \
-            YomkUnPackPkg(__resp.m_data, String, __ver);                           \
+            auto __ver = ::yomk::msgs::unpack<::yomk::msgs::String>(__resp.m_data);                            \
             if (__ver)                                                             \
             {                                                                      \
-                YOMK_INFO_TAG("YomkRpcService", __ver->d);                         \
+                ::yomk::log().tag("YomkRpcService").info(__ver->d);                         \
             }                                                                      \
         }                                                                          \
         else                                                                       \
         {                                                                          \
-            YOMK_ERROR_TAG("YomkRpcService", "getVersion failed: ", __resp.m_msg); \
+            ::yomk::log().tag("YomkRpcService").error("getVersion failed: ", __resp.m_msg); \
         }                                                                          \
     } while (0)
 
@@ -57,7 +57,7 @@
 ///   （RELIABLE+KEEP_LAST(10)+VOLATILE），也可在底座上逐项覆盖（如只设 depth）。
 /// 详见 docs/features/qos-profiles.md
 #define YOMKRPC_PUB_TOPIC(nodeName, topicName, type, ...) \
-    YOMK_REQUEST("/YomkRpcService/register_pub_topic", YomkMkPtr(DDSTopic, DDSTopic{nodeName, topicName, type, ##__VA_ARGS__}))
+    ::yomk::server().url("/YomkRpcService/register_pub_topic").msg(::yomk::msgs::DDSTopic::shared(DDSTopic{nodeName, topicName, type, ##__VA_ARGS__})).request()
 
 /// @brief 在指定节点上注册订阅主题。
 /// @param type 同 YOMKRPC_PUB_TOPIC，所有权移交服务端。
@@ -67,15 +67,15 @@
 ///   DDSQosProfile::ros2DefaultSubscriber()（BEST_EFFORT requested 对任意 offered 均可匹配）。
 /// 详见 docs/features/qos-profiles.md
 #define YOMKRPC_SUB_TOPIC(nodeName, topicName, type, callback, ...) \
-    YOMK_REQUEST(                                              \
-        "/YomkRpcService/register_sub_topic",                  \
-        YomkMkPtr(DDSSubRequest, DDSSubRequest{nodeName, topicName, type, callback, ##__VA_ARGS__}))
+    ::yomk::server().url(\
+        "/YomkRpcService/register_sub_topic").msg(\
+        ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{nodeName, topicName, type, callback, ##__VA_ARGS__})).request()
 
 /// @brief 向指定节点的已注册发布主题发送一条消息。
 /// @param data 消息实例指针（&msg），借用（非所有权）——publish 同步写入，caller 保留并在
 ///   调用后自行管理其生命周期。
 #define YOMKRPC_PUB_MSG(nodeName, topicName, data) \
-    YOMK_REQUEST("/YomkRpcService/publish", YomkMkPtr(DDSPublish, DDSPublish{nodeName, topicName, data}))
+    ::yomk::server().url("/YomkRpcService/publish").msg(::yomk::msgs::DDSPublish::shared(DDSPublish{nodeName, topicName, data})).request()
 
 /// @brief 借出发布缓冲（仅 plain 类型）：成功时 outPtr 指向 writer 池内待发样本，直接在池内
 ///   填值后经 YOMKRPC_PUB_MSG 发布免序列化；类型不支持 loan（非 plain）或池耗尽时 outPtr
@@ -85,10 +85,10 @@
     do                                                                                                                 \
     {                                                                                                                  \
         (outPtr) = nullptr;                                                                                            \
-        auto __resp = YOMK_REQUEST("/YomkRpcService/loan", YomkMkPtr(DDSLoan, DDSLoan{nodeName, topicName, nullptr})); \
-        if (__resp.m_status == YomkResponse::eOk && __resp.m_data)                                                     \
+        auto __resp = ::yomk::server().url("/YomkRpcService/loan").msg(::yomk::msgs::DDSLoan::shared(DDSLoan{nodeName, topicName, nullptr})).request(); \
+        if (__resp.m_status == yomk::payload::ResStatus::Succeeded && __resp.m_data)                                                     \
         {                                                                                                              \
-            YomkUnPackPkg(__resp.m_data, DDSLoanResult, __loan);                                                       \
+            auto __loan = ::yomk::msgs::unpack<::yomk::msgs::DDSLoanResult>(__resp.m_data);                                                        \
             if (__loan)                                                                                                \
             {                                                                                                          \
                 (outPtr) = __loan->msg.sample;                                                                         \
@@ -98,10 +98,10 @@
 
 /// @brief 归还未发布的借出样本（sample 为 YOMKRPC_LOAN 借出的指针），避免 writer 池泄漏。
 #define YOMKRPC_DISCARD_LOAN(nodeName, topicName, sample) \
-    YOMK_REQUEST("/YomkRpcService/discard_loan", YomkMkPtr(DDSLoan, DDSLoan{nodeName, topicName, sample}))
+    ::yomk::server().url("/YomkRpcService/discard_loan").msg(::yomk::msgs::DDSLoan::shared(DDSLoan{nodeName, topicName, sample})).request()
 
 /// @brief 删除节点并销毁其全部 DDS 实体；nodeName 不存在时返回错误。
-#define YOMKRPC_DEL_NODE(nodeName) YOMK_REQUEST("/YomkRpcService/delete_node", YomkMkPtr(String, nodeName))
+#define YOMKRPC_DEL_NODE(nodeName) ::yomk::server().url("/YomkRpcService/delete_node").msg(::yomk::msgs::String::shared(nodeName)).request()
 
 // ===== YomkRpcDebugService 调试 API（端点定义见 YomkRpcDebugService.h） =====
 
@@ -113,7 +113,7 @@
 ///   仅默认档可兜底）。
 /// 调试节点以唯一名 yomkrpc_debug_<uid> 入域（uid 为 12 位随机 hex，可被 yomkrpc node list 列出）。
 #define YOMKRPC_DEBUG_NODE(...) \
-    YOMK_REQUEST("/YomkRpcDebugService/create_node", YomkMkPtr(DDSDebugNode, DDSDebugNode{__VA_ARGS__}))
+    ::yomk::server().url("/YomkRpcDebugService/create_node").msg(::yomk::msgs::DDSDebugNode::shared(DDSDebugNode{__VA_ARGS__})).request()
 
 /// @brief 登记调试主题：发现匹配的远端 DataWriter 后自动解析类型并建立订阅，消息 JSON 文本
 ///   逐条投递 output（DDSDebugOutputFunc，用户自定义，服务层不打印）；须先创建调试节点。
@@ -126,9 +126,9 @@
 /// created / empty topic name / topic [...] already registered。
 /// 详见 docs/features/debug-service.md
 #define YOMKRPC_DEBUG_TOPIC_PRINT(topicName, output, ...) \
-    YOMK_REQUEST(                              \
-        "/YomkRpcDebugService/topic_print",    \
-        YomkMkPtr(DDSDebugTopic, DDSDebugTopic{topicName, output, ##__VA_ARGS__}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/topic_print").msg(\
+        ::yomk::msgs::DDSDebugTopic::shared(DDSDebugTopic{topicName, output, ##__VA_ARGS__})).request()
 
 /// @brief 列出当前域内已发现的全部主题（仅主题名，按名排序，每行一项，列表可为空）；
 ///   须先创建调试节点。仅有订阅者而无发布者的主题同样列出。
@@ -136,41 +136,41 @@
 /// 连续 stableRounds 次集合不变即返回；stableRounds=0 钳制为默认 5 次/200ms，=1 即单次快照
 /// 免等待，最长阻塞约 stableRounds*intervalMs。
 #define YOMKRPC_DEBUG_TOPIC_LIST(stableRounds, intervalMs)                   \
-    YOMK_REQUEST(                                                            \
-        "/YomkRpcDebugService/list_topics",                                  \
-        YomkMkPtr(DDSDebugList, DDSDebugList{stableRounds, intervalMs}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/list_topics").msg(\
+        ::yomk::msgs::DDSDebugList::shared(DDSDebugList{stableRounds, intervalMs})).request()
 
 /// @brief 同 YOMKRPC_DEBUG_TOPIC_LIST 的 types 模式：每行输出 "主题名 [类型名]"（单空格 +
 ///   方括号，对齐 ros2 topic list -t 形态，类型名原样输出）；收敛语义同上。须先创建调试节点。
 #define YOMKRPC_DEBUG_TOPIC_LIST_T(stableRounds, intervalMs)                 \
-    YOMK_REQUEST(                                                            \
-        "/YomkRpcDebugService/list_topics",                                  \
-        YomkMkPtr(DDSDebugList, DDSDebugList{stableRounds, intervalMs, true}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/list_topics").msg(\
+        ::yomk::msgs::DDSDebugList::shared(DDSDebugList{stableRounds, intervalMs, true})).request()
 
 /// @brief 查询单主题的发现详情（独立收敛，语义同上）：命中返回 StringArray 三行——
 ///   Type: <原始 DDS 类型名>、Publisher count: <N>、Subscription count: <N>（类型名原样
 ///   输出，无任何风格转换）；未发现主题返回错误。须先创建调试节点。
 #define YOMKRPC_DEBUG_TOPIC_INFO(topicName, stableRounds, intervalMs)        \
-    YOMK_REQUEST(                                                            \
-        "/YomkRpcDebugService/topic_info",                                   \
-        YomkMkPtr(DDSDebugInfo, DDSDebugInfo{topicName, stableRounds, intervalMs}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/topic_info").msg(\
+        ::yomk::msgs::DDSDebugInfo::shared(DDSDebugInfo{topicName, stableRounds, intervalMs})).request()
 
 /// @brief 单主题端点详情（verbose，与 topic_info 同端点同收敛语义）：另逐端点输出 Node name
 ///   （归属参与者名）、Endpoint type（PUBLISHER/SUBSCRIPTION）、GUID（FastDDS 原生格式）与
 ///   QoS profile（ROS2 风格键值行，核心组恒输出、扩展组按发现数据携带情况追加）；count=0
 ///   的端点类型无清单段；未发现主题返回错误。须先创建调试节点。
 #define YOMKRPC_DEBUG_TOPIC_INFO_V(topicName, stableRounds, intervalMs)      \
-    YOMK_REQUEST(                                                            \
-        "/YomkRpcDebugService/topic_info",                                   \
-        YomkMkPtr(DDSDebugInfo, DDSDebugInfo{topicName, stableRounds, intervalMs, true}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/topic_info").msg(\
+        ::yomk::msgs::DDSDebugInfo::shared(DDSDebugInfo{topicName, stableRounds, intervalMs, true})).request()
 
 /// @brief 按数据类型名反查域内主题列表（类型名精确匹配，收敛语义同上）：命中返回 StringArray
 ///   每行一个主题名（按名排序）；无匹配主题返回错误（type [...] not found）。
 ///   须先创建调试节点。
 #define YOMKRPC_DEBUG_TOPIC_FIND(typeName, stableRounds, intervalMs)         \
-    YOMK_REQUEST(                                                            \
-        "/YomkRpcDebugService/topic_find",                                   \
-        YomkMkPtr(DDSDebugFind, DDSDebugFind{typeName, stableRounds, intervalMs}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/topic_find").msg(\
+        ::yomk::msgs::DDSDebugFind::shared(DDSDebugFind{typeName, stableRounds, intervalMs})).request()
 
 /// @brief 按数据类型名输出该类型的 IDL 结构描述（精确匹配，收敛语义同上）：命中返回
 ///   StringArray 多行（IDL 源语法：struct 头 + 四空格缩进字段行 + 结尾 };）。失败 m_msg
@@ -179,17 +179,17 @@
 ///   is not a struct, interface display unsupported / interface introspection failed
 ///   for [...]。须先创建调试节点。
 #define YOMKRPC_DEBUG_INTERFACE_SHOW(typeName, stableRounds, intervalMs)     \
-    YOMK_REQUEST(                                                            \
-        "/YomkRpcDebugService/interface_show",                               \
-        YomkMkPtr(DDSDebugInterfaceShow, DDSDebugInterfaceShow{typeName, stableRounds, intervalMs}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/interface_show").msg(\
+        ::yomk::msgs::DDSDebugInterfaceShow::shared(DDSDebugInterfaceShow{typeName, stableRounds, intervalMs})).request()
 
 /// @brief 列出发现缓存中出现的全部数据类型名（去重字典序，interface show 的配套导航；
 ///   收敛语义同上）：域内无任何类型返回错误（no interface types discovered）。
 ///   须先创建调试节点。
 #define YOMKRPC_DEBUG_INTERFACE_LIST(stableRounds, intervalMs)              \
-    YOMK_REQUEST(                                                            \
-        "/YomkRpcDebugService/interface_list",                               \
-        YomkMkPtr(DDSDebugInterfaceList, DDSDebugInterfaceList{stableRounds, intervalMs}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/interface_list").msg(\
+        ::yomk::msgs::DDSDebugInterfaceList::shared(DDSDebugInterfaceList{stableRounds, intervalMs})).request()
 
 /// @brief 按主题名查询发布示例三段行集（收敛语义同上）："Type: <类型名>" + "IDL:" + IDL
 ///   行集 + "example:" + 可复制发布命令（JSON 默认值模板整体包单引号，改字段值即可发布）。
@@ -197,18 +197,18 @@
 ///   生成侧（type rebuild failed for [...] / example generation failed for [...]:
 ///   create_data 或 json_serialize）。须先创建调试节点。
 #define YOMKRPC_DEBUG_TOPIC_EXAMPLE(topicName, stableRounds, intervalMs)    \
-    YOMK_REQUEST(                                                            \
-        "/YomkRpcDebugService/topic_example",                                \
-        YomkMkPtr(DDSDebugTopicExample, DDSDebugTopicExample{topicName, stableRounds, intervalMs}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/topic_example").msg(\
+        ::yomk::msgs::DDSDebugTopicExample::shared(DDSDebugTopicExample{topicName, stableRounds, intervalMs})).request()
 
 /// @brief 按主题名查询消息描述（供导出消息描述文件；收敛语义同上）：命中返回 StringArray
 ///   恰 2 行——d[0]=类型名、d[1]=紧凑 msg JSON（单行，可直接作为发布载荷模板）。失败 m_msg
 ///   按两步归因：topic [...] not found → JSON 模板生成侧（同 topic_example 步骤 2/3）。
 ///   须先创建调试节点。
 #define YOMKRPC_DEBUG_TOPIC_MSG(topicName, stableRounds, intervalMs)        \
-    YOMK_REQUEST(                                                            \
-        "/YomkRpcDebugService/topic_msg",                                    \
-        YomkMkPtr(DDSDebugTopicMsg, DDSDebugTopicMsg{topicName, stableRounds, intervalMs}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/topic_msg").msg(\
+        ::yomk::msgs::DDSDebugTopicMsg::shared(DDSDebugTopicMsg{topicName, stableRounds, intervalMs})).request()
 
 /// @brief 按主题名发布 JSON 载荷消息：发现收敛 → 类型重建 + json_deserialize 解析载荷 →
 ///   建临时 RELIABLE+TRANSIENT_LOCAL writer 匹配收敛 → write 一次 → 存在 RELIABLE 订阅者时
@@ -223,33 +223,33 @@
 /// @param qos 可缺省尾参：临时发布 writer QoS DDSQosProfile；缺省全哨兵=Fast DDS writer
 ///   默认底座（KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL）；ROS2 底座建议
 ///   DDSQosProfile::ros2DefaultPublisher()。
-/// @retval eNo 未发现主题（topic [...] not found）/ 载荷不合法（invalid json for type [...]）/
+/// @retval Failed 未发现主题（topic [...] not found）/ 载荷不合法（invalid json for type [...]）/
 ///   送达未确认（not all subscribers acknowledged）。
 /// 详见 docs/features/debug-service.md
 #define YOMKRPC_DEBUG_TOPIC_PUB(topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes, ...)  \
-    YOMK_REQUEST(                                                            \
-        "/YomkRpcDebugService/topic_pub",                                    \
-        YomkMkPtr(DDSDebugTopicPub, DDSDebugTopicPub{topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes, ##__VA_ARGS__}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/topic_pub").msg(\
+        ::yomk::msgs::DDSDebugTopicPub::shared(DDSDebugTopicPub{topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes, ##__VA_ARGS__})).request()
 
 /// @brief 列出当前域内已发现的全部命名参与者（独立收敛，语义同上）：返回 StringArray 每行
 ///   一个节点名（participant_name 非空才列出，空名参与者跳过，不输出 GUID 串），按名称排序，
 ///   列表可为空。须先创建调试节点。
 #define YOMKRPC_DEBUG_NODE_LIST(stableRounds, intervalMs)                    \
-    YOMK_REQUEST(                                                            \
-        "/YomkRpcDebugService/list_nodes",                                   \
-        YomkMkPtr(DDSNodeList, DDSNodeList{stableRounds, intervalMs}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/list_nodes").msg(\
+        ::yomk::msgs::DDSNodeList::shared(DDSNodeList{stableRounds, intervalMs})).request()
 
 /// @brief 查询指定节点名的发布/订阅主题清单（独立收敛，语义同上）：归属判定基于 RTPS 规范
 ///   「端点 GUID 前缀 == 所属参与者 GUID 前缀」，同名多参与者端点合并。命中返回 StringArray：
 ///   节点名行、"  Subscribers:" 段 + 每行 "    <topic>: <type>"、"  Publishers:" 段同形态
 ///   （类型名原样输出；空段仅打段头）；未发现节点名返回错误。须先创建调试节点。
 #define YOMKRPC_DEBUG_NODE_INFO(nodeName, stableRounds, intervalMs)          \
-    YOMK_REQUEST(                                                            \
-        "/YomkRpcDebugService/node_info",                                    \
-        YomkMkPtr(DDSNodeInfo, DDSNodeInfo{nodeName, stableRounds, intervalMs}))
+    ::yomk::server().url(\
+        "/YomkRpcDebugService/node_info").msg(\
+        ::yomk::msgs::DDSNodeInfo::shared(DDSNodeInfo{nodeName, stableRounds, intervalMs})).request()
 
 /// @brief 退出调试：删除调试节点并销毁其全部 DDS 实体（未创建时返回错误）。
-#define YOMKRPC_DEBUG_QUIT() YOMK_REQUEST("/YomkRpcDebugService/delete_node", nullptr)
+#define YOMKRPC_DEBUG_QUIT() ::yomk::server().url("/YomkRpcDebugService/delete_node").msg(nullptr).request()
 
 // ===== YomkRpcBagService 录制 API（端点定义见 YomkRpcBagService.h） =====
 
@@ -259,7 +259,7 @@
 ///   用户名，XML 提取链仅默认档可兜底）。domainId 合法范围 [0,232]。
 /// bag 节点以唯一名 yomkrpc_bag_<uid> 入域（uid 为 12 位随机 hex，可被 yomkrpc node list 列出）。
 #define YOMKRPC_BAG_NODE(...) \
-    YOMK_REQUEST("/YomkRpcBagService/create_node", YomkMkPtr(DDSBagNode, DDSBagNode{__VA_ARGS__}))
+    ::yomk::server().url("/YomkRpcBagService/create_node").msg(::yomk::msgs::DDSBagNode::shared(DDSBagNode{__VA_ARGS__})).request()
 
 /// @brief 录制主题（长驻阻塞：调用线程阻塞至录制收尾完成，SIGINT 经 yomk::bagRecordStop
 ///   无锁置位后收尾返回）；须先创建 bag 节点。
@@ -282,7 +282,7 @@
 /// 成功 data 为 StringArray：首行 bag 目录名，其后每主题一行 "topic: N 条 / M 字节" 统计。
 /// 详见 docs/features/bag-service.md
 #define YOMKRPC_BAG_RECORD(topics, outputDir, maxBagSize, maxBagDurationSec, maxCacheSize) \
-    YOMK_REQUEST("/YomkRpcBagService/bag_record", YomkMkPtr(DDSBagRecord, DDSBagRecord{(topics), (outputDir), (maxBagSize), (maxBagDurationSec), (maxCacheSize)}))
+    ::yomk::server().url("/YomkRpcBagService/bag_record").msg(::yomk::msgs::DDSBagRecord::shared(DDSBagRecord{(topics), (outputDir), (maxBagSize), (maxBagDurationSec), (maxCacheSize)})).request()
 
 /// @brief 查看 bag 元信息（纯文件读，不经 bag 节点，无须 create_node）：读 bagDir 的
 ///   metadata.json 与目录递归总大小，输出对齐 ros2 bag info 形态的元信息文本（Files/Bag
@@ -291,7 +291,7 @@
 ///   information 行在 Type 后插 QoS 段，旧 bag/仅订阅者主题不显示）。成功 data 每项一行
 ///   （首项为空行）；路径不存在/无 metadata.json/解析失败返回错误。
 #define YOMKRPC_BAG_INFO(bagDir) \
-    YOMK_REQUEST("/YomkRpcBagService/bag_info", YomkMkPtr(DDSBagInfo, DDSBagInfo{(bagDir)}))
+    ::yomk::server().url("/YomkRpcBagService/bag_info").msg(::yomk::msgs::DDSBagInfo::shared(DDSBagInfo{(bagDir)})).request()
 
 /// @brief 重建 bag 元信息（纯文件操作，不经 bag 节点）：读 bagDir 全部 mcap 分片
 ///   （<前缀>_<编号>.mcap 按编号升序）重建 metadata.json 并无条件覆盖写出（元信息文件缺失/
@@ -299,7 +299,7 @@
 ///   type 键恢复；旧格式 bag（无该元数据的既有分片）读不到则回退空串。路径不存在/非目录/
 ///   无 mcap 分片/读取失败返回错误。
 #define YOMKRPC_BAG_REINDEX(bagDir) \
-    YOMK_REQUEST("/YomkRpcBagService/bag_reindex", YomkMkPtr(DDSBagReindex, DDSBagReindex{(bagDir)}))
+    ::yomk::server().url("/YomkRpcBagService/bag_reindex").msg(::yomk::msgs::DDSBagReindex::shared(DDSBagReindex{(bagDir)})).request()
 
 /// @brief 转换 bag（纯文件操作，不经 bag 节点）：读输入 bag 目录集与输出配置文件，把输入
 ///   消息按配置过滤合并写为新 bag；多输入按 logTime 全局归并，同主题跨输入类型不一致报错。
@@ -313,7 +313,7 @@
 ///   size 同用先到先分）；未知字段忽略。任一条目失败整体报错（已产生的输出目录保留不回滚）。
 /// 成功 data 每条目一行 "converted <uri>: N messages / M bytes / K topics" 统计。
 #define YOMKRPC_BAG_CONVERT(inputs, cfgPath) \
-    YOMK_REQUEST("/YomkRpcBagService/bag_convert", YomkMkPtr(DDSBagConvert, DDSBagConvert{(inputs), (cfgPath)}))
+    ::yomk::server().url("/YomkRpcBagService/bag_convert").msg(::yomk::msgs::DDSBagConvert::shared(DDSBagConvert{(inputs), (cfgPath)})).request()
 
 /// @brief 回放 bag（长驻阻塞：调用线程阻塞至全部消息播毕或 SIGINT 经 yomk::bagPlayStop
 ///   无锁置位后收尾返回）；须先创建 bag 节点。读播解耦：读线程逐条预读原始 CDR 字节入有界
@@ -352,8 +352,8 @@
 /// 成功 data 为 StringArray：首行 bag 目录名，其后每主题一行 "topic: N 条 / M 字节" 统计。
 /// 详见 docs/features/bag-service.md
 #define YOMKRPC_BAG_PLAY(bagDir, playbackRate, topics, loop, startOffset, delay, waitForAllAckedMs, topicRemaps, readAheadQueueSize, qosOverridesPath) \
-    YOMK_REQUEST("/YomkRpcBagService/bag_play", \
-        YomkMkPtr(DDSBagPlay, DDSBagPlay{(bagDir), (playbackRate), (topics), (loop), (startOffset), (delay), (waitForAllAckedMs), (topicRemaps), (readAheadQueueSize), (qosOverridesPath)}))
+    ::yomk::server().url("/YomkRpcBagService/bag_play").msg(\
+        ::yomk::msgs::DDSBagPlay::shared(DDSBagPlay{(bagDir), (playbackRate), (topics), (loop), (startOffset), (delay), (waitForAllAckedMs), (topicRemaps), (readAheadQueueSize), (qosOverridesPath)})).request()
 
 /// @brief 退出录制：删除 bag 节点并销毁其全部 DDS 实体（未创建时返回错误）。
-#define YOMKRPC_BAG_DEL_NODE() YOMK_REQUEST("/YomkRpcBagService/delete_node", nullptr)
+#define YOMKRPC_BAG_DEL_NODE() ::yomk::server().url("/YomkRpcBagService/delete_node").msg(nullptr).request()

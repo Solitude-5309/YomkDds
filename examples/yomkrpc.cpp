@@ -19,7 +19,7 @@
 
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpc/YomkRpcBagService.h>
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 
 #include <nlohmann/json.hpp> // --qos-file 解析（vendored header-only，CMake 配 include 路径）
 
@@ -315,7 +315,7 @@ static void persistDefaultEnv(const char *name, const char *value, const char *n
     std::ofstream out(bashrc, std::ios::app);
     if (!out)
     {
-        YOMK_ERROR_TAG("yomkrpc", "persist default env failed: cannot append ", bashrc);
+        ::yomk::log().tag("yomkrpc").error("persist default env failed: cannot append ", bashrc);
         return;
     }
     out << "\n# added by yomkrpc: " << note << "\n"
@@ -336,16 +336,16 @@ static bool autoLoadXmlProfile()
     }
     // load_xml 端点在 /YomkRpcService 上，而本工具按需只注册调试/bag 服务——首次
     // 触发自动加载时补注册 RPC 服务（static 守卫保证全进程仅注册一次）
-    static const bool rpcServiceReady = (YOMK_NEW_SERVICE(YomkRpcService) == 0);
+    static const bool rpcServiceReady = (::yomk::server().srv<YomkRpcService>().create() == 0);
     if (!rpcServiceReady)
     {
-        YOMK_ERROR_TAG("yomkrpc", "register /YomkRpcService failed");
+        ::yomk::log().tag("yomkrpc").error("register /YomkRpcService failed");
         return false;
     }
     auto resp = YOMKRPC_LOAD_XML();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "auto load xml profile [", path, "] failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("auto load xml profile [", path, "] failed: ", resp.m_msg);
         return false;
     }
     return true;
@@ -670,8 +670,8 @@ static bool loadQosFile(const std::string &path, DDSQosProfile &profile, std::st
 // 订阅 reader 的 QoS 描述（全哨兵=Fast DDS 默认底座）
 static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQosProfile &qos)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -679,9 +679,9 @@ static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQo
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -691,17 +691,16 @@ static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQo
         std::cout << text << std::endl; // 逐条直出并刷新
     };
     resp = YOMKRPC_DEBUG_TOPIC_PRINT(topicName, onMessage, qos);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "register debug topic failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("register debug topic failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT(); // 登记失败路径同样须清理已建调试节点
         return 1;
     }
 
     // 3. 监听 Ctrl+C，主循环等待退出信号
     std::signal(SIGINT, onSignal);
-    YOMK_INFO_TAG("yomkrpc", "debug printing topic \"", topicName, "\" on domain ",
-                  std::to_string(domainId), ", press Ctrl+C to exit");
+    ::yomk::log().tag("yomkrpc").info("debug printing topic \"", topicName, "\" on domain ", std::to_string(domainId), ", press Ctrl+C to exit");
     while (!g_stop.load())
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -709,9 +708,9 @@ static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQo
 
     // 4. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -728,8 +727,8 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
                      const std::string &outputDir, bool startPaused, uint64_t maxBagSize,
                      uint64_t maxBagDurationSec, uint64_t maxCacheSize)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcBagService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcBagService>().create();
 
     // 1. 复位双标志（防上次会话残留置位导致秒退/不录）后创建 bag 节点（单节点模型）
     yomk::bagRecordReset();
@@ -742,9 +741,9 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
         return 1;
     }
     auto resp = YOMKRPC_BAG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create bag node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create bag node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -776,8 +775,7 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
     {
         startSuffix += ", press p to pause, r to resume, Ctrl+C to stop";
     }
-    YOMK_INFO_TAG("yomkrpc", "recording topics from ", std::to_string(topics.size()),
-                  " list item(s) on domain ", std::to_string(domainId), startSuffix);
+    ::yomk::log().tag("yomkrpc").info("recording topics from ", std::to_string(topics.size()), " list item(s) on domain ", std::to_string(domainId), startSuffix);
 
     // 3. 键盘监听线程（始终启动，tty 下生效）：SPACE=start，p=pause，r=resume，Ctrl+C 退出
     //    poll() 100ms 超时轮询：每次超时后检查 g_bagRecordStop，Ctrl+C 后最多 100ms 内干净退出
@@ -835,15 +833,15 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
 
     // 4. 长驻阻塞：启动校验、订阅与录制、收尾落盘都在服务端完成，返回即录制结束
     resp = YOMKRPC_BAG_RECORD(topics, outputDir, maxBagSize, maxBagDurationSec, maxCacheSize);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "bag record failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("bag record failed: ", resp.m_msg);
         YOMKRPC_BAG_DEL_NODE(); // 失败路径同样须清理已建 bag 节点
         return 2;
     }
 
     // 4. 输出统计：首行 bag 目录，其后每主题一行 "topic: N 条 / M 字节"
-    YomkUnPackPkg(resp.m_data, StringArray, lines);
+    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (lines != nullptr)
     {
         for (const auto &line : lines->d)
@@ -854,9 +852,9 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
 
     // 5. 退出前显式删除 bag 节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
     resp = YOMKRPC_BAG_DEL_NODE();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "delete bag node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("delete bag node failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -917,8 +915,8 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
         const std::vector<std::string> &playTopicRemaps, long long playReadAheadQueueSize,
         const std::string &playQosOverridesPath)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcBagService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcBagService>().create();
 
     // 1. 复位双标志（防上次会话残留置位导致秒退/开播即冻）后创建 bag 节点（单节点模型）；
     //    暂停态启动：先置位再发起播放（对齐 record 先例——服务 handler 只清 stop 不清
@@ -933,9 +931,9 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
         return 1;
     }
     auto resp = YOMKRPC_BAG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create bag node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create bag node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -997,9 +995,7 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
         ? ", started paused, press SPACE to start, p/r to pause/resume, +/- rate, Ctrl+C to stop"
         : ", press p to pause, r to resume, +/- rate, Ctrl+C to stop";
     const char *loopNote = loop ? ", looping" : "";
-    YOMK_INFO_TAG("yomkrpc", "replaying bag [", bagDir, "] on domain ",
-                  std::to_string(domainId), rateNote, offsetNote, delayNote, ackNote,
-                  remapNote, queueNote, qosNote, loopNote, startSuffix);
+    ::yomk::log().tag("yomkrpc").info("replaying bag [", bagDir, "] on domain ", std::to_string(domainId), rateNote, offsetNote, delayNote, ackNote, remapNote, queueNote, qosNote, loopNote, startSuffix);
 
     // 3. 键盘监听线程（tty 下生效）：SPACE=start（仅暂停态），p=pause（仅运行态），
     //    r=resume（仅暂停态，与 record 键位一致），+/-=rate ±10%，Ctrl+C 退出
@@ -1082,15 +1078,15 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
     resp = YOMKRPC_BAG_PLAY(bagDir, playbackRate, topics, loop, startOffsetSec,
                             playDelaySec, playWaitAckedMs, playTopicRemaps, queueSizeArg,
                             playQosOverridesPath);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "bag play failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("bag play failed: ", resp.m_msg);
         YOMKRPC_BAG_DEL_NODE(); // 失败路径同样须清理已建 bag 节点
         return 2;
     }
 
     // 5. 输出统计：首行 bag 目录，其后每主题一行 "topic: N 条 / M 字节"
-    YomkUnPackPkg(resp.m_data, StringArray, lines);
+    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (lines != nullptr)
     {
         for (const auto &line : lines->d)
@@ -1101,9 +1097,9 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
 
     // 6. 退出前显式删除 bag 节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
     resp = YOMKRPC_BAG_DEL_NODE();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "delete bag node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("delete bag node failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -1115,18 +1111,18 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
 // 文本逐行打印，成功返回 0，失败（路径不存在/无 metadata/JSON 损坏）打印原因返回 1
 static int runBagInfo(const std::string &bagDir)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcBagService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcBagService>().create();
 
     auto resp = YOMKRPC_BAG_INFO(bagDir);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "bag info failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("bag info failed: ", resp.m_msg);
         return 1;
     }
 
     // 逐行输出（首项为 ros2 对齐的空行，自然保留）
-    YomkUnPackPkg(resp.m_data, StringArray, lines);
+    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (lines != nullptr)
     {
         for (const auto &line : lines->d)
@@ -1144,13 +1140,13 @@ static int runBagInfo(const std::string &bagDir)
 // 打印原因返回 1
 static int runBagReindex(const std::string &bagDir)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcBagService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcBagService>().create();
 
     auto resp = YOMKRPC_BAG_REINDEX(bagDir);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "bag reindex failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("bag reindex failed: ", resp.m_msg);
         return 1;
     }
 
@@ -1164,17 +1160,17 @@ static int runBagReindex(const std::string &bagDir)
 // 逐行打印，成功返回 0，失败（配置错误/转换失败）打印原因返回 1
 static int runBagConvert(const std::vector<std::string> &inputs, const std::string &cfgPath)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcBagService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcBagService>().create();
 
     auto resp = YOMKRPC_BAG_CONVERT(inputs, cfgPath);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "bag convert failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("bag convert failed: ", resp.m_msg);
         return 1;
     }
 
-    YomkUnPackPkg(resp.m_data, StringArray, lines);
+    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (lines != nullptr)
     {
         for (const auto &line : lines->d)
@@ -1193,8 +1189,8 @@ static int runBagConvert(const std::vector<std::string> &inputs, const std::stri
 static int runHz(uint32_t domainId, const std::string &topicName, size_t windowSize,
         const DDSQosProfile &qos)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1202,9 +1198,9 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -1230,9 +1226,9 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
         hzHasLast = true;
     };
     resp = YOMKRPC_DEBUG_TOPIC_PRINT(topicName, onMessage, qos);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "register debug topic failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("register debug topic failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT(); // 登记失败路径同样须清理已建调试节点
         return 1;
     }
@@ -1240,8 +1236,7 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
     // 3. 主循环每秒打印一次统计（对齐 ros2 1s 打印线程节奏）：无新消息（末消息时间戳未变）
     // 跳过；窗口空（尚无完整间隔，仅收到 0/1 条消息）跳过——首条消息前静默
     std::signal(SIGINT, onSignal);
-    YOMK_INFO_TAG("yomkrpc", "measuring hz of topic \"", topicName, "\" on domain ",
-                  std::to_string(domainId), ", press Ctrl+C to exit");
+    ::yomk::log().tag("yomkrpc").info("measuring hz of topic \"", topicName, "\" on domain ", std::to_string(domainId), ", press Ctrl+C to exit");
     auto lastPrinted = hzLast;
     std::cout << std::fixed;
     while (!g_stop.load())
@@ -1279,9 +1274,9 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
 
     // 4. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print 不变式）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -1292,8 +1287,8 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
 // 无 Ctrl+C 循环，查完即退）
 static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1301,9 +1296,9 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false)
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -1317,16 +1312,16 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false)
     {
         resp = YOMKRPC_DEBUG_TOPIC_LIST(waitRounds, 200);
     }
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "list topics failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("list topics failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
-    YomkUnPackPkg(resp.m_data, StringArray, arr);
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (arr == nullptr)
     {
-        YOMK_ERROR_TAG("yomkrpc", "list topics failed: unexpected response payload");
+        ::yomk::log().tag("yomkrpc").error("list topics failed: unexpected response payload");
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
@@ -1345,9 +1340,9 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false)
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print 不变式）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -1361,8 +1356,8 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false)
 static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t waitRounds,
                    bool verbose = false)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1370,9 +1365,9 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -1387,16 +1382,16 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
     {
         resp = YOMKRPC_DEBUG_TOPIC_INFO(topicName, waitRounds, 200);
     }
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "topic info failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("topic info failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
-    YomkUnPackPkg(resp.m_data, StringArray, arr);
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (arr == nullptr)
     {
-        YOMK_ERROR_TAG("yomkrpc", "topic info failed: unexpected response payload");
+        ::yomk::log().tag("yomkrpc").error("topic info failed: unexpected response payload");
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
@@ -1408,9 +1403,9 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -1421,8 +1416,8 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
 // 未发现主题报错退出（无 Ctrl+C 循环，查完即退）
 static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_t waitRounds)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1430,24 +1425,24 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
     // 2. 独立收敛查询单主题详情（非 verbose 三行），仅消费首行类型名
     resp = YOMKRPC_DEBUG_TOPIC_INFO(topicName, waitRounds, 200);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "topic type failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("topic type failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
-    YomkUnPackPkg(resp.m_data, StringArray, arr);
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (arr == nullptr || arr->d.empty())
     {
-        YOMK_ERROR_TAG("yomkrpc", "topic type failed: unexpected response payload");
+        ::yomk::log().tag("yomkrpc").error("topic type failed: unexpected response payload");
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
@@ -1465,9 +1460,9 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -1478,8 +1473,8 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
 // 无 Ctrl+C 循环，查完即退
 static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t waitRounds)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1487,24 +1482,24 @@ static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
     // 2. 独立收敛按类型名反查主题列表
     resp = YOMKRPC_DEBUG_TOPIC_FIND(typeName, waitRounds, 200);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "topic find failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("topic find failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
-    YomkUnPackPkg(resp.m_data, StringArray, arr);
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (arr == nullptr || arr->d.empty())
     {
-        YOMK_ERROR_TAG("yomkrpc", "topic find failed: unexpected response payload");
+        ::yomk::log().tag("yomkrpc").error("topic find failed: unexpected response payload");
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
@@ -1516,9 +1511,9 @@ static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -1530,8 +1525,8 @@ static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t
 // 无 Ctrl+C 循环，查完即退
 static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint32_t waitRounds)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1539,24 +1534,24 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
     // 2. 独立收敛按类型名查询 IDL 结构行集
     resp = YOMKRPC_DEBUG_INTERFACE_SHOW(typeName, waitRounds, 200);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "interface show failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("interface show failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
-    YomkUnPackPkg(resp.m_data, StringArray, arr);
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (arr == nullptr || arr->d.empty())
     {
-        YOMK_ERROR_TAG("yomkrpc", "interface show failed: unexpected response payload");
+        ::yomk::log().tag("yomkrpc").error("interface show failed: unexpected response payload");
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
@@ -1568,9 +1563,9 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -1581,8 +1576,8 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
 // 无 Ctrl+C 循环，查完即退
 static int runInterfaceList(uint32_t domainId, uint32_t waitRounds)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1590,24 +1585,24 @@ static int runInterfaceList(uint32_t domainId, uint32_t waitRounds)
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
     // 2. 独立收敛收集发现缓存中的全部类型名
     resp = YOMKRPC_DEBUG_INTERFACE_LIST(waitRounds, 200);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "interface list failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("interface list failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
-    YomkUnPackPkg(resp.m_data, StringArray, arr);
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (arr == nullptr)
     {
-        YOMK_ERROR_TAG("yomkrpc", "interface list failed: unexpected response payload");
+        ::yomk::log().tag("yomkrpc").error("interface list failed: unexpected response payload");
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
@@ -1619,9 +1614,9 @@ static int runInterfaceList(uint32_t domainId, uint32_t waitRounds)
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -1704,8 +1699,8 @@ static std::string prettyJson(const std::string &json, int indentBase = 0)
 static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
         const std::string &outDir, uint32_t waitRounds)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1713,24 +1708,24 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
     // 2. 独立收敛查询消息描述两要素（StringArray 恰 2 行：类型名 + 紧凑 msg JSON）
     resp = YOMKRPC_DEBUG_TOPIC_MSG(topicName, waitRounds, 200);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "topic msg failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("topic msg failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
-    YomkUnPackPkg(resp.m_data, StringArray, arr);
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (arr == nullptr || arr->d.size() != 2)
     {
-        YOMK_ERROR_TAG("yomkrpc", "topic msg failed: unexpected response payload");
+        ::yomk::log().tag("yomkrpc").error("topic msg failed: unexpected response payload");
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
@@ -1746,7 +1741,7 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
     if (!dir.empty() &&
             (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)))
     {
-        YOMK_ERROR_TAG("yomkrpc", "output directory not found: ", dir);
+        ::yomk::log().tag("yomkrpc").error("output directory not found: ", dir);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
@@ -1768,7 +1763,7 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
     std::ofstream out(filePath);
     if (!out)
     {
-        YOMK_ERROR_TAG("yomkrpc", "cannot open file for write: ", filePath);
+        ::yomk::log().tag("yomkrpc").error("cannot open file for write: ", filePath);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
@@ -1780,9 +1775,9 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
 
     // 6. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同其余子命令不变式）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -1793,8 +1788,8 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
 // IDL 行集 → JSON 示例，独立收敛参数同其余查询（无 Ctrl+C 循环）
 static int runTopicPubExample(uint32_t domainId, const std::string &topicName, uint32_t waitRounds)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1802,24 +1797,24 @@ static int runTopicPubExample(uint32_t domainId, const std::string &topicName, u
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
     // 2. 独立收敛查询发布示例三段行集
     resp = YOMKRPC_DEBUG_TOPIC_EXAMPLE(topicName, waitRounds, 200);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "topic example failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("topic example failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
-    YomkUnPackPkg(resp.m_data, StringArray, arr);
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (arr == nullptr)
     {
-        YOMK_ERROR_TAG("yomkrpc", "topic example failed: unexpected response payload");
+        ::yomk::log().tag("yomkrpc").error("topic example failed: unexpected response payload");
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
@@ -1837,9 +1832,9 @@ static int runTopicPubExample(uint32_t domainId, const std::string &topicName, u
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -1860,8 +1855,8 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
         uint32_t waitRounds, double rateHz, uint32_t requiredSubs, uint32_t maxTimes,
         const DDSQosProfile &qos)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1869,9 +1864,9 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -1883,29 +1878,26 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
     std::signal(SIGINT, onSignal);
     if (maxTimes > 0)
     {
-        YOMK_INFO_TAG("yomkrpc", "publishing to topic \"", topicName, "\" at ",
-                      std::to_string(rateHz), " Hz, limit ", std::to_string(maxTimes),
-                      " messages, press Ctrl+C to stop");
+        ::yomk::log().tag("yomkrpc").info("publishing to topic \"", topicName, "\" at ", std::to_string(rateHz), " Hz, limit ", std::to_string(maxTimes), " messages, press Ctrl+C to stop");
     }
     else
     {
-        YOMK_INFO_TAG("yomkrpc", "publishing to topic \"", topicName, "\" at ",
-                      std::to_string(rateHz), " Hz, press Ctrl+C to stop");
+        ::yomk::log().tag("yomkrpc").info("publishing to topic \"", topicName, "\" at ", std::to_string(rateHz), " Hz, press Ctrl+C to stop");
     }
     const auto repeatIntervalMs =
         std::max<uint32_t>(1, static_cast<uint32_t>(std::lround(1000.0 / rateHz)));
     resp = YOMKRPC_DEBUG_TOPIC_PUB(topicName, json, waitRounds, 200, repeatIntervalMs, requiredSubs,
             maxTimes, qos);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "topic pub failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("topic pub failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
     // 持续发布统计：响应 data 为 StringArray { "total=N", "failed=M" }（含首轮）
     uint32_t total = 1;
     uint32_t failed = 0;
-    YomkUnPackPkg(resp.m_data, StringArray, stats);
+    auto stats = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (stats != nullptr)
     {
         for (const auto &kv : stats->d)
@@ -1933,9 +1925,9 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -1953,13 +1945,13 @@ static int runTopicPubJsonFile(uint32_t domainId, const std::string &topicName,
         const std::string &jsonFile, uint32_t waitRounds, double rateHz, uint32_t requiredSubs,
         uint32_t maxTimes, const DDSQosProfile &qos)
 {
-    YOMK_INIT();
+    ::yomk::server().init();
 
     // 1. 读文件：文件不存在/打不开报错退出（此时尚未创建调试节点，无需 DEBUG_QUIT）
     std::ifstream in(jsonFile);
     if (!in)
     {
-        YOMK_ERROR_TAG("yomkrpc", "cannot open json file: ", jsonFile);
+        ::yomk::log().tag("yomkrpc").error("cannot open json file: ", jsonFile);
         return 1;
     }
     std::ostringstream buf;
@@ -1968,7 +1960,7 @@ static int runTopicPubJsonFile(uint32_t domainId, const std::string &topicName,
     const auto first = raw.find_first_not_of(" \t\r\n");
     if (first == std::string::npos)
     {
-        YOMK_ERROR_TAG("yomkrpc", "json file is empty: ", jsonFile);
+        ::yomk::log().tag("yomkrpc").error("json file is empty: ", jsonFile);
         return 1;
     }
     const auto last = raw.find_last_not_of(" \t\r\n");
@@ -1984,8 +1976,8 @@ static int runTopicPubJsonFile(uint32_t domainId, const std::string &topicName,
 // 跳过），按名称排序；调试节点自身不在自身发现回调中，天然不列出（无 Ctrl+C 循环，查完即退）
 static int runNodeList(uint32_t domainId, uint32_t waitRounds)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1993,25 +1985,25 @@ static int runNodeList(uint32_t domainId, uint32_t waitRounds)
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
     // 2. 独立收敛查询域内命名参与者（与 topic 查询完全分开的路径）：命中返回 StringArray，
     //    每行一个节点名；域内暂无命名参与者返回空列表（合法，输出提示行）
     resp = YOMKRPC_DEBUG_NODE_LIST(waitRounds, 200);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "node list failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("node list failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
-    YomkUnPackPkg(resp.m_data, StringArray, arr);
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (arr == nullptr)
     {
-        YOMK_ERROR_TAG("yomkrpc", "node list failed: unexpected response payload");
+        ::yomk::log().tag("yomkrpc").error("node list failed: unexpected response payload");
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
@@ -2030,9 +2022,9 @@ static int runNodeList(uint32_t domainId, uint32_t waitRounds)
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list/info 不变式）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -2045,8 +2037,8 @@ static int runNodeList(uint32_t domainId, uint32_t waitRounds)
 // 空段仅打段头）；未发现节点名报错退出（无 Ctrl+C 循环，查完即退）
 static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t waitRounds)
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -2054,9 +2046,9 @@ static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t 
         return 1;
     }
     auto resp = YOMKRPC_DEBUG_NODE(domainId);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -2064,16 +2056,16 @@ static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t 
     //    行文案由服务层拼装（节点名 + Subscribers/Publishers 段），原样直出；
     //    未发现节点名（含收敛窗口内始终不可见）返回 eNo
     resp = YOMKRPC_DEBUG_NODE_INFO(nodeName, waitRounds, 200);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "node info failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("node info failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
-    YomkUnPackPkg(resp.m_data, StringArray, arr);
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (arr == nullptr)
     {
-        YOMK_ERROR_TAG("yomkrpc", "node info failed: unexpected response payload");
+        ::yomk::log().tag("yomkrpc").error("node info failed: unexpected response payload");
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
@@ -2085,9 +2077,9 @@ static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t 
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同其余子命令不变式）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("yomkrpc", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("yomkrpc").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;

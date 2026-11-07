@@ -1,6 +1,6 @@
 /**
  * @file TestYomkRpcBagServiceContract.cpp
- * @brief YomkRpcBagService 服务层契约测试（DDS-free，白盒经 invoke 直接分发）
+ * @brief YomkRpcBagService 服务层契约测试（DDS-free，白盒经服务器公开路由直接分发）
  *
  * 范围：仅验证 bag 服务 8 端点在不触发任何 DDS 运行时（不创建 participant）前提下的
  *       输入校验与错误码契约；真实 DDS 生命周期（创建/录制/删除）归
@@ -38,6 +38,7 @@
  */
 
 #include "TestCheck.h"
+#include "TestServiceAccess.h"
 #include "YomkRpcBagService.h" // 服务/DDSBagNode/DDSBagRecord/String/YOMK_* 宏
 
 #include <mcap/writer.hpp> // T8 造最小 mcap 分片（实现经链接库内单译元，仅声明头）
@@ -92,70 +93,70 @@ namespace
     // T2：/version 契约（不解包，忽略 pkg）
     void testVersion(YomkRpcBagService *svc)
     {
-        auto resp = svc->invoke("/version");
-        CHECK(resp.m_status == YomkResponse::eOk, "/version 返回 eOk");
+        auto resp = testInvoke(svc, "/version");
+        CHECK(resp.m_status == yomk::payload::ResStatus::Succeeded, "/version 返回 eOk");
         CHECK(resp.m_msg == "ok", "/version m_msg == ok");
 
-        YomkUnPackPkg(resp.m_data, String, ver);
+        auto ver = ::yomk::msgs::unpack<::yomk::msgs::String>(resp.m_data);;
         CHECK(ver != nullptr, "/version m_data 可解包为 String");
         if (ver != nullptr)
         {
             CHECK(ver->d.rfind("YomkRpc v", 0) == 0, "/version 版本串前缀为 YomkRpc v");
         }
 
-        auto respNull = svc->invoke("/version", nullptr);
-        CHECK(respNull.m_status == YomkResponse::eOk, "/version 传 nullptr 仍 eOk（忽略 pkg）");
+        auto respNull = testInvoke(svc, "/version", nullptr);
+        CHECK(respNull.m_status == yomk::payload::ResStatus::Succeeded, "/version 传 nullptr 仍 eOk（忽略 pkg）");
     }
 
     // T3：/create_node、/bag_record 的解包双守卫（nullptr / 异类包 / 改名伪造）
     void testUnpackGuards(YomkRpcBagService *svc)
     {
-        auto checkGuards = [&](const char *ep, const char *expectName, YomkPkgPtr wrongPkg)
+        auto checkGuards = [&](const char *ep, const char *expectName, YomkMsgPtr wrongPkg)
         {
             // (a) nullptr → 第一守卫 !pkg
-            auto ra = svc->invoke(ep, nullptr);
-            CHECK(ra.m_status == YomkResponse::eNo &&
+            auto ra = testInvoke(svc, ep, nullptr);
+            CHECK(ra.m_status == yomk::payload::ResStatus::Failed &&
                       ra.m_msg.find("pkg is null or pkg is not") != std::string::npos,
                   std::string(ep) + " : nullptr 包命中第一守卫 eNo");
 
             // (b) 异类包（保留自身名）→ 第一守卫 name()!=expectName
-            auto rb = svc->invoke(ep, wrongPkg);
-            CHECK(rb.m_status == YomkResponse::eNo &&
+            auto rb = testInvoke(svc, ep, wrongPkg);
+            CHECK(rb.m_status == yomk::payload::ResStatus::Failed &&
                       rb.m_msg.find("pkg is null or pkg is not") != std::string::npos,
                   std::string(ep) + " : 异类包命中第一守卫 eNo");
 
             // (c) 改名伪造：异类包改名为期望名 → 第一守卫通过、dynamic_pointer_cast 失败命中第二守卫
             wrongPkg->name(expectName);
-            auto rc = svc->invoke(ep, wrongPkg);
-            CHECK(rc.m_status == YomkResponse::eNo &&
+            auto rc = testInvoke(svc, ep, wrongPkg);
+            CHECK(rc.m_status == yomk::payload::ResStatus::Failed &&
                       rc.m_msg.find("dynamic_pointer_cast failed") != std::string::npos,
                   std::string(ep) + " : 改名伪造命中第二守卫(dynamic_pointer_cast 失败) eNo");
         };
 
-        checkGuards("/create_node", "DDSBagNode", YomkMkPtr(String, "wrong"));
-        checkGuards("/bag_record", "DDSBagRecord", YomkMkPtr(String, "wrong"));
-        checkGuards("/bag_info", "DDSBagInfo", YomkMkPtr(String, "wrong"));
-        checkGuards("/bag_reindex", "DDSBagReindex", YomkMkPtr(String, "wrong"));
-        checkGuards("/bag_convert", "DDSBagConvert", YomkMkPtr(String, "wrong"));
-        checkGuards("/bag_play", "DDSBagPlay", YomkMkPtr(String, "wrong"));
+        checkGuards("/create_node", "DDSBagNode", ::yomk::msgs::String::shared("wrong"));
+        checkGuards("/bag_record", "DDSBagRecord", ::yomk::msgs::String::shared("wrong"));
+        checkGuards("/bag_info", "DDSBagInfo", ::yomk::msgs::String::shared("wrong"));
+        checkGuards("/bag_reindex", "DDSBagReindex", ::yomk::msgs::String::shared("wrong"));
+        checkGuards("/bag_convert", "DDSBagConvert", ::yomk::msgs::String::shared("wrong"));
+        checkGuards("/bag_play", "DDSBagPlay", ::yomk::msgs::String::shared("wrong"));
     }
 
     // T4：/delete_node 特殊契约——单节点模型无参载荷，(void)pkg 不走解包守卫
     void testNoPayloadEndpoints(YomkRpcBagService *svc)
     {
         // 未建节点：无论载荷形态，均在 node_ 空检查处早退（不触 DDS）
-        auto rNull = svc->invoke("/delete_node", nullptr);
-        CHECK(rNull.m_status == YomkResponse::eNo &&
+        auto rNull = testInvoke(svc, "/delete_node", nullptr);
+        CHECK(rNull.m_status == yomk::payload::ResStatus::Failed &&
                   rNull.m_msg.find("bag node not created") != std::string::npos,
               "/delete_node : nullptr 载荷 → eNo bag node not created（不走解包守卫）");
 
-        auto rWrong = svc->invoke("/delete_node", YomkMkPtr(String, "wrong"));
-        CHECK(rWrong.m_status == YomkResponse::eNo &&
+        auto rWrong = testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("wrong"));
+        CHECK(rWrong.m_status == yomk::payload::ResStatus::Failed &&
                   rWrong.m_msg.find("bag node not created") != std::string::npos,
               "/delete_node : 异类载荷 → eNo bag node not created（载荷被忽略）");
 
-        auto rNoArg = svc->invoke("/delete_node");
-        CHECK(rNoArg.m_status == YomkResponse::eNo &&
+        auto rNoArg = testInvoke(svc, "/delete_node");
+        CHECK(rNoArg.m_status == yomk::payload::ResStatus::Failed &&
                   rNoArg.m_msg.find("bag node not created") != std::string::npos,
               "/delete_node : 无载荷 → eNo bag node not created（对齐无参宏形态）");
     }
@@ -163,13 +164,13 @@ namespace
     // T5：/create_node domainId 越界前置拦截（锁外校验，不触 DDS）
     void testCreateDomainBoundary(YomkRpcBagService *svc)
     {
-        auto r233 = svc->invoke("/create_node", YomkMkPtr(DDSBagNode, DDSBagNode{233}));
-        CHECK(r233.m_status == YomkResponse::eNo &&
+        auto r233 = testInvoke(svc, "/create_node", ::yomk::msgs::DDSBagNode::shared(DDSBagNode{233}));
+        CHECK(r233.m_status == yomk::payload::ResStatus::Failed &&
                   r233.m_msg.find("out of valid range") != std::string::npos,
               "domainId=233 → eNo out of valid range（前置拦截，不建 participant）");
 
-        auto rmax = svc->invoke("/create_node", YomkMkPtr(DDSBagNode, DDSBagNode{UINT32_MAX}));
-        CHECK(rmax.m_status == YomkResponse::eNo &&
+        auto rmax = testInvoke(svc, "/create_node", ::yomk::msgs::DDSBagNode::shared(DDSBagNode{UINT32_MAX}));
+        CHECK(rmax.m_status == yomk::payload::ResStatus::Failed &&
                   rmax.m_msg.find("out of valid range") != std::string::npos,
               "domainId=UINT32_MAX → eNo out of valid range（前置拦截，不再回绕深入 setDomainId）");
     }
@@ -178,20 +179,20 @@ namespace
     void testBagRecordInputOrder(YomkRpcBagService *svc)
     {
         // 空清单：topics 校验先于 node_ 检查，报输入问题而非节点未建
-        auto rEmpty = svc->invoke("/bag_record", YomkMkPtr(DDSBagRecord, DDSBagRecord{{}}));
-        CHECK(rEmpty.m_status == YomkResponse::eNo &&
+        auto rEmpty = testInvoke(svc, "/bag_record", ::yomk::msgs::DDSBagRecord::shared(DDSBagRecord{{}}));
+        CHECK(rEmpty.m_status == yomk::payload::ResStatus::Failed &&
                   rEmpty.m_msg.find("no topics given") != std::string::npos,
               "/bag_record 空清单+未建节点 → eNo no topics given（topics 校验先于节点检查）");
 
         // 含空名：同上，报空名而非节点未建
-        auto rBlank = svc->invoke("/bag_record", YomkMkPtr(DDSBagRecord, DDSBagRecord{{"t_ok", ""}}));
-        CHECK(rBlank.m_status == YomkResponse::eNo &&
+        auto rBlank = testInvoke(svc, "/bag_record", ::yomk::msgs::DDSBagRecord::shared(DDSBagRecord{{"t_ok", ""}}));
+        CHECK(rBlank.m_status == yomk::payload::ResStatus::Failed &&
                   rBlank.m_msg.find("empty topic name in topic list") != std::string::npos,
               "/bag_record 含空名+未建节点 → eNo empty topic name in topic list");
 
         // 合法清单 + 未建节点：node_ 空检查先于触达节点层
-        auto rValid = svc->invoke("/bag_record", YomkMkPtr(DDSBagRecord, DDSBagRecord{{"t_no_node"}}));
-        CHECK(rValid.m_status == YomkResponse::eNo &&
+        auto rValid = testInvoke(svc, "/bag_record", ::yomk::msgs::DDSBagRecord::shared(DDSBagRecord{{"t_no_node"}}));
+        CHECK(rValid.m_status == yomk::payload::ResStatus::Failed &&
                   rValid.m_msg.find("bag node not created") != std::string::npos,
               "/bag_record 合法包+未建节点 → eNo bag node not created（node_ 检查先于触达节点层）");
     }
@@ -200,14 +201,14 @@ namespace
     void testBagInfoContract(YomkRpcBagService *svc)
     {
         // bagDir 空校验锁外前置：未建节点也报输入错误（对齐 bagRecord topics 校验先例）
-        auto rEmpty = svc->invoke("/bag_info", YomkMkPtr(DDSBagInfo, DDSBagInfo{""}));
-        CHECK(rEmpty.m_status == YomkResponse::eNo &&
+        auto rEmpty = testInvoke(svc, "/bag_info", ::yomk::msgs::DDSBagInfo::shared(DDSBagInfo{""}));
+        CHECK(rEmpty.m_status == yomk::payload::ResStatus::Failed &&
                   rEmpty.m_msg.find("no bag dir given") != std::string::npos,
               "/bag_info 空目录+未建节点 → eNo no bag dir given（输入校验先于一切）");
 
         // 路径不存在：报文件层错误而非节点错误（纯文件读，未建节点亦可调）
-        auto rMiss = svc->invoke("/bag_info", YomkMkPtr(DDSBagInfo, DDSBagInfo{"info_svc_miss"}));
-        CHECK(rMiss.m_status == YomkResponse::eNo &&
+        auto rMiss = testInvoke(svc, "/bag_info", ::yomk::msgs::DDSBagInfo::shared(DDSBagInfo{"info_svc_miss"}));
+        CHECK(rMiss.m_status == yomk::payload::ResStatus::Failed &&
                   rMiss.m_msg.find("bag path [info_svc_miss] does not exist") != std::string::npos,
               "/bag_info 路径不存在 → eNo 文件层错误（不依赖节点生命周期）");
 
@@ -233,10 +234,10 @@ namespace
 }
 )";
         }
-        auto rOk = svc->invoke("/bag_info", YomkMkPtr(DDSBagInfo, DDSBagInfo{dir}));
-        CHECK(rOk.m_status == YomkResponse::eOk && rOk.m_msg == "ok",
+        auto rOk = testInvoke(svc, "/bag_info", ::yomk::msgs::DDSBagInfo::shared(DDSBagInfo{dir}));
+        CHECK(rOk.m_status == yomk::payload::ResStatus::Succeeded && rOk.m_msg == "ok",
               "/bag_info 真实 bag 目录 → eOk ok");
-        YomkUnPackPkg(rOk.m_data, StringArray, lines);
+        auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(rOk.m_data);;
         CHECK(lines != nullptr && lines->d.size() == 9,
               "回执可解包为 9 行 StringArray（节点层单主题契约行数）");
         if (lines != nullptr && lines->d.size() == 9)
@@ -258,15 +259,15 @@ namespace
     void testBagReindexContract(YomkRpcBagService *svc)
     {
         // bagDir 空校验锁外前置：未建节点也报输入错误（对齐 bagInfo 输入校验先例）
-        auto rEmpty = svc->invoke("/bag_reindex", YomkMkPtr(DDSBagReindex, DDSBagReindex{""}));
-        CHECK(rEmpty.m_status == YomkResponse::eNo &&
+        auto rEmpty = testInvoke(svc, "/bag_reindex", ::yomk::msgs::DDSBagReindex::shared(DDSBagReindex{""}));
+        CHECK(rEmpty.m_status == yomk::payload::ResStatus::Failed &&
                   rEmpty.m_msg.find("no bag dir given") != std::string::npos,
               "/bag_reindex 空目录+未建节点 → eNo no bag dir given（输入校验先于一切）");
 
         // 路径不存在：报文件层错误而非节点错误（纯文件操作，未建节点亦可调）
-        auto rMiss = svc->invoke("/bag_reindex",
-                                 YomkMkPtr(DDSBagReindex, DDSBagReindex{"reindex_svc_miss"}));
-        CHECK(rMiss.m_status == YomkResponse::eNo &&
+        auto rMiss = testInvoke(svc, "/bag_reindex",
+                                 ::yomk::msgs::DDSBagReindex::shared(DDSBagReindex{"reindex_svc_miss"}));
+        CHECK(rMiss.m_status == yomk::payload::ResStatus::Failed &&
                   rMiss.m_msg.find("bag path [reindex_svc_miss] does not exist") != std::string::npos,
               "/bag_reindex 路径不存在 → eNo 文件层错误（不依赖节点生命周期）");
 
@@ -277,8 +278,8 @@ namespace
         fs::remove_all(dir, ec);
         CHECK(fs::create_directory(dir, ec), "T8 前置：临时 bag 目录创建成功");
         CHECK(makeMcapFile(dir + "/bag_0.mcap", "/rt/t8", 2), "T8 前置：最小 mcap 分片造文件成功");
-        auto rOk = svc->invoke("/bag_reindex", YomkMkPtr(DDSBagReindex, DDSBagReindex{dir}));
-        CHECK(rOk.m_status == YomkResponse::eOk && rOk.m_msg == "ok",
+        auto rOk = testInvoke(svc, "/bag_reindex", ::yomk::msgs::DDSBagReindex::shared(DDSBagReindex{dir}));
+        CHECK(rOk.m_status == yomk::payload::ResStatus::Succeeded && rOk.m_msg == "ok",
               "/bag_reindex 真实 bag 目录 → eOk ok");
         CHECK(fs::exists(dir + "/metadata.json", ec), "T8 重建产物 metadata.json 落盘");
         fs::remove_all(dir, ec);
@@ -288,16 +289,16 @@ namespace
     void testBagConvertContract(YomkRpcBagService *svc)
     {
         // inputs 空校验锁外前置：未建节点也报输入错误（对齐 bagRecord topics 校验先例）
-        auto rNoInput = svc->invoke(
-            "/bag_convert", YomkMkPtr(DDSBagConvert, DDSBagConvert{{}, "whatever.json"}));
-        CHECK(rNoInput.m_status == YomkResponse::eNo &&
+        auto rNoInput = testInvoke(svc,
+            "/bag_convert", ::yomk::msgs::DDSBagConvert::shared(DDSBagConvert{{}, "whatever.json"}));
+        CHECK(rNoInput.m_status == yomk::payload::ResStatus::Failed &&
                   rNoInput.m_msg.find("no input bag dir given") != std::string::npos,
               "/bag_convert 空清单+未建节点 → eNo no input bag dir given（输入校验先于一切）");
 
         // cfgPath 空校验
-        auto rNoCfg = svc->invoke(
-            "/bag_convert", YomkMkPtr(DDSBagConvert, DDSBagConvert{{"some_dir"}, ""}));
-        CHECK(rNoCfg.m_status == YomkResponse::eNo &&
+        auto rNoCfg = testInvoke(svc,
+            "/bag_convert", ::yomk::msgs::DDSBagConvert::shared(DDSBagConvert{{"some_dir"}, ""}));
+        CHECK(rNoCfg.m_status == yomk::payload::ResStatus::Failed &&
                   rNoCfg.m_msg.find("no config file given") != std::string::npos,
               "/bag_convert 空 cfgPath → eNo no config file given");
 
@@ -305,9 +306,9 @@ namespace
         std::error_code ec;
 
         // cfg 不存在 → 文件层错误（纯文件操作，未建节点亦可调）
-        auto rMissCfg = svc->invoke("/bag_convert",
-            YomkMkPtr(DDSBagConvert, DDSBagConvert{{"some_dir"}, "no_such_cfg.json"}));
-        CHECK(rMissCfg.m_status == YomkResponse::eNo &&
+        auto rMissCfg = testInvoke(svc, "/bag_convert",
+            ::yomk::msgs::DDSBagConvert::shared(DDSBagConvert{{"some_dir"}, "no_such_cfg.json"}));
+        CHECK(rMissCfg.m_status == yomk::payload::ResStatus::Failed &&
                   rMissCfg.m_msg.find("open cfg [no_such_cfg.json] failed") != std::string::npos,
               "/bag_convert cfg 不存在 → eNo open cfg failed（不依赖节点生命周期）");
 
@@ -317,9 +318,9 @@ namespace
             std::ofstream out(badCfg);
             out << "{ not json";
         }
-        auto rBadJson = svc->invoke(
-            "/bag_convert", YomkMkPtr(DDSBagConvert, DDSBagConvert{{"some_dir"}, badCfg}));
-        CHECK(rBadJson.m_status == YomkResponse::eNo &&
+        auto rBadJson = testInvoke(svc,
+            "/bag_convert", ::yomk::msgs::DDSBagConvert::shared(DDSBagConvert{{"some_dir"}, badCfg}));
+        CHECK(rBadJson.m_status == yomk::payload::ResStatus::Failed &&
                   rBadJson.m_msg.find("parse cfg [" + badCfg + "] failed") != std::string::npos,
               "/bag_convert cfg 非法 JSON → eNo parse cfg failed");
         fs::remove(badCfg, ec);
@@ -337,11 +338,11 @@ namespace
             std::ofstream out(cfg);
             out << R"({"output_bags": [{"uri": ")" << outDir << R"("}]})";
         }
-        auto rOk = svc->invoke(
-            "/bag_convert", YomkMkPtr(DDSBagConvert, DDSBagConvert{{inDir}, cfg}));
-        CHECK(rOk.m_status == YomkResponse::eOk && rOk.m_msg == "ok",
+        auto rOk = testInvoke(svc,
+            "/bag_convert", ::yomk::msgs::DDSBagConvert::shared(DDSBagConvert{{inDir}, cfg}));
+        CHECK(rOk.m_status == yomk::payload::ResStatus::Succeeded && rOk.m_msg == "ok",
               "/bag_convert 真实输入+最小 cfg → eOk ok");
-        YomkUnPackPkg(rOk.m_data, StringArray, lines);
+        auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(rOk.m_data);;
         CHECK(lines != nullptr && lines->d.size() == 1 &&
                   lines->d[0].rfind("converted " + outDir + ":", 0) == 0 &&
                   lines->d[0].find("2 messages") != std::string::npos,
@@ -351,9 +352,9 @@ namespace
               "T9 转换产物 bag_0.mcap + metadata.json 落盘");
 
         // 输出目录已存在 → 冲突报错（防混入旧产物）
-        auto rDup = svc->invoke(
-            "/bag_convert", YomkMkPtr(DDSBagConvert, DDSBagConvert{{inDir}, cfg}));
-        CHECK(rDup.m_status == YomkResponse::eNo &&
+        auto rDup = testInvoke(svc,
+            "/bag_convert", ::yomk::msgs::DDSBagConvert::shared(DDSBagConvert{{inDir}, cfg}));
+        CHECK(rDup.m_status == yomk::payload::ResStatus::Failed &&
                   rDup.m_msg.find("output dir [" + outDir + "] already exists") != std::string::npos,
               "/bag_convert 输出目录已存在 → eNo already exists");
 
@@ -366,38 +367,38 @@ namespace
     void testBagPlayContract(YomkRpcBagService *svc)
     {
         // bagDir 空校验锁外前置：未建节点也报输入错误（对齐 bagInfo 输入校验先例）
-        auto rEmpty = svc->invoke("/bag_play", YomkMkPtr(DDSBagPlay, DDSBagPlay{""}));
-        CHECK(rEmpty.m_status == YomkResponse::eNo &&
+        auto rEmpty = testInvoke(svc, "/bag_play", ::yomk::msgs::DDSBagPlay::shared(DDSBagPlay{""}));
+        CHECK(rEmpty.m_status == yomk::payload::ResStatus::Failed &&
                   rEmpty.m_msg.find("no bag dir given") != std::string::npos,
               "/bag_play 空目录+未建节点 → eNo no bag dir given（输入校验先于一切）");
 
         // 节点检查先于文件触达：非空目录但未建节点 → eNo bag node not created（与
         // /bag_info 的"未建节点也可纯文件读"形态相反——bag_play 触 DDS 必经节点实例）
-        auto rNoNode = svc->invoke("/bag_play", YomkMkPtr(DDSBagPlay, DDSBagPlay{"play_svc_t10"}));
-        CHECK(rNoNode.m_status == YomkResponse::eNo &&
+        auto rNoNode = testInvoke(svc, "/bag_play", ::yomk::msgs::DDSBagPlay::shared(DDSBagPlay{"play_svc_t10"}));
+        CHECK(rNoNode.m_status == yomk::payload::ResStatus::Failed &&
                   rNoNode.m_msg.find("bag node not created") != std::string::npos &&
                   rNoNode.m_msg.find("does not exist") == std::string::npos,
               "/bag_play 未建节点 → eNo bag node not created（先于文件触达）");
 
         // playbackRate<=0 锁外校验先于节点检查（纯输入校验先例）：报速率错误而非节点错误
-        auto rRate = svc->invoke("/bag_play",
-            YomkMkPtr(DDSBagPlay, DDSBagPlay{"play_svc_t10", 0.0}));
-        CHECK(rRate.m_status == YomkResponse::eNo &&
+        auto rRate = testInvoke(svc, "/bag_play",
+            ::yomk::msgs::DDSBagPlay::shared(DDSBagPlay{"play_svc_t10", 0.0}));
+        CHECK(rRate.m_status == yomk::payload::ResStatus::Failed &&
                   rRate.m_msg.find("invalid playback rate") != std::string::npos,
             "/bag_play rate=0.0 + 未建节点 → eNo invalid playback rate（输入校验先于节点检查）");
 
         // rate 合法通过锁外校验后仍受节点检查兑底拦截（校验放行、节点拦截）
-        auto rOkRate = svc->invoke("/bag_play",
-            YomkMkPtr(DDSBagPlay, DDSBagPlay{"play_svc_t10", 2.0}));
-        CHECK(rOkRate.m_status == YomkResponse::eNo &&
+        auto rOkRate = testInvoke(svc, "/bag_play",
+            ::yomk::msgs::DDSBagPlay::shared(DDSBagPlay{"play_svc_t10", 2.0}));
+        CHECK(rOkRate.m_status == yomk::payload::ResStatus::Failed &&
                   rOkRate.m_msg.find("bag node not created") != std::string::npos,
             "/bag_play rate=2.0 合法通过校验 → eNo bag node not created（节点兑底）");
 
         // topics 字段经 handler 直透节点层（无锁外校验，清单对账在服务端预扫）：带
         // 清单未建节点仍由节点检查兑底拦截
-        auto rTopics = svc->invoke("/bag_play",
-            YomkMkPtr(DDSBagPlay, DDSBagPlay{"play_svc_t10", 1.0, {"/t"}}));
-        CHECK(rTopics.m_status == YomkResponse::eNo &&
+        auto rTopics = testInvoke(svc, "/bag_play",
+            ::yomk::msgs::DDSBagPlay::shared(DDSBagPlay{"play_svc_t10", 1.0, {"/t"}}));
+        CHECK(rTopics.m_status == yomk::payload::ResStatus::Failed &&
                   rTopics.m_msg.find("bag node not created") != std::string::npos,
             "/bag_play topics={/t} + 未建节点 → eNo bag node not created（topics 直透）");
     }
@@ -405,14 +406,14 @@ namespace
 
 int main()
 {
-    YOMK_INIT();
+    ::yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkRpcBagService(YOMK_SERVER_P);
-    CHECK(YOMK_ADD_SERVICE(svc) == 0, "YomkRpcBagService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkRpcBagService(::yomk::server().instance().get());
+    CHECK(::yomk::server().srv_ptr(svc).add() == 0, "YomkRpcBagService 注册成功（所有权移交框架，init() 已内部调用）");
 
     // T1：内省——8 端点齐全
-    auto infos = svc->funcInfos();
+    auto infos = testFuncInfos(svc);
     CHECK(infos.size() == 8 && infos.count("/version") && infos.count("/create_node") &&
               infos.count("/bag_record") && infos.count("/delete_node") &&
               infos.count("/bag_info") && infos.count("/bag_reindex") &&
@@ -429,7 +430,7 @@ int main()
     testBagConvertContract(svc);
     testBagPlayContract(svc);
 
-    CHECK(svc->invoke("/no_such_endpoint").m_status == YomkResponse::eNo, "未知端点返回 eNo");
+    CHECK(testInvoke(svc, "/no_such_endpoint").m_status == yomk::payload::ResStatus::Failed, "未知端点返回 eNo");
 
     return testReport("TestYomkRpcBagServiceContract");
 }

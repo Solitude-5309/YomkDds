@@ -18,6 +18,7 @@
  */
 
 #include "TestCheck.h"
+#include "TestServiceAccess.h"
 #include "YomkRpcService.h" // 服务/DDSNode/DDSXmlLoad/String/YOMK_* 宏 + xmlCache() 静态访问器
 
 #include <cstdint>
@@ -87,45 +88,45 @@ namespace
         return bool(f);
     }
 
-    YomkPkgPtr mkLoad(const std::string &xmlPath)
+    YomkMsgPtr mkLoad(const std::string &xmlPath)
     {
-        return YomkMkPtr(DDSXmlLoad, DDSXmlLoad{xmlPath});
+        return ::yomk::msgs::DDSXmlLoad::shared(DDSXmlLoad{xmlPath});
     }
 
-    YomkPkgPtr mkNode(uint32_t domainId, const std::string &nodeName, const std::string &serverLocator = "")
+    YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName, const std::string &serverLocator = "")
     {
-        return YomkMkPtr(DDSNode, DDSNode{nodeName, domainId, serverLocator});
+        return ::yomk::msgs::DDSNode::shared(DDSNode{nodeName, domainId, serverLocator});
     }
 } // namespace
 
 int main()
 {
-    YOMK_INIT();
+    ::yomk::server().init();
 
-    auto *svc = new YomkRpcService(YOMK_SERVER_P);
-    CHECK(YOMK_ADD_SERVICE(svc) == 0, "YomkRpcService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkRpcService(::yomk::server().instance().get());
+    CHECK(::yomk::server().srv_ptr(svc).add() == 0, "YomkRpcService 注册成功（所有权移交框架，init() 已内部调用）");
 
     // ---- A：load 前时序（现状零改动）----
     CHECK(YomkRpcService::xmlCache().empty(), "进程内未 load → xmlCache() 为空串（未加载现状）");
-    CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, "ts_before_node")).m_status == YomkResponse::eOk,
+    CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "ts_before_node")).m_status == yomk::payload::ResStatus::Succeeded,
           "load 前 create_node → eOk（XML 未加载=提取链跳过，现状行为零改动）");
 
     // ---- B/C/D：load_xml 错误三态（均不落缓存）----
-    auto notExist = svc->invoke("/load_xml", mkLoad("/tmp/yomkrpc_test_no_such_profiles.xml"));
-    CHECK(notExist.m_status == YomkResponse::eNo && notExist.m_msg.find("not readable") != std::string::npos,
+    auto notExist = testInvoke(svc, "/load_xml", mkLoad("/tmp/yomkrpc_test_no_such_profiles.xml"));
+    CHECK(notExist.m_status == yomk::payload::ResStatus::Failed && notExist.m_msg.find("not readable") != std::string::npos,
           "load_xml 路径不存在 → eNo not readable（文件读入前回显）");
     CHECK(YomkRpcService::xmlCache().empty(), "失败 load 不落缓存 → xmlCache() 仍空");
 
     const std::string emptyPath = "/tmp/yomkrpc_test_empty_profiles.xml";
     CHECK(writeTmpFile(emptyPath, ""), "写空 XML fixture → true");
-    auto isEmpty = svc->invoke("/load_xml", mkLoad(emptyPath));
-    CHECK(isEmpty.m_status == YomkResponse::eNo && isEmpty.m_msg.find("is empty") != std::string::npos,
+    auto isEmpty = testInvoke(svc, "/load_xml", mkLoad(emptyPath));
+    CHECK(isEmpty.m_status == yomk::payload::ResStatus::Failed && isEmpty.m_msg.find("is empty") != std::string::npos,
           "load_xml 空文件 → eNo is empty（空 raw 串无提取价值，前置拦截）");
 
     const std::string badPath = "/tmp/yomkrpc_test_bad_profiles.xml";
     CHECK(writeTmpFile(badPath, "this is not xml at all"), "写非法 XML fixture → true");
-    auto bad = svc->invoke("/load_xml", mkLoad(badPath));
-    CHECK(bad.m_status == YomkResponse::eNo && bad.m_msg.find("failed, rc=") != std::string::npos,
+    auto bad = testInvoke(svc, "/load_xml", mkLoad(badPath));
+    CHECK(bad.m_status == yomk::payload::ResStatus::Failed && bad.m_msg.find("failed, rc=") != std::string::npos,
           "load_xml 格式非法 → eNo failed, rc=<N>（load_XML_profiles_file 显式检查返回码，rc 整值回显）");
     std::cout << "[OBSERVE] 非法 XML msg=\"" << bad.m_msg << "\"" << std::endl;
     CHECK(YomkRpcService::xmlCache().empty(), "非法 XML 不落缓存 → xmlCache() 仍空");
@@ -133,25 +134,25 @@ int main()
     // ---- E：load_xml 合法（缓存落定）----
     const std::string validPath = "/tmp/yomkrpc_test_valid_profiles.xml";
     CHECK(writeTmpFile(validPath, kTestXml), "写合法 XML fixture → true");
-    auto ok = svc->invoke("/load_xml", mkLoad(validPath));
-    CHECK(ok.m_status == YomkResponse::eOk, "load_xml 合法文件 → eOk（load_XML_profiles_file 实际校验通过）");
+    auto ok = testInvoke(svc, "/load_xml", mkLoad(validPath));
+    CHECK(ok.m_status == yomk::payload::ResStatus::Succeeded, "load_xml 合法文件 → eOk（load_XML_profiles_file 实际校验通过）");
     CHECK(!YomkRpcService::xmlCache().empty() &&
               YomkRpcService::xmlCache().find("xml_by_name") != std::string::npos &&
               YomkRpcService::xmlCache().find("xml_default") != std::string::npos,
           "成功 load → xmlCache() 为文件 raw 串（含两 profile 名，节点层三级提取链取用）");
 
     // ---- F：load 后时序（合成链不阻断）----
-    CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, "ts_after_node")).m_status == YomkResponse::eOk,
+    CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "ts_after_node")).m_status == yomk::payload::ResStatus::Succeeded,
           "load 后 create_node → eOk（participant 按三级提取链合成，QoS 字段级读回见 NodeLifecycle）");
-    CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "ts_before_node")).m_status == YomkResponse::eOk,
+    CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("ts_before_node")).m_status == yomk::payload::ResStatus::Succeeded,
           "删除 ts_before_node → eOk");
-    CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "ts_after_node")).m_status == YomkResponse::eOk,
+    CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("ts_after_node")).m_status == yomk::payload::ResStatus::Succeeded,
           "删除 ts_after_node → eOk（关键不变式：退出前清理）");
 
     // ---- G：重复 load 整体替换 ----
     const std::string reloadedPath = "/tmp/yomkrpc_test_reloaded_profiles.xml";
     CHECK(writeTmpFile(reloadedPath, kTestXmlReloaded), "写第二份合法 XML fixture → true");
-    CHECK(svc->invoke("/load_xml", mkLoad(reloadedPath)).m_status == YomkResponse::eOk,
+    CHECK(testInvoke(svc, "/load_xml", mkLoad(reloadedPath)).m_status == yomk::payload::ResStatus::Succeeded,
           "重复 load 第二份合法文件 → eOk（load_XML_profiles_file 注册表追加语义）");
     CHECK(!YomkRpcService::xmlCache().empty() &&
               YomkRpcService::xmlCache().find("xml_reloaded") != std::string::npos &&
@@ -159,11 +160,11 @@ int main()
           "重复 load → xmlCache() 为最新成功文件整体替换（非追加拼接）");
 
     // ---- H：create_node 非法 serverLocator 容错回显 ----
-    auto badPort = svc->invoke("/create_node", mkNode(TEST_DOMAIN, "srv_bad_node", "127.0.0.1:99999"));
-    CHECK(badPort.m_status == YomkResponse::eNo && badPort.m_msg.find("port out of range") != std::string::npos,
+    auto badPort = testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "srv_bad_node", "127.0.0.1:99999"));
+    CHECK(badPort.m_status == yomk::payload::ResStatus::Failed && badPort.m_msg.find("port out of range") != std::string::npos,
           "serverLocator port=99999 越界 → eNo 回显 port out of range（setDomainId err 带出）");
-    auto emptyItem = svc->invoke("/create_node", mkNode(TEST_DOMAIN, "srv_bad_node2", "10.0.0.1;;10.0.0.2"));
-    CHECK(emptyItem.m_status == YomkResponse::eNo && emptyItem.m_msg.find("empty server item") != std::string::npos,
+    auto emptyItem = testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "srv_bad_node2", "10.0.0.1;;10.0.0.2"));
+    CHECK(emptyItem.m_status == yomk::payload::ResStatus::Failed && emptyItem.m_msg.find("empty server item") != std::string::npos,
           "serverLocator 空项 → eNo 回显 empty server item");
     std::cout << "[OBSERVE] 越界 port msg=\"" << badPort.m_msg << "\"" << std::endl;
 

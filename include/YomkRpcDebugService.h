@@ -3,7 +3,7 @@
 // （DDSDebugNode/DDSDebugTopic）、调试输出回调类型 DDSDebugOutputFunc，以及服务类
 // YomkRpcDebugService 的声明。调试能力由内部的 FastDDSDebugNode 提供（类型无关：经 DDS 发现
 // 机制取回远端 TypeObject 动态建订阅，消息以 JSON 文本投递给用户回调，零消息类型依赖）。
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 // 引 DDSQosProfile（DDSDebugTopic/DDSDebugTopicPub 的 qos 尾参）；平铺引号三环境命中：
 // 安装树同目录/测试树平铺/主库平铺
 #include "YomkRpcService.h"
@@ -24,20 +24,20 @@ public:
     virtual int init() override;
 
 private:
-    YomkResponse getVersion(YomkPkgPtr pkg);
-    YomkResponse createNode(YomkPkgPtr pkg);
-    YomkResponse topicPrint(YomkPkgPtr pkg);
-    YomkResponse listTopics(YomkPkgPtr pkg);
-    YomkResponse topicInfo(YomkPkgPtr pkg);
-    YomkResponse topicFind(YomkPkgPtr pkg);
-    YomkResponse interfaceShow(YomkPkgPtr pkg);
-    YomkResponse interfaceList(YomkPkgPtr pkg);
-    YomkResponse topicExample(YomkPkgPtr pkg);
-    YomkResponse topicMsg(YomkPkgPtr pkg);
-    YomkResponse topicPub(YomkPkgPtr pkg);
-    YomkResponse listNodes(YomkPkgPtr pkg);
-    YomkResponse nodeInfo(YomkPkgPtr pkg);
-    YomkResponse deleteNode(YomkPkgPtr pkg);
+    yomk::payload::Response getVersion(YomkMsgPtr pkg);
+    yomk::payload::Response createNode(YomkMsgPtr pkg);
+    yomk::payload::Response topicPrint(YomkMsgPtr pkg);
+    yomk::payload::Response listTopics(YomkMsgPtr pkg);
+    yomk::payload::Response topicInfo(YomkMsgPtr pkg);
+    yomk::payload::Response topicFind(YomkMsgPtr pkg);
+    yomk::payload::Response interfaceShow(YomkMsgPtr pkg);
+    yomk::payload::Response interfaceList(YomkMsgPtr pkg);
+    yomk::payload::Response topicExample(YomkMsgPtr pkg);
+    yomk::payload::Response topicMsg(YomkMsgPtr pkg);
+    yomk::payload::Response topicPub(YomkMsgPtr pkg);
+    yomk::payload::Response listNodes(YomkMsgPtr pkg);
+    yomk::payload::Response nodeInfo(YomkMsgPtr pkg);
+    yomk::payload::Response deleteNode(YomkMsgPtr pkg);
 
 private:
     // 单 debug 节点：一个进程至多一个实例，重复 create 须先 delete；服务析构时自动销毁节点
@@ -48,7 +48,7 @@ private:
 
 // topic pub 持续发布停止标志：发布循环（FastDDSDebugNode::topicPub 内部，repeatIntervalMs>0
 // 时）只读，SIGINT 处理函数（CLI onSignal）经 debugPubStop 写——atomic 无锁 store 保证
-// async-signal-safe（不可经 YOMK_REQUEST 停止：请求链路含锁与内存分配，handler 内禁用）。
+// async-signal-safe（不可经 yomk 请求链停止：请求链路含锁与内存分配，handler 内禁用）。
 // 调用方在发起持续发布前应先 debugPubReset 复位，避免上次会话残留置位导致循环秒退。
 namespace yomk
 {
@@ -196,17 +196,17 @@ struct DDSDebugTopicPub
 };
 
 // clang-format off
-// YomkMsg 是 YomkServer 第三方宏，cppcheck 未 --library 配置识别（unknownMacro 属工具配置需求，非自有源码缺陷）
+// YOMK_DEFINE_MSG 是 YomkServer 第三方宏，cppcheck 未 --library 配置识别（unknownMacro 属工具配置需求，非自有源码缺陷）
 // cppcheck-suppress unknownMacro
-YomkMsg(DDSDebugNode, DDSDebugNode, msg)
-YomkMsg(DDSDebugTopic, DDSDebugTopic, msg)
-YomkMsg(DDSDebugList, DDSDebugList, msg)
-YomkMsg(DDSDebugInfo, DDSDebugInfo, msg)
-YomkMsg(DDSNodeList, DDSNodeList, msg)
-YomkMsg(DDSNodeInfo, DDSNodeInfo, msg)
-YomkMsg(DDSDebugFind, DDSDebugFind, msg)
-YomkMsg(DDSDebugInterfaceShow, DDSDebugInterfaceShow, msg)
-YomkMsg(DDSDebugInterfaceList, DDSDebugInterfaceList, msg)
-YomkMsg(DDSDebugTopicExample, DDSDebugTopicExample, msg)
-YomkMsg(DDSDebugTopicMsg, DDSDebugTopicMsg, msg)
-YomkMsg(DDSDebugTopicPub, DDSDebugTopicPub, msg)
+YOMK_DEFINE_MSG(::DDSDebugNode, DDSDebugNode, msg)
+YOMK_DEFINE_MSG(::DDSDebugTopic, DDSDebugTopic, msg)
+YOMK_DEFINE_MSG(::DDSDebugList, DDSDebugList, msg)
+YOMK_DEFINE_MSG(::DDSDebugInfo, DDSDebugInfo, msg)
+YOMK_DEFINE_MSG(::DDSNodeList, DDSNodeList, msg)
+YOMK_DEFINE_MSG(::DDSNodeInfo, DDSNodeInfo, msg)
+YOMK_DEFINE_MSG(::DDSDebugFind, DDSDebugFind, msg)
+YOMK_DEFINE_MSG(::DDSDebugInterfaceShow, DDSDebugInterfaceShow, msg)
+YOMK_DEFINE_MSG(::DDSDebugInterfaceList, DDSDebugInterfaceList, msg)
+YOMK_DEFINE_MSG(::DDSDebugTopicExample, DDSDebugTopicExample, msg)
+YOMK_DEFINE_MSG(::DDSDebugTopicMsg, DDSDebugTopicMsg, msg)
+YOMK_DEFINE_MSG(::DDSDebugTopicPub, DDSDebugTopicPub, msg)

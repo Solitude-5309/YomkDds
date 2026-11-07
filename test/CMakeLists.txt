@@ -7,7 +7,7 @@
 #   2. 为仅对自有源码插桩 sanitizer/coverage，测试树从源码重新编译 ../src/*.cpp 为被测目标
 #      yomkrpc_under_test，而非链接已安装的 libYomkRpc.so（后者无法单独插桩）。
 #   3. 每个被测主题一个独立可执行程序（单一 TU + 纯 main + CHECK），进程隔离，
-#      规避 YomkAPI 单进程单次初始化约束。
+#      规避 YomkServer 单进程单次初始化约束。
 #
 # 构建（在 test/ 下独立配置，勿污染主库构建）：
 #   cmake -S test -B test/build -DCMAKE_PREFIX_PATH="/opt/yomk"
@@ -26,7 +26,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 get_filename_component(YOMKRPC_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 
 # ----------------------------- 依赖定位 -----------------------------
+# 版本系列检测：测试树独立配置时同样只接受 YomkServer 3.x.x
+include(${YOMKRPC_ROOT}/cmake/YomkServerVersionCheck.cmake)
 find_package(YomkServer REQUIRED)
+yomk_server_version_check()
 message(STATUS "[test] YomkServer version: ${YomkServer_VERSION}")
 
 # FastDDS 随主库 vendored 于 thirdparty/，测试树直接复用，不依赖系统安装

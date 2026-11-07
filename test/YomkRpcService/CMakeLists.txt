@@ -1,6 +1,6 @@
 # =============================================================================
 # MC1：服务层契约测试（DDS-free）
-# 目的：白盒经 svc->invoke() 验证 YomkRpcService 8 端点的输入校验与错误码契约，
+# 目的：白盒经 testInvoke()（服务器公开路由）验证 YomkRpcService 8 端点的输入校验与错误码契约，
 #       全程不创建任何 DDS participant（解包守卫/节点不存在均在触达 DDS 前早退）。
 # =============================================================================
 add_executable(TestYomkRpcServiceContract TestYomkRpcServiceContract.cpp)
@@ -97,7 +97,7 @@ set_tests_properties(TestYomkRpcTypes PROPERTIES
 
 # =============================================================================
 # MC6：并发安全 + TSan 基线（多线程 invoke 锁正确性 / 并发收发 / teardown 竞态）
-# 从多线程并发驱动 svc->invoke()，实证双层锁(service mtx_ + node mtx_)正确性、通用 take() reader
+# 从多线程并发驱动 testInvoke()，实证双层锁(service mtx_ + node mtx_)正确性、通用 take() reader
 # 回调路径并发下数据完整性、delete_node 与活跃回调 teardown 竞态安全；off/asan/tsan 三模式验证。
 # =============================================================================
 add_executable(TestYomkRpcConcurrency TestYomkRpcConcurrency.cpp)

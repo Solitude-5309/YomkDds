@@ -77,15 +77,15 @@ YOMKRPC_NODE(nodeName[, domainId[, udpDiscoverServerLocator[, tcpDiscoverServerL
 发布端关键代码（节选自 `examples/ExampleDiscoverServerPub.cpp`，完整程序见仓库源文件）：
 
 ```cpp
-YOMK_INIT();
-YOMK_NEW_SERVICE(YomkRpcService);
+::yomk::server().init();
+::yomk::server().srv<YomkRpcService>().create();
 
 // 1. 创建节点：域 id 显式 100（DS 模式下可与对端异域）；省略双通道尾参 →
 //    直配串自动取环境变量（总开关开启时生效，participant 以 CLIENT 发现协议运行）
 auto resp = YOMKRPC_NODE("ds_pub_node", 100);
-if (resp.m_status != YomkResponse::eOk)
+if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 {
-    YOMK_ERROR_TAG("ExampleDiscoverServerPub", "create node failed: ", resp.m_msg);
+    ::yomk::log().tag("ExampleDiscoverServerPub").error("create node failed: ", resp.m_msg);
     return 1;
 }
 
@@ -119,7 +119,7 @@ auto onMessage = [&](const void* data)
 {
     auto* msg = static_cast<const YomkRpc::MString*>(data);
     received++;
-    YOMK_INFO_TAG("ExampleDiscoverServerSub", "[RECV] ", msg->data());
+    ::yomk::log().tag("ExampleDiscoverServerSub").info("[RECV] ", msg->data());
 };
 resp = YOMKRPC_SUB_TOPIC("ds_sub_node", "ds_hello_world", new YomkRpc::MStringPubSubType(), onMessage);
 ```

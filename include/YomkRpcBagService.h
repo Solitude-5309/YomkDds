@@ -4,7 +4,7 @@
 // 服务类 YomkRpcBagService 的声明。录制能力由内部的
 // FastDDSBagNode 提供（类型无关：透传原始 CDR 字节直写 mcap，schema_id=0 无 schema 通道，
 // 零消息类型依赖）；回放能力同节点（读 mcap 分片重建透传 writer，按录制时间轴发布）。
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 // 引 DDSBagNode 三字段缺省初始化器 env helper（YomkRpcDefaultDomainId 等）；平铺引号
 // 三环境命中：安装树同目录/测试树平铺/主库平铺
 #include "YomkRpcService.h"
@@ -25,14 +25,14 @@ public:
     virtual int init() override;
 
 private:
-    YomkResponse getVersion(YomkPkgPtr pkg);
-    YomkResponse createNode(YomkPkgPtr pkg);
-    YomkResponse bagRecord(YomkPkgPtr pkg);
-    YomkResponse deleteNode(YomkPkgPtr pkg);
-    YomkResponse bagInfo(YomkPkgPtr pkg);
-    YomkResponse bagReindex(YomkPkgPtr pkg);
-    YomkResponse bagConvert(YomkPkgPtr pkg);
-    YomkResponse bagPlay(YomkPkgPtr pkg);
+    yomk::payload::Response getVersion(YomkMsgPtr pkg);
+    yomk::payload::Response createNode(YomkMsgPtr pkg);
+    yomk::payload::Response bagRecord(YomkMsgPtr pkg);
+    yomk::payload::Response deleteNode(YomkMsgPtr pkg);
+    yomk::payload::Response bagInfo(YomkMsgPtr pkg);
+    yomk::payload::Response bagReindex(YomkMsgPtr pkg);
+    yomk::payload::Response bagConvert(YomkMsgPtr pkg);
+    yomk::payload::Response bagPlay(YomkMsgPtr pkg);
 
 private:
     // 单 bag 节点：一个进程至多一个实例，重复 create 须先 delete；服务析构时自动销毁节点
@@ -43,7 +43,7 @@ private:
 
 // bag record 录制停止标志：录制循环（FastDDSBagNode::record 内部，每 100ms 轮询）只读，
 // SIGINT 处理函数（CLI onSignal）经 bagRecordStop 写——atomic 无锁 store 保证
-// async-signal-safe（不可经 YOMK_REQUEST 停止：请求链路含锁与内存分配，handler 内禁用）。
+// async-signal-safe（不可经 yomk 请求链停止：请求链路含锁与内存分配，handler 内禁用）。
 // 调用方在发起录制前应先 bagRecordReset 复位，避免上次会话残留置位导致秒退；
 // bag 服务 handler 录制前亦兜底复位 stop（只复位 stop 不动 paused——暂停是调用方启动意图）。
 //
@@ -76,7 +76,7 @@ inline void bagRecordReset()
 
 // bag play 回放停止标志：播放线程（读线程/播放线程各阻塞处）只读，SIGINT 处理函数
 //（CLI onSignal）经 bagPlayStop 写——atomic 无锁 store 保证 async-signal-safe（同
-// bagRecordStop 约定：不可经 YOMK_REQUEST 停止）。调用方在发起回放前应先 bagPlayReset
+// bagRecordStop 约定：不可经 yomk 请求链停止）。调用方在发起回放前应先 bagPlayReset
 // 复位，避免上次会话残留置位导致秒退；bag 服务 handler 回放前亦兜底复位 stop（只复位
 // stop 不动 paused——暂停是调用方运行意图）。
 //
@@ -217,11 +217,11 @@ struct DDSBagPlay
 };
 
 // clang-format off
-// YomkMsg 是 YomkServer 第三方宏，cppcheck 未 --library 配置识别（unknownMacro 属工具配置需求，非自有源码缺陷）
+// YOMK_DEFINE_MSG 是 YomkServer 第三方宏，cppcheck 未 --library 配置识别（unknownMacro 属工具配置需求，非自有源码缺陷）
 // cppcheck-suppress unknownMacro
-YomkMsg(DDSBagNode, DDSBagNode, msg)
-YomkMsg(DDSBagRecord, DDSBagRecord, msg)
-YomkMsg(DDSBagInfo, DDSBagInfo, msg)
-YomkMsg(DDSBagReindex, DDSBagReindex, msg)
-YomkMsg(DDSBagConvert, DDSBagConvert, msg)
-YomkMsg(DDSBagPlay, DDSBagPlay, msg)
+YOMK_DEFINE_MSG(::DDSBagNode, DDSBagNode, msg)
+YOMK_DEFINE_MSG(::DDSBagRecord, DDSBagRecord, msg)
+YOMK_DEFINE_MSG(::DDSBagInfo, DDSBagInfo, msg)
+YOMK_DEFINE_MSG(::DDSBagReindex, DDSBagReindex, msg)
+YOMK_DEFINE_MSG(::DDSBagConvert, DDSBagConvert, msg)
+YOMK_DEFINE_MSG(::DDSBagPlay, DDSBagPlay, msg)

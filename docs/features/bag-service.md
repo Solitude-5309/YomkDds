@@ -17,7 +17,7 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 | 转换 bag（过滤/裁剪/归并） | `YOMKRPC_BAG_CONVERT(inputs, cfgPath)` | `bag convert` | 不须（纯文件操作，无须 create_node） |
 | 回放 bag | `YOMKRPC_BAG_PLAY(...)`（等价宏见 README 6.11，须先自建 bag 节点） | `bag play` | CLI 自动创建并在退出前删除 bag 节点 |
 
-> 除 `YOMKRPC_VERSION()` 外，其余宏均返回 `YomkResponse`，调用后须判 `m_status == YomkResponse::eOk`；失败时可读 `m_msg` 获取错误信息。
+> 除 `YOMKRPC_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 ## 使用方式概述
 
@@ -47,7 +47,7 @@ yomkrpc bag record --start-paused hello_world  # 暂停态启动（订阅照常�
 等价宏调用（完整用户代码，`YOMKRPC_BAG_*` 宏定义于 `YomkRpcAPI.h`，SIGINT 处理与暂停控制声明于 `YomkRpcBagService.h`）：
 
 ```cpp
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpc/YomkRpcBagService.h> // bagRecordStop/bagRecordReset（停止标志读写端）
 
@@ -61,13 +61,13 @@ void onSignal(int) { bagRecordStop(); }  // 无锁原子置位，录制循环读
 
 int main()
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcBagService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcBagService>().create();
 
     // 1. 复位残留停止标志（防上次会话置位导致秒退）后创建 bag 节点（单节点模型）
     bagRecordReset();
     auto resp = YOMKRPC_BAG_NODE(0);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         return 1;
     }
@@ -82,7 +82,7 @@ int main()
     //                                                      第三参单分片最大字节数（0=不分片，>0 写满滚动 bag_N.mcap），
     //                                                      第四参单分片最大时长秒（0=不分片，>0 时长达限滚动；与字节上限同用时先到先分），
     //                                                      第五参写缓存双缓冲字节数（0=每条直写；>0 回调拷贝入队独立线程写盘，缓存满丢新并计数）
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         // m_msg 为逐项原因（校验类多行）；失败路径同样须删除已建 bag 节点
         YOMKRPC_BAG_DEL_NODE();
@@ -90,7 +90,7 @@ int main()
     }
 
     // 4. 成功回执 StringArray：首行 bag 目录名，其后每主题一行 "topic: N 条 / M 字节"
-    YomkUnPackPkg(resp.m_data, StringArray, lines);
+    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
     if (lines != nullptr)
     {
         for (const auto &line : lines->d) { std::cout << line << "\n"; }

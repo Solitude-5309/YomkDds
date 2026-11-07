@@ -4,7 +4,10 @@ project(ExampleYomkRpc LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# 版本系列检测：示例独立配置时同样只接受 YomkServer 3.x.x
+include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/YomkServerVersionCheck.cmake)
 find_package(YomkServer REQUIRED)
+yomk_server_version_check()
 find_package(YomkRpc REQUIRED)
 
 message(STATUS "YomkServer version: ${YomkServer_VERSION}")

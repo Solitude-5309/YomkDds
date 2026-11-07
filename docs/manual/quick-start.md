@@ -46,7 +46,7 @@ target_link_libraries(first_pubsub PRIVATE YomkRpc::YomkRpc YomkServer::YomkServ
 `first_pubsub.cpp` 完整内容（同一节点内注册发布与订阅主题，发布 5 条 MString 消息并等待接收）：
 
 ```cpp
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
@@ -60,8 +60,8 @@ using namespace yomk;
 int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 RPC 服务
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcService>().create();
     YOMKRPC_VERSION(); // 查看版本（宏内部自动解包并打印）
 
     // 2. 创建节点（每节点一个独立 DDS 参与者；domainId 缺省取环境变量 YOMKRPC_DDS_DOMAIN_ID）
@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
     {
         auto *msg = static_cast<const YomkRpc::MString *>(data);
         received++;
-        YOMK_INFO_TAG("PubSubExample", "[RECV] ", msg->data());
+        ::yomk::log().tag("PubSubExample").info("[RECV] ", msg->data());
     };
     YOMKRPC_SUB_TOPIC("node0", "my_topic", new YomkRpc::MStringPubSubType(), onMessage);
 
@@ -87,13 +87,13 @@ int main(int argc, char *argv[])
         YomkRpc::MString msg;
         msg.data("hello " + std::to_string(i));
         YOMKRPC_PUB_MSG("node0", "my_topic", &msg);
-        YOMK_INFO_TAG("PubSubExample", "[SEND] ", msg.data());
+        ::yomk::log().tag("PubSubExample").info("[SEND] ", msg.data());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // 6. 等待接收完成（首条消息可能因 discovery 时序丢失）
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    YOMK_INFO_TAG("PubSubExample", "received=", received.load(), "/5");
+    ::yomk::log().tag("PubSubExample").info("received=", received.load(), "/5");
 
     // 7. 退出前删除节点（显式销毁 DDS 实体）
     YOMKRPC_DEL_NODE("node0");
@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 
 | 片段 | 作用 |
 |---|---|
-| `YOMK_INIT()` + `YOMK_NEW_SERVICE(YomkRpcService)` | 初始化 YomkServer 框架并启动 RPC 服务（`YomkServer/YomkAPI.h` 提供）；每个使用 YomkRpc 宏 API 的程序开头都需要 |
+| `::yomk::server().init()` + `::yomk::server().srv<YomkRpcService>().create()` | 初始化 YomkServer 框架并启动 RPC 服务（`YomkServer/YomkApi.h` 提供）；每个使用 YomkRpc 宏 API 的程序开头都需要 |
 | `YOMKRPC_VERSION()` | 版本查询宏，内部自动解包并打印，无返回值 |
 | `YOMKRPC_NODE("node0")` | 创建节点，每节点一个独立 DDS 参与者；domainId 缺省取环境变量 `YOMKRPC_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0，合法范围 [0,232]） |
 | `YOMKRPC_PUB_TOPIC(...)` / `YOMKRPC_SUB_TOPIC(...)` | 在节点上注册发布/订阅主题；type 实参为 `new XxxPubSubType()`，**所有权移交服务端，调用后 caller 不再持有/释放** |
@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
 | `YOMKRPC_PUB_MSG("node0", "my_topic", &msg)` | 发布数据；data 为数据实例指针（借用，同步写入，caller 保留所有权） |
 | `YOMKRPC_DEL_NODE("node0")` | 退出前删除节点，显式销毁 DDS 实体 |
 
-除 `YOMKRPC_VERSION()` 外，其余宏均返回 `YomkResponse`，调用后须判 `m_status == YomkResponse::eOk`，失败时可读 `m_msg` 获取错误信息（上例为最小篇幅省略了判断，正式代码建议参照 `examples/ExampleYomkRpcTopic.cpp` 逐宏判错）。
+除 `YOMKRPC_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`，失败时可读 `m_msg` 获取错误信息（上例为最小篇幅省略了判断，正式代码建议参照 `examples/ExampleYomkRpcTopic.cpp` 逐宏判错）。
 
 ### 第 3 步：编译并运行
 

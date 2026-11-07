@@ -4,7 +4,7 @@
  *       再注册订阅主题，等待发现后发布 5 条并打印接收统计，退出前 DEL_NODE 清理。
  */
 #include <YomkRpc/YomkRpcAPI.h>
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
@@ -20,34 +20,34 @@ using namespace yomk;
 // 覆盖 create_node / register_pub_topic / register_sub_topic / publish / delete_node 全流程。
 int main(int argc, char* argv[])
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcService>().create();
 
     // 查看版本（宏内部自动解包并打印）
-    YOMK_INFO_TAG("ExampleYomkRpcTopic", "=== YomkRpcService::getVersion ===");
+    ::yomk::log().tag("ExampleYomkRpcTopic").info("=== YomkRpcService::getVersion ===");
     YOMKRPC_VERSION();
 
     // 1. 创建节点（每节点一个独立 DDS 参与者）
-    YOMK_INFO_TAG("ExampleYomkRpcTopic", "=== YomkRpcService::createNode ===");
+    ::yomk::log().tag("ExampleYomkRpcTopic").info("=== YomkRpcService::createNode ===");
     auto resp = YOMKRPC_NODE("node0");
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleYomkRpcTopic", "create node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleYomkRpcTopic").error("create node failed: ", resp.m_msg);
         return 1;
     }
 
     // 2. 注册发布主题（type 所有权移交 FastDDSNode）
-    YOMK_INFO_TAG("ExampleYomkRpcTopic", "=== YomkRpcService::registerPubTopic ===");
+    ::yomk::log().tag("ExampleYomkRpcTopic").info("=== YomkRpcService::registerPubTopic ===");
     resp = YOMKRPC_PUB_TOPIC("node0", "rpc_demo_topic", new YomkRpc::MStringPubSubType());
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleYomkRpcTopic", "register pub topic failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleYomkRpcTopic").error("register pub topic failed: ", resp.m_msg);
         YOMKRPC_DEL_NODE("node0");
         return 1;
     }
 
     // 3. 注册订阅主题：回调中累加计数并记录最后一条消息
-    YOMK_INFO_TAG("ExampleYomkRpcTopic", "=== YomkRpcService::registerSubTopic ===");
+    ::yomk::log().tag("ExampleYomkRpcTopic").info("=== YomkRpcService::registerSubTopic ===");
     std::atomic<int> received{0};
     std::mutex msgMtx;
     std::string lastMsg;
@@ -58,31 +58,30 @@ int main(int argc, char* argv[])
         std::lock_guard<std::mutex> lock(msgMtx);
         lastMsg = msg->data();
         received++;
-        YOMK_INFO_TAG("ExampleYomkRpcTopic", "[RECV] 收到消息: ", msg->data());
+        ::yomk::log().tag("ExampleYomkRpcTopic").info("[RECV] 收到消息: ", msg->data());
     };
     resp = YOMKRPC_SUB_TOPIC("node0", "rpc_demo_topic", new YomkRpc::MStringPubSubType(), onMessage);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleYomkRpcTopic", "register sub topic failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleYomkRpcTopic").error("register sub topic failed: ", resp.m_msg);
         YOMKRPC_DEL_NODE("node0");
         return 1;
     }
 
     // 4. 等待 DDS discovery 完成后发布 5 条消息
-    YOMK_INFO_TAG("ExampleYomkRpcTopic", "=== YomkRpcService::publish ===");
+    ::yomk::log().tag("ExampleYomkRpcTopic").info("=== YomkRpcService::publish ===");
     std::this_thread::sleep_for(std::chrono::seconds(1));
     for (int i = 0; i < 5; ++i)
     {
         YomkRpc::MString msg;
         msg.data("Hello YomkRpcService " + std::to_string(i));
         resp = YOMKRPC_PUB_MSG("node0", "rpc_demo_topic", &msg);
-        if (resp.m_status != YomkResponse::eOk)
+        if (resp.m_status != yomk::payload::ResStatus::Succeeded)
         {
-            YOMK_ERROR_TAG(
-                "ExampleYomkRpcTopic", "[SEND] 发布失败: ", msg.data(), " status=", static_cast<int>(resp.m_status));
+            ::yomk::log().tag("ExampleYomkRpcTopic").error("[SEND] 发布失败: ", msg.data(), " status=", static_cast<int>(resp.m_status));
             break;
         }
-        YOMK_INFO_TAG("ExampleYomkRpcTopic", "[SEND] 发布消息: ", msg.data());
+        ::yomk::log().tag("ExampleYomkRpcTopic").info("[SEND] 发布消息: ", msg.data());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
@@ -93,14 +92,14 @@ int main(int argc, char* argv[])
         std::lock_guard<std::mutex> lock(msgMtx);
         lastMsgCopy = lastMsg;
     }
-    YOMK_INFO_TAG("ExampleYomkRpcTopic", "[RESULT] 接收=", received.load(), "/5 最后一条=", lastMsgCopy);
+    ::yomk::log().tag("ExampleYomkRpcTopic").info("[RESULT] 接收=", received.load(), "/5 最后一条=", lastMsgCopy);
 
     // 6. 退出前销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
-    YOMK_INFO_TAG("ExampleYomkRpcTopic", "=== YomkRpcService::deleteNode ===");
+    ::yomk::log().tag("ExampleYomkRpcTopic").info("=== YomkRpcService::deleteNode ===");
     resp = YOMKRPC_DEL_NODE("node0");
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleYomkRpcTopic", "delete node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleYomkRpcTopic").error("delete node failed: ", resp.m_msg);
         return 1;
     }
     return 0;

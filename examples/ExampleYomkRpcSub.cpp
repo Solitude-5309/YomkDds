@@ -5,7 +5,7 @@
  *       配对验证。
  */
 #include <YomkRpc/YomkRpcAPI.h>
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
@@ -27,14 +27,14 @@ static void onSignal(int)
 // 跨进程运行方式（与 ExampleYomkRpcPub 配合、启动顺序）见 README。
 int main(int argc, char* argv[])
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcService>().create();
 
     // 1. 创建节点：domainId 缺省取环境变量 YOMKRPC_DDS_DOMAIN_ID，须与发布端同域方可互通
     auto resp = YOMKRPC_NODE("sub_node");
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleYomkRpcSub", "create node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleYomkRpcSub").error("create node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -45,30 +45,30 @@ int main(int argc, char* argv[])
         // data 为交付的消息实例指针（仅回调期间有效），转型为具体消息类型后读取
         auto* msg = static_cast<const YomkRpc::MString*>(data);
         received++;
-        YOMK_INFO_TAG("ExampleYomkRpcSub", "[RECV] ", msg->data());
+        ::yomk::log().tag("ExampleYomkRpcSub").info("[RECV] ", msg->data());
     };
     resp = YOMKRPC_SUB_TOPIC("sub_node", "hello_world", new YomkRpc::MStringPubSubType(), onMessage);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleYomkRpcSub", "register sub topic failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleYomkRpcSub").error("register sub topic failed: ", resp.m_msg);
         YOMKRPC_DEL_NODE("sub_node");
         return 1;
     }
 
     // 3. 监听 Ctrl+C，主循环等待退出信号
     std::signal(SIGINT, onSignal);
-    YOMK_INFO_TAG("ExampleYomkRpcSub", "subscribing hello_world, press Ctrl+C to exit");
+    ::yomk::log().tag("ExampleYomkRpcSub").info("subscribing hello_world, press Ctrl+C to exit");
     while (!g_stop.load())
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     // 4. 退出前显式销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
-    YOMK_INFO_TAG("ExampleYomkRpcSub", "received total=", received.load(), " messages");
+    ::yomk::log().tag("ExampleYomkRpcSub").info("received total=", received.load(), " messages");
     resp = YOMKRPC_DEL_NODE("sub_node");
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleYomkRpcSub", "delete node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleYomkRpcSub").error("delete node failed: ", resp.m_msg);
         return 1;
     }
     return 0;

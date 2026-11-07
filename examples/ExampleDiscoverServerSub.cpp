@@ -5,7 +5,7 @@
  *       步骤详见 docs/manual/discovery-server-tutorial.md。
  */
 #include <YomkRpc/YomkRpcAPI.h>
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
@@ -36,15 +36,15 @@ static void onSignal(int)
 // 三终端运行方式（先启动发现服务器，再 Sub/Pub 任意顺序）见 README 5.8。
 int main()
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcService>().create();
 
     // 1. 创建节点：域 id 显式 200（DS 模式下可与对端异域）；省略双通道尾参 →
     //    直配串自动取环境变量（总开关开启时生效，participant 以 CLIENT 发现协议运行）
     auto resp = YOMKRPC_NODE("ds_sub_node", 200);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleDiscoverServerSub", "create node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleDiscoverServerSub").error("create node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -55,30 +55,30 @@ int main()
         // data 为交付的消息实例指针（仅回调期间有效），转型为具体消息类型后读取
         auto* msg = static_cast<const YomkRpc::MString*>(data);
         received++;
-        YOMK_INFO_TAG("ExampleDiscoverServerSub", "[RECV] ", msg->data());
+        ::yomk::log().tag("ExampleDiscoverServerSub").info("[RECV] ", msg->data());
     };
     resp = YOMKRPC_SUB_TOPIC("ds_sub_node", "ds_hello_world", new YomkRpc::MStringPubSubType(), onMessage);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleDiscoverServerSub", "register sub topic failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleDiscoverServerSub").error("register sub topic failed: ", resp.m_msg);
         YOMKRPC_DEL_NODE("ds_sub_node");
         return 1;
     }
 
     // 3. 监听 Ctrl+C，主循环等待退出信号
     std::signal(SIGINT, onSignal);
-    YOMK_INFO_TAG("ExampleDiscoverServerSub", "subscribing ds_hello_world, press Ctrl+C to exit");
+    ::yomk::log().tag("ExampleDiscoverServerSub").info("subscribing ds_hello_world, press Ctrl+C to exit");
     while (!g_stop.load())
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     // 4. 退出前显式销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
-    YOMK_INFO_TAG("ExampleDiscoverServerSub", "received total=", received.load(), " messages");
+    ::yomk::log().tag("ExampleDiscoverServerSub").info("received total=", received.load(), " messages");
     resp = YOMKRPC_DEL_NODE("ds_sub_node");
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleDiscoverServerSub", "delete node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleDiscoverServerSub").error("delete node failed: ", resp.m_msg);
         return 1;
     }
     return 0;

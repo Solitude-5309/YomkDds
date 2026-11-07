@@ -43,7 +43,7 @@
 
 用户经 `YOMKRPC_*` 宏（定义于 `include/YomkRpcAPI.h`）调用三个服务域，完整参数与约束见对应功能文档。
 
-> 除 `YOMKRPC_VERSION()` 外，其余宏均返回 `YomkResponse`，调用后须判 `m_status == YomkResponse::eOk`；失败时可读 `m_msg` 获取错误信息。
+> 除 `YOMKRPC_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 **核心通信（YomkRpcService）** — 详见 [功能文档：核心通信](docs/features/core-communication.md)：
 

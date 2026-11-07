@@ -5,7 +5,7 @@
  *       配对验证。
  */
 #include <YomkRpc/YomkRpcAPI.h>
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
@@ -29,23 +29,23 @@ static void onSignal(int)
 // 跨进程运行方式（与 ExampleYomkRpcSub 配合、启动顺序）见 README。
 int main(int argc, char* argv[])
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcService>().create();
 
     // 1. 创建节点：domainId 缺省取环境变量 YOMKRPC_DDS_DOMAIN_ID（无/非法回落 0；仅同域
     //    节点互通），nodeName 唯一
     auto resp = YOMKRPC_NODE("pub_node");
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleYomkRpcPub", "create node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleYomkRpcPub").error("create node failed: ", resp.m_msg);
         return 1;
     }
 
     // 2. 注册发布主题：type 所有权移交服务端，new 后无需自行 delete
     resp = YOMKRPC_PUB_TOPIC("pub_node", "hello_world", new YomkRpc::MStringPubSubType());
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleYomkRpcPub", "register pub topic failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleYomkRpcPub").error("register pub topic failed: ", resp.m_msg);
         YOMKRPC_DEL_NODE("pub_node");
         return 1;
     }
@@ -60,30 +60,25 @@ int main(int argc, char* argv[])
         YomkRpc::MString msg;
         msg.data("hello world " + std::to_string(total));
         resp = YOMKRPC_PUB_MSG("pub_node", "hello_world", &msg);
-        if (resp.m_status != YomkResponse::eOk)
+        if (resp.m_status != yomk::payload::ResStatus::Succeeded)
         {
             failCount++;
-            YOMK_ERROR_TAG(
-                "ExampleYomkRpcPub",
-                "[SEND] publish failed: ",
-                msg.data(),
-                " status=",
-                static_cast<int>(resp.m_status));
+            ::yomk::log().tag("ExampleYomkRpcPub").error("[SEND] publish failed: ", msg.data(), " status=", static_cast<int>(resp.m_status));
         }
         else
         {
-            YOMK_INFO_TAG("ExampleYomkRpcPub", "[SEND] ", msg.data());
+            ::yomk::log().tag("ExampleYomkRpcPub").info("[SEND] ", msg.data());
         }
         total++;
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     // 4. 退出前显式销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
-    YOMK_INFO_TAG("ExampleYomkRpcPub", "publish done: total=", total, " failed=", failCount);
+    ::yomk::log().tag("ExampleYomkRpcPub").info("publish done: total=", total, " failed=", failCount);
     resp = YOMKRPC_DEL_NODE("pub_node");
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleYomkRpcPub", "delete node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleYomkRpcPub").error("delete node failed: ", resp.m_msg);
         return 1;
     }
     return failCount > 0 ? 1 : 0;

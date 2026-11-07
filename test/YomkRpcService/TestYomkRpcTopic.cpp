@@ -3,7 +3,7 @@
  * @brief MC3：主题注册 + 端到端发布订阅（真实 DDS + YomkRpcMsg 真实类型指针）
  *
  * 范围：MC0-MC2 覆盖服务层契约（DDS-free）与节点生命周期，但主题注册与收发链路完全未测。
- *       本用例经 svc->invoke() 白盒验证 registerPubTopic/registerSubTopic/getOrCreateTopic/
+ *       本用例经 testInvoke(svc, ) 白盒验证 registerPubTopic/registerSubTopic/getOrCreateTopic/
  *       publish/on_data_available 的真实 DDS 行为，并首次功能触达 F1（SubResGuard）所在的
  *       registerSubTopic happy-path。测试树自此首次引入 YomkRpcMsg 真实类型依赖。
  * 覆盖：
@@ -25,6 +25,7 @@
  */
 
 #include "TestCheck.h"
+#include "TestServiceAccess.h"
 // 引服务头：YomkRpcService + DDSQosProfile + DDSTopic/DDSSubRequest/DDSPublish +
 // String + YOMK_* 宏
 #include "YomkRpcService.h"
@@ -48,62 +49,62 @@ namespace
     constexpr uint32_t TEST_DOMAIN = 200;
 
     // 构造 /create_node 请求包
-    YomkPkgPtr mkNode(uint32_t domainId, const std::string &nodeName)
+    YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName)
     {
-        return YomkMkPtr(DDSNode, DDSNode{nodeName, domainId});
+        return ::yomk::msgs::DDSNode::shared(DDSNode{nodeName, domainId});
     }
 
     // T8/T10/T9：注册成功 + 守卫（重复注册/type==null）+ 类型名不符回滚
     void testTopicRegistration(YomkRpcService *svc)
     {
-        CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, "topic_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "topic_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "创建 topic_node(domain 200) → eOk");
 
-        CHECK(svc->invoke("/register_pub_topic",
-                          YomkMkPtr(DDSTopic, DDSTopic{"topic_node", "t_str", new YomkRpc::MStringPubSubType()}))
-                      .m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/register_pub_topic",
+                          ::yomk::msgs::DDSTopic::shared(DDSTopic{"topic_node", "t_str", new YomkRpc::MStringPubSubType()}))
+                      .m_status == yomk::payload::ResStatus::Succeeded,
               "T8 register_pub_topic t_str(MString) → eOk");
 
-        CHECK(svc->invoke("/register_pub_topic",
-                          YomkMkPtr(DDSTopic, DDSTopic{"topic_node", "t_str", new YomkRpc::MStringPubSubType()}))
-                      .m_status == YomkResponse::eNo,
+        CHECK(testInvoke(svc, "/register_pub_topic",
+                          ::yomk::msgs::DDSTopic::shared(DDSTopic{"topic_node", "t_str", new YomkRpc::MStringPubSubType()}))
+                      .m_status == yomk::payload::ResStatus::Failed,
               "T10 重复 register_pub_topic t_str → eNo（pubTopics_.count>0 守卫）");
 
-        CHECK(svc->invoke("/register_pub_topic",
-                          YomkMkPtr(DDSTopic, DDSTopic{"topic_node", "t_null", nullptr}))
-                      .m_status == YomkResponse::eNo,
+        CHECK(testInvoke(svc, "/register_pub_topic",
+                          ::yomk::msgs::DDSTopic::shared(DDSTopic{"topic_node", "t_null", nullptr}))
+                      .m_status == yomk::payload::ResStatus::Failed,
               "T10 register_pub_topic type=nullptr → eNo（type==null 守卫）");
 
-        CHECK(svc->invoke("/register_pub_topic",
-                          YomkMkPtr(DDSTopic, DDSTopic{"topic_node", "t_mm", new YomkRpc::MStringPubSubType()}))
-                      .m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/register_pub_topic",
+                          ::yomk::msgs::DDSTopic::shared(DDSTopic{"topic_node", "t_mm", new YomkRpc::MStringPubSubType()}))
+                      .m_status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic t_mm(MString) → eOk");
 
-        CHECK(svc->invoke("/register_sub_topic",
-                          YomkMkPtr(DDSSubRequest, DDSSubRequest{"topic_node", "t_mm", new YomkRpc::MInt32PubSubType(), nullptr}))
-                      .m_status == YomkResponse::eNo,
+        CHECK(testInvoke(svc, "/register_sub_topic",
+                          ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"topic_node", "t_mm", new YomkRpc::MInt32PubSubType(), nullptr}))
+                      .m_status == yomk::payload::ResStatus::Failed,
               "T9 register_sub_topic t_mm(MInt32) → eNo（getOrCreateTopic 类型名 MString≠MInt32 返回 nullptr）");
 
         // MC8 覆盖率补测：register_sub type==nullptr 守卫（对称上方 register_pub type=null），触达
         // FastDDSNode::registerSubTopic L201 复合守卫的 type==nullptr 分支（MC3 原仅覆盖 pub 侧 type=null）。
-        CHECK(svc->invoke("/register_sub_topic",
-                          YomkMkPtr(DDSSubRequest, DDSSubRequest{"topic_node", "s_null", nullptr, nullptr}))
-                      .m_status == YomkResponse::eNo,
+        CHECK(testInvoke(svc, "/register_sub_topic",
+                          ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"topic_node", "s_null", nullptr, nullptr}))
+                      .m_status == yomk::payload::ResStatus::Failed,
               "MC8 register_sub_topic type=nullptr → eNo（type==null 守卫，delete nullptr 安全）");
 
-        CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "topic_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("topic_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "删除 topic_node → eOk");
     }
 
     // T11：publish → on_data_available → callback 本地回环（同 participant 内 pub+sub 同主题）
     void testEndToEndPubSub(YomkRpcService *svc)
     {
-        CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, "e2e_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "e2e_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "创建 e2e_node → eOk");
 
-        CHECK(svc->invoke("/register_pub_topic",
-                          YomkMkPtr(DDSTopic, DDSTopic{"e2e_node", "e2e_topic", new YomkRpc::MStringPubSubType()}))
-                      .m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/register_pub_topic",
+                          ::yomk::msgs::DDSTopic::shared(DDSTopic{"e2e_node", "e2e_topic", new YomkRpc::MStringPubSubType()}))
+                      .m_status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic e2e_topic(MString) → eOk");
 
         std::atomic<int> received{0};
@@ -117,9 +118,9 @@ namespace
             received++;
         };
 
-        CHECK(svc->invoke("/register_sub_topic",
-                          YomkMkPtr(DDSSubRequest, DDSSubRequest{"e2e_node", "e2e_topic", new YomkRpc::MStringPubSubType(), cb}))
-                      .m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/register_sub_topic",
+                          ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"e2e_node", "e2e_topic", new YomkRpc::MStringPubSubType(), cb}))
+                      .m_status == yomk::payload::ResStatus::Succeeded,
               "register_sub_topic e2e_topic(callback) → eOk（首次功能触达 F1 registerSubTopic happy-path）");
 
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 等待 discovery
@@ -130,8 +131,8 @@ namespace
         {
             YomkRpc::MString msg;
             msg.data("e2e-" + std::to_string(i));
-            if (svc->invoke("/publish", YomkMkPtr(DDSPublish, DDSPublish{"e2e_node", "e2e_topic", &msg}))
-                    .m_status == YomkResponse::eOk)
+            if (testInvoke(svc, "/publish", ::yomk::msgs::DDSPublish::shared(DDSPublish{"e2e_node", "e2e_topic", &msg}))
+                    .m_status == yomk::payload::ResStatus::Succeeded)
             {
                 pubOk++;
             }
@@ -153,32 +154,32 @@ namespace
         }
         std::cout << "[OBSERVE] e2e received=" << r << "/" << N << " last=\"" << lastGot << "\"" << std::endl;
 
-        CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "e2e_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("e2e_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "删除 e2e_node → eOk（析构 reader 停止回调，捕获状态仍存活）");
     }
 
     // publish 守卫（节点存在但主题未注册 / 数据非法）
     void testPublishGuards(YomkRpcService *svc)
     {
-        CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, "pg_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "pg_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "创建 pg_node → eOk");
 
         YomkRpc::MString msg;
         msg.data("x");
-        CHECK(svc->invoke("/publish", YomkMkPtr(DDSPublish, DDSPublish{"pg_node", "no_topic", &msg}))
-                      .m_status == YomkResponse::eNo,
+        CHECK(testInvoke(svc, "/publish", ::yomk::msgs::DDSPublish::shared(DDSPublish{"pg_node", "no_topic", &msg}))
+                      .m_status == yomk::payload::ResStatus::Failed,
               "publish 未注册主题 → eNo（pubTopics_.find 失败）");
 
-        CHECK(svc->invoke("/register_pub_topic",
-                          YomkMkPtr(DDSTopic, DDSTopic{"pg_node", "p_topic", new YomkRpc::MStringPubSubType()}))
-                      .m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/register_pub_topic",
+                          ::yomk::msgs::DDSTopic::shared(DDSTopic{"pg_node", "p_topic", new YomkRpc::MStringPubSubType()}))
+                      .m_status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic p_topic → eOk");
 
-        CHECK(svc->invoke("/publish", YomkMkPtr(DDSPublish, DDSPublish{"pg_node", "p_topic", nullptr}))
-                      .m_status == YomkResponse::eNo,
+        CHECK(testInvoke(svc, "/publish", ::yomk::msgs::DDSPublish::shared(DDSPublish{"pg_node", "p_topic", nullptr}))
+                      .m_status == yomk::payload::ResStatus::Failed,
               "publish data=nullptr → eNo（data==null 守卫）");
 
-        CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "pg_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("pg_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "删除 pg_node → eOk");
     }
 
@@ -189,27 +190,27 @@ namespace
     void testTypeOwnershipOnFailure(YomkRpcService *svc)
     {
         // 服务层：节点不存在（未委托到 FastDDSNode，type 须由服务层释放）
-        CHECK(svc->invoke("/register_pub_topic",
-                          YomkMkPtr(DDSTopic, DDSTopic{"no_such_node", "t", new YomkRpc::MStringPubSubType()}))
-                      .m_status == YomkResponse::eNo,
+        CHECK(testInvoke(svc, "/register_pub_topic",
+                          ::yomk::msgs::DDSTopic::shared(DDSTopic{"no_such_node", "t", new YomkRpc::MStringPubSubType()}))
+                      .m_status == yomk::payload::ResStatus::Failed,
               "P1 register_pub_topic 节点不存在 → eNo（type 由服务层释放，不泄漏）");
-        CHECK(svc->invoke("/register_sub_topic",
-                          YomkMkPtr(DDSSubRequest, DDSSubRequest{"no_such_node", "t", new YomkRpc::MStringPubSubType(), nullptr}))
-                      .m_status == YomkResponse::eNo,
+        CHECK(testInvoke(svc, "/register_sub_topic",
+                          ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"no_such_node", "t", new YomkRpc::MStringPubSubType(), nullptr}))
+                      .m_status == yomk::payload::ResStatus::Failed,
               "P1 register_sub_topic 节点不存在 → eNo（type 由服务层释放，不泄漏）");
 
         // 节点层：重复注册 sub 守卫（委托到 FastDDSNode，type 须由节点层释放）
-        CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, "own_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "own_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "创建 own_node → eOk");
-        CHECK(svc->invoke("/register_sub_topic",
-                          YomkMkPtr(DDSSubRequest, DDSSubRequest{"own_node", "s_dup", new YomkRpc::MStringPubSubType(), nullptr}))
-                      .m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/register_sub_topic",
+                          ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"own_node", "s_dup", new YomkRpc::MStringPubSubType(), nullptr}))
+                      .m_status == yomk::payload::ResStatus::Succeeded,
               "register_sub_topic s_dup → eOk（首次注册成功）");
-        CHECK(svc->invoke("/register_sub_topic",
-                          YomkMkPtr(DDSSubRequest, DDSSubRequest{"own_node", "s_dup", new YomkRpc::MStringPubSubType(), nullptr}))
-                      .m_status == YomkResponse::eNo,
+        CHECK(testInvoke(svc, "/register_sub_topic",
+                          ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"own_node", "s_dup", new YomkRpc::MStringPubSubType(), nullptr}))
+                      .m_status == yomk::payload::ResStatus::Failed,
               "P1 重复 register_sub_topic s_dup → eNo（subTopics_.count>0 守卫，type 由节点层释放，不泄漏）");
-        CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "own_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("own_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "删除 own_node → eOk");
     }
 
@@ -219,16 +220,16 @@ namespace
     // 本地回环：同 node 内 pub+sub 同 topic，发布数据触发 sub 的 on_data_available，callback_ 空则跳过。
     void testEmptyCallbackSub(YomkRpcService *svc)
     {
-        CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, "ecb_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "ecb_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "创建 ecb_node → eOk");
-        CHECK(svc->invoke("/register_pub_topic",
-                          YomkMkPtr(DDSTopic, DDSTopic{"ecb_node", "ecb_topic", new YomkRpc::MInt32PubSubType()}))
-                      .m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/register_pub_topic",
+                          ::yomk::msgs::DDSTopic::shared(DDSTopic{"ecb_node", "ecb_topic", new YomkRpc::MInt32PubSubType()}))
+                      .m_status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic ecb_topic(MInt32) → eOk");
         // 空回调订阅：callback=nullptr，注册应成功（SubListener 持有空 std::function，收数据时防御性跳过）
-        CHECK(svc->invoke("/register_sub_topic",
-                          YomkMkPtr(DDSSubRequest, DDSSubRequest{"ecb_node", "ecb_topic", new YomkRpc::MInt32PubSubType(), nullptr}))
-                      .m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/register_sub_topic",
+                          ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"ecb_node", "ecb_topic", new YomkRpc::MInt32PubSubType(), nullptr}))
+                      .m_status == yomk::payload::ResStatus::Succeeded,
               "MC8 register_sub_topic ecb_topic(空callback) → eOk");
 
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 等待 discovery
@@ -240,8 +241,8 @@ namespace
         {
             YomkRpc::MInt32 msg;
             msg.data(i);
-            if (svc->invoke("/publish", YomkMkPtr(DDSPublish, DDSPublish{"ecb_node", "ecb_topic", &msg}))
-                    .m_status == YomkResponse::eOk)
+            if (testInvoke(svc, "/publish", ::yomk::msgs::DDSPublish::shared(DDSPublish{"ecb_node", "ecb_topic", &msg}))
+                    .m_status == yomk::payload::ResStatus::Succeeded)
             {
                 pubOk++;
             }
@@ -252,7 +253,7 @@ namespace
         // 等待投递触发 on_data_available（callback_ 空跳过）
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "ecb_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("ecb_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "删除 ecb_node → eOk（空回调路径无崩溃/UAF，析构 reader 停止回调）");
     }
 
@@ -269,23 +270,21 @@ namespace
     void testQosProfile(YomkRpcService *svc, YomkRpcDebugService *svcDebug)
     {
         // B1：ros2 底座组合收发（invoke+四参/五参聚合尾参，与宏展开等价同链路）
-        CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, "qos1_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "qos1_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "QoS 创建 qos1_node → eOk");
-        CHECK(svc->invoke("/register_pub_topic",
-                          YomkMkPtr(DDSTopic,
-                              DDSTopic{"qos1_node", "q1_topic", new YomkRpc::MStringPubSubType(), DDSQosProfile::ros2DefaultPublisher()}))
-                      .m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/register_pub_topic",
+                          ::yomk::msgs::DDSTopic::shared(DDSTopic{"qos1_node", "q1_topic", new YomkRpc::MStringPubSubType(), DDSQosProfile::ros2DefaultPublisher()}))
+                      .m_status == yomk::payload::ResStatus::Succeeded,
               "QoS-B1 register_pub_topic 尾参 ros2DefaultPublisher → eOk（四参聚合尾参落位）");
         std::atomic<int> recv1{0};
         auto cb1 = [&recv1](const void *)
         {
             recv1++;
         };
-        CHECK(svc->invoke("/register_sub_topic",
-                          YomkMkPtr(DDSSubRequest,
-                              DDSSubRequest{"qos1_node", "q1_topic", new YomkRpc::MStringPubSubType(), cb1,
+        CHECK(testInvoke(svc, "/register_sub_topic",
+                          ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"qos1_node", "q1_topic", new YomkRpc::MStringPubSubType(), cb1,
                                   DDSQosProfile::ros2DefaultSubscriber()}))
-                      .m_status == YomkResponse::eOk,
+                      .m_status == yomk::payload::ResStatus::Succeeded,
               "QoS-B1 register_sub_topic 尾参 ros2DefaultSubscriber → eOk（五参聚合尾参落位）");
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 等待 discovery
         int pubOk1 = 0;
@@ -293,8 +292,8 @@ namespace
         {
             YomkRpc::MString msg;
             msg.data("q1-" + std::to_string(i));
-            if (svc->invoke("/publish", YomkMkPtr(DDSPublish, DDSPublish{"qos1_node", "q1_topic", &msg}))
-                    .m_status == YomkResponse::eOk)
+            if (testInvoke(svc, "/publish", ::yomk::msgs::DDSPublish::shared(DDSPublish{"qos1_node", "q1_topic", &msg}))
+                    .m_status == yomk::payload::ResStatus::Succeeded)
             {
                 pubOk1++;
             }
@@ -303,18 +302,18 @@ namespace
         CHECK(pubOk1 == 5, "QoS-B1 publish 5 条 → 全部 eOk");
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 等待投递
         CHECK(recv1.load() > 0, "QoS-B1 RELIABLE writer + BEST_EFFORT reader 匹配收到数据");
-        CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "qos1_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("qos1_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "删除 qos1_node → eOk");
 
         // B2：BEST_EFFORT writer + RELIABLE reader（requested > offered 不匹配反证）
-        CHECK(svc->invoke("/create_node", mkNode(TEST_DOMAIN, "qos2_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "qos2_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "QoS 创建 qos2_node → eOk");
         DDSQosProfile be;
         be.reliability = DDSReliability::BEST_EFFORT;
         be.durability = DDSDurability::VOLATILE; // writer 底座 TRANSIENT_LOCAL，显式 VOLATILE 供 B4 直证
-        CHECK(svc->invoke("/register_pub_topic",
-                          YomkMkPtr(DDSTopic, DDSTopic{"qos2_node", "t_be", new YomkRpc::MStringPubSubType(), be}))
-                      .m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/register_pub_topic",
+                          ::yomk::msgs::DDSTopic::shared(DDSTopic{"qos2_node", "t_be", new YomkRpc::MStringPubSubType(), be}))
+                      .m_status == yomk::payload::ResStatus::Succeeded,
               "QoS-B2 register_pub_topic t_be 显式 BEST_EFFORT+VOLATILE → eOk");
         DDSQosProfile rel;
         rel.reliability = DDSReliability::RELIABLE;
@@ -323,10 +322,9 @@ namespace
         {
             recv2++;
         };
-        CHECK(svc->invoke("/register_sub_topic",
-                          YomkMkPtr(
-                              DDSSubRequest, DDSSubRequest{"qos2_node", "t_be", new YomkRpc::MStringPubSubType(), cb2, rel}))
-                      .m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/register_sub_topic",
+                          ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"qos2_node", "t_be", new YomkRpc::MStringPubSubType(), cb2, rel}))
+                      .m_status == yomk::payload::ResStatus::Succeeded,
               "QoS-B2 register_sub_topic t_be 显式 RELIABLE → eOk");
         std::this_thread::sleep_for(std::chrono::seconds(2)); // 双方 discovery + 匹配判定稳定
         int pubOk2 = 0;
@@ -334,8 +332,8 @@ namespace
         {
             YomkRpc::MString msg;
             msg.data("be-" + std::to_string(i));
-            if (svc->invoke("/publish", YomkMkPtr(DDSPublish, DDSPublish{"qos2_node", "t_be", &msg}))
-                    .m_status == YomkResponse::eOk)
+            if (testInvoke(svc, "/publish", ::yomk::msgs::DDSPublish::shared(DDSPublish{"qos2_node", "t_be", &msg}))
+                    .m_status == yomk::payload::ResStatus::Succeeded)
             {
                 pubOk2++;
             }
@@ -347,13 +345,13 @@ namespace
               "QoS-B2 RELIABLE requested > BEST_EFFORT offered → 收 0 条（若翻译失效将匹配收到 → 失败侦察）");
 
         // B4：debug 链路 QoS 直证（发现数据读回 writer 端点实际 QoS）
-        CHECK(svcDebug->invoke("/create_node", YomkMkPtr(DDSDebugNode, DDSDebugNode{TEST_DOMAIN})).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svcDebug, "/create_node", ::yomk::msgs::DDSDebugNode::shared(DDSDebugNode{TEST_DOMAIN})).m_status == yomk::payload::ResStatus::Succeeded,
               "QoS-B4 创建调试节点（域 200）→ eOk");
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 调试参与者发现已在线端点
-        auto hitV = svcDebug->invoke("/topic_info", YomkMkPtr(DDSDebugInfo, DDSDebugInfo{"t_be", 10, 200, true}));
-        CHECK(hitV.m_status == YomkResponse::eOk && hitV.m_data != nullptr,
+        auto hitV = testInvoke(svcDebug, "/topic_info", ::yomk::msgs::DDSDebugInfo::shared(DDSDebugInfo{"t_be", 10, 200, true}));
+        CHECK(hitV.m_status == yomk::payload::ResStatus::Succeeded && hitV.m_data != nullptr,
               "QoS-B4 topic info -v t_be → eOk（发现缓存命中）");
-        YomkUnPackPkg(hitV.m_data, StringArray, infoArrV);
+        auto infoArrV = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(hitV.m_data);;
         CHECK(infoArrV != nullptr, "QoS-B4 verbose 返回包可解包为 StringArray");
         bool hasBe = false;
         bool hasVol = false;
@@ -373,9 +371,9 @@ namespace
         }
         CHECK(hasBe, "QoS-B4 writer QoS 读回 Reliability: BEST_EFFORT（底座 RELIABLE → profile 生效直证）");
         CHECK(hasVol, "QoS-B4 writer QoS 读回 Durability: VOLATILE（底座 TRANSIENT_LOCAL → profile 生效直证）");
-        CHECK(svcDebug->invoke("/delete_node", nullptr).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svcDebug, "/delete_node", nullptr).m_status == yomk::payload::ResStatus::Succeeded,
               "删除调试节点 → eOk");
-        CHECK(svc->invoke("/delete_node", YomkMkPtr(String, "qos2_node")).m_status == YomkResponse::eOk,
+        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("qos2_node")).m_status == yomk::payload::ResStatus::Succeeded,
               "删除 qos2_node → eOk");
     }
 
@@ -383,14 +381,14 @@ namespace
 
 int main()
 {
-    YOMK_INIT();
+    ::yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkRpcService(YOMK_SERVER_P);
-    CHECK(YOMK_ADD_SERVICE(svc) == 0, "YomkRpcService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkRpcService(::yomk::server().instance().get());
+    CHECK(::yomk::server().srv_ptr(svc).add() == 0, "YomkRpcService 注册成功（所有权移交框架，init() 已内部调用）");
     // 调试服务（QoS-B4 从发现数据读回端点实际 QoS 用）
-    auto *svcDebug = new YomkRpcDebugService(YOMK_SERVER_P);
-    CHECK(YOMK_ADD_SERVICE(svcDebug) == 0, "YomkRpcDebugService 注册成功");
+    auto *svcDebug = new YomkRpcDebugService(::yomk::server().instance().get());
+    CHECK(::yomk::server().srv_ptr(svcDebug).add() == 0, "YomkRpcDebugService 注册成功");
 
     testTopicRegistration(svc);
     testEndToEndPubSub(svc);

@@ -30,46 +30,55 @@ YomkRpcDebugService::~YomkRpcDebugService() = default;
 
 int YomkRpcDebugService::init()
 {
-    YomkInstallFunc("/version", YomkRpcDebugService::getVersion);
-    YomkInstallFunc("/create_node", YomkRpcDebugService::createNode);
-    YomkInstallFunc("/topic_print", YomkRpcDebugService::topicPrint);
-    YomkInstallFunc("/list_topics", YomkRpcDebugService::listTopics);
-    YomkInstallFunc("/topic_info", YomkRpcDebugService::topicInfo);
-    YomkInstallFunc("/topic_find", YomkRpcDebugService::topicFind);
-    YomkInstallFunc("/interface_show", YomkRpcDebugService::interfaceShow);
-    YomkInstallFunc("/interface_list", YomkRpcDebugService::interfaceList);
-    YomkInstallFunc("/topic_example", YomkRpcDebugService::topicExample);
-    YomkInstallFunc("/topic_msg", YomkRpcDebugService::topicMsg);
-    YomkInstallFunc("/topic_pub", YomkRpcDebugService::topicPub);
-    YomkInstallFunc("/list_nodes", YomkRpcDebugService::listNodes);
-    YomkInstallFunc("/node_info", YomkRpcDebugService::nodeInfo);
-    YomkInstallFunc("/delete_node", YomkRpcDebugService::deleteNode);
+    installFunc("/version", &YomkRpcDebugService::getVersion);
+    installFunc("/create_node", &YomkRpcDebugService::createNode);
+    installFunc("/topic_print", &YomkRpcDebugService::topicPrint);
+    installFunc("/list_topics", &YomkRpcDebugService::listTopics);
+    installFunc("/topic_info", &YomkRpcDebugService::topicInfo);
+    installFunc("/topic_find", &YomkRpcDebugService::topicFind);
+    installFunc("/interface_show", &YomkRpcDebugService::interfaceShow);
+    installFunc("/interface_list", &YomkRpcDebugService::interfaceList);
+    installFunc("/topic_example", &YomkRpcDebugService::topicExample);
+    installFunc("/topic_msg", &YomkRpcDebugService::topicMsg);
+    installFunc("/topic_pub", &YomkRpcDebugService::topicPub);
+    installFunc("/list_nodes", &YomkRpcDebugService::listNodes);
+    installFunc("/node_info", &YomkRpcDebugService::nodeInfo);
+    installFunc("/delete_node", &YomkRpcDebugService::deleteNode);
     return 0;
 }
 
-YomkResponse YomkRpcDebugService::getVersion(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::getVersion(YomkMsgPtr pkg)
 {
     std::string version = "YomkRpc v" YOMKRPC_VERSION_STRING;
-    return YomkResponse(YomkResponse::eOk, "ok", YomkMkPtr(String, version));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::String::shared(version));
 }
 
-YomkResponse YomkRpcDebugService::createNode(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::createNode(YomkMsgPtr pkg)
 {
-    YomkUnPackPkgResponse(pkg, DDSDebugNode, p);
+        if (!pkg || pkg->name() != "DDSDebugNode")
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DDSDebugNode. ");
+    }
+    auto p = std::dynamic_pointer_cast<::yomk::msgs::DDSDebugNode>(pkg);
+    if (!p)
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg[DDSDebugNode] is dynamic_pointer_cast failed. ");
+    };
 
     if (p->msg.domainId > kMaxDomainId)
     {
-        YOMK_ERROR_TAG(
-            "YomkRpcDebugService::createNode", "domainId [", p->msg.domainId, "] out of valid range [0,232]");
-        return YomkResponse(
-            YomkResponse::eNo, "domainId [" + std::to_string(p->msg.domainId) + "] out of valid range [0,232]");
+        ::yomk::log().tag("YomkRpcDebugService::createNode").error("domainId [", p->msg.domainId, "] out of valid range [0,232]");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, "domainId [" + std::to_string(p->msg.domainId) + "] out of valid range [0,232]");
     }
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ != nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::createNode", "debug node already exists, delete it first");
-        return YomkResponse(YomkResponse::eNo, "debug node already exists, delete it first");
+        ::yomk::log().tag("YomkRpcDebugService::createNode").error("debug node already exists, delete it first");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node already exists, delete it first");
     }
 
     auto node = std::make_unique<FastDDSDebugNode>();
@@ -82,32 +91,39 @@ YomkResponse YomkRpcDebugService::createNode(YomkPkgPtr pkg)
     std::string nodeErr;
     if (!node->setDomainId(p->msg.domainId, spec, &nodeErr))
     {
-        YOMK_ERROR_TAG(
-            "YomkRpcDebugService::createNode",
-            "create debug node failed: ",
-            nodeErr.empty() ? "setDomainId error" : nodeErr);
-        return YomkResponse(
-            YomkResponse::eNo,
+        ::yomk::log().tag("YomkRpcDebugService::createNode").error("create debug node failed: ", nodeErr.empty() ? "setDomainId error" : nodeErr);
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed,
             "create debug node failed: " + (nodeErr.empty() ? "setDomainId error" : nodeErr));
     }
     node_ = std::move(node);
-    return YomkResponse(YomkResponse::eOk, "ok");
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }
 
-YomkResponse YomkRpcDebugService::topicPrint(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::topicPrint(YomkMsgPtr pkg)
 {
-    YomkUnPackPkgResponse(pkg, DDSDebugTopic, p);
+        if (!pkg || pkg->name() != "DDSDebugTopic")
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DDSDebugTopic. ");
+    }
+    auto p = std::dynamic_pointer_cast<::yomk::msgs::DDSDebugTopic>(pkg);
+    if (!p)
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg[DDSDebugTopic] is dynamic_pointer_cast failed. ");
+    };
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicPrint", "debug node not created");
-        return YomkResponse(YomkResponse::eNo, "debug node not created");
+        ::yomk::log().tag("YomkRpcDebugService::topicPrint").error("debug node not created");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     if (p->msg.output == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicPrint", "output callback is empty");
-        return YomkResponse(YomkResponse::eNo, "output callback is empty");
+        ::yomk::log().tag("YomkRpcDebugService::topicPrint").error("output callback is empty");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "output callback is empty");
     }
     // 先 setOutputSink 后 subscribeTopic：sink 须在工作线程建立订阅前就位（FastDDSDebugNode 约定）。
     node_->setOutputSink(p->msg.output);
@@ -124,21 +140,31 @@ YomkResponse YomkRpcDebugService::topicPrint(YomkPkgPtr pkg)
         {
             error = "subscribeTopic [" + p->msg.topicName + "] failed: " + error;
         }
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicPrint", error);
-        return YomkResponse(YomkResponse::eNo, error);
+        ::yomk::log().tag("YomkRpcDebugService::topicPrint").error(error);
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
-    return YomkResponse(YomkResponse::eOk, "ok");
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }
 
-YomkResponse YomkRpcDebugService::listTopics(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::listTopics(YomkMsgPtr pkg)
 {
-    YomkUnPackPkgResponse(pkg, DDSDebugList, p);
+        if (!pkg || pkg->name() != "DDSDebugList")
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DDSDebugList. ");
+    }
+    auto p = std::dynamic_pointer_cast<::yomk::msgs::DDSDebugList>(pkg);
+    if (!p)
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg[DDSDebugList] is dynamic_pointer_cast failed. ");
+    };
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::listTopics", "debug node not created");
-        return YomkResponse(YomkResponse::eNo, "debug node not created");
+        ::yomk::log().tag("YomkRpcDebugService::listTopics").error("debug node not created");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // node_ 非空即已入域，listTopics 必返回 true；持锁收敛等待（最长约 stableRounds*intervalMs）：
     // 锁保护 node_ 生命周期不被并发 deleteNode 破坏（同 createNode 锁内 setDomainId 的既有约定），
@@ -153,18 +179,28 @@ YomkResponse YomkRpcDebugService::listTopics(YomkPkgPtr pkg)
     {
         lines.emplace_back(p->msg.types ? entry.first + " [" + entry.second + "]" : entry.first);
     }
-    return YomkResponse(YomkResponse::eOk, "ok", YomkMkPtr(StringArray, lines));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
 }
 
-YomkResponse YomkRpcDebugService::topicFind(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::topicFind(YomkMsgPtr pkg)
 {
-    YomkUnPackPkgResponse(pkg, DDSDebugFind, p);
+        if (!pkg || pkg->name() != "DDSDebugFind")
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DDSDebugFind. ");
+    }
+    auto p = std::dynamic_pointer_cast<::yomk::msgs::DDSDebugFind>(pkg);
+    if (!p)
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg[DDSDebugFind] is dynamic_pointer_cast failed. ");
+    };
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicFind", "debug node not created");
-        return YomkResponse(YomkResponse::eNo, "debug node not created");
+        ::yomk::log().tag("YomkRpcDebugService::topicFind").error("debug node not created");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // 持锁取发现缓存全集快照（listTopics 已按主题名排序），按类型名精确匹配过滤；
     // 无匹配按查询失败处理（info 族语义），便于调用方发现类型名拼写错误
@@ -180,21 +216,31 @@ YomkResponse YomkRpcDebugService::topicFind(YomkPkgPtr pkg)
     }
     if (lines.empty())
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicFind", "type [", p->msg.typeName, "] not found");
-        return YomkResponse(YomkResponse::eNo, "type [" + p->msg.typeName + "] not found");
+        ::yomk::log().tag("YomkRpcDebugService::topicFind").error("type [", p->msg.typeName, "] not found");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "type [" + p->msg.typeName + "] not found");
     }
-    return YomkResponse(YomkResponse::eOk, "ok", YomkMkPtr(StringArray, lines));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
 }
 
-YomkResponse YomkRpcDebugService::interfaceShow(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::interfaceShow(YomkMsgPtr pkg)
 {
-    YomkUnPackPkgResponse(pkg, DDSDebugInterfaceShow, p);
+        if (!pkg || pkg->name() != "DDSDebugInterfaceShow")
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DDSDebugInterfaceShow. ");
+    }
+    auto p = std::dynamic_pointer_cast<::yomk::msgs::DDSDebugInterfaceShow>(pkg);
+    if (!p)
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg[DDSDebugInterfaceShow] is dynamic_pointer_cast failed. ");
+    };
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::interfaceShow", "debug node not created");
-        return YomkResponse(YomkResponse::eNo, "debug node not created");
+        ::yomk::log().tag("YomkRpcDebugService::interfaceShow").error("debug node not created");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // 持锁取该类型的 IDL 行集（节点层收敛轮询：TypeInformation→TypeObject→DynamicType 内省）；
     // 未发现该类型按查询失败处理（find 族语义），便于调用方发现类型名拼写错误。
@@ -207,21 +253,31 @@ YomkResponse YomkRpcDebugService::interfaceShow(YomkPkgPtr pkg)
         {
             error = "type [" + p->msg.typeName + "] not found";  // 兜底，保证既有文本语义不回退
         }
-        YOMK_ERROR_TAG("YomkRpcDebugService::interfaceShow", error);
-        return YomkResponse(YomkResponse::eNo, error);
+        ::yomk::log().tag("YomkRpcDebugService::interfaceShow").error(error);
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
-    return YomkResponse(YomkResponse::eOk, "ok", YomkMkPtr(StringArray, lines));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
 }
 
-YomkResponse YomkRpcDebugService::interfaceList(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::interfaceList(YomkMsgPtr pkg)
 {
-    YomkUnPackPkgResponse(pkg, DDSDebugInterfaceList, p);
+        if (!pkg || pkg->name() != "DDSDebugInterfaceList")
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DDSDebugInterfaceList. ");
+    }
+    auto p = std::dynamic_pointer_cast<::yomk::msgs::DDSDebugInterfaceList>(pkg);
+    if (!p)
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg[DDSDebugInterfaceList] is dynamic_pointer_cast failed. ");
+    };
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::interfaceList", "debug node not created");
-        return YomkResponse(YomkResponse::eNo, "debug node not created");
+        ::yomk::log().tag("YomkRpcDebugService::interfaceList").error("debug node not created");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // 持锁取发现缓存全集快照（listTopics 已按主题名排序），收集非空类型名去重排序
     // （std::set 保证字典序，同类型多主题仅出一行）；域内无任何类型按查询失败处理
@@ -238,22 +294,32 @@ YomkResponse YomkRpcDebugService::interfaceList(YomkPkgPtr pkg)
     }
     if (typeNames.empty())
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::interfaceList", "no interface types discovered");
-        return YomkResponse(YomkResponse::eNo, "no interface types discovered");
+        ::yomk::log().tag("YomkRpcDebugService::interfaceList").error("no interface types discovered");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no interface types discovered");
     }
-    return YomkResponse(YomkResponse::eOk, "ok",
-                        YomkMkPtr(StringArray, std::vector<std::string>(typeNames.begin(), typeNames.end())));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
+                        ::yomk::msgs::StringArray::shared(std::vector<std::string>(typeNames.begin(), typeNames.end())));
 }
 
-YomkResponse YomkRpcDebugService::topicExample(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::topicExample(YomkMsgPtr pkg)
 {
-    YomkUnPackPkgResponse(pkg, DDSDebugTopicExample, p);
+        if (!pkg || pkg->name() != "DDSDebugTopicExample")
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DDSDebugTopicExample. ");
+    }
+    auto p = std::dynamic_pointer_cast<::yomk::msgs::DDSDebugTopicExample>(pkg);
+    if (!p)
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg[DDSDebugTopicExample] is dynamic_pointer_cast failed. ");
+    };
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicExample", "debug node not created");
-        return YomkResponse(YomkResponse::eNo, "debug node not created");
+        ::yomk::log().tag("YomkRpcDebugService::topicExample").error("debug node not created");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // 持锁取该主题的发布示例三段行集（节点层依次收敛：类型名→IDL 行集→JSON 示例；
     // 未发现主题按查询失败处理，info 族语义）。失败原因由节点层按步归类透传：
@@ -266,21 +332,31 @@ YomkResponse YomkRpcDebugService::topicExample(YomkPkgPtr pkg)
         {
             error = "topic [" + p->msg.topicName + "] not found";  // 兜底，保证既有文本语义不回退
         }
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicExample", error);
-        return YomkResponse(YomkResponse::eNo, error);
+        ::yomk::log().tag("YomkRpcDebugService::topicExample").error(error);
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
-    return YomkResponse(YomkResponse::eOk, "ok", YomkMkPtr(StringArray, lines));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
 }
 
-YomkResponse YomkRpcDebugService::topicMsg(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::topicMsg(YomkMsgPtr pkg)
 {
-    YomkUnPackPkgResponse(pkg, DDSDebugTopicMsg, p);
+        if (!pkg || pkg->name() != "DDSDebugTopicMsg")
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DDSDebugTopicMsg. ");
+    }
+    auto p = std::dynamic_pointer_cast<::yomk::msgs::DDSDebugTopicMsg>(pkg);
+    if (!p)
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg[DDSDebugTopicMsg] is dynamic_pointer_cast failed. ");
+    };
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicMsg", "debug node not created");
-        return YomkResponse(YomkResponse::eNo, "debug node not created");
+        ::yomk::log().tag("YomkRpcDebugService::topicMsg").error("debug node not created");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // 持锁取该主题的消息描述两要素（节点层依次收敛：类型名→JSON 模板；未发现主题按
     // 查询失败处理，info 族语义）；StringArray 恰 2 行：d[0]=类型名、d[1]=紧凑 msg JSON
@@ -296,22 +372,32 @@ YomkResponse YomkRpcDebugService::topicMsg(YomkPkgPtr pkg)
         {
             error = "topic [" + p->msg.topicName + "] not found";  // 兜底，保证既有文本语义不回退
         }
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicMsg", error);
-        return YomkResponse(YomkResponse::eNo, error);
+        ::yomk::log().tag("YomkRpcDebugService::topicMsg").error(error);
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
-    return YomkResponse(YomkResponse::eOk, "ok",
-            YomkMkPtr(StringArray, std::vector<std::string>{typeName, json}));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
+            ::yomk::msgs::StringArray::shared(std::vector<std::string>{typeName, json}));
 }
 
-YomkResponse YomkRpcDebugService::topicPub(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::topicPub(YomkMsgPtr pkg)
 {
-    YomkUnPackPkgResponse(pkg, DDSDebugTopicPub, p);
+        if (!pkg || pkg->name() != "DDSDebugTopicPub")
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DDSDebugTopicPub. ");
+    }
+    auto p = std::dynamic_pointer_cast<::yomk::msgs::DDSDebugTopicPub>(pkg);
+    if (!p)
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg[DDSDebugTopicPub] is dynamic_pointer_cast failed. ");
+    };
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicPub", "debug node not created");
-        return YomkResponse(YomkResponse::eNo, "debug node not created");
+        ::yomk::log().tag("YomkRpcDebugService::topicPub").error("debug node not created");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // 持锁执行发布（节点层内部：发现收敛→类型重建→匹配收敛（requiredSubscribers>0 时先
     // 阻塞等待期望建匹配数达标，可被停止标志中断）→write 一次→ack 自适应确认；失败原因
@@ -327,27 +413,37 @@ YomkResponse YomkRpcDebugService::topicPub(YomkPkgPtr pkg)
                 p->msg.intervalMs, p->msg.repeatIntervalMs, p->msg.requiredSubscribers,
                 p->msg.maxTimes, &total, &failed, p->msg.qos))
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicPub", "pub failed: ", error);
-        return YomkResponse(YomkResponse::eNo, error);
+        ::yomk::log().tag("YomkRpcDebugService::topicPub").error("pub failed: ", error);
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
     if (p->msg.repeatIntervalMs > 0)
     {
-        return YomkResponse(YomkResponse::eOk, "delivered",
-                YomkMkPtr(StringArray, std::vector<std::string>{
+        return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "delivered",
+                ::yomk::msgs::StringArray::shared(std::vector<std::string>{
                         "total=" + std::to_string(total), "failed=" + std::to_string(failed)}));
     }
-    return YomkResponse(YomkResponse::eOk, "delivered");
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "delivered");
 }
 
-YomkResponse YomkRpcDebugService::topicInfo(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::topicInfo(YomkMsgPtr pkg)
 {
-    YomkUnPackPkgResponse(pkg, DDSDebugInfo, p);
+        if (!pkg || pkg->name() != "DDSDebugInfo")
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DDSDebugInfo. ");
+    }
+    auto p = std::dynamic_pointer_cast<::yomk::msgs::DDSDebugInfo>(pkg);
+    if (!p)
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg[DDSDebugInfo] is dynamic_pointer_cast failed. ");
+    };
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicInfo", "debug node not created");
-        return YomkResponse(YomkResponse::eNo, "debug node not created");
+        ::yomk::log().tag("YomkRpcDebugService::topicInfo").error("debug node not created");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // node_ 非空即已入域；持锁对单个目标主题做独立收敛查询（最长约 stableRounds*intervalMs）：
     // 锁保护 node_ 生命周期不被并发 deleteNode 破坏（同 listTopics 既有约定）；0 值参数由节点层钳制；
@@ -362,8 +458,8 @@ YomkResponse YomkRpcDebugService::topicInfo(YomkPkgPtr pkg)
                 p->msg.verbose ? &pubDetails : nullptr,
                 p->msg.verbose ? &subDetails : nullptr))
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::topicInfo", "topic [", p->msg.topicName, "] not found");
-        return YomkResponse(YomkResponse::eNo, "topic [" + p->msg.topicName + "] not found");
+        ::yomk::log().tag("YomkRpcDebugService::topicInfo").error("topic [", p->msg.topicName, "] not found");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "topic [" + p->msg.topicName + "] not found");
     }
     // 非 verbose 三行：类型名原样输出（不做任何风格转换）+ 两端点计数；verbose 追加逐端点
     // 详情段（空行规则：Type 后一段、每端点块前一段；count 为 0 的端点类型无清单段）
@@ -374,7 +470,7 @@ YomkResponse YomkRpcDebugService::topicInfo(YomkPkgPtr pkg)
         lines.emplace_back("Type: " + typeName);
         lines.emplace_back("Publisher count: " + std::to_string(publisherCount));
         lines.emplace_back("Subscription count: " + std::to_string(subscriptionCount));
-        return YomkResponse(YomkResponse::eOk, "ok", YomkMkPtr(StringArray, lines));
+        return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
     }
     lines.emplace_back("Type: " + typeName);
     lines.emplace_back("");
@@ -399,36 +495,56 @@ YomkResponse YomkRpcDebugService::topicInfo(YomkPkgPtr pkg)
         lines.emplace_back("QoS profile:");
         lines.insert(lines.end(), detail.qosLines.begin(), detail.qosLines.end());
     }
-    return YomkResponse(YomkResponse::eOk, "ok", YomkMkPtr(StringArray, lines));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
 }
 
-YomkResponse YomkRpcDebugService::listNodes(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::listNodes(YomkMsgPtr pkg)
 {
-    YomkUnPackPkgResponse(pkg, DDSNodeList, p);
+        if (!pkg || pkg->name() != "DDSNodeList")
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DDSNodeList. ");
+    }
+    auto p = std::dynamic_pointer_cast<::yomk::msgs::DDSNodeList>(pkg);
+    if (!p)
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg[DDSNodeList] is dynamic_pointer_cast failed. ");
+    };
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::listNodes", "debug node not created");
-        return YomkResponse(YomkResponse::eNo, "debug node not created");
+        ::yomk::log().tag("YomkRpcDebugService::listNodes").error("debug node not created");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // node_ 非空即已入域，listNodes 必返回 true；持锁收敛等待（最长约 stableRounds*intervalMs）：
     // 锁保护 node_ 生命周期不被并发 deleteNode 破坏（同 listTopics 既有约定）；0 值参数由节点层
     // 钳制为默认。无 "not found" 分支——空列表合法（域内暂无命名参与者），语义同 list_topics 空域
     std::vector<std::string> names;
     node_->nodeList(names, p->msg.stableRounds, p->msg.intervalMs);
-    return YomkResponse(YomkResponse::eOk, "ok", YomkMkPtr(StringArray, names));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(names));
 }
 
-YomkResponse YomkRpcDebugService::nodeInfo(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::nodeInfo(YomkMsgPtr pkg)
 {
-    YomkUnPackPkgResponse(pkg, DDSNodeInfo, p);
+        if (!pkg || pkg->name() != "DDSNodeInfo")
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DDSNodeInfo. ");
+    }
+    auto p = std::dynamic_pointer_cast<::yomk::msgs::DDSNodeInfo>(pkg);
+    if (!p)
+    {
+        return ::yomk::payload::Response(
+            ::yomk::payload::ResStatus::Failed, " pkg[DDSNodeInfo] is dynamic_pointer_cast failed. ");
+    };
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::nodeInfo", "debug node not created");
-        return YomkResponse(YomkResponse::eNo, "debug node not created");
+        ::yomk::log().tag("YomkRpcDebugService::nodeInfo").error("debug node not created");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // node_ 非空即已入域；持锁对单个目标节点名做独立收敛查询（最长约 stableRounds*intervalMs）：
     // 锁保护 node_ 生命周期不被并发 deleteNode 破坏（同 listNodes 既有约定）；0 值参数由节点层钳制
@@ -436,8 +552,8 @@ YomkResponse YomkRpcDebugService::nodeInfo(YomkPkgPtr pkg)
     std::vector<std::pair<std::string, std::string>> subscribers;
     if (!node_->nodeInfo(p->msg.nodeName, publishers, subscribers, p->msg.stableRounds, p->msg.intervalMs))
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::nodeInfo", "node [", p->msg.nodeName, "] not found");
-        return YomkResponse(YomkResponse::eNo, "node [" + p->msg.nodeName + "] not found");
+        ::yomk::log().tag("YomkRpcDebugService::nodeInfo").error("node [", p->msg.nodeName, "] not found");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node [" + p->msg.nodeName + "] not found");
     }
     // 输出行（对齐 ros2 node info 形态）：节点名行 + Subscribers 段 + Publishers 段，每条主题
     // 一行 "    <topic>: <type>"（类型名原样输出，无任何风格转换）；空段仅打段头
@@ -454,19 +570,19 @@ YomkResponse YomkRpcDebugService::nodeInfo(YomkPkgPtr pkg)
     {
         lines.emplace_back("    " + entry.first + ": " + entry.second);
     }
-    return YomkResponse(YomkResponse::eOk, "ok", YomkMkPtr(StringArray, lines));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
 }
 
-YomkResponse YomkRpcDebugService::deleteNode(YomkPkgPtr pkg)
+yomk::payload::Response YomkRpcDebugService::deleteNode(YomkMsgPtr pkg)
 {
     (void)pkg;  // 单 debug 节点模型无参数载荷
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        YOMK_ERROR_TAG("YomkRpcDebugService::deleteNode", "debug node not created");
-        return YomkResponse(YomkResponse::eNo, "debug node not created");
+        ::yomk::log().tag("YomkRpcDebugService::deleteNode").error("debug node not created");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     node_.reset();  // 节点析构即按其内部顺序（停工作线程 → reader → topic → subscriber → participant）清理
-    return YomkResponse(YomkResponse::eOk, "ok");
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }

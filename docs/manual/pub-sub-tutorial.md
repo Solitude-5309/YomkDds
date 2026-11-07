@@ -78,7 +78,7 @@ YOMKRPC_SUB_TOPIC("node0", "my_topic", new YomkRpc::MStringPubSubType(), onMessa
 `YOMKRPC_NODE` 每调用一次即创建一个独立 DDS 参与者（每节点一个独立 DDS 参与者；节点名唯一、domainId 合法范围 [0,232]），一个进程可创建多个节点，每个节点可注册多个发布/订阅主题。完整示例（两个节点、两个主题）：
 
 ```cpp
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
@@ -92,8 +92,8 @@ using namespace yomk;
 int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 RPC 服务
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcService>().create();
 
     // 2. 创建两个节点（每节点一个独立 DDS 参与者）
     YOMKRPC_NODE("node_pub");
@@ -109,13 +109,13 @@ int main(int argc, char *argv[])
     {
         auto *msg = static_cast<const YomkRpc::MString *>(data);
         recvA++;
-        YOMK_INFO_TAG("MultiTopicExample", "[RECV A] ", msg->data());
+        ::yomk::log().tag("MultiTopicExample").info("[RECV A] ", msg->data());
     };
     auto onB = [&](const void *data)
     {
         auto *msg = static_cast<const YomkRpc::MInt32 *>(data);
         recvB++;
-        YOMK_INFO_TAG("MultiTopicExample", "[RECV B] ", msg->data());
+        ::yomk::log().tag("MultiTopicExample").info("[RECV B] ", msg->data());
     };
     YOMKRPC_SUB_TOPIC("node_sub", "topic_a", new YomkRpc::MStringPubSubType(), onA);
     YOMKRPC_SUB_TOPIC("node_sub", "topic_b", new YomkRpc::MInt32PubSubType(), onB);
@@ -137,8 +137,8 @@ int main(int argc, char *argv[])
 
     // 5. 等待接收完成
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    YOMK_INFO_TAG("MultiTopicExample", "topic_a received=", recvA.load(), "/5");
-    YOMK_INFO_TAG("MultiTopicExample", "topic_b received=", recvB.load(), "/5");
+    ::yomk::log().tag("MultiTopicExample").info("topic_a received=", recvA.load(), "/5");
+    ::yomk::log().tag("MultiTopicExample").info("topic_b received=", recvB.load(), "/5");
 
     // 6. 退出前逐个删除节点
     YOMKRPC_DEL_NODE("node_pub");

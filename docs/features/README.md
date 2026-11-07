@@ -37,7 +37,7 @@ flowchart LR
 | YomkRpcDebugService | 类型无关的域内观察（主题/节点/类型/端点）与 JSON 载荷发布 | `YOMKRPC_DEBUG_*` | `yomkrpc topic/node/interface` 全部覆盖 |
 | YomkRpcBagService | mcap 格式录制、元信息、重建索引、转换、回放 | `YOMKRPC_BAG_*` | `yomkrpc bag` 全部覆盖（play 仅 CLI） |
 
-> 除 `YOMKRPC_VERSION()` 外，其余宏均返回 `YomkResponse`，调用后须判 `m_status == YomkResponse::eOk`；失败时可读 `m_msg` 获取错误信息。
+> 除 `YOMKRPC_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 ## 二、功能速查矩阵
 

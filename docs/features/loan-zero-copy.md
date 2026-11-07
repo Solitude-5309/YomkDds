@@ -14,14 +14,14 @@
 | 归还未发布的借出缓冲 | `YOMKRPC_DISCARD_LOAN(nodeName, topicName, sample)` | `/YomkRpcService/discard_loan` | 归还未发布样本避免池泄漏 |
 | 订阅端零拷贝接收 | —（自动，无需调用） | — | `FastDDSNode` 内部自动使用 reader loan 接收，回调接口与指针语义不变 |
 
-返回值约定同核心通信：除 `YOMKRPC_VERSION()` 外其余宏均返回 `YomkResponse`，调用后须判 `m_status == YomkResponse::eOk`；`YOMKRPC_LOAN` 的借出结果另经 outPtr 判空获取。
+返回值约定同核心通信：除 `YOMKRPC_VERSION()` 外其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；`YOMKRPC_LOAN` 的借出结果另经 outPtr 判空获取。
 
 ## 使用方式概述
 
 摘自 README 5.2：plain 类型（如 MInt32）可借出 writer 池内样本直接填值发布，免序列化；loan 失败（非 plain 或池耗尽）时回退普通发布路径。
 
 ```cpp
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
@@ -33,8 +33,8 @@ using namespace yomk;
 int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 RPC 服务
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcService>().create();
 
     // 2. 创建节点与发布主题（loan 仅支持 plain 类型：纯基础类型成员 + FINAL 可扩展性；
     //    domainId 缺省取环境变量 YOMKRPC_DDS_DOMAIN_ID）
@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
 - **loan 失败的两种情形**：非 plain 类型（含 string/sequence 的类型）/ 池耗尽——outPtr 置 nullptr，须以判空分支回退普通发布，不可假定借出必然成功。
 - **未归还即池泄漏**：借出后不发布须 `YOMKRPC_DISCARD_LOAN` 归还。
 - **write 后访问指针非法**：发布后指针被中间件收回，不可再访问。
-- **宏返回值**：两宏均返回 `YomkResponse`，须判 `m_status == YomkResponse::eOk`；失败可读 `m_msg` 获取错误信息。
+- **宏返回值**：两宏均返回 `yomk::payload::Response`，须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败可读 `m_msg` 获取错误信息。
 
 ## 与其他功能的关系
 

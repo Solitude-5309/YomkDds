@@ -7,7 +7,7 @@
  */
 
 #include <YomkRpc/YomkRpcAPI.h>
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
@@ -31,14 +31,14 @@ static void onSignal(int)
 
 int main()
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcService>().create();
 
     // 1. 创建节点（域 0 对齐 ROS2 默认域）
     auto resp = YOMKRPC_NODE("interop_pub", 0);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleRos2InteropPub", "create node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleRos2InteropPub").error("create node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -48,9 +48,9 @@ int main()
     // QoS 用 ROS2 发布端默认底座：RELIABLE offered 对 ros2 topic echo 任意 requested 可匹配
     resp = YOMKRPC_PUB_TOPIC("interop_pub", "rt/chatter_interop", type,
                              DDSQosProfile::ros2DefaultPublisher());
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleRos2InteropPub", "register pub topic failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleRos2InteropPub").error("register pub topic failed: ", resp.m_msg);
         YOMKRPC_DEL_NODE("interop_pub");
         return 1;
     }
@@ -65,22 +65,22 @@ int main()
         YomkRpc::MString msg;
         msg.data("interop hello " + std::to_string(seq++));
         resp = YOMKRPC_PUB_MSG("interop_pub", "rt/chatter_interop", &msg);
-        if (resp.m_status != YomkResponse::eOk)
+        if (resp.m_status != yomk::payload::ResStatus::Succeeded)
         {
-            YOMK_ERROR_TAG("ExampleRos2InteropPub", "[SEND] publish failed");
+            ::yomk::log().tag("ExampleRos2InteropPub").error("[SEND] publish failed");
         }
         else
         {
-            YOMK_INFO_TAG("ExampleRos2InteropPub", "[SEND] ", msg.data());
+            ::yomk::log().tag("ExampleRos2InteropPub").info("[SEND] ", msg.data());
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     // 4. 退出前显式销毁节点
     resp = YOMKRPC_DEL_NODE("interop_pub");
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("ExampleRos2InteropPub", "delete node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleRos2InteropPub").error("delete node failed: ", resp.m_msg);
         return 1;
     }
     return 0;

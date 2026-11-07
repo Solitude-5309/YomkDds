@@ -1,7 +1,7 @@
 #pragma once
 // YomkRpcService 对外头：定义 YOMKRPC_* 宏所打包的请求/响应结构（DDSNode/DDSTopic/...）、
 // 订阅回调类型 DDSCallbackFunc，以及服务类 YomkRpcService 的声明。用户通常直接使用 YomkRpcAPI.h 中的宏。
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 
 #include <cctype>
 #include <cstdint>
@@ -22,15 +22,15 @@ public:
     virtual int init() override;
 
 private:
-    YomkResponse getVersion(YomkPkgPtr pkg);
-    YomkResponse loadXml(YomkPkgPtr pkg);
-    YomkResponse createNode(YomkPkgPtr pkg);
-    YomkResponse deleteNode(YomkPkgPtr pkg);
-    YomkResponse registerPubTopic(YomkPkgPtr pkg);
-    YomkResponse registerSubTopic(YomkPkgPtr pkg);
-    YomkResponse publish(YomkPkgPtr pkg);
-    YomkResponse loan(YomkPkgPtr pkg);
-    YomkResponse discardLoan(YomkPkgPtr pkg);
+    yomk::payload::Response getVersion(YomkMsgPtr pkg);
+    yomk::payload::Response loadXml(YomkMsgPtr pkg);
+    yomk::payload::Response createNode(YomkMsgPtr pkg);
+    yomk::payload::Response deleteNode(YomkMsgPtr pkg);
+    yomk::payload::Response registerPubTopic(YomkMsgPtr pkg);
+    yomk::payload::Response registerSubTopic(YomkMsgPtr pkg);
+    yomk::payload::Response publish(YomkMsgPtr pkg);
+    yomk::payload::Response loan(YomkMsgPtr pkg);
+    yomk::payload::Response discardLoan(YomkMsgPtr pkg);
 
 private:
     std::map<std::string, std::unique_ptr<FastDDSNode>> nodes_;
@@ -295,12 +295,12 @@ struct DDSLoanResult
 };
 
 // clang-format off
-// YomkMsg 是 YomkServer 第三方宏，cppcheck 未 --library 配置识别（unknownMacro 属工具配置需求，非自有源码缺陷）
+// YOMK_DEFINE_MSG 是 YomkServer 第三方宏，cppcheck 未 --library 配置识别（unknownMacro 属工具配置需求，非自有源码缺陷）
 // cppcheck-suppress unknownMacro
-YomkMsg(DDSNode, DDSNode, msg)
-YomkMsg(DDSXmlLoad, DDSXmlLoad, msg)
-YomkMsg(DDSTopic, DDSTopic, msg)
-YomkMsg(DDSSubRequest, DDSSubRequest, msg)
-YomkMsg(DDSPublish, DDSPublish, msg)
-YomkMsg(DDSLoan, DDSLoan, msg)
-YomkMsg(DDSLoanResult, DDSLoanResult, msg)
+YOMK_DEFINE_MSG(::DDSNode, DDSNode, msg)
+YOMK_DEFINE_MSG(::DDSXmlLoad, DDSXmlLoad, msg)
+YOMK_DEFINE_MSG(::DDSTopic, DDSTopic, msg)
+YOMK_DEFINE_MSG(::DDSSubRequest, DDSSubRequest, msg)
+YOMK_DEFINE_MSG(::DDSPublish, DDSPublish, msg)
+YOMK_DEFINE_MSG(::DDSLoan, DDSLoan, msg)
+YOMK_DEFINE_MSG(::DDSLoanResult, DDSLoanResult, msg)

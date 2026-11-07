@@ -14,7 +14,7 @@
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成编译安装；C++ 工程骨架与 [quick-start.md](./quick-start.md) 相同（`find_package(YomkServer REQUIRED)` + `find_package(YomkRpc REQUIRED)`，链接 `YomkRpc::YomkRpc YomkServer::YomkServer`——本教程示例未使用消息类型，无需 `YomkRpcMsg`）；
 - 加载语义（README 5.7 口径）：`YOMKRPC_LOAD_XML` 读文件经 `load_XML_profiles_file` 解析校验（返回码显式检查）后缓存，供后续 create_node 的 participant 按**三级提取链**叠加：按节点名 `profile_name` 精确匹配 → `is_default_profile="true"` 默认档兜底（同文件多默认档取首个）→ 均未命中保持默认底座；命中后节点名仍最后覆盖。可配置范围为 participant 级发现/传输/QoS 配置，字段写法经 Fast DDS XML schema 校验；
-- 宏返回值约定：除 `YOMKRPC_VERSION()` 外，其余宏均返回 `YomkResponse`，调用后须判 `m_status == YomkResponse::eOk`，失败时读 `m_msg` 获取错误信息。
+- 宏返回值约定：除 `YOMKRPC_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`，失败时读 `m_msg` 获取错误信息。
 
 ## 分步操作
 
@@ -78,36 +78,36 @@ export YOMKRPC_XML_PROFILE_PATH="/path/to/profiles.xml"
 
 ```cpp
 #include <YomkRpc/YomkRpcAPI.h>
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 
 using namespace yomk;
 
 int main()
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcService>().create();
     YOMKRPC_VERSION();
 
     // 1. 加载 XML profiles——必须在任何节点创建之前调用！
     auto resp = YOMKRPC_LOAD_XML("/path/to/profiles.xml");
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("XmlProfilesDemo", "load xml failed: ", resp.m_msg);
+        ::yomk::log().tag("XmlProfilesDemo").error("load xml failed: ", resp.m_msg);
         return 1;
     }
 
     // 2. 创建节点：xml_node 精确命中具名档；other_node 具名档无匹配走默认档兜底
     resp = YOMKRPC_NODE("xml_node", 0);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("XmlProfilesDemo", "create xml_node failed: ", resp.m_msg);
+        ::yomk::log().tag("XmlProfilesDemo").error("create xml_node failed: ", resp.m_msg);
         return 1;
     }
 
     resp = YOMKRPC_NODE("other_node", 0);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("XmlProfilesDemo", "create other_node failed: ", resp.m_msg);
+        ::yomk::log().tag("XmlProfilesDemo").error("create other_node failed: ", resp.m_msg);
         YOMKRPC_DEL_NODE("xml_node");
         return 1;
     }

@@ -33,7 +33,7 @@
 发布端用 `ros2DefaultPublisher()` 底座并逐项覆盖 depth=10，订阅端用 `ros2DefaultSubscriber()`（BEST_EFFORT requested 对任意 offered 均可匹配）：
 
 ```cpp
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
@@ -47,8 +47,8 @@ using namespace yomk;
 int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 RPC 服务
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcService>().create();
 
     // 2. 创建节点（domainId 缺省取环境变量 YOMKRPC_DDS_DOMAIN_ID）
     YOMKRPC_NODE("qos_node");
@@ -59,7 +59,7 @@ int main(int argc, char *argv[])
     {
         auto *msg = static_cast<const YomkRpc::MString *>(data);
         received++;
-        YOMK_INFO_TAG("QosExample", "[RECV] ", msg->data());
+        ::yomk::log().tag("QosExample").info("[RECV] ", msg->data());
     };
     YOMKRPC_SUB_TOPIC("qos_node", "qos_topic", new YomkRpc::MStringPubSubType(), onMessage,
                       DDSQosProfile::ros2DefaultSubscriber());
@@ -76,13 +76,13 @@ int main(int argc, char *argv[])
         YomkRpc::MString msg;
         msg.data("hello " + std::to_string(i));
         YOMKRPC_PUB_MSG("qos_node", "qos_topic", &msg);
-        YOMK_INFO_TAG("QosExample", "[SEND] ", msg.data());
+        ::yomk::log().tag("QosExample").info("[SEND] ", msg.data());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // 6. 等待接收完成后删除节点
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    YOMK_INFO_TAG("QosExample", "received=", received.load(), "/5");
+    ::yomk::log().tag("QosExample").info("received=", received.load(), "/5");
     YOMKRPC_DEL_NODE("qos_node");
     return 0;
 }

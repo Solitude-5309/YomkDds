@@ -5,7 +5,7 @@ include(cmake/AbiInfo.cmake)
 # YomkServer 版本系列检测模块：find_package(YomkServer) 之后调用 yomk_server_version_check()
 include(cmake/YomkServerVersionCheck.cmake)
 
-project(YomkRpc VERSION 0.4.10 LANGUAGES CXX)
+project(YomkRpc VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,7 +22,7 @@ add_custom_target(export_compile_commands ALL
 )
 
 find_package(YomkServer REQUIRED)
-# 版本系列检测：YomkRpc 仅支持 YomkServer 2.x.x，非 2 系列直接报错终止配置
+# 版本系列检测：YomkRpc 仅支持 YomkServer 3.x.x，非 3 系列直接报错终止配置
 yomk_server_version_check()
 message(STATUS "YomkServer version: ${YomkServer_VERSION}")  
 message(STATUS "YomkServer include dirs: ${YomkServer_INCLUDE_DIRS}")  

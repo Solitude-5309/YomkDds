@@ -81,7 +81,7 @@
 调试节点生命周期三步：创建调试节点 → 登记查询/登记主题/发布 → 退出前显式清理（规避 FastDDS 静态析构期段错误）。完整示例（对应 CLI `topic print` 的等价用户代码）：
 
 ```cpp
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 
 #include <iostream>
@@ -91,14 +91,14 @@ using namespace yomk;
 
 int main(int argc, char *argv[])
 {
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcDebugService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：一个进程至多一个，重复创建须先删除）
     auto resp = YOMKRPC_DEBUG_NODE(0);
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("DebugExample", "create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("DebugExample").error("create debug node failed: ", resp.m_msg);
         return 1;
     }
 
@@ -106,18 +106,18 @@ int main(int argc, char *argv[])
     //    消息文本逐条投递 output 回调（输出权在调用方，服务层不打印）
     resp = YOMKRPC_DEBUG_TOPIC_PRINT("hello_world", [](const std::string &text)
         { std::cout << text << std::endl; });
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("DebugExample", "register debug topic failed: ", resp.m_msg);
+        ::yomk::log().tag("DebugExample").error("register debug topic failed: ", resp.m_msg);
         YOMKRPC_DEBUG_QUIT();
         return 1;
     }
 
     // 3. 业务逻辑后退出前显式清理（规避 FastDDS 静态析构期段错误）
     resp = YOMKRPC_DEBUG_QUIT();
-    if (resp.m_status != YomkResponse::eOk)
+    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
-        YOMK_ERROR_TAG("DebugExample", "debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("DebugExample").error("debug quit failed: ", resp.m_msg);
         return 1;
     }
     return 0;
@@ -127,11 +127,11 @@ int main(int argc, char *argv[])
 收敛查询类宏的等价调用序列（以 `yomkrpc topic list` 为例，流程同构）：
 
 ```cpp
-YOMK_INIT();
-YOMK_NEW_SERVICE(YomkRpcDebugService);
+::yomk::server().init();
+::yomk::server().srv<YomkRpcDebugService>().create();
 auto resp = YOMKRPC_DEBUG_NODE(0);          // 1. 创建调试节点
 resp = YOMKRPC_DEBUG_TOPIC_LIST(5, 200);          // 2. 收敛查询：连续 5 次 200ms 快照不变即返回 StringArray 包
-YomkUnPackPkg(resp.m_data, StringArray, arr);
+auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
 if (arr != nullptr)
 {
     for (const auto &line : arr->d) { std::cout << line << "\n"; }
@@ -202,7 +202,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 - **`topic pub` 发布失败**：未发现主题/载荷不合法/送达未确认返回错误，错误文本枚举：`invalid json for type [...]`（非法 JSON）、`not all subscribers acknowledged`（未全部确认送达）、`subscribers exist but not all matched (suspended or offline)`（订阅者在场却无一与发布端匹配）、`cannot open json file`/`json file is empty`（`-f` 文件问题）、`非法频率 "..."`/`非法订阅者数量 "..."`/`非法发布条数 "..."`/`waiting for subscribers interrupted` 等。ack 确认覆盖语义：RELIABLE 订阅者运行中 → ack 协议级确认送达；中途挂起 → ack 超时报错退出不假成功；发布端启动前已离线的订阅者无从期待、照常返回成功（DDS 发现机制的客观边界）；BEST_EFFORT 订阅者不参与 ack 与 matched 校验，始终尽力而为。
 
-> 除 `YOMKRPC_VERSION()` 外，其余宏均返回 `YomkResponse`，调用后须判 `m_status == YomkResponse::eOk`；失败时可读 `m_msg` 获取错误信息。
+> 除 `YOMKRPC_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 ## 与其他功能的关系
 

@@ -19,7 +19,7 @@ YomkRpc 是基于 YomkServer 框架的 RPC 分布式通信扩展，集成 Fast D
 | 加载 XML profiles | `YOMKRPC_LOAD_XML([xmlPath])` | `/YomkRpcService/load_xml` | participant 级配置入口，详见 [xml-profiles.md](./xml-profiles.md) |
 | Loan 借出零拷贝发布 | `YOMKRPC_LOAN(nodeName, topicName, outPtr)` / `YOMKRPC_DISCARD_LOAN(nodeName, topicName, sample)` | `/YomkRpcService/loan`、`/YomkRpcService/discard_loan` | 详见 [loan-zero-copy.md](./loan-zero-copy.md) |
 
-返回值约定：除 `YOMKRPC_VERSION()` 外，其余宏均返回 `YomkResponse`，调用后须判 `m_status == YomkResponse::eOk`；失败时可读 `m_msg` 获取错误信息。
+返回值约定：除 `YOMKRPC_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 ## 使用方式概述
 
@@ -28,8 +28,8 @@ YomkRpc 是基于 YomkServer 框架的 RPC 分布式通信扩展，集成 Fast D
 调用任何 `YOMKRPC_*` 宏之前，必须先执行以下两步（初始化 YomkServer 框架并启动 YomkRpc RPC 服务）：
 
 ```cpp
-YOMK_INIT();
-YOMK_NEW_SERVICE(YomkRpcService);
+::yomk::server().init();
+::yomk::server().srv<YomkRpcService>().create();
 ```
 
 ### 最小闭环示例（普通发布订阅）
@@ -37,7 +37,7 @@ YOMK_NEW_SERVICE(YomkRpcService);
 摘自 README 5.1：同一节点内注册发布与订阅主题，发布 5 条 MString 消息并等待接收。
 
 ```cpp
-#include <YomkServer/YomkAPI.h>
+#include <YomkServer/YomkApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
@@ -51,8 +51,8 @@ using namespace yomk;
 int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 RPC 服务
-    YOMK_INIT();
-    YOMK_NEW_SERVICE(YomkRpcService);
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkRpcService>().create();
     YOMKRPC_VERSION(); // 查看版本（宏内部自动解包并打印）
 
     // 2. 创建节点（每节点一个独立 DDS 参与者；domainId 缺省取环境变量 YOMKRPC_DDS_DOMAIN_ID）
@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
     {
         auto *msg = static_cast<const YomkRpc::MString *>(data);
         received++;
-        YOMK_INFO_TAG("PubSubExample", "[RECV] ", msg->data());
+        ::yomk::log().tag("PubSubExample").info("[RECV] ", msg->data());
     };
     YOMKRPC_SUB_TOPIC("node0", "my_topic", new YomkRpc::MStringPubSubType(), onMessage);
 
@@ -78,13 +78,13 @@ int main(int argc, char *argv[])
         YomkRpc::MString msg;
         msg.data("hello " + std::to_string(i));
         YOMKRPC_PUB_MSG("node0", "my_topic", &msg);
-        YOMK_INFO_TAG("PubSubExample", "[SEND] ", msg.data());
+        ::yomk::log().tag("PubSubExample").info("[SEND] ", msg.data());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // 6. 等待接收完成（首条消息可能因 discovery 时序丢失）
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    YOMK_INFO_TAG("PubSubExample", "received=", received.load(), "/5");
+    ::yomk::log().tag("PubSubExample").info("received=", received.load(), "/5");
 
     // 7. 退出前删除节点（显式销毁 DDS 实体）
     YOMKRPC_DEL_NODE("node0");
@@ -159,7 +159,7 @@ auto onMessage = [&](const void *data)
 
 ## 错误与边界行为
 
-- **返回值**：除 `YOMKRPC_VERSION()` 外的宏调用后须判 `m_status == YomkResponse::eOk`，失败读 `m_msg`。
+- **返回值**：除 `YOMKRPC_VERSION()` 外的宏调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`，失败读 `m_msg`。
 - **节点创建失败**：domainId 非法（超出 [0,232]）或 nodeName 为空，返回错误；serverLocator 非法串创建失败回显（不静默回落多播发现）。
 - **节点删除**：`YOMKRPC_DEL_NODE` 对不存在的节点返回错误。
 - **discovery 时序**：注册订阅后远端发布者需要时间被发现——示例在发布前等待 1 秒（`std::this_thread::sleep_for(std::chrono::seconds(1))`），首条消息可能因 discovery 时序丢失；对收发条数做精确预期的程序须预留等待。

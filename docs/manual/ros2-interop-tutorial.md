@@ -43,14 +43,14 @@ source /opt/ros/humble/setup.bash
 机制：构造类型实例后用 `set_name` 把注册类型名改成 ROS2 约定形态，再传给注册宏——链路内 `register_type` 以新名注册、发现数据 `type_name` 即新名，ROS2 侧同名匹配即通。发布端关键代码（摘自 `examples/ExampleRos2InteropPub.cpp`，1Hz 持续发布直至 Ctrl+C/SIGTERM）：
 
 ```cpp
-YOMK_INIT();
-YOMK_NEW_SERVICE(YomkRpcService);
+::yomk::server().init();
+::yomk::server().srv<YomkRpcService>().create();
 
 // 1. 创建节点（域 0 对齐 ROS2 默认域）
 auto resp = YOMKRPC_NODE("interop_pub", 0);
-if (resp.m_status != YomkResponse::eOk)
+if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 {
-    YOMK_ERROR_TAG("ExampleRos2InteropPub", "create node failed: ", resp.m_msg);
+    ::yomk::log().tag("ExampleRos2InteropPub").error("create node failed: ", resp.m_msg);
     return 1;
 }
 
@@ -60,9 +60,9 @@ type->set_name("std_msgs::msg::dds_::String_");
 // QoS 用 ROS2 发布端默认底座：RELIABLE offered 对 ros2 topic echo 任意 requested 可匹配
 resp = YOMKRPC_PUB_TOPIC("interop_pub", "rt/chatter_interop", type,
                          DDSQosProfile::ros2DefaultPublisher());
-if (resp.m_status != YomkResponse::eOk)
+if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 {
-    YOMK_ERROR_TAG("ExampleRos2InteropPub", "register pub topic failed: ", resp.m_msg);
+    ::yomk::log().tag("ExampleRos2InteropPub").error("register pub topic failed: ", resp.m_msg);
     YOMKRPC_DEL_NODE("interop_pub");
     return 1;
 }
@@ -94,7 +94,7 @@ auto onMessage = [&](const void* data)
 {
     auto* msg = static_cast<const YomkRpc::MString*>(data);
     received++;
-    YOMK_INFO_TAG("ExampleRos2InteropSub", "[RECV] ", msg->data());
+    ::yomk::log().tag("ExampleRos2InteropSub").info("[RECV] ", msg->data());
 };
 // QoS 用 ROS2 订阅端默认底座：BEST_EFFORT requested 对任意 offered（含 ros2 topic
 // pub 与 YomkRpc pub 的 RELIABLE）均可匹配

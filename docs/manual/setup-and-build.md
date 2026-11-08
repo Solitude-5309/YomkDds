@@ -16,7 +16,7 @@
 |---|---|---|
 | C++17 编译器 | gcc 等 | 编译 YomkRpc 主库与示例 |
 | CMake | >= 3.14 | 构建系统 |
-| YomkServer | 3.x（当前适配 3.5.2） | 通过其 `build_ubuntu.sh` 安装后会自动配置环境变量 `YOMK_PREFIX_PATH` 指向安装路径；配置阶段检测到非 3.x 版本会直接报错终止 |
+| YomkServer | 3.6.x（当前适配 3.6.0，分域头布局 `include/yomk/<域>/`） | 通过其 `build_ubuntu.sh` 安装后会自动配置环境变量 `YOMK_PREFIX_PATH` 指向安装路径；配置阶段检测到非 3.6.x 版本会直接报错终止 |
 | swig 与 python3-dev | 已安装 | msg 类型库 SWIG Python 绑定编译依赖 |
 
 确认 `YOMK_PREFIX_PATH` 已指向 YomkServer 安装路径（未安装 YomkServer 时先完成 YomkServer 安装）：

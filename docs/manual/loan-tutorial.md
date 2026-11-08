@@ -32,7 +32,8 @@ loan 发布的四步循环：
 以下为完整可编译程序（借出发布 5 条 MInt32，失败自动回退普通发布，最后演示归还未用样本）：
 
 ```cpp
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>

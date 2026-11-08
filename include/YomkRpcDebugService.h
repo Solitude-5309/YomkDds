@@ -3,7 +3,8 @@
 // （DDSDebugNode/DDSDebugTopic）、调试输出回调类型 DDSDebugOutputFunc，以及服务类
 // YomkRpcDebugService 的声明。调试能力由内部的 FastDDSDebugNode 提供（类型无关：经 DDS 发现
 // 机制取回远端 TypeObject 动态建订阅，消息以 JSON 文本投递给用户回调，零消息类型依赖）。
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 // 引 DDSQosProfile（DDSDebugTopic/DDSDebugTopicPub 的 qos 尾参）；平铺引号三环境命中：
 // 安装树同目录/测试树平铺/主库平铺
 #include "YomkRpcService.h"

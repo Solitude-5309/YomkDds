@@ -19,7 +19,8 @@
 
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpc/YomkRpcBagService.h>
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 
 #include <nlohmann/json.hpp> // --qos-file 解析（vendored header-only，CMake 配 include 路径）
 

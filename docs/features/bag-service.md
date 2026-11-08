@@ -47,7 +47,8 @@ yomkrpc bag record --start-paused hello_world  # 暂停态启动（订阅照常�
 等价宏调用（完整用户代码，`YOMKRPC_BAG_*` 宏定义于 `YomkRpcAPI.h`，SIGINT 处理与暂停控制声明于 `YomkRpcBagService.h`）：
 
 ```cpp
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpc/YomkRpcBagService.h> // bagRecordStop/bagRecordReset（停止标志读写端）
 

@@ -33,7 +33,8 @@
 发布端用 `ros2DefaultPublisher()` 底座并逐项覆盖 depth=10，订阅端用 `ros2DefaultSubscriber()`（BEST_EFFORT requested 对任意 offered 均可匹配）：
 
 ```cpp
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>

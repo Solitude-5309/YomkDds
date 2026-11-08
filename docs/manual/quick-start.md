@@ -46,7 +46,8 @@ target_link_libraries(first_pubsub PRIVATE YomkRpc::YomkRpc YomkServer::YomkServ
 `first_pubsub.cpp` 完整内容（同一节点内注册发布与订阅主题，发布 5 条 MString 消息并等待接收）：
 
 ```cpp
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
@@ -105,7 +106,7 @@ int main(int argc, char *argv[])
 
 | 片段 | 作用 |
 |---|---|
-| `::yomk::server().init()` + `::yomk::server().srv<YomkRpcService>().create()` | 初始化 YomkServer 框架并启动 RPC 服务（`YomkServer/YomkApi.h` 提供）；每个使用 YomkRpc 宏 API 的程序开头都需要 |
+| `::yomk::server().init()` + `::yomk::server().srv<YomkRpcService>().create()` | 初始化 YomkServer 框架并启动 RPC 服务（`yomk/server/YomkServerApi.h` 提供）；每个使用 YomkRpc 宏 API 的程序开头都需要 |
 | `YOMKRPC_VERSION()` | 版本查询宏，内部自动解包并打印，无返回值 |
 | `YOMKRPC_NODE("node0")` | 创建节点，每节点一个独立 DDS 参与者；domainId 缺省取环境变量 `YOMKRPC_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0，合法范围 [0,232]） |
 | `YOMKRPC_PUB_TOPIC(...)` / `YOMKRPC_SUB_TOPIC(...)` | 在节点上注册发布/订阅主题；type 实参为 `new XxxPubSubType()`，**所有权移交服务端，调用后 caller 不再持有/释放** |

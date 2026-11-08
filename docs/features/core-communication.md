@@ -37,7 +37,8 @@ YomkRpc 是基于 YomkServer 框架的 RPC 分布式通信扩展，集成 Fast D
 摘自 README 5.1：同一节点内注册发布与订阅主题，发布 5 条 MString 消息并等待接收。
 
 ```cpp
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>

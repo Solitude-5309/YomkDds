@@ -5,7 +5,8 @@
  *       展示借出返回空指针的回退路径。详见 docs/manual/loan-tutorial.md。
  */
 #include <YomkRpc/YomkRpcAPI.h>
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>

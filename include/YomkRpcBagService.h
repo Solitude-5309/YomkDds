@@ -4,7 +4,8 @@
 // 服务类 YomkRpcBagService 的声明。录制能力由内部的
 // FastDDSBagNode 提供（类型无关：透传原始 CDR 字节直写 mcap，schema_id=0 无 schema 通道，
 // 零消息类型依赖）；回放能力同节点（读 mcap 分片重建透传 writer，按录制时间轴发布）。
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 // 引 DDSBagNode 三字段缺省初始化器 env helper（YomkRpcDefaultDomainId 等）；平铺引号
 // 三环境命中：安装树同目录/测试树平铺/主库平铺
 #include "YomkRpcService.h"

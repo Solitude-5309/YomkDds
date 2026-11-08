@@ -78,7 +78,8 @@ export YOMKRPC_XML_PROFILE_PATH="/path/to/profiles.xml"
 
 ```cpp
 #include <YomkRpc/YomkRpcAPI.h>
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 
 using namespace yomk;
 

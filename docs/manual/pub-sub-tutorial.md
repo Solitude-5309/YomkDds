@@ -78,7 +78,8 @@ YOMKRPC_SUB_TOPIC("node0", "my_topic", new YomkRpc::MStringPubSubType(), onMessa
 `YOMKRPC_NODE` 每调用一次即创建一个独立 DDS 参与者（每节点一个独立 DDS 参与者；节点名唯一、domainId 合法范围 [0,232]），一个进程可创建多个节点，每个节点可注册多个发布/订阅主题。完整示例（两个节点、两个主题）：
 
 ```cpp
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>

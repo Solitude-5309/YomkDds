@@ -21,7 +21,8 @@
 摘自 README 5.2：plain 类型（如 MInt32）可借出 writer 池内样本直接填值发布，免序列化；loan 失败（非 plain 或池耗尽）时回退普通发布路径。
 
 ```cpp
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>

@@ -81,7 +81,8 @@
 调试节点生命周期三步：创建调试节点 → 登记查询/登记主题/发布 → 退出前显式清理（规避 FastDDS 静态析构期段错误）。完整示例（对应 CLI `topic print` 的等价用户代码）：
 
 ```cpp
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 #include <YomkRpc/YomkRpcAPI.h>
 
 #include <iostream>

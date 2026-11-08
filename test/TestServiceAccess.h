@@ -9,7 +9,7 @@
 // "/服务名/函数名" 的公开路由格式。
 //
 // 前置条件：被测服务已通过 srv_ptr(svc).add() 注册（所有测试均在调用前完成注册）。
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
 
 #include <map>
 #include <string>

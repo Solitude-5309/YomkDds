@@ -4,7 +4,8 @@
  *       再注册订阅主题，等待发现后发布 5 条并打印接收统计，退出前 DEL_NODE 清理。
  */
 #include <YomkRpc/YomkRpcAPI.h>
-#include <YomkServer/YomkApi.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
 
 #include <YomkRpcMsg/YomkRpcMsg.hpp>
 #include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>

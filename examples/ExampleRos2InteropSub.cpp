@@ -6,12 +6,12 @@
  *       docs/manual/ros2-interop-tutorial.md。
  */
 
-#include <YomkRpc/YomkRpcAPI.h>
+#include <yomk/dds/YomkDdsAPI.h>
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 
-#include <YomkRpcMsg/YomkRpcMsg.hpp>
-#include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
+#include <yomk/dds/YomkDdsStdMsgs.hpp>
+#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -31,34 +31,34 @@ static void onSignal(int)
 int main()
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkRpcService>().create();
+    ::yomk::server().srv<YomkDdsService>().create();
 
     // 创建节点（域 0 对齐 ROS2 默认域）
-    auto resp = YOMKRPC_NODE("interop_sub", 0);
-    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+    auto resp = YOMKDDS_NODE("interop_sub", 0);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleRos2InteropSub").error("create node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleRos2InteropSub").error("create node failed: ", resp.msg);
         return 1;
     }
 
     // 类型对象 new 后、移交前 set_name 成 ROS2 约定名（宏实参位内联 new 无法先改名）
     std::atomic<int> received{0};
-    auto* type = new YomkRpc::MStringPubSubType();
+    auto* type = new YomkDdsStd::MStringPubSubType();
     type->set_name("std_msgs::msg::dds_::String_");
     auto onMessage = [&](const void* data)
     {
-        auto* msg = static_cast<const YomkRpc::MString*>(data);
+        auto* msg = static_cast<const YomkDdsStd::MString*>(data);
         received++;
         ::yomk::log().tag("ExampleRos2InteropSub").info("[RECV] ", msg->data());
     };
     // QoS 用 ROS2 订阅端默认底座：BEST_EFFORT requested 对任意 offered（含 ros2 topic
-    // pub 与 YomkRpc pub 的 RELIABLE）均可匹配（头文件 YOMKRPC_SUB_TOPIC 注释同口径）
+    // pub 与 YomkDds pub 的 RELIABLE）均可匹配（头文件 YOMKDDS_SUB_TOPIC 注释同口径）
     resp =
-        YOMKRPC_SUB_TOPIC("interop_sub", "rt/chatter_interop", type, onMessage, DDSQosProfile::ros2DefaultSubscriber());
-    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+        YOMKDDS_SUB_TOPIC("interop_sub", "rt/chatter_interop", type, onMessage, DDSQosProfile::ros2DefaultSubscriber());
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleRos2InteropSub").error("register sub topic failed: ", resp.m_msg);
-        YOMKRPC_DEL_NODE("interop_sub");
+        ::yomk::log().tag("ExampleRos2InteropSub").error("register sub topic failed: ", resp.msg);
+        YOMKDDS_DEL_NODE("interop_sub");
         return 1;
     }
 
@@ -71,10 +71,10 @@ int main()
     }
 
     // 退出前显式销毁节点，打印总收条数
-    resp = YOMKRPC_DEL_NODE("interop_sub");
-    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+    resp = YOMKDDS_DEL_NODE("interop_sub");
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleRos2InteropSub").error("delete node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleRos2InteropSub").error("delete node failed: ", resp.msg);
         return 1;
     }
     std::cout << "[QUIT] received total=" << received.load() << std::endl;

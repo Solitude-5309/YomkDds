@@ -1,10 +1,10 @@
 # 功能文档：QoS 配置
 
-> **本文档覆盖范围**：端点 QoS 描述 `DDSQosProfile` 的 8 项配置与哨兵/底座/覆盖三层语义、三个 ROS2 预置底座；宏侧 qos 可缺省尾参（`YOMKRPC_PUB_TOPIC` / `YOMKRPC_SUB_TOPIC` / `YOMKRPC_DEBUG_TOPIC_PUB`）与 `yomkrpc` CLI 侧 `--qos-ros` / `--qos-*` / `--qos-file` 参数族的用法与优先级链。
+> **本文档覆盖范围**：端点 QoS 描述 `DDSQosProfile` 的 8 项配置与哨兵/底座/覆盖三层语义、三个 ROS2 预置底座；宏侧 qos 可缺省尾参（`YOMKDDS_PUB_TOPIC` / `YOMKDDS_SUB_TOPIC` / `YOMKDDS_DEBUG_TOPIC_PUB`）与 `yomkdds` CLI 侧 `--qos-ros` / `--qos-*` / `--qos-file` 参数族的用法与优先级链。
 
 ## 功能定位
 
-QoS（Quality of Service）决定 DDS 端点的可靠性、持久化、历史深度等行为，直接影响发布端与订阅端能否匹配、消息是否丢失。YomkRpc 在两侧提供同一套 8 项 QoS 配置能力：编程侧经 `DDSQosProfile` 尾参随主题注册下发；命令行侧经 `yomkrpc` topic 命令的 QoS 参数族在不改代码的情况下调整 QoS。
+QoS（Quality of Service）决定 DDS 端点的可靠性、持久化、历史深度等行为，直接影响发布端与订阅端能否匹配、消息是否丢失。YomkDds 在两侧提供同一套 8 项 QoS 配置能力：编程侧经 `DDSQosProfile` 尾参随主题注册下发；命令行侧经 `yomkdds` topic 命令的 QoS 参数族在不改代码的情况下调整 QoS。
 
 ## 能力清单
 
@@ -18,32 +18,32 @@ QoS（Quality of Service）决定 DDS 端点的可靠性、持久化、历史深
 
 ### 宏侧（编程）
 
-qos 为 `YOMKRPC_PUB_TOPIC` / `YOMKRPC_SUB_TOPIC` / `YOMKRPC_DEBUG_TOPIC_PUB` 的可缺省尾参，传入 `DDSQosProfile` 实例即可。摘自 README 5.6 的发布端用法（ROS2 互通场景使用 ROS2 发布端默认底座）：
+qos 为 `YOMKDDS_PUB_TOPIC` / `YOMKDDS_SUB_TOPIC` / `YOMKDDS_DEBUG_TOPIC_PUB` 的可缺省尾参，传入 `DDSQosProfile` 实例即可。摘自 README 5.6 的发布端用法（ROS2 互通场景使用 ROS2 发布端默认底座）：
 
 ```cpp
 // DDS 层话题名带 rt/ 前缀（rmw_fastrtps 对语义名 /chatter 的实际 DDS 名），QoS 用 ROS2 发布端默认底座
-YOMKRPC_PUB_TOPIC("interop_pub", "rt/chatter", type, DDSQosProfile::ros2DefaultPublisher());
+YOMKDDS_PUB_TOPIC("interop_pub", "rt/chatter", type, DDSQosProfile::ros2DefaultPublisher());
 ```
 
-底座上逐项覆盖（如只设 depth=10，其余项保持底座值；字段定义见公共头 `include/YomkRpcService.h` 的 `DDSQosProfile`）：
+底座上逐项覆盖（如只设 depth=10，其余项保持底座值；字段定义见公共头 `include/dds/YomkDdsService.h` 的 `DDSQosProfile`）：
 
 ```cpp
 DDSQosProfile qos = DDSQosProfile::ros2DefaultPublisher();
 qos.depth = 10;   // 未设置项为哨兵保持底座值，仅覆盖 depth
-YOMKRPC_PUB_TOPIC("node0", "my_topic", new YomkRpc::MStringPubSubType(), qos);
+YOMKDDS_PUB_TOPIC("node0", "my_topic", new YomkDdsStd::MStringPubSubType(), qos);
 ```
 
-### CLI 侧（yomkrpc 命令行）
+### CLI 侧（yomkdds 命令行）
 
 QoS 参数族仅 `topic pub` / `topic print` / `topic hz` 生效，命令行形态 `[--qos-ros | --qos-KEY VAL ... | --qos-file FILE]`：
 
 ```bash
 # 整体切 ROS2 底座 QoS
-yomkrpc topic print --qos-ros <主题名>
+yomkdds topic print --qos-ros <主题名>
 # 底座上逐项覆盖（--qos-ros 与 --qos-* 叠加时，逐项覆盖底座）
-yomkrpc topic pub --qos-ros --qos-reliability reliable <主题名> <JSON数据>
+yomkdds topic pub --qos-ros --qos-reliability reliable <主题名> <JSON数据>
 # 从 JSON 文件加载逐项覆盖
-yomkrpc topic pub --qos-file qos.json <主题名> <JSON数据>
+yomkdds topic pub --qos-file qos.json <主题名> <JSON数据>
 ```
 
 `--qos-file FILE` 从 JSON 文件加载逐项覆盖——扁平对象，键为 reliability/durability/history/depth/deadline/lifespan/liveliness/liveliness_lease_duration，值形态同对应 `--qos-*` 选项（README 示例）：
@@ -65,7 +65,7 @@ yomkrpc topic pub --qos-file qos.json <主题名> <JSON数据>
 
 ### 8 项参数表
 
-逐项覆盖的值大小写不敏感，ros2 小写与 DDS 大写均收。宏侧字段名为公共头 `include/YomkRpcService.h` 中 `DDSQosProfile` 的成员（未设置哨兵为 `Unset` / `-1`）：
+逐项覆盖的值大小写不敏感，ros2 小写与 DDS 大写均收。宏侧字段名为公共头 `include/dds/YomkDdsService.h` 中 `DDSQosProfile` 的成员（未设置哨兵为 `Unset` / `-1`）：
 
 | 配置项 | 宏侧字段 | CLI 选项 | 取值（CLI） | 说明 |
 |---|---|---|---|---|
@@ -80,9 +80,9 @@ yomkrpc topic pub --qos-file qos.json <主题名> <JSON数据>
 
 ### 宏侧约束
 
-- qos 为可缺省尾参：`YOMKRPC_PUB_TOPIC(nodeName, topicName, type[, qos])`、`YOMKRPC_SUB_TOPIC(nodeName, topicName, type, callback[, qos])`、`YOMKRPC_DEBUG_TOPIC_PUB(topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes[, qos])`。
-- `YOMKRPC_DEBUG_TOPIC_PUB` 的 qos：临时发布 writer 的 QoS 描述 `DDSQosProfile`，全哨兵=既有固定值 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL，ROS2 底座建议 `ros2DefaultPublisher()`。
-- 订阅端（`YOMKRPC_SUB_TOPIC`）推荐 `DDSQosProfile::ros2DefaultSubscriber()`（BEST_EFFORT requested 对任意 offered 均可匹配）。
+- qos 为可缺省尾参：`YOMKDDS_PUB_TOPIC(nodeName, topicName, type[, qos])`、`YOMKDDS_SUB_TOPIC(nodeName, topicName, type, callback[, qos])`、`YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes[, qos])`。
+- `YOMKDDS_DEBUG_TOPIC_PUB` 的 qos：临时发布 writer 的 QoS 描述 `DDSQosProfile`，全哨兵=既有固定值 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL，ROS2 底座建议 `ros2DefaultPublisher()`。
+- 订阅端（`YOMKDDS_SUB_TOPIC`）推荐 `DDSQosProfile::ros2DefaultSubscriber()`（BEST_EFFORT requested 对任意 offered 均可匹配）。
 
 ### CLI 侧约束
 
@@ -101,8 +101,8 @@ yomkrpc topic pub --qos-file qos.json <主题名> <JSON数据>
 
 ## 与其他功能的关系
 
-- 宏侧 qos 尾参挂在主题注册上（`YOMKRPC_PUB_TOPIC` / `YOMKRPC_SUB_TOPIC`），节点与发布订阅本身见 [core-communication.md](./core-communication.md)。
-- CLI 侧 QoS 参数族属于 `yomkrpc` 的 `topic pub` / `topic print` / `topic hz` 命令，命令全集见 [debug-service.md](./debug-service.md)。
+- 宏侧 qos 尾参挂在主题注册上（`YOMKDDS_PUB_TOPIC` / `YOMKDDS_SUB_TOPIC`），节点与发布订阅本身见 [core-communication.md](./core-communication.md)。
+- CLI 侧 QoS 参数族属于 `yomkdds` 的 `topic pub` / `topic print` / `topic hz` 命令，命令全集见 [debug-service.md](./debug-service.md)。
 
 ## 教程链接
 

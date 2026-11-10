@@ -3,11 +3,11 @@
 # 后续可与 YomkPluginSystem 对齐补 modernize-*/readability-* 维度
 #
 # 禁用项理由：
-# - bugprone-macro-parentheses：include/YomkRpcAPI.h 全量为 API 包装宏，宏体含参数展开为设计使然
+# - bugprone-macro-parentheses：include/YomkDdsAPI.h 全量为 API 包装宏，宏体含参数展开为设计使然
 # - bugprone-easily-swappable-parameters：相邻同型参数为消息结构体字段风格约定
-# - cppcoreguidelines-owning-memory：所有权协议以注释约定（src/YomkRpcService.cpp 文件头），
+# - cppcoreguidelines-owning-memory：所有权协议以注释约定（src/YomkDdsService.cpp 文件头），
 #   raw new/delete 为 FastDDS TopicDataType create_data/delete_data 惯用法，非 gsl owner 体系
-# - cppcoreguidelines-macro-usage：API 宏即产品形态（include/YomkRpcAPI.h）
+# - cppcoreguidelines-macro-usage：API 宏即产品形态（include/YomkDdsAPI.h）
 # - cppcoreguidelines-pro-bounds-array-to-pointer-decay：LoanableCollection buffer()[i] 为
 #   FastDDS 官方惯用法（src/FastDDSNode.cpp 已配 NOLINT 注明安全性依据）
 # - cppcoreguidelines-special-member-functions：FastDDSNode 以 mutex 成员天然不可拷贝，

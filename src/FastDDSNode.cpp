@@ -274,7 +274,7 @@ FastDDSNode::~FastDDSNode()
 }
 
 bool FastDDSNode::setDomainId(uint32_t domainId, const std::string& nodeName,
-    const yomkrpc_xml::ParticipantQosSpec& spec, std::string* err)
+    const yomkdds_xml::ParticipantQosSpec& spec, std::string* err)
 {
     std::lock_guard<std::mutex> lock(mtx_);
     if (participant_ != nullptr)
@@ -287,14 +287,14 @@ bool FastDDSNode::setDomainId(uint32_t domainId, const std::string& nodeName,
     // XML 配置通道三级提取链先于置名执行：按节点名 profile → 默认档 → 落空保持 DEFAULT
     // 底座回退现状；提取整体填充 qos（含 name），节点名在提取后最终覆盖不可被 XML 顶掉
     DomainParticipantQos qos = PARTICIPANT_QOS_DEFAULT;
-    yomkrpc_xml::participantQosFromXml(qos, nodeName, spec.xml);
+    yomkdds_xml::participantQosFromXml(qos, nodeName, spec.xml);
     // 发现服务器直配（仅 client 角色）：CLIENT + m_DiscoveryServers 重建，覆盖 XML
     // discoveryServersList（合并语义：直配 > XML 提取打底）；UDP/TCP 双通道任一非空即叠加，
     // TCP 通道自动补注入 TCPv4 传输；任一 spec 非法则整体失败
     if (!spec.udpServerSpec.empty() || !spec.tcpServerSpec.empty())
     {
         std::string serverErr;
-        if (!yomkrpc_xml::applyDiscoveryServers(qos, spec.udpServerSpec, spec.tcpServerSpec, serverErr))
+        if (!yomkdds_xml::applyDiscoveryServers(qos, spec.udpServerSpec, spec.tcpServerSpec, serverErr))
         {
             if (err != nullptr)
             {

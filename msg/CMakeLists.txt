@@ -26,15 +26,15 @@ if(POLICY CMP0086)
 endif()
 
 ###############################################################################
-# Library for types defined in YomkRpcMsg IDL
+# Library for types defined in YomkDdsStdMsgs IDL
 ###############################################################################
 
-message(STATUS "Configuring python wrapper for types in YomkRpcMsg...")
+message(STATUS "Configuring python wrapper for types in YomkDdsStdMsgs...")
 
 ###############################################################################
 # Type library on C++
 
-project(YomkRpcMsg)
+project(YomkDdsStdMsgs)
 
 find_package(fastcdr REQUIRED)
 find_package(fastdds 3 REQUIRED)
@@ -50,8 +50,8 @@ endif()
 
 #Create library for C++ types
 add_library(${PROJECT_NAME} SHARED
-        YomkRpcMsgTypeObjectSupport.cxx
-        YomkRpcMsgPubSubTypes.cxx
+        YomkDdsStdMsgsTypeObjectSupport.cxx
+        YomkDdsStdMsgsPubSubTypes.cxx
         )
 if(WIN32)
     target_compile_definitions(${PROJECT_NAME} PRIVATE EPROSIMA_USER_DLL_EXPORT)
@@ -86,11 +86,11 @@ set(PYTHON_LIBRARIES ${Python3_LIBRARIES})
 include_directories(${PYTHON_INCLUDE_PATH})
 
 set(${PROJECT_NAME}_MODULE
-    YomkRpcMsgWrapper
+    YomkDdsStdMsgsWrapper
     )
 
 set(${PROJECT_NAME}_MODULE_FILES
-    YomkRpcMsg.i
+    YomkDdsStdMsgs.i
     )
 
 SET_SOURCE_FILES_PROPERTIES(
@@ -124,7 +124,7 @@ execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "from sysconfig import get_path;
 get_filename_component (_ABS_PYTHON_MODULE_PATH ${_ABS_PYTHON_MODULE_PATH} ABSOLUTE)
 file (RELATIVE_PATH _REL_PYTHON_MODULE_PATH ${CMAKE_INSTALL_PREFIX} ${_ABS_PYTHON_MODULE_PATH})
 SET (PYTHON_MODULE_PATH
-    ${_REL_PYTHON_MODULE_PATH}/YomkRpc/${PROJECT_NAME}
+    ${_REL_PYTHON_MODULE_PATH}/YomkDds/${PROJECT_NAME}
     )
 
 # Install

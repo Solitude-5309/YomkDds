@@ -5,19 +5,19 @@
 # 前置：
 #   1. ROS2 环境（脚本自动探测版本：优先继承当前终端已 source 的 ROS_DISTRO，
 #      否则取 /opt/ros/* 字典序最后一个发行版；缺失时 exit 2 并提示安装后重跑）
-#   2. test 树构建后的判定二进制（test/build/Ros2Interop/TestRos2InteropPub|Sub，
+#   2. test 树构建后的判定二进制（test/build/ros2_interop/TestRos2InteropPub|Sub，
 #      examples 的 ExampleRos2InteropPub|Sub 为用户教学示例，不承担判定职责）
 #
 # 用法：
 #   ./test/run_ros2_interop.sh                # 无参：默认取 test 树构建产物
 #   ./test/run_ros2_interop.sh <Pub> [<Sub>]  # 可选：显式覆盖判定程序路径
-#   （默认：本脚本同目录下 build/Ros2Interop/TestRos2InteropPub 与同目录 TestRos2InteropSub；
+#   （默认：本脚本同目录下 build/ros2_interop/TestRos2InteropPub 与同目录 TestRos2InteropSub；
 #     未构建时先执行 cmake -S test -B test/build -DCMAKE_PREFIX_PATH=/opt/yomk &&
 #     cmake --build test/build --target TestRos2InteropPub TestRos2InteropSub）
 #
 # 两项判定（以数据到达为准；两侧收发消息流逐条一行展示再判 PASS/FAIL）：
 #   方向 1：TestRos2InteropPub（set_name 新名 + 1Hz 发 30 条 "hello ros2 N" 后自退）→ ros2 topic echo（6s 窗口）收到多条
-#   方向 2：ros2 topic pub 三路各 -r 1 发 "hello yomkrpc N"（N=1..3，VOLATILE 不回放
+#   方向 2：ros2 topic pub 三路各 -r 1 发 "hello yomkdds N"（N=1..3，VOLATILE 不回放
 #   故 Sub 先行匹配）→ TestRos2InteropSub 收满 3 条 [RECV] 即退
 #
 # 退出码：0 = 两项全过；1 = 某方向失败；2 = 参数错误/ROS2 环境不可用
@@ -27,7 +27,7 @@ set -u
 
 # 判定程序路径：无参默认取本脚本同目录 test 树构建产物，可选传参覆盖（路径固定非必输）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PUB_EXE="${1:-${SCRIPT_DIR}/build/Ros2Interop/TestRos2InteropPub}"
+PUB_EXE="${1:-${SCRIPT_DIR}/build/ros2_interop/TestRos2InteropPub}"
 SUB_EXE="${2:-$(dirname "$PUB_EXE")/TestRos2InteropSub}"
 if [ ! -x "$PUB_EXE" ]; then
     echo "[FAIL] 发布端不存在或不可执行: $PUB_EXE"
@@ -54,7 +54,7 @@ else
 fi
 if [ -z "$ROS_SETUP" ]; then
     echo "[FAIL] 未检测到 ROS2 环境（/opt/ros/*/setup.bash 均不存在）"
-    echo "       本脚本验证 YomkRpc 与 ROS2 的 DDS 层互通，须先安装 ROS2"
+    echo "       本脚本验证 YomkDds 与 ROS2 的 DDS 层互通，须先安装 ROS2"
     echo "       （Ubuntu 22.04 示例：sudo apt install ros-humble-desktop），"
     echo "       安装完成后重跑本脚本验证：./test/run_ros2_interop.sh"
     exit 2
@@ -83,7 +83,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "==== 方向 1：YomkRpc pub → ROS2 topic echo ===="
+echo "==== 方向 1：YomkDds pub → ROS2 topic echo ===="
 PUB_LOG=/tmp/yomk_interop_pub.log
 "$PUB_EXE" >"$PUB_LOG" 2>&1 &
 PUB_PID=$!
@@ -92,28 +92,28 @@ ECHO_OUT=$(timeout 6 ros2 topic echo /chatter_interop std_msgs/msg/String 2>/dev
 kill -INT "$PUB_PID" 2>/dev/null
 wait "$PUB_PID" 2>/dev/null
 # 收发消息流逐条一行对照：发布侧 [SEND] 序列，接收侧 echo data: 序列
-grep "\[SEND\]" "$PUB_LOG" | sed "s/.*\[SEND\] */[YomkRpc pub] /"
+grep "\[SEND\]" "$PUB_LOG" | sed "s/.*\[SEND\] */[YomkDds pub] /"
 PUB_TOTAL=$(grep -c "\[SEND\]" "$PUB_LOG")
 rm -f "$PUB_LOG"
 ECHO_N=$(echo "$ECHO_OUT" | grep -c "^data:")
 if [ "$ECHO_N" -gt 0 ]; then
     echo "$ECHO_OUT" | grep "^data:" | sed "s/^data: */[ros2 echo ] /"
-    echo "[PASS] 方向 1：YomkRpc pub → ros2 topic echo 收到（set_name 新名互通，pub ${PUB_TOTAL} 条 / echo ${ECHO_N} 条）"
+    echo "[PASS] 方向 1：YomkDds pub → ros2 topic echo 收到（set_name 新名互通，pub ${PUB_TOTAL} 条 / echo ${ECHO_N} 条）"
 else
     echo "[ros2 echo ] （6s 窗口无输出）"
     echo "[FAIL] 方向 1：ROS2 侧未收到 /chatter_interop（pub ${PUB_TOTAL} 条）"
     exit 1
 fi
 
-echo "==== 方向 2：ROS2 topic pub → YomkRpc sub ===="
+echo "==== 方向 2：ROS2 topic pub → YomkDds sub ===="
 SUB_LOG=/tmp/yomk_interop_sub.log
 "$SUB_EXE" >"$SUB_LOG" 2>&1 &
 SUB_PID=$!
 sleep 2 # Sub discovery 建立窗（VOLATILE 不回放：Sub 先行匹配后再发保证送达）
 # 三路发布：各 -r 1 持续发固定序号内容，每路一行展示
 for i in 1 2 3; do
-    echo "[ros2 pub  ] hello yomkrpc $i（-r 1 持续发布，直到 Sub 收满 3 条）"
-    timeout 8 ros2 topic pub /chatter_interop_rev std_msgs/msg/String "{data: hello yomkrpc $i}" -r 1 >/dev/null 2>&1 &
+    echo "[ros2 pub  ] hello yomkdds $i（-r 1 持续发布，直到 Sub 收满 3 条）"
+    timeout 8 ros2 topic pub /chatter_interop_rev std_msgs/msg/String "{data: hello yomkdds $i}" -r 1 >/dev/null 2>&1 &
     sleep 0.2
 done
 # 等 Sub 收满 3 条自退（最长 30s），等不到自退则 SIGINT 收尾
@@ -125,11 +125,11 @@ kill -INT "$SUB_PID" 2>/dev/null
 wait "$SUB_PID" 2>/dev/null
 RECV_N=$(grep -c "\[RECV\]" "$SUB_LOG")
 if [ "$RECV_N" -ge 3 ]; then
-    grep "\[RECV\]" "$SUB_LOG" | sed "s/.*\[RECV\] */[YomkRpc sub] /"
-    echo "[PASS] 方向 2：ros2 topic pub → YomkRpc sub 收到"
+    grep "\[RECV\]" "$SUB_LOG" | sed "s/.*\[RECV\] */[YomkDds sub] /"
+    echo "[PASS] 方向 2：ros2 topic pub → YomkDds sub 收到"
 else
-    grep "\[RECV\]" "$SUB_LOG" | sed "s/.*\[RECV\] */[YomkRpc sub] /"
-    echo "[FAIL] 方向 2：YomkRpc 侧未收满 3 条 /chatter_interop_rev（共 ${RECV_N} 条）"
+    grep "\[RECV\]" "$SUB_LOG" | sed "s/.*\[RECV\] */[YomkDds sub] /"
+    echo "[FAIL] 方向 2：YomkDds 侧未收满 3 条 /chatter_interop_rev（共 ${RECV_N} 条）"
     tail -5 "$SUB_LOG"
     rm -f "$SUB_LOG"
     exit 1

@@ -1,20 +1,20 @@
 # 使用手册：环境搭建与编译安装
 
-> **本文档覆盖范围**：从零完成 YomkRpc 的依赖确认、一键编译安装（`build_ubuntu.sh` 交互流程逐步说明）、安装布局确认与安装结果验证。完成本文档后，你的机器上会装好 YomkRpc 扩展库、msg 类型库（含 SWIG Python 绑定）与全部示例程序，并可直接运行第一个发布订阅演示。
+> **本文档覆盖范围**：从零完成 YomkDds 的依赖确认、一键编译安装（`build_ubuntu.sh` 交互流程逐步说明）、安装布局确认与安装结果验证。完成本文档后，你的机器上会装好 YomkDds 扩展库、msg 类型库（含 SWIG Python 绑定）与全部示例程序，并可直接运行第一个发布订阅演示。
 
 ## 目标
 
 按本文档操作完后，你将得到：
 
 1. 一台满足全部编译依赖的 Ubuntu 机器（C++17 编译器、CMake、swig、python3-dev 等）；
-2. 已安装到指定路径的 YomkRpc 扩展（与 YomkServer 安装到一起），动态库已注册进系统缓存，新开任意终端即可使用；
-3. `<安装路径>/bin` 下可直接运行的示例程序与 `yomkrpc` 命令行工具，并已通过运行 `ExampleYomkRpcTopic` 验证安装成功。
+2. 已安装到指定路径的 YomkDds 扩展（与 YomkServer 安装到一起），动态库已注册进系统缓存，新开任意终端即可使用；
+3. `<安装路径>/bin` 下可直接运行的示例程序与 `yomkdds` 命令行工具，并已通过运行 `ExampleYomkDdsTopic` 验证安装成功。
 
 ## 前提与准备
 
 | 依赖 | 要求 | 说明 |
 |---|---|---|
-| C++17 编译器 | gcc 等 | 编译 YomkRpc 主库与示例 |
+| C++17 编译器 | gcc 等 | 编译 YomkDds 主库与示例 |
 | CMake | >= 3.14 | 构建系统 |
 | YomkServer | 3.6.x（当前适配 3.6.0，分域头布局 `include/yomk/<域>/`） | 通过其 `build_ubuntu.sh` 安装后会自动配置环境变量 `YOMK_PREFIX_PATH` 指向安装路径；配置阶段检测到非 3.6.x 版本会直接报错终止 |
 | swig 与 python3-dev | 已安装 | msg 类型库 SWIG Python 绑定编译依赖 |
@@ -41,8 +41,8 @@ source build_ubuntu.sh
 
 脚本依次询问两个路径，默认均取环境变量 `$YOMK_PREFIX_PATH`，可直接回车确认或输入新路径修改：
 
-1. **YomkServer 安装路径（前置路径）**——YomkRpc 编译与链接时的前置依赖查找路径；若未检测到环境变量 `YOMK_PREFIX_PATH`，脚本会提示「未检测到环境变量 YOMK_PREFIX_PATH，可能未通过 build_ubuntu.sh 安装 YomkServer，请手动输入安装路径」，此时必须手动输入；
-2. **扩展安装路径**——YomkRpc 扩展的安装目录，默认装入 YomkServer 安装目录（扩展库与 YomkServer 安装到一起，头文件路径由 `YomkServer::YomkServer` 的 INTERFACE include 统一提供）。
+1. **YomkServer 安装路径（前置路径）**——YomkDds 编译与链接时的前置依赖查找路径；若未检测到环境变量 `YOMK_PREFIX_PATH`，脚本会提示「未检测到环境变量 YOMK_PREFIX_PATH，可能未通过 build_ubuntu.sh 安装 YomkServer，请手动输入安装路径」，此时必须手动输入；
+2. **扩展安装路径**——YomkDds 扩展的安装目录，默认装入 YomkServer 安装目录（扩展库与 YomkServer 安装到一起，头文件路径由 `YomkServer::YomkServer` 的 INTERFACE include 统一提供）。
 
 两个路径任一为空脚本都会报「错误: 未指定安装路径」并终止。
 
@@ -63,8 +63,8 @@ source build_ubuntu.sh
 
 | 步骤 | 内容 |
 |---|---|
-| 步骤 1/3 | 编译安装主库 YomkRpc |
-| 步骤 2/3 | 编译安装 msg 类型库 YomkRpcMsg（含 SWIG Python 绑定） |
+| 步骤 1/3 | 编译安装主库 YomkDds |
+| 步骤 2/3 | 编译安装 msg 类型库 YomkDdsStdMsgs（含 SWIG Python 绑定） |
 | 步骤 3/3 | 编译安装示例程序（随扩展一并安装到 `<安装路径>/bin`） |
 
 任一步失败（如「cmake 配置失败」「编译失败」「msg 编译安装失败」「示例程序编译失败」）脚本立即中止，修复后重新 `source build_ubuntu.sh` 即可。
@@ -86,14 +86,14 @@ source build_ubuntu.sh
 
 ```
 ===========================================
- YomkRpc 扩展安装成功!
+ YomkDds 扩展安装成功!
 -------------------------------------------
  安装路径:       <安装路径>
  YomkServer 路径: <YomkServer 安装路径>
  动态库缓存:
- ...（ldconfig -p 过滤出的 YomkRpc 相关库）
+ ...（ldconfig -p 过滤出的 YomkDds 相关库）
  示例程序列表（安装于 <安装路径>/bin）:
-   - ExampleYomkRpcTopic
+   - ExampleYomkDdsTopic
    - ...
 ===========================================
 编译完成，扩展库已注册到系统动态库缓存，新开任意终端即可使用
@@ -105,11 +105,11 @@ source build_ubuntu.sh
 
 | 程序 | 用途 |
 |---|---|
-| `ExampleYomkRpcTopic` | 发布订阅完整流程演示 |
-| `ExampleYomkRpcTopicLoan` | loan 借出机制演示 |
-| `ExampleYomkRpcPub` | 跨进程发布端示例（每 1s 发布 hello world，Ctrl+C 退出） |
-| `ExampleYomkRpcSub` | 跨进程订阅端示例（订阅 hello_world，Ctrl+C 退出） |
-| `yomkrpc` | 命令行工具：观察任意 DDS 主题与频率（topic print/type/find/hz）、列出域内主题与类型（topic list）、查询主题与节点详情（topic info/node info）、查看类型 IDL 结构（interface show/list）、按 JSON 载荷发布消息（topic pub）、录制/查看/重建/转换 mcap bag（bag record/info/reindex/convert） |
+| `ExampleYomkDdsTopic` | 发布订阅完整流程演示 |
+| `ExampleYomkDdsTopicLoan` | loan 借出机制演示 |
+| `ExampleYomkDdsPub` | 跨进程发布端示例（每 1s 发布 hello world，Ctrl+C 退出） |
+| `ExampleYomkDdsSub` | 跨进程订阅端示例（订阅 hello_world，Ctrl+C 退出） |
+| `yomkdds` | 命令行工具：观察任意 DDS 主题与频率（topic print/type/find/hz）、列出域内主题与类型（topic list）、查询主题与节点详情（topic info/node info）、查看类型 IDL 结构（interface show/list）、按 JSON 载荷发布消息（topic pub）、录制/查看/重建/转换 mcap bag（bag record/info/reindex/convert） |
 
 确认程序就位：
 
@@ -122,15 +122,15 @@ ls $YOMK_PREFIX_PATH/bin
 新开一个终端，直接运行发布订阅完整流程演示：
 
 ```bash
-ExampleYomkRpcTopic
+ExampleYomkDdsTopic
 ```
 
 预期观察到的关键输出（日志前缀与时间戳以实际运行环境为准）：
 
-- 依次打印 `=== YomkRpcService::getVersion ===`、`=== YomkRpcService::createNode ===` 等阶段标记；
-- `[SEND] 发布消息: Hello YomkRpcService 0` 至 `Hello YomkRpcService 4` 共 5 条发送日志；
+- 依次打印 `=== YomkDdsService::getVersion ===`、`=== YomkDdsService::createNode ===` 等阶段标记；
+- `[SEND] 发布消息: Hello YomkDdsService 0` 至 `Hello YomkDdsService 4` 共 5 条发送日志；
 - 交错的 `[RECV] 收到消息: ...` 接收日志（同进程内发布并被订阅回调收到）；
-- 结尾 `[RESULT] 接收=5/5 最后一条=Hello YomkRpcService 4`（首条消息可能因 discovery 时序丢失，偶尔为 4/5，属正常现象，详见 [quick-start.md](./quick-start.md) 排障一节）。
+- 结尾 `[RESULT] 接收=5/5 最后一条=Hello YomkDdsService 4`（首条消息可能因 discovery 时序丢失，偶尔为 4/5，属正常现象，详见 [quick-start.md](./quick-start.md) 排障一节）。
 
 程序自动退出、返回码为 0 即安装验证通过。
 
@@ -144,7 +144,7 @@ ExampleYomkRpcTopic
 | 步骤 2/3 报「msg 编译安装失败」 | 多为 swig / python3-dev 缺失（msg 类型库 SWIG Python 绑定编译依赖）：回到第 4 步让脚本检测补齐后重跑 |
 | 运行示例报 `error while loading shared libraries`（找不到扩展 so） | 动态库缓存未更新：检查 `/etc/ld.so.conf.d/yomk.conf` 是否包含 `<安装路径>/lib` 一行（缺失则重新运行安装脚本），随后执行 `sudo ldconfig` 刷新；或确认是在安装完成之后新开的终端中运行 |
 | 安装路径输错，想重新安装 | 直接重新 `source build_ubuntu.sh`，在路径询问处输入正确路径即可 |
-| `ExampleYomkRpcTopic` 命令未找到 | 安装路径的 `bin` 不在 `PATH` 中：用完整路径运行（`$YOMK_PREFIX_PATH/bin/ExampleYomkRpcTopic`），或先 `export PATH=$YOMK_PREFIX_PATH/bin:$PATH` |
+| `ExampleYomkDdsTopic` 命令未找到 | 安装路径的 `bin` 不在 `PATH` 中：用完整路径运行（`$YOMK_PREFIX_PATH/bin/ExampleYomkDdsTopic`），或先 `export PATH=$YOMK_PREFIX_PATH/bin:$PATH` |
 
 ## 延伸阅读
 

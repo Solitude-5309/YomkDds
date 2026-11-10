@@ -5,7 +5,7 @@ include(cmake/AbiInfo.cmake)
 # YomkServer 版本系列检测模块：find_package(YomkServer) 之后调用 yomk_server_version_check()
 include(cmake/YomkServerVersionCheck.cmake)
 
-project(YomkRpc VERSION 1.0.1 LANGUAGES CXX)
+project(YomkDds VERSION 2.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,7 +22,7 @@ add_custom_target(export_compile_commands ALL
 )
 
 find_package(YomkServer REQUIRED)
-# 版本系列检测：YomkRpc 仅支持 YomkServer 3.6.x，非 3 系列直接报错终止配置
+# 版本系列检测：YomkDds 仅支持 YomkServer 3.6.x，非 3 系列直接报错终止配置
 yomk_server_version_check()
 message(STATUS "YomkServer version: ${YomkServer_VERSION}")  
 message(STATUS "YomkServer include dirs: ${YomkServer_INCLUDE_DIRS}")  
@@ -38,22 +38,22 @@ set(CMAKE_PREFIX_PATH
 )
 find_package(fastdds 3 REQUIRED)
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/dds)
 
 # 编译为动态库
 add_library(${PROJECT_NAME} SHARED
-    src/YomkRpcService.cpp
-    src/YomkRpcDebugService.cpp
+    src/YomkDdsService.cpp
+    src/YomkDdsDebugService.cpp
     src/FastDDSNode.cpp
     src/FastDDSDebugNode.cpp
-    src/YomkRpcBagService.cpp
+    src/YomkDdsBagService.cpp
     src/FastDDSBagNode.cpp
 )
 target_link_libraries(${PROJECT_NAME} PRIVATE YomkServer::YomkServer)
 target_link_libraries(${PROJECT_NAME} PUBLIC fastdds)
-# MC9：版本号对象宏改名 YOMKRPC_VERSION→YOMKRPC_VERSION_STRING，消除与 YomkRpcAPI.h 公共 API 宏
-# YOMKRPC_VERSION() 的同名冲突（clang-tidy 报 clang-diagnostic-macro-redefined）。
-target_compile_definitions(${PROJECT_NAME} PRIVATE YOMKRPC_VERSION_STRING="${PROJECT_VERSION}")
+# MC9：版本号对象宏改名 YOMKDDS_VERSION→YOMKDDS_VERSION_STRING，消除与 YomkDdsAPI.h 公共 API 宏
+# YOMKDDS_VERSION() 的同名冲突（clang-tidy 报 clang-diagnostic-macro-redefined）。
+target_compile_definitions(${PROJECT_NAME} PRIVATE YOMKDDS_VERSION_STRING="${PROJECT_VERSION}")
 # bag record：vendored mcap 头库（仅 FastDDSBagNode.cpp 定义 MCAP_IMPLEMENTATION，其余 TU 只
 # include 头链接库内实现）；压缩算法禁用 LZ4/ZSTD（ZSTD 依赖缺失，LZ4 无需求，
 # 未定义 MCAP_COMPRESSION_NO_ZSTD 时 mcap 头文件内直接编译报错）
@@ -64,14 +64,18 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE MCAP_COMPRESSION_NO_LZ4 MCAP_
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/nlohmann_json/include)
 
 # 安装规则
+# 对齐 YomkServer template/extension：源码树 include/dds/ 分域携带扩展名层级，DESTINATION 固定
+# include/yomk（头文件物理安装位置 include/yomk/dds/），对外引用统一 <yomk/dds/...>，
+# 导出 target 与 YomkServer::YomkServer 共用同一 include 根
 set(INCLUDE_INSTALL_DIR "include")
 set(LIB_INSTALL_DIR "lib")
 
 install(TARGETS ${PROJECT_NAME}
     EXPORT ${PROJECT_NAME}Targets
     LIBRARY DESTINATION ${LIB_INSTALL_DIR}
+    INCLUDES DESTINATION ${INCLUDE_INSTALL_DIR}
 )
-install(DIRECTORY include/ DESTINATION include/${PROJECT_NAME})
+install(DIRECTORY include/ DESTINATION include/yomk)
 
 # ABI 环境指纹：随库安装，供下游比对编译环境
 install(FILES ${CMAKE_BINARY_DIR}/abi_report.txt
@@ -106,9 +110,9 @@ install(FILES
 )
 
 install(FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/msg/YomkRpcMsg.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/msg/YomkRpcMsgPubSubTypes.hpp"
-    DESTINATION include/YomkRpcMsg
+    "${CMAKE_CURRENT_SOURCE_DIR}/msg/YomkDdsStdMsgs.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/msg/YomkDdsStdMsgsPubSubTypes.hpp"
+    DESTINATION include/yomk/dds
 )
 
 install(DIRECTORY thirdparty/Fast-DDS-3.6.1/install/

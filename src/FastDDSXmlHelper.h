@@ -16,12 +16,12 @@
 #include <string>
 #include <vector>
 
-#include "YomkRpcService.h"  // DDSServerInfo（平铺引号命中 include/；本头仅库内与测试树编译，src 头不安装）
+#include "YomkDdsService.h"  // DDSServerInfo（平铺引号命中 include/；本头仅库内与测试树编译，src 头不安装）
 
-namespace yomkrpc_xml
+namespace yomkdds_xml
 {
 
-// participant 级配置来源：服务层从 YomkRpcService::xmlCache()（已成功加载的 XML raw 串）与
+// participant 级配置来源：服务层从 YomkDdsService::xmlCache()（已成功加载的 XML raw 串）与
 // 负载发现服务器直配聚合串组装后传入 setDomainId；各字段均可为空（空=跳过该项配置）。
 struct ParticipantQosSpec
 {
@@ -151,7 +151,7 @@ inline bool applyDiscoveryServers(eprosima::fastdds::dds::DomainParticipantQos& 
 }
 
 // participant 三级提取链（qos 入参须已置 PARTICIPANT_QOS_DEFAULT）：
-// ①按节点名 profile（profile_name 逐字全等无通配，配套约定 profile 名 = YomkRpc 节点名）
+// ①按节点名 profile（profile_name 逐字全等无通配，配套约定 profile 名 = YomkDds 节点名）
 // → ②默认档（is_default_profile=true 兜底，factory 单值槽位语义，建议至多一个默认档）
 // → ③两级全落空保持 DEFAULT 底座（非错误）。节点名下沉由调用点既有逻辑在
 // 提取后执行（XML 提取会整体填充 qos 含 name，节点名必须最终覆盖，不可被 XML 顶掉；
@@ -175,4 +175,4 @@ inline void participantQosFromXml(eprosima::fastdds::dds::DomainParticipantQos& 
     }
 }
 
-}  // namespace yomkrpc_xml
+}  // namespace yomkdds_xml

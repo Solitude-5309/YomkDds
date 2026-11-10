@@ -1,6 +1,6 @@
-# 使用手册：yomkrpc 发布与类型内省手册（topic pub/interface）
+# 使用手册：yomkdds 发布与类型内省手册（topic pub/interface）
 
-> **本文档覆盖范围**：用 `yomkrpc` 命令行工具不写代码向任意 DDS 主题发布消息——topic pub -e 查看发布示例、-ef 导出载荷文件、JSON 直发、-f 文件发布、-w/-r/-t 组合控制与临时 writer QoS 调参（README 6.1 与 6.4 topic pub 部分），以及类型内省 interface show / interface list（探明消息结构）。观察类命令（print/list/info/hz/node）见 [cli-observe-handbook.md](./cli-observe-handbook.md)。
+> **本文档覆盖范围**：用 `yomkdds` 命令行工具不写代码向任意 DDS 主题发布消息——topic pub -e 查看发布示例、-ef 导出载荷文件、JSON 直发、-f 文件发布、-w/-r/-t 组合控制与临时 writer QoS 调参（README 6.1 与 6.4 topic pub 部分），以及类型内省 interface show / interface list（探明消息结构）。观察类命令（print/list/info/hz/node）见 [cli-observe-handbook.md](./cli-observe-handbook.md)。
 
 ## 目标
 
@@ -15,11 +15,11 @@
 
 ## 前提与准备
 
-- 已按 [setup-and-build.md](./setup-and-build.md) 完成编译安装：`yomkrpc` 命令行工具位于 `<安装路径>/bin`，可直接运行；
-- 发布是**类型无关**的：工具经 `YomkRpcDebugService` 调试服务从发现数据重建 DynamicType 并解析 JSON 载荷，无需 IDL 生成代码；目标主题须有端点已在域内被发现（或使用 `-w N` 先等主题出现，见下文）；
-- **域号**由环境变量 `YOMKRPC_DDS_DOMAIN_ID` 指定（合法范围 [0,232]，默认 0）：yomkrpc 启动时无该变量则自动创建并默认 0，幂等写入 `~/.bashrc`（带 `# added by yomkrpc` 注释），已打开的终端须 `source ~/.bashrc` 或重开才生效；单次临时换域可用显式选项 `-D/--domain <N>`（优先于环境变量，详见 [env-vars-reference.md](./env-vars-reference.md)）；
-- **收敛次数**由环境变量 `YOMKRPC_DDS_DISCOVER_ROUNDS` 配置（默认 5，值须为 >=1 的整数，非法报错退出）：topic pub 全形态与 interface show/list 均按「每 ~200ms 轮询快照、连续 N 次不变即收敛」输出/发布；
-- 一个用于验证的订阅端（可选）：安装自带的 `ExampleYomkRpcSub`（节点 `sub_node`，订阅 `hello_world`），或另开终端跑 `yomkrpc topic print hello_world`（见 [cli-observe-handbook.md](./cli-observe-handbook.md)）。
+- 已按 [setup-and-build.md](./setup-and-build.md) 完成编译安装：`yomkdds` 命令行工具位于 `<安装路径>/bin`，可直接运行；
+- 发布是**类型无关**的：工具经 `YomkDdsDebugService` 调试服务从发现数据重建 DynamicType 并解析 JSON 载荷，无需 IDL 生成代码；目标主题须有端点已在域内被发现（或使用 `-w N` 先等主题出现，见下文）；
+- **域号**由环境变量 `YOMKDDS_DDS_DOMAIN_ID` 指定（合法范围 [0,232]，默认 0）：yomkdds 启动时无该变量则自动创建并默认 0，幂等写入 `~/.bashrc`（带 `# added by yomkdds` 注释），已打开的终端须 `source ~/.bashrc` 或重开才生效；单次临时换域可用显式选项 `-D/--domain <N>`（优先于环境变量，详见 [env-vars-reference.md](./env-vars-reference.md)）；
+- **收敛次数**由环境变量 `YOMKDDS_DDS_DISCOVER_ROUNDS` 配置（默认 5，值须为 >=1 的整数，非法报错退出）：topic pub 全形态与 interface show/list 均按「每 ~200ms 轮询快照、连续 N 次不变即收敛」输出/发布；
+- 一个用于验证的订阅端（可选）：安装自带的 `ExampleYomkDdsSub`（节点 `sub_node`，订阅 `hello_world`），或另开终端跑 `yomkdds topic print hello_world`（见 [cli-observe-handbook.md](./cli-observe-handbook.md)）。
 
 ## 分步操作
 
@@ -31,21 +31,21 @@ topic pub 共五种形态（互相独立，均为「先解析再发布」）：`
 - **完整命令行**：
 
 ```bash
-yomkrpc topic pub -e <主题名>        # 等价长名 --example
+yomkdds topic pub -e <主题名>        # 等价长名 --example
 ```
 
 - **示例输出**：
 
 ```
-Type: YomkRpc::MString
+Type: YomkDdsStd::MString
 
 IDL:
-struct YomkRpc::MString {
+struct YomkDdsStd::MString {
     string data;
 };
 
 example:
-yomkrpc topic pub hello_world '{"data":""}'
+yomkdds topic pub hello_world '{"data":""}'
 ```
 
 - **要点**：example 段的发布命令里 JSON 已整体包好单引号（裸传会被 shell 剥掉内层双引号导致解析失败），改字段值即可直接发布；IDL 段同 `interface show` 的结构描述。
@@ -60,7 +60,7 @@ yomkrpc topic pub hello_world '{"data":""}'
 | `type rebuild failed for [<类型名>]` | 步骤 3：DynamicType 构建失败 |
 | `example generation failed for [<类型名>]: create_data` / `: json_serialize` | 步骤 3：默认值样本创建或 JSON 序列化失败 |
 
-- **等价宏名**：`YOMKRPC_DEBUG_TOPIC_EXAMPLE(topicName, stableRounds, intervalMs)`。
+- **等价宏名**：`YOMKDDS_DEBUG_TOPIC_EXAMPLE(topicName, stableRounds, intervalMs)`。
 
 ### topic pub -ef：导出消息描述 JSON 文件
 
@@ -68,14 +68,14 @@ yomkrpc topic pub hello_world '{"data":""}'
 - **完整命令行**：
 
 ```bash
-yomkrpc topic pub -ef <主题名> [-o 目录]        # 等价长名 --example-file / --output
+yomkdds topic pub -ef <主题名> [-o 目录]        # 等价长名 --example-file / --output
 ```
 
 - **关键选项**：`-o <目录>` / `--output <目录>` 指定生成目录（相对/绝对路径均可），缺省当前目录；目录不存在报错退出，不自动创建（`bag record` 的 `-o` 语义不同——创建 bag 目录名）。
 - **示例输出**：
 
 ```
-message description written: hello_world_msg_2026-09-28-12-14-42-626.json (topic: hello_world, type: YomkRpc::MString)
+message description written: hello_world_msg_2026-09-28-12-14-42-626.json (topic: hello_world, type: YomkDdsStd::MString)
 ```
 
 文件名 `<主题名>_msg_<时间戳>.json`，时间戳格式为 年-月-日-时-分-秒-毫秒。文件内容（整体就是一份合法发布载荷）：
@@ -88,7 +88,7 @@ message description written: hello_world_msg_2026-09-28-12-14-42-626.json (topic
 
 - **要点**：主题名/类型名不在文件内，从文件名与 stdout 提示行追溯；编辑文件改字段值后按文件发布（见下文 `-f` 形态）——`"$(cat 文件)"` 命令替换结果不再经历引号删除，内层双引号与换行原样保留，多行缩进 JSON 解析无碍。
 - **失败报错**：按节点层两步骤归类——步骤 1 `topic [<主题名>] not found` 主题未发现；步骤 2 类型重建与 JSON 模板生成侧原因（同 `topic pub -e` 的步骤 2/3 错误文本）。
-- **等价宏名**：`YOMKRPC_DEBUG_TOPIC_MSG(topicName, stableRounds, intervalMs)`（CLI 侧由两要素拼装导出文件）。
+- **等价宏名**：`YOMKDDS_DEBUG_TOPIC_MSG(topicName, stableRounds, intervalMs)`（CLI 侧由两要素拼装导出文件）。
 
 ### topic pub 直发：发布 JSON 载荷
 
@@ -96,12 +96,12 @@ message description written: hello_world_msg_2026-09-28-12-14-42-626.json (topic
 - **完整命令行**：
 
 ```bash
-yomkrpc topic pub [--qos-ros | --qos-KEY VAL ... | --qos-file FILE] <主题名> <JSON数据>
+yomkdds topic pub [--qos-ros | --qos-KEY VAL ... | --qos-file FILE] <主题名> <JSON数据>
 ```
 
 - **发布链路**（理解后即明白「为什么首发慢半拍、为什么缺订阅端会报错」）：
 
-1. **发现收敛**：轮询主题类型名 + 订阅者数快照，连续 N 轮（默认 5，环境变量 `YOMKRPC_DDS_DISCOVER_ROUNDS` 可调）不变即收敛——保证不早发（避免订阅者还没被发现就漏收）；未发现主题报错退出（`-w N` 时改为先等待主题出现）；
+1. **发现收敛**：轮询主题类型名 + 订阅者数快照，连续 N 轮（默认 5，环境变量 `YOMKDDS_DDS_DISCOVER_ROUNDS` 可调）不变即收敛——保证不早发（避免订阅者还没被发现就漏收）；未发现主题报错退出（`-w N` 时改为先等待主题出现）；
 2. **类型重建 + 载荷解析**：由发现的类型重建 DynamicType，`json_deserialize` 解析载荷；解析失败报错退出，不建任何发布实体；
 3. **匹配收敛 + 首轮发布**：临时 RELIABLE + TRANSIENT_LOCAL writer（请求 ≤ 提供，最大兼容既有订阅者 QoS）匹配收敛后 write 首轮消息；`-w N` 时匹配收敛前先阻塞等待 matched 计数达到 N；随后执行 **matched 校验**（writer 实际匹配的订阅端 GUID 集与发现缓存中该主题 RELIABLE 订阅者逐一比对，缓存里有订阅者却不在匹配集则不发布、报错退出）；
 4. **ack 自适应确认送达（首轮）**：存在 RELIABLE 订阅者时以 `wait_for_acknowledgments` 协议级确认——每个 RELIABLE 订阅者确认样本已入 reader history 才返回成功（未全部确认报错退出）；全 BEST_EFFORT 或无订阅者退化尽力而为（保底窗后返回成功）；首轮成功后进入持续发布循环（缺省 1 Hz），Ctrl+C 停止并输出统计（`-t N` 时发满即停，排空 200ms 后退出）。
@@ -115,7 +115,7 @@ publishing #2 to topic hello_world
 ```
 
 逐条回执附带消息 JSON 内容（从实际待发数据转出，与 `topic print` 输出同源），发布期间可看到每条载荷。
-- **等价宏名**：`YOMKRPC_DEBUG_TOPIC_PUB(topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes[, qos])`。
+- **等价宏名**：`YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes[, qos])`。
 
 ### topic pub -f：从文件读取载荷发布
 
@@ -123,17 +123,17 @@ publishing #2 to topic hello_world
 - **完整命令行**：
 
 ```bash
-yomkrpc topic pub [--qos-ros | --qos-KEY VAL ... | --qos-file FILE] <主题名> -f <文件>
+yomkdds topic pub [--qos-ros | --qos-KEY VAL ... | --qos-file FILE] <主题名> -f <文件>
 ```
 
 - **关键选项**：`-f <文件>` / `--file <文件>` 指定载荷文件（文件不存在报错退出 `cannot open json file`，文件内容为空报错退出 `json file is empty`）；缺省 1 Hz 持续发送，`-w N` 等待订阅者匹配、`-r N` 持续发布、`-t N` 条数上限，语义同直发；临时 writer QoS 经 `--qos-ros`/`--qos-*`/`--qos-file` 可调。
 - **示例输出**（先导出再按文件发布）：
 
 ```bash
-$ yomkrpc topic pub -ef hello_world
-message description written: hello_world_msg_2026-09-28-12-14-42-626.json (topic: hello_world, type: YomkRpc::MString)
+$ yomkdds topic pub -ef hello_world
+message description written: hello_world_msg_2026-09-28-12-14-42-626.json (topic: hello_world, type: YomkDdsStd::MString)
 # 编辑文件改字段值后按文件发布（同一发布链路，多行缩进 JSON 直接可发）
-$ yomkrpc topic pub hello_world -f hello_world_msg_2026-09-28-12-14-42-626.json
+$ yomkdds topic pub hello_world -f hello_world_msg_2026-09-28-12-14-42-626.json
 publishing to topic "hello_world" at 1.000000 Hz, press Ctrl+C to stop
 ^Cpublished total=3 failed=0 to topic hello_world
 ```
@@ -165,22 +165,22 @@ publishing to topic "hello_world" at 1.000000 Hz, press Ctrl+C to stop
 
 ```bash
 # 持续发布：首轮校验发布后按 10 Hz 周期重发，Ctrl+C 停止并输出统计
-yomkrpc topic pub -r 10 hello_world '{"data":"hello yomkrpc"}'
+yomkdds topic pub -r 10 hello_world '{"data":"hello yomkdds"}'
 
 # 等待订阅者匹配：期望建匹配 2 个订阅端，计数达标才开始发布
-yomkrpc topic pub -w 2 hello_world '{"data":"hello yomkrpc"}'
+yomkdds topic pub -w 2 hello_world '{"data":"hello yomkdds"}'
 
 # 先发布后订阅：主题未发现时先等待主题出现，上线后自动进入匹配等待
-yomkrpc topic pub -w 1 hello_world '{"data":"hello yomkrpc"}'
+yomkdds topic pub -w 1 hello_world '{"data":"hello yomkdds"}'
 
 # -w 与 -r 叠加（顺序任意）：先等 2 个订阅端匹配，再按 10 Hz 持续发布
-yomkrpc topic pub -r 10 -w 2 hello_world '{"data":"hello yomkrpc"}'
+yomkdds topic pub -r 10 -w 2 hello_world '{"data":"hello yomkdds"}'
 
 # 条数上限：发满 5 条自动停止（排空 200ms 后退出，无需 Ctrl+C）
-yomkrpc topic pub -t 5 hello_world '{"data":"hello yomkrpc"}'
+yomkdds topic pub -t 5 hello_world '{"data":"hello yomkdds"}'
 
 # 三者叠加（顺序任意）：先等 1 个订阅端匹配，再按 5 Hz 发满 5 条退出
-yomkrpc topic pub -t 5 -r 5 -w 1 hello_world '{"data":"hello yomkrpc"}'
+yomkdds topic pub -t 5 -r 5 -w 1 hello_world '{"data":"hello yomkdds"}'
 ```
 
 ### 临时 writer QoS 参数
@@ -201,9 +201,9 @@ topic pub 发布形态的临时 writer 缺省 **`RELIABLE+TRANSIENT_LOCAL` depth
 - **优先级**：命令行逐项 > 文件逐项 > `--qos-ros` 底座 > 默认（pub 临时 writer 缺省 RELIABLE+TRANSIENT_LOCAL depth 1）。
 
 ```bash
-yomkrpc topic pub --qos-ros hello_world '{"data":"hi"}'              # ROS2 底座发布
-yomkrpc topic pub --qos-reliability best_effort hello_world '{"data":"hi"}'
-yomkrpc topic pub --qos-file qos.json hello_world '{"data":"hi"}'    # 文件逐项覆盖发布 QoS
+yomkdds topic pub --qos-ros hello_world '{"data":"hi"}'              # ROS2 底座发布
+yomkdds topic pub --qos-reliability best_effort hello_world '{"data":"hi"}'
+yomkdds topic pub --qos-file qos.json hello_world '{"data":"hi"}'    # 文件逐项覆盖发布 QoS
 ```
 
 ### interface show：查看类型的 IDL 结构
@@ -212,13 +212,13 @@ yomkrpc topic pub --qos-file qos.json hello_world '{"data":"hi"}'    # 文件逐
 - **完整命令行**：
 
 ```bash
-yomkrpc interface show <类型名>
+yomkdds interface show <类型名>
 ```
 
 - **示例输出**：
 
 ```
-struct YomkRpc::MString {
+struct YomkDdsStd::MString {
     string data;
 };
 ```
@@ -233,7 +233,7 @@ struct YomkRpc::MString {
 | `type [<类型名>] is not a struct, interface display unsupported` | 顶层为 enum/alias 等非 struct 类型 |
 | `interface introspection failed for [<类型名>]` | DynamicType 成员枚举失败 |
 
-- **等价宏名**：`YOMKRPC_DEBUG_INTERFACE_SHOW(typeName, stableRounds, intervalMs)`。
+- **等价宏名**：`YOMKDDS_DEBUG_INTERFACE_SHOW(typeName, stableRounds, intervalMs)`。
 
 ### interface list：列出全部已发现类型
 
@@ -241,17 +241,17 @@ struct YomkRpc::MString {
 - **完整命令行**：
 
 ```bash
-yomkrpc interface list
+yomkdds interface list
 ```
 
 - **示例输出**：
 
 ```
-YomkRpc::MString
+YomkDdsStd::MString
 ```
 
 - **要点**：域内无任何类型报错退出（find 族语义）。
-- **等价宏名**：`YOMKRPC_DEBUG_INTERFACE_LIST(stableRounds, intervalMs)`。
+- **等价宏名**：`YOMKDDS_DEBUG_INTERFACE_LIST(stableRounds, intervalMs)`。
 
 ### 典型工作流串联
 
@@ -259,67 +259,67 @@ YomkRpc::MString
 
 ```bash
 # 1. 发现主题（拿到主题名全集；-t 可同时看类型名）
-yomkrpc topic list -t
+yomkdds topic list -t
 
 # 2. 看消息结构（确认字段名与类型，便于构造 JSON）
-yomkrpc interface show YomkRpc::MString
+yomkdds interface show YomkDdsStd::MString
 
 # 3. 拿载荷模板（example 段是可直接改值发布的完整命令）
-yomkrpc topic pub -e hello_world
+yomkdds topic pub -e hello_world
 
 # 4. 发布（发满 5 条自动退出；参数替换成自己的主题名与字段值）
-yomkrpc topic pub -t 5 hello_world '{"data":"hello yomkrpc"}'
+yomkdds topic pub -t 5 hello_world '{"data":"hello yomkdds"}'
 
 # 5. 验证（另开终端订阅直出，确认数据到达）
-yomkrpc topic print hello_world
+yomkdds topic print hello_world
 ```
 
-第 4 步若订阅端尚未上线，改用 `yomkrpc topic pub -w 1 -t 5 hello_world '{"data":"hello yomkrpc"}'` 先等订阅端匹配再发布。
+第 4 步若订阅端尚未上线，改用 `yomkdds topic pub -w 1 -t 5 hello_world '{"data":"hello yomkdds"}'` 先等订阅端匹配再发布。
 
 ## 预期输出
 
-完整会话（终端 1 为订阅端 `ExampleYomkRpcSub` 先启动，终端 2 依次执行；前缀以实际环境为准）：
+完整会话（终端 1 为订阅端 `ExampleYomkDdsSub` 先启动，终端 2 依次执行；前缀以实际环境为准）：
 
 ```bash
 # 终端 1（先启动订阅端，提供匹配对象与验证载体）
-ExampleYomkRpcSub
+ExampleYomkDdsSub
 ```
 
 ```bash
 # 终端 2
-yomkrpc interface list
-# YomkRpc::MString
+yomkdds interface list
+# YomkDdsStd::MString
 
-yomkrpc interface show YomkRpc::MString
-# struct YomkRpc::MString {
+yomkdds interface show YomkDdsStd::MString
+# struct YomkDdsStd::MString {
 #     string data;
 # };
 
-yomkrpc topic pub -e hello_world
-# Type: YomkRpc::MString
+yomkdds topic pub -e hello_world
+# Type: YomkDdsStd::MString
 #
 # IDL:
-# struct YomkRpc::MString {
+# struct YomkDdsStd::MString {
 #     string data;
 # };
 #
 # example:
-# yomkrpc topic pub hello_world '{"data":""}'
+# yomkdds topic pub hello_world '{"data":""}'
 
-yomkrpc topic pub -t 5 hello_world '{"data":"hello yomkrpc"}'
+yomkdds topic pub -t 5 hello_world '{"data":"hello yomkdds"}'
 # publishing to topic "hello_world" at 1.000000 Hz, limit 5 messages, press Ctrl+C to stop
 # publishing #2 to topic hello_world
 # publishing #5 to topic hello_world
 # published total=5 failed=0 to topic hello_world
 ```
 
-终端 1（订阅端）同步打印 5 条 `[RECV] hello yomkrpc`；Ctrl+C 退出时打印累计接收条数。将第 4 步换成 `-r 10 -w 1 hello_world '{"data":"hello yomkrpc"}'`，则先打印 `waiting for subscribers: 1/1 matched on topic hello_world`，随后以 10 Hz 持续发布，Ctrl+C 停止并输出统计。
+终端 1（订阅端）同步打印 5 条 `[RECV] hello yomkdds`；Ctrl+C 退出时打印累计接收条数。将第 4 步换成 `-r 10 -w 1 hello_world '{"data":"hello yomkdds"}'`，则先打印 `waiting for subscribers: 1/1 matched on topic hello_world`，随后以 10 Hz 持续发布，Ctrl+C 停止并输出统计。
 
 ## 常见错误与排障
 
 | 现象 | 原因与处理 |
 |---|---|
-| 报 `topic [<主题名>] not found` | 主题在收敛窗口内始终未被发现（主题名拼错 / 未加 `rt/` 前缀 / 对端未发布 / 域号不一致）：先 `yomkrpc topic list` 确认主题已在域内、核对域号 `echo $YOMKRPC_DDS_DOMAIN_ID`；确要先发布后订阅就用 `-w N`（先等主题出现，订阅端上线即宣告主题与类型），或等订阅端上线后再发 |
+| 报 `topic [<主题名>] not found` | 主题在收敛窗口内始终未被发现（主题名拼错 / 未加 `rt/` 前缀 / 对端未发布 / 域号不一致）：先 `yomkdds topic list` 确认主题已在域内、核对域号 `echo $YOMKDDS_DDS_DOMAIN_ID`；确要先发布后订阅就用 `-w N`（先等主题出现，订阅端上线即宣告主题与类型），或等订阅端上线后再发 |
 | 报 `invalid json for type [...]` | JSON 载荷不合法（与类型不匹配或格式错误）：载荷解析失败报错退出、不建任何发布实体；先用 `topic pub -e <主题名>` 拿同构模板改值，或用 `-ef` 导出文件改值后 `-f` 发布；命令行裸传 JSON 双引号会被 shell 剥掉，务必整体包单引号（`'{"data":"..."}'`），多行文件用 `"$(cat 文件)"` |
 | 报 `not all subscribers acknowledged` | 首轮送达未确认：存在 RELIABLE 订阅者时以 `wait_for_acknowledgments` 协议级确认，RELIABLE 订阅者中途挂起（如 SIGSTOP）即 ack 超时报错退出，不假成功；恢复订阅端运行后重试 |
 | 报 `subscribers exist but not all matched (suspended or offline)` | 订阅者在场却无一与发布端匹配：发现缓存有记录但 QoS 不兼容（如订阅端请求 PERSISTENT），或订阅者异常死亡（kill -9、断网等无 graceful goodbye，lease 过期前的短暂区间内可能误报一次，重试即恢复）；正常退出（graceful dispose）的订阅端已被发现缓存清理，不影响发布 |
@@ -328,11 +328,11 @@ yomkrpc topic pub -t 5 hello_world '{"data":"hello yomkrpc"}'
 | 报 `非法频率 "..."` / `非法订阅者数量 "..."` / `非法发布条数 "..."` | `-r` 须为数值且 >0；`-w`/`-t` 须为 >=1 整数（0、负数、溢出或非数值均报错）；参数后缺值同用法错误退出 |
 | `-w` 等待被打断 | Ctrl+C 中断等待报错退出（exit=1，`waiting for subscribers interrupted`），不发布任何数据；确认订阅端数量后再发布，或去掉 `-w` 改自动收敛 |
 | `interface show` 报 `type object for [...] not available` | 对端未提供 XTypes TypeObject（**ROS2 rmw_fastrtps 端点即此情形**）或 TypeLookup 尚未完成：等对端类型发现完成后重试；ROS2 端点类型当前无法内省 |
-| 收敛/等待感觉偏慢或偏快 | 调整 `YOMKRPC_DDS_DISCOVER_ROUNDS`（默认 5，值须为 >=1 的整数，非法报错退出）：发现频繁变动想多等调大，想快速失败调小 |
+| 收敛/等待感觉偏慢或偏快 | 调整 `YOMKDDS_DDS_DISCOVER_ROUNDS`（默认 5，值须为 >=1 的整数，非法报错退出）：发现频繁变动想多等调大，想快速失败调小 |
 
 ## 延伸阅读
 
-- [../features/debug-service.md](../features/debug-service.md)——调试服务能力全貌：调试节点模型、`YOMKRPC_DEBUG_*` 宏全集与 CLI 双入口对照
+- [../features/debug-service.md](../features/debug-service.md)——调试服务能力全貌：调试节点模型、`YOMKDDS_DEBUG_*` 宏全集与 CLI 双入口对照
 - [../features/qos-profiles.md](../features/qos-profiles.md)——QoS 配置能力全貌：DDSQosProfile 8 项、ROS2 预置底座与宏侧/CLI 侧优先级链
 - [cli-observe-handbook.md](./cli-observe-handbook.md)——观察类命令（print/list/info/hz/node），与本文档构成调试闭环
-- [env-vars-reference.md](./env-vars-reference.md)——`YOMKRPC_DDS_DOMAIN_ID`、`YOMKRPC_DDS_DISCOVER_ROUNDS` 等环境变量的作用域、默认值与优先级
+- [env-vars-reference.md](./env-vars-reference.md)——`YOMKDDS_DDS_DOMAIN_ID`、`YOMKDDS_DDS_DISCOVER_ROUNDS` 等环境变量的作用域、默认值与优先级

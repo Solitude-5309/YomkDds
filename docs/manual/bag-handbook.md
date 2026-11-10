@@ -1,21 +1,21 @@
 # 使用手册：Bag 录制回放手册
 
-> **本文档覆盖范围**：用 `yomkrpc` 命令行工具把域内主题数据录制为 mcap bag、查看 bag 元信息、按录制时间轴回放为真实 DDS 流量、按配置对 bag 做过滤/裁剪/合并，以及从 mcap 分片重建缺失/损坏的 `metadata.json`——覆盖 bag 全部五个子命令（`bag record`/`bag info`/`bag play`/`bag convert`/`bag reindex`）的操作闭环。bag 功能的能力边界与参数总表见 [../features/bag-service.md](../features/bag-service.md)。
+> **本文档覆盖范围**：用 `yomkdds` 命令行工具把域内主题数据录制为 mcap bag、查看 bag 元信息、按录制时间轴回放为真实 DDS 流量、按配置对 bag 做过滤/裁剪/合并，以及从 mcap 分片重建缺失/损坏的 `metadata.json`——覆盖 bag 全部五个子命令（`bag record`/`bag info`/`bag play`/`bag convert`/`bag reindex`）的操作闭环。bag 功能的能力边界与参数总表见 [../features/bag-service.md](../features/bag-service.md)。
 
 ## 目标
 
 完成本文档后，你将：
 
-1. 用 `yomkrpc bag record` 把一个或多个主题（含通配模式）录制为 mcap bag，掌握目录命名、分片、写缓存、暂停态启动与交互键；
-2. 用 `yomkrpc bag info` 查看 bag 元信息，用 `yomkrpc bag reindex` 修复被删/损坏的 `metadata.json`；
-3. 用 `yomkrpc bag play` 把 bag 按录制时间轴回放为真实 DDS 流量（倍率/主题过滤/循环/起始偏移/开播延迟/退出确认/主题重映射/QoS 覆盖）；
-4. 用 `yomkrpc bag convert` 按输出配置文件对 bag 做过滤、裁剪与合并；
+1. 用 `yomkdds bag record` 把一个或多个主题（含通配模式）录制为 mcap bag，掌握目录命名、分片、写缓存、暂停态启动与交互键；
+2. 用 `yomkdds bag info` 查看 bag 元信息，用 `yomkdds bag reindex` 修复被删/损坏的 `metadata.json`；
+3. 用 `yomkdds bag play` 把 bag 按录制时间轴回放为真实 DDS 流量（倍率/主题过滤/循环/起始偏移/开播延迟/退出确认/主题重映射/QoS 覆盖）；
+4. 用 `yomkdds bag convert` 按输出配置文件对 bag 做过滤、裁剪与合并；
 5. 独立完成一次端到端演练：录制约 10 秒数据，查看元信息，回放并验证收到数据，最后裁剪转换出新 bag。
 
 ## 前提与准备
 
-- 已按 [setup-and-build.md](./setup-and-build.md) 完成 YomkRpc 编译安装（`yomkrpc` 命令行工具与 `ExampleYomkRpcPub` 等示例程序可直接运行）；
-- bag 命令与被录/被回放主题同处一个 DDS 域：域号经环境变量 `YOMKRPC_DDS_DOMAIN_ID` 选择（合法范围 [0,232]，默认 0，同其他 yomkrpc 命令；单次临时换域可用显式选项 `-D/--domain <N>`，优先于环境变量；详见 [env-vars-reference.md](./env-vars-reference.md)）；
+- 已按 [setup-and-build.md](./setup-and-build.md) 完成 YomkDds 编译安装（`yomkdds` 命令行工具与 `ExampleYomkDdsPub` 等示例程序可直接运行）；
+- bag 命令与被录/被回放主题同处一个 DDS 域：域号经环境变量 `YOMKDDS_DDS_DOMAIN_ID` 选择（合法范围 [0,232]，默认 0，同其他 yomkdds 命令；单次临时换域可用显式选项 `-D/--domain <N>`，优先于环境变量；详见 [env-vars-reference.md](./env-vars-reference.md)）；
 - bag 产物为标准 mcap 容器：bag 目录内含 `bag_0.mcap` 数据分片与 `metadata.json` 元信息两文件，可用任意 mcap 标准读库读回；
 - 通配模式在 shell 下须加引号：bash 会对未加引号的 `*` 做当前目录文件名 glob 预展开（清单项被替换为文件名），程序内无法防御，务必 `'hello_*'` 传参；
 - 演练中的观察/发布命令（`topic print`/`topic pub`）用法详见 [cli-observe-handbook.md](./cli-observe-handbook.md) 与 [cli-publish-handbook.md](./cli-publish-handbook.md)。
@@ -26,29 +26,29 @@
 
 | 子命令 | 职责 | 是否需要 bag 节点 | 等价宏 |
 |---|---|---|---|
-| `yomkrpc bag record` | 录制主题列表为 mcap bag（长驻阻塞至 Ctrl+C 收尾） | 经 bag 节点实现（CLI 自动建删） | `YOMKRPC_BAG_RECORD`（宏形态须先 `YOMKRPC_BAG_NODE` 自建 bag 节点） |
-| `yomkrpc bag info` | 查看 bag 元信息（输出对齐 `ros2 bag info`） | 纯文件操作，无须节点 | `YOMKRPC_BAG_INFO` |
-| `yomkrpc bag play` | 按录制时间轴回放为真实 DDS 流量 | CLI 自动建删 bag 节点 | `YOMKRPC_BAG_PLAY`（宏形态须先自建 bag 节点） |
-| `yomkrpc bag convert` | 按输出配置文件把一个或多个输入 bag 过滤/裁剪/合并写为新 bag | 纯文件操作，无须节点 | `YOMKRPC_BAG_CONVERT` |
-| `yomkrpc bag reindex` | 从 mcap 分片重建被删/损坏的 `metadata.json` | 纯文件操作，无须节点 | `YOMKRPC_BAG_REINDEX` |
+| `yomkdds bag record` | 录制主题列表为 mcap bag（长驻阻塞至 Ctrl+C 收尾） | 经 bag 节点实现（CLI 自动建删） | `YOMKDDS_BAG_RECORD`（宏形态须先 `YOMKDDS_BAG_NODE` 自建 bag 节点） |
+| `yomkdds bag info` | 查看 bag 元信息（输出对齐 `ros2 bag info`） | 纯文件操作，无须节点 | `YOMKDDS_BAG_INFO` |
+| `yomkdds bag play` | 按录制时间轴回放为真实 DDS 流量 | CLI 自动建删 bag 节点 | `YOMKDDS_BAG_PLAY`（宏形态须先自建 bag 节点） |
+| `yomkdds bag convert` | 按输出配置文件把一个或多个输入 bag 过滤/裁剪/合并写为新 bag | 纯文件操作，无须节点 | `YOMKDDS_BAG_CONVERT` |
+| `yomkdds bag reindex` | 从 mcap 分片重建被删/损坏的 `metadata.json` | 纯文件操作，无须节点 | `YOMKDDS_BAG_REINDEX` |
 
-info/reindex/convert 为纯本地文件操作——不经 bag 节点、不创建任何 DDS 实体、不依赖域内状态，未建 bag 节点亦可调用。等价宏 `YOMKRPC_BAG_*` 定义于 `YomkRpcAPI.h`，链接 `YomkRpc::YomkRpc YomkServer::YomkServer`；本文以 CLI 为主线，宏等价形态见 [../features/bag-service.md](../features/bag-service.md)。
+info/reindex/convert 为纯本地文件操作——不经 bag 节点、不创建任何 DDS 实体、不依赖域内状态，未建 bag 节点亦可调用。等价宏 `YOMKDDS_BAG_*` 定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`；本文以 CLI 为主线，宏等价形态见 [../features/bag-service.md](../features/bag-service.md)。
 
 ### 第 1 步：录制主题到 bag（bag record）
 
 命令形态（`<主题名|模式>` 清单为位置参数，至少一项）：
 
 ```bash
-yomkrpc bag record [-o <目录>|--output <目录>] [-b <字节>|--max-bag-size <字节>] [-d <秒>|--max-bag-duration <秒>] [-c <字节>|--max-cache-size <字节>] [--start-paused] <主题名|模式> [<主题名|模式> ...]
+yomkdds bag record [-o <目录>|--output <目录>] [-b <字节>|--max-bag-size <字节>] [-d <秒>|--max-bag-duration <秒>] [-c <字节>|--max-cache-size <字节>] [--start-paused] <主题名|模式> [<主题名|模式> ...]
 ```
 
 基础用法：
 
 ```bash
-yomkrpc bag record hello_world           # 录制单主题（默认域 0）
-yomkrpc bag record rt/chatter rt/tf      # 多主题清单
-yomkrpc bag record 'hello_*' '*_world'   # 通配模式（清单项恰好含一个 *，引号防 shell glob 展开）
-yomkrpc bag record -o my_session hello_world   # 指定 bag 目录名（相对/绝对路径均可）
+yomkdds bag record hello_world           # 录制单主题（默认域 0）
+yomkdds bag record rt/chatter rt/tf      # 多主题清单
+yomkdds bag record 'hello_*' '*_world'   # 通配模式（清单项恰好含一个 *，引号防 shell glob 展开）
+yomkdds bag record -o my_session hello_world   # 指定 bag 目录名（相对/绝对路径均可）
 ```
 
 **bag 目录命名**（`-o|--output`）：
@@ -73,8 +73,8 @@ yomkrpc bag record -o my_session hello_world   # 指定 bag 目录名（相对/�
 **分片录制**（`-b` 字节上限与 `-d` 时长上限，写满/到限即滚动 `bag_N.mcap` 分片）：
 
 ```bash
-yomkrpc bag record -b 1048576 hello_world      # 单分片最大 1MB（写满滚动 bag_N.mcap 分片，0=不分片缺省）
-yomkrpc bag record -d 60 hello_world          # 单分片最大 60s（-d/--max-bag-duration；时长达限滚动 bag_N.mcap 分片，0=不分片缺省）
+yomkdds bag record -b 1048576 hello_world      # 单分片最大 1MB（写满滚动 bag_N.mcap 分片，0=不分片缺省）
+yomkdds bag record -d 60 hello_world          # 单分片最大 60s（-d/--max-bag-duration；时长达限滚动 bag_N.mcap 分片，0=不分片缺省）
 ```
 
 - `-b|--max-bag-size <字节>`：单分片最大字节数，下限 1024 字节——非 0 且低于 1024 在启动校验报错退出（`max bag size [x] too small, minimum split file size is 1024 bytes (0 to disable splitting)`）；实际分片粒度不小于 chunk 落盘边界——默认 786432 字节，小于该值的 `-b` 实际每 chunk 一片（时长分片不受 chunk 影响）；
@@ -84,7 +84,7 @@ yomkrpc bag record -d 60 hello_world          # 单分片最大 60s（-d/--max-b
 **写缓存双缓冲**（`-c`）：
 
 ```bash
-yomkrpc bag record -c 8388608 hello_world     # 写缓存双缓冲 8MB（-c/--max-cache-size；回调拷贝入队独立线程写盘，CLI 缺省 100MiB，0=每条直写）
+yomkdds bag record -c 8388608 hello_world     # 写缓存双缓冲 8MB（-c/--max-cache-size；回调拷贝入队独立线程写盘，CLI 缺省 100MiB，0=每条直写）
 ```
 
 `-c|--max-cache-size <字节>` 非零时启用写缓存双缓冲——数据回调仅将消息深拷贝入内存队列，独立消费线程逐条取出落盘（默认 100 MiB，0=每条直写，最坏占 2 倍内存）；缓存满丢弃新消息并按主题计数，停止收尾一次性打印丢条统计。
@@ -92,26 +92,26 @@ yomkrpc bag record -c 8388608 hello_world     # 写缓存双缓冲 8MB（-c/--ma
 **暂停态启动与交互键**：
 
 ```bash
-yomkrpc bag record --start-paused hello_world  # 暂停态启动（订阅照常、消息丢弃不写入，按 SPACE 开始录制）
+yomkdds bag record --start-paused hello_world  # 暂停态启动（订阅照常、消息丢弃不写入，按 SPACE 开始录制）
 ```
 
 `--start-paused` 暂停态启动——订阅与发现照常、收到的消息丢弃不写入。交互键（tty 下）：SPACE 开始录制（暂停态→运行态，输出 `recording started`）、p 暂停（输出 `recording paused`）、r 继续（输出 `recording resumed`），Ctrl+C 停止；非 tty（管道/重定向）时跳过键盘处理，Ctrl+C 退出不受影响。
 
-**启动校验**（失败不建目录不产生文件）：先做清单快速校验（空清单/空名/重复/多通配/`-o` 目录已存在即报错），随后轮询发现缓存快照并逐轮展开模式项（校验参数固定，不经 `YOMKRPC_DDS_DISCOVER_ROUNDS` 调整）；收敛后逐项判定，任一精确主题既无发布者也无订阅者、或任一模式未命中任何主题即整体报错退出。**校验失败发生在建目录之前，不产生任何文件**。仅有订阅者的主题同样通过（类型名取自订阅端点公告，先建订阅，发布者上线匹配后自动开始录流）。
+**启动校验**（失败不建目录不产生文件）：先做清单快速校验（空清单/空名/重复/多通配/`-o` 目录已存在即报错），随后轮询发现缓存快照并逐轮展开模式项（校验参数固定，不经 `YOMKDDS_DDS_DISCOVER_ROUNDS` 调整）；收敛后逐项判定，任一精确主题既无发布者也无订阅者、或任一模式未命中任何主题即整体报错退出。**校验失败发生在建目录之前，不产生任何文件**。仅有订阅者的主题同样通过（类型名取自订阅端点公告，先建订阅，发布者上线匹配后自动开始录流）。
 
 与发布端配合观察（另开两个终端）：
 
 ```bash
 # 终端 1（先启动发布端）
-ExampleYomkRpcPub
+ExampleYomkDdsPub
 # 终端 2
-yomkrpc bag record hello_world
+yomkdds bag record hello_world
 ```
 
 **落盘产物**（bag 目录两文件）：
 
 - `bag_0.mcap`：标准 mcap 容器，逐主题 Channel（encoding=cdr、无 schema——schemaless 对齐透传语义），Channel.metadata 记录该主题消息类型名与 QoS 串（`type=<类型名>`、`qos=<Reliability>,<Durability>`），消息 record 保存原始 CDR 字节；指定 `-b`/`-d` 时滚动产生同格式分片 `bag_1.mcap`、`bag_2.mcap`、...（各分片独立完整可读回，消息按写入顺序连续切分——不重复不空洞）；
-- `metadata.json`：顶层平铺 bag 元信息（`version` 为 yomkrpc 自有格式版本，1 起步），样例如下（起始时间与时长各附 `_format` 可读伴生键；`topics_with_message_count` 的 `qos` 键记录录制时远端 writer 的 offered QoS 串，仅订阅者主题录制时为空串）：
+- `metadata.json`：顶层平铺 bag 元信息（`version` 为 yomkdds 自有格式版本，1 起步），样例如下（起始时间与时长各附 `_format` 可读伴生键；`topics_with_message_count` 的 `qos` 键记录录制时远端 writer 的 offered QoS 串，仅订阅者主题录制时为空串）：
 
 ```json
 {
@@ -131,7 +131,7 @@ yomkrpc bag record hello_world
         {
             "topic_metadata": {
                 "name": "hello_world",
-                "type": "YomkRpc::MString",
+                "type": "YomkDdsStd::MString",
                 "qos": "RELIABLE,TRANSIENT_LOCAL"
             },
             "message_count": 12
@@ -143,11 +143,11 @@ yomkrpc bag record hello_world
 ### 第 2 步：查看 bag 元信息（bag info）
 
 ```bash
-yomkrpc bag info <bag目录>
+yomkdds bag info <bag目录>
 ```
 
 ```bash
-yomkrpc bag info bag_2026-10-02_19-37-33_726   # 查看第 1 步的录制产物
+yomkdds bag info bag_2026-10-02_19-37-33_726   # 查看第 1 步的录制产物
 ```
 
 读取 bag 目录下 `metadata.json` 与目录递归总大小，输出与 `ros2 bag info`（humble）逐行一致的元信息文本（多行文本逐行直出 stdout；纯本地文件读——不经 bag 节点、不创建任何 DDS 实体、不依赖域内状态）。输出样例与逐行含义见下文「预期输出」。
@@ -159,25 +159,25 @@ yomkrpc bag info bag_2026-10-02_19-37-33_726   # 查看第 1 步的录制产物
 命令形态（`<bag目录>` 为单个位置参数，CLI 自动创建并在退出前删除 bag 节点，播放期间服务端长驻阻塞，播毕即退出）：
 
 ```bash
-yomkrpc bag play [-r <rate>] [--topics T1 T2 ...] [--start-paused] [-l | --loop] [--start-offset SEC] [-d <sec> | --delay <sec>] [--wait-for-all-acked MS] [--remap old:=new ...] [--read-ahead-queue-size N] [--qos-profile-overrides-path FILE] <bag目录>
+yomkdds bag play [-r <rate>] [--topics T1 T2 ...] [--start-paused] [-l | --loop] [--start-offset SEC] [-d <sec> | --delay <sec>] [--wait-for-all-acked MS] [--remap old:=new ...] [--read-ahead-queue-size N] [--qos-profile-overrides-path FILE] <bag目录>
 ```
 
 基础用法：
 
 ```bash
-yomkrpc bag play bag_in                    # 全主题 1x 按录制时间轴回放
-yomkrpc bag play -r 2.0 bag_in             # 2 倍速回放（0.5 半倍速慢放排查竞态）
-yomkrpc bag play bag_in --topics hello_world          # 只回放指定主题
-yomkrpc bag play bag_in --topics 'hello_*' /other     # 清单可混排通配与精确项
-yomkrpc bag play bag_in --start-paused                # 暂停态启动，SPACE 开始回放
-yomkrpc bag play bag_in --loop                        # 循环回放，到尾回开头无限播放
-yomkrpc bag play bag_in --start-offset 5             # 从 bag 内第 5 秒起播，跳过前段
-yomkrpc bag play bag_in -d 3                         # 开播前先等 3 秒，等订阅端就绪
-yomkrpc bag play bag_in --wait-for-all-acked 0       # 播毕等订阅端确认收齐再退出
-yomkrpc bag play bag_in --remap /chatter:=hello_world   # 旧数据喂新主题名（可多规则空格分隔）
-yomkrpc bag play bag_in --read-ahead-queue-size 5000   # 加大预读队列防 IO 抖动致播放延迟
-yomkrpc bag play bag_in --qos-profile-overrides-path qos.json   # 按主题覆盖发布 QoS（文件命中>快照>回退）
-yomkrpc bag play ./bag_2026-10-08_09-52-22            # 回放指定录制产物目录
+yomkdds bag play bag_in                    # 全主题 1x 按录制时间轴回放
+yomkdds bag play -r 2.0 bag_in             # 2 倍速回放（0.5 半倍速慢放排查竞态）
+yomkdds bag play bag_in --topics hello_world          # 只回放指定主题
+yomkdds bag play bag_in --topics 'hello_*' /other     # 清单可混排通配与精确项
+yomkdds bag play bag_in --start-paused                # 暂停态启动，SPACE 开始回放
+yomkdds bag play bag_in --loop                        # 循环回放，到尾回开头无限播放
+yomkdds bag play bag_in --start-offset 5             # 从 bag 内第 5 秒起播，跳过前段
+yomkdds bag play bag_in -d 3                         # 开播前先等 3 秒，等订阅端就绪
+yomkdds bag play bag_in --wait-for-all-acked 0       # 播毕等订阅端确认收齐再退出
+yomkdds bag play bag_in --remap /chatter:=hello_world   # 旧数据喂新主题名（可多规则空格分隔）
+yomkdds bag play bag_in --read-ahead-queue-size 5000   # 加大预读队列防 IO 抖动致播放延迟
+yomkdds bag play bag_in --qos-profile-overrides-path qos.json   # 按主题覆盖发布 QoS（文件命中>快照>回退）
+yomkdds bag play ./bag_2026-10-08_09-52-22            # 回放指定录制产物目录
                                            # tty 下播放中按 +/- 键 ±10% 动态调率
 ```
 
@@ -212,12 +212,12 @@ yomkrpc bag play ./bag_2026-10-08_09-52-22            # 回放指定录制产物
 ### 第 4 步：转换 bag（bag convert）
 
 ```bash
-yomkrpc bag convert -i <bag目录>|--input <bag目录> [-i <bag目录> ...] -o <配置文件>|--output <配置文件>
+yomkdds bag convert -i <bag目录>|--input <bag目录> [-i <bag目录> ...] -o <配置文件>|--output <配置文件>
 ```
 
 ```bash
-yomkrpc bag convert -i bag_in -o convert.json              # 单输入全缺省条目：全主题全时段合并输出
-yomkrpc bag convert -i bag_a -i bag_b -o convert.json      # 多输入按 logTime 全局归并
+yomkdds bag convert -i bag_in -o convert.json              # 单输入全缺省条目：全主题全时段合并输出
+yomkdds bag convert -i bag_a -i bag_b -o convert.json      # 多输入按 logTime 全局归并
 ```
 
 按输出配置文件把一个或多个输入 bag 的消息过滤、裁剪、合并后写为新 bag（纯本地文件操作——不经 bag 节点、不创建任何 DDS 实体，未建 bag 节点亦可调用）。多输入按消息 logTime 全局升序 k-way 归并（同刻消息按输入序稳定先后）；转换透传原始 CDR 字节与消息时间戳/序号，不反序列化——产物仍为标准 mcap bag，可被 `bag info`、`bag reindex` 与任意 mcap 标准读库直接读取。
@@ -263,8 +263,8 @@ yomkrpc bag convert -i bag_a -i bag_b -o convert.json      # 多输入按 logTim
 ### 第 5 步：修复 bag 元信息（bag reindex）
 
 ```bash
-yomkrpc bag reindex bag_2026-10-02_19-37-33_726   # 重建第 1 步录制产物的 metadata.json
-yomkrpc bag info bag_2026-10-02_19-37-33_726      # 重建后可正常查看
+yomkdds bag reindex bag_2026-10-02_19-37-33_726   # 重建第 1 步录制产物的 metadata.json
+yomkdds bag info bag_2026-10-02_19-37-33_726      # 重建后可正常查看
 ```
 
 从 bag 目录内的 mcap 分片文件重建 `metadata.json` 并**无条件覆盖写出**（纯本地文件操作——不经 bag 节点、不创建任何 DDS 实体，未建 bag 节点亦可调用）。元信息文件缺失（中断录制 / 手工删除）或损坏时均可重建，行为对齐 `ros2 bag reindex`（"Reconstruct metadata file for a bag"）；成功打印一行 `reindexing complete`。
@@ -283,33 +283,33 @@ yomkrpc bag info bag_2026-10-02_19-37-33_726      # 重建后可正常查看
 以下用一个完整闭环串联五个子命令（bag 目录名以实际输出为准，下文沿用 README 样例目录名 `bag_2026-10-02_19-37-33_726`）：
 
 ```bash
-# 终端 1：启动发布端（ExampleYomkRpcPub 每 1s 发布一次 hello_world；
-#         或用等价 CLI 发布端：yomkrpc topic pub hello_world '{"data":"hello bag"}'）
-ExampleYomkRpcPub
+# 终端 1：启动发布端（ExampleYomkDdsPub 每 1s 发布一次 hello_world；
+#         或用等价 CLI 发布端：yomkdds topic pub hello_world '{"data":"hello bag"}'）
+ExampleYomkDdsPub
 ```
 
 ```bash
 # 终端 2：录制 hello_world 约 10 秒后按 Ctrl+C 停止
-yomkrpc bag record hello_world
+yomkdds bag record hello_world
 # [19:37:30.123456] recording topics from 1 list item(s) on domain 0, press p to pause, r to resume, Ctrl+C to stop
-# recording topic=hello_world type=YomkRpc::MString
+# recording topic=hello_world type=YomkDdsStd::MString
 # ...等待约 10 秒...
 # ^C
 ```
 
 ```bash
 # 终端 2：查看录制产物
-yomkrpc bag info bag_2026-10-02_19-37-33_726
+yomkdds bag info bag_2026-10-02_19-37-33_726
 ```
 
 ```bash
 # 终端 3（先起订阅观察端，再开播——防 VOLATILE 快照丢开头样本）
-yomkrpc topic print hello_world
+yomkdds topic print hello_world
 ```
 
 ```bash
 # 终端 2：回放（-d 3 给订阅端预留 3 秒匹配窗口），播毕自动退出
-yomkrpc bag play -d 3 ./bag_2026-10-02_19-37-33_726
+yomkdds bag play -d 3 ./bag_2026-10-02_19-37-33_726
 # 终端 3 同步逐条打印回放出的消息 JSON
 ```
 
@@ -326,8 +326,8 @@ cat > convert.json <<'EOF'
     ]
 }
 EOF
-yomkrpc bag convert -i bag_2026-10-02_19-37-33_726 -o convert.json
-yomkrpc bag info out_trimmed
+yomkdds bag convert -i bag_2026-10-02_19-37-33_726 -o convert.json
+yomkdds bag info out_trimmed
 ```
 
 > `max_bagfile_duration` 为单输出分片最大时长秒（本例 5 秒一片）；若想按时段精确裁剪，把条目换成 `start_time`/`end_time`（从产物 metadata.json 的 `_format` 伴生键直接拷贝即用）。
@@ -340,7 +340,7 @@ yomkrpc bag info out_trimmed
 
 ```
 [19:37:30.123456] recording topics from 1 list item(s) on domain 0, press p to pause, r to resume, Ctrl+C to stop
-recording topic=hello_world type=YomkRpc::MString
+recording topic=hello_world type=YomkDdsStd::MString
 recording paused
 recording resumed
 ^C
@@ -363,7 +363,7 @@ Duration:          4.012345678s
 Start:             Oct  2 2026 19:37:33.726412000 (1791953853.726412000)
 End:               Oct  2 2026 19:37:37.738757678 (1791953857.738757678)
 Messages:          12
-Topic information: Topic: hello_world | Type: YomkRpc::MString | QoS: RELIABLE,TRANSIENT_LOCAL | Count: 12 | Serialization Format: cdr
+Topic information: Topic: hello_world | Type: YomkDdsStd::MString | QoS: RELIABLE,TRANSIENT_LOCAL | Count: 12 | Serialization Format: cdr
 ```
 
 ### bag play
@@ -372,8 +372,8 @@ Topic information: Topic: hello_world | Type: YomkRpc::MString | QoS: RELIABLE,T
 
 ```text
 replaying bag [ bag_in ] on domain 0 , rate=1 , press p to pause, r to resume, +/- rate, Ctrl+C to stop
-replaying topic=/chatter type=YomkRpc::MString qos=RELIABLE,TRANSIENT_LOCAL
-replaying topic=/battery type=YomkRpc::MInt32 qos=RELIABLE,TRANSIENT_LOCAL
+replaying topic=/chatter type=YomkDdsStd::MString qos=RELIABLE,TRANSIENT_LOCAL
+replaying topic=/battery type=YomkDdsStd::MInt32 qos=RELIABLE,TRANSIENT_LOCAL
 replaying bag [bag_in]: 60 messages / duration 00-00-06_000-000-000 / start 2026-10-08_09-52-22_685-614-542
 bag_in
 /chatter: 30 条 / 150 字节
@@ -398,7 +398,7 @@ reindexing complete
 
 1. 终端 2 录制收尾打印 bag 目录名与 `hello_world: N 条 / M 字节`（N 约等于录制秒数，发布端 1 Hz）；
 2. `bag info` 显示 `Storage id: mcap` 与该主题计数行；
-3. 回放期间终端 3 的 `topic print` 逐条打印消息 JSON（形如 `[17:18:34.868398] topic=hello_world type=YomkRpc::MString seq=1` 与 `{"data":"hello world 0"}` 两行一组）；
+3. 回放期间终端 3 的 `topic print` 逐条打印消息 JSON（形如 `[17:18:34.868398] topic=hello_world type=YomkDdsStd::MString seq=1` 与 `{"data":"hello world 0"}` 两行一组）；
 4. `bag play` 播毕打印收尾统计行 `hello_world: N 条 / M 字节`；
 5. convert 打印 `converted out_trimmed: ...` 一行，`bag info out_trimmed` 可正常查看（时长约 5 秒分片）。
 
@@ -407,23 +407,23 @@ reindexing complete
 | 现象 | 原因与处理 |
 |---|---|
 | 录制报 `bag directory [x] already exists, remove it or choose another name` | `-o` 指定的目录已存在（fail-fast 于发现校验前，不落盘）：删除旧目录或换名重试 |
-| 录制报 `模式 [x] 未匹配到任何主题，请检查通配输入（域 N，已等待 M ms）` | 通配未命中：模式拼错或域内确无匹配主题；先 `yomkrpc topic list` 核对域内主题名，注意模式须加引号防 shell glob 展开 |
-| 录制报 `主题 [x] 既无发布者也无订阅者，请检查主题名输入（域 N，已等待 M ms）` | 精确主题无任何端点：主题名拼错 / 对端未上线 / 域号不一致（`echo $YOMKRPC_DDS_DOMAIN_ID` 与发布端对齐）；先启动发布端再录制 |
+| 录制报 `模式 [x] 未匹配到任何主题，请检查通配输入（域 N，已等待 M ms）` | 通配未命中：模式拼错或域内确无匹配主题；先 `yomkdds topic list` 核对域内主题名，注意模式须加引号防 shell glob 展开 |
+| 录制报 `主题 [x] 既无发布者也无订阅者，请检查主题名输入（域 N，已等待 M ms）` | 精确主题无任何端点：主题名拼错 / 对端未上线 / 域号不一致（`echo $YOMKDDS_DDS_DOMAIN_ID` 与发布端对齐）；先启动发布端再录制 |
 | 录制报 `max bag size [x] too small, minimum split file size is 1024 bytes (0 to disable splitting)` | `-b` 分片上限过小（非 0 且低于 1024 字节）：调大或传 0 关闭分片 |
 | 录制收尾打印丢条统计（按主题计数 + `Total dropped` 总计） | `-c` 写缓存满丢弃新消息：加大 `-c`/`--max-cache-size`（默认 100 MiB），或传 0 改每条直写（牺牲突发吞吐换零丢失） |
 | 指定 `-b` 后分片大小不生效（单片偏大/偏小） | chunk 边界：受存储层 chunk 缓冲影响，`-b` 实际分片粒度不小于 chunk 落盘边界——默认 786432 字节，小于该值的 `-b` 实际每 chunk 一片；时长分片（`-d`）不受 chunk 影响 |
 | 回放时订阅端一条都收不到 / 只有开头几条 | 回放无订阅端就绪：offered durability 为 VOLATILE 时晚建的订阅端必丢样本——先起订阅端再开播，或加 `-d <sec>` 开播延迟给足匹配窗口；RELIABLE 快照下可加 `--wait-for-all-acked 0` 播毕等确认收齐再退出 |
-| 回放报 `topic [x] not found in bag` / `topic pattern [x] matched no bag topic` | `--topics` 清单对账失败（精确项不在 bag / 模式未命中）：先 `yomkrpc bag info <bag目录>` 核对 bag 内主题名，注意精确匹配大小写与 `/` 前缀 |
+| 回放报 `topic [x] not found in bag` / `topic pattern [x] matched no bag topic` | `--topics` 清单对账失败（精确项不在 bag / 模式未命中）：先 `yomkdds bag info <bag目录>` 核对 bag 内主题名，注意精确匹配大小写与 `/` 前缀 |
 | 回放报 `topic [x] invalid qos string [y]` | QoS 快照或 `--qos-profile-overrides-path` 覆盖文件含未知枚举拼写（原串随报错回显）：按大写 DDS 标准拼写修正（`RELIABLE`/`BEST_EFFORT`、`VOLATILE`/`TRANSIENT_LOCAL`/`TRANSIENT`/`PERSISTENT`） |
 | 回放报 `invalid remap rule [x] (expected old:=new)` / `duplicate remap rule [x]` | `--remap` 规则缺 `:=` 或两侧为空 / old 主题重复：按 `old:=new` 形态逐条修正 |
-| 回放/转换/查看报 `could not find metadata.json in bag directory [x]` | bag 目录元信息缺失（中断录制/手工删除）：`yomkrpc bag reindex <bag目录>` 从 mcap 分片重建后重试 |
+| 回放/转换/查看报 `could not find metadata.json in bag directory [x]` | bag 目录元信息缺失（中断录制/手工删除）：`yomkdds bag reindex <bag目录>` 从 mcap 分片重建后重试 |
 | convert 报 `output dir [x] already exists` | 输出条目 `uri` 目录已存在（防混入旧产物）：删除旧目录或换 uri |
 | convert 报 `topic [x] has conflicting types [a] vs [b] across inputs` | 同主题跨输入类型不一致：核对多输入 bag 是否来自同一录制口径，或用条目 `topics` 缩小清单避开冲突主题 |
 
 ## 延伸阅读
 
-- [../features/bag-service.md](../features/bag-service.md)——bag 功能能力清单、参数总表与 `YOMKRPC_BAG_*` 宏等价调用（含 `yomk::bagRecordStop/Pause/Resume`、`yomk::bagPlaySetRate` 库侧接口）
+- [../features/bag-service.md](../features/bag-service.md)——bag 功能能力清单、参数总表与 `YOMKDDS_BAG_*` 宏等价调用（含 `yomk::bagRecordStop/Pause/Resume`、`yomk::bagPlaySetRate` 库侧接口）
 - [cli-observe-handbook.md](./cli-observe-handbook.md)——`topic print`/`topic list`/`topic info` 等观察命令，与回放验证配合使用
-- [cli-publish-handbook.md](./cli-publish-handbook.md)——`topic pub` 手工发布消息，演练中可替代 `ExampleYomkRpcPub` 作发布端
-- [env-vars-reference.md](./env-vars-reference.md)——域号等公共环境变量（bag 命令域号经 `YOMKRPC_DDS_DOMAIN_ID` 选择）
+- [cli-publish-handbook.md](./cli-publish-handbook.md)——`topic pub` 手工发布消息，演练中可替代 `ExampleYomkDdsPub` 作发布端
+- [env-vars-reference.md](./env-vars-reference.md)——域号等公共环境变量（bag 命令域号经 `YOMKDDS_DDS_DOMAIN_ID` 选择）
 - [返回手册入口](./README.md)

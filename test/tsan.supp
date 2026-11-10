@@ -1,20 +1,20 @@
-# ThreadSanitizer 抑制清单（仅抑制第三方 FastDDS 的死锁检测器噪声，绝不抑制 YomkRpc 自有源码）
+# ThreadSanitizer 抑制清单（仅抑制第三方 FastDDS 的死锁检测器噪声，绝不抑制 YomkDds 自有源码）
 #
-# 原则（用户决策）：第三方库（FastDDS / YomkServer / YomkRpcMsg）默认正确，只链接不插桩不修改。
+# 原则（用户决策）：第三方库（FastDDS / YomkServer / YomkDdsStdMsgs）默认正确，只链接不插桩不修改。
 # libfastdds.so 未经 TSan 插桩，其内部异步事件系统 ResourceEvent（dds.ev.* 线程）在并发创建/销毁
 # participant 时，被 TSan 死锁检测器（启发式）判为 lock-order-inversion 与 double-lock。
 #
 # 已核验（MC6 tsan 实测）：这些报告的冲突加锁栈 100% 落在 eprosima::fastdds::rtps::ResourceEvent
-# 与 SharedMemWatchdog 内部；YomkRpc 帧仅出现在"线程创建来源"段（createNode 合法创建 participant →
-# FastDDS 派生其内部事件线程），非 YomkRpc 的锁获取。YomkRpc 自有源码 data race 计数为 0。
+# 与 SharedMemWatchdog 内部；YomkDds 帧仅出现在"线程创建来源"段（createNode 合法创建 participant →
+# FastDDS 派生其内部事件线程），非 YomkDds 的锁获取。YomkDds 自有源码 data race 计数为 0。
 #
 # 抑制范围刻意收窄：仅用 deadlock:/mutex: 类型（死锁检测器），不用 called_from_lib: 或 race:——
-# 以完整保留对 YomkRpc 自有源码的数据竞争检测灵敏度，尤其是通用 take() reader 回调 on_data_available
+# 以完整保留对 YomkDds 自有源码的数据竞争检测灵敏度，尤其是通用 take() reader 回调 on_data_available
 # （由 libfastdds 线程回调，若用 called_from_lib:libfastdds.so 会连同其栈一并屏蔽，抹掉核心验证）。
-# 若某条抑制被证实掩盖 YomkRpc 自有源码缺陷，应删除该条并修复源码。
+# 若某条抑制被证实掩盖 YomkDds 自有源码缺陷，应删除该条并修复源码。
 
 # ---- GCC 11.4 libtsan 死锁检测器假阳性定罪（2026-10，用户决策：维持 GCC 仅记录，不加抑制）----
-# 现象：TestFastDDSDebugNode / TestYomkRpcDebugServiceLifecycle 以 exit 66 失败，报 double lock
+# 现象：TestFastDDSDebugNode / TestYomkDdsDebugServiceLifecycle 以 exit 66 失败，报 double lock
 #       （当前栈 setDomainId:512 / listTopics:612 / ~FastDDSDebugNode():473 / topicPub:1472，"首次加锁栈"指向更早的
 #       一次正常获取，如 listTopics:612←main:309）并级联双侧同锁的假 data race（如 dtor:474 写 vs
 #       workerLoop:2052 读 workerRunning_，双侧均标 "mutexes: write M1238"）。
@@ -32,14 +32,14 @@
 #   lock 但残留 24 条级联假 race）、suppressions 的 deadlock:/mutex: 类型（对该报告不响应）、-O0、
 #   history_size=7；系统亦无更高版本 GCC 可试。
 # clang++-14 对照（LLVM TSan 14 死锁检测器默认关闭，race 检测完整保留）：cmake -S test -B
-#   test/build-tsan-clang -DCMAKE_CXX_COMPILER=clang++-14 -DYOMKRPC_TEST_SANITIZER=tsan 后两测
+#   test/build-tsan-clang -DCMAKE_CXX_COMPILER=clang++-14 -DYOMKDDS_TEST_SANITIZER=tsan 后两测
 #   6/6 全绿 0 报告，本清单的 FastDDS 第三方抑制条目照常生效。
 #
 # 【最终处置（2026-10-12）】源码侧规避落地：FastDDSDebugNode 去 cv 化（workerLoop 改 sleep
 #   轮询，删 cv_ 成员与三处 notify_all），探针变体矩阵证实 cv_.wait_for 是触发必要条件
 #   （sleep 轮询版 3/3 干净、仅线程锁外启动版 3/3 仍报）。落地后 tsan 全量 19/19 全绿
 #   （复用 test/build-tsan，运行器 --sanitizer tsan 实测 254s）；语义代价仅为新登记响应/
-#   析构停止延迟 ≤100ms。本清单条目未新增（无需抑制 YomkRpc 自有源码）。
+#   析构停止延迟 ≤100ms。本清单条目未新增（无需抑制 YomkDds 自有源码）。
 
 # ---- FastDDS ResourceEvent：异步事件线程内部锁序（lock-order-inversion / double-lock）----
 deadlock:eprosima::fastdds::rtps::ResourceEvent
@@ -63,10 +63,10 @@ race:eprosima::fastdds::rtps::BaseReader::local_actions_on_reader_removed
 
 # ---- FastDDS RTPS participant/reader/writer 生命周期 + 传输内部：并发 create_node/delete_node churn 下
 #      FastDDS 自有异步线程与创建/销毁线程在进程内共享传输/发现资源上竞态（与上方同类，仅函数不同）。
-#      实测（恢复通用 take() 后全量 tsan 首现，TestYomkRpcStressConcurrent 的 c2_concurrentNodeChurn）：
+#      实测（恢复通用 take() 后全量 tsan 首现，TestYomkDdsStressConcurrent 的 c2_concurrentNodeChurn）：
 #      两侧真实内存访问 100% 落在 libfastdds 内部（BaseReader::init / ReaderLocator::stop|local_reader /
 #      StatefulWriter::intraprocess_heartbeat|matched_reader_add_edp / ReceiverResource::OnDataReceived /
-#      WriterHistory::create_change）；YomkRpc 帧仅为 createNode(YomkRpcService.cpp:82)/registerSubTopic(:144)
+#      WriterHistory::create_change）；YomkDds 帧仅为 createNode(YomkDdsService.cpp:82)/registerSubTopic(:144)
 #      这类合法实体创建触发点，FastDDSNode.cpp/on_data_available 帧 0 次出现。
 #      【已实证为既有问题、非本次 take()/loan 恢复引入】：git stash 将 src/FastDDSNode.cpp 回退到方向2 基线
 #      (take_next_sample、无 loan)后重编重跑，基线以相同频率(4/6)、相同 libfastdds 函数、同样 0 个 reader 帧

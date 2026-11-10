@@ -7,7 +7,7 @@
 // 安全，多 reader 并发写须串行），不触 mtx_。
 #include "FastDDSBagNode.h"
 
-#include "YomkRpcBagService.h" // yomk::g_bagRecordStop（录制停止标志，API 头内联定义）
+#include "YomkDdsBagService.h" // yomk::g_bagRecordStop（录制停止标志，API 头内联定义）
 
 #define MCAP_IMPLEMENTATION  // mcap header-only：实现随本 TU 编译（全库唯一单译元）
 #include <mcap/reader.hpp>   // 读回侧实现同译元编译（读回断言经链接本库取实现）
@@ -63,7 +63,7 @@ constexpr size_t kTimeBufBytes = 32;          // 时间戳 strftime 格式化缓
 constexpr uint32_t kRecordPollMs = 100;       // 录制循环停止标志轮询间隔
 constexpr int kMsDigits = 3;                  // 定宽 3 位段位数（毫秒/微秒/纳秒）
 constexpr int kClockDigits = 2;               // 定宽 2 位段位数（时/分/秒）
-constexpr uint32_t kBagMetadataVersion = 1;   // yomkrpc 元信息格式自有版本号（1 起步，与参考来源 rosbag2 的 v5 无关）
+constexpr uint32_t kBagMetadataVersion = 1;   // yomkdds 元信息格式自有版本号（1 起步，与参考来源 rosbag2 的 v5 无关）
 constexpr uint64_t kMinSplitFileSize = 1024;  // -b 分片下限（对齐 rosbag2 mcap 插件 kMinimumSplitFileSize）
 constexpr uint64_t kNsPerUs = 1000;                     // 纳秒每微秒
 constexpr uint64_t kNsPerMs = kNsPerUs * kNsPerUs;      // 纳秒每毫秒
@@ -891,7 +891,7 @@ FastDDSBagNode::~FastDDSBagNode()
 }
 
 bool FastDDSBagNode::setDomainId(uint32_t domainId,
-    const yomkrpc_xml::ParticipantQosSpec& spec, std::string* err)
+    const yomkdds_xml::ParticipantQosSpec& spec, std::string* err)
 {
     std::lock_guard<std::mutex> lock(mtx_);
     if (participant_ != nullptr)
@@ -906,14 +906,14 @@ bool FastDDSBagNode::setDomainId(uint32_t domainId,
     // XML 配置通道三级提取链先于置名执行：无用户名，按名 profile 无意义仅默认档可兜底，
     // 落空保持 DEFAULT 底座
     DomainParticipantQos qos = PARTICIPANT_QOS_DEFAULT;
-    yomkrpc_xml::participantQosFromXml(qos, "", spec.xml);
+    yomkdds_xml::participantQosFromXml(qos, "", spec.xml);
     // 发现服务器直配（仅 client 角色）：CLIENT + m_DiscoveryServers 重建，覆盖 XML
     // discoveryServersList（合并语义：直配 > XML 提取打底）；UDP/TCP 双通道任一非空即叠加，
     // TCP 通道自动补注入 TCPv4 传输；任一 spec 非法则整体失败
     if (!spec.udpServerSpec.empty() || !spec.tcpServerSpec.empty())
     {
         std::string serverErr;
-        if (!yomkrpc_xml::applyDiscoveryServers(qos, spec.udpServerSpec, spec.tcpServerSpec, serverErr))
+        if (!yomkdds_xml::applyDiscoveryServers(qos, spec.udpServerSpec, spec.tcpServerSpec, serverErr))
         {
             if (err != nullptr)
             {
@@ -922,7 +922,7 @@ bool FastDDSBagNode::setDomainId(uint32_t domainId,
             return false;
         }
     }
-    qos.name(std::string("yomkrpc_bag_") + makeUidSuffix());
+    qos.name(std::string("yomkdds_bag_") + makeUidSuffix());
     participant_ = DomainParticipantFactory::get_instance()->create_participant(
         domainId, qos, listener_.get(), StatusMask::none());
     if (participant_ == nullptr)

@@ -1,8 +1,8 @@
-# YomkRpc 文档中心
+# YomkDds 文档中心
 
-本目录是 YomkRpc 的权威文档库，由两大册组成：
+本目录是 YomkDds 的权威文档库，由两大册组成：
 
-- **[功能文档册](./features/README.md)** — 说明 YomkRpc 提供哪些功能、能力边界与参数约束
+- **[功能文档册](./features/README.md)** — 说明 YomkDds 提供哪些功能、能力边界与参数约束
 - **[用户使用手册册](./manual/README.md)** — 手把手教程，照做即可完成安装、开发与调试
 
 ## 一、文档体系架构
@@ -47,8 +47,8 @@ flowchart TD
 
 | 你是谁 / 你想做什么 | 推荐路径 |
 |---|---|
-| 第一次接触 YomkRpc，想把它跑起来 | [手册入口](./manual/README.md) → [环境搭建](./manual/setup-and-build.md) → [快速开始](./manual/quick-start.md) |
-| 想知道 YomkRpc 有哪些能力、边界在哪 | [功能文档入口](./features/README.md) 的「功能速查矩阵」 |
+| 第一次接触 YomkDds，想把它跑起来 | [手册入口](./manual/README.md) → [环境搭建](./manual/setup-and-build.md) → [快速开始](./manual/quick-start.md) |
+| 想知道 YomkDds 有哪些能力、边界在哪 | [功能文档入口](./features/README.md) 的「功能速查矩阵」 |
 | 已经会用，想查某个宏/命令/参数的细节 | 对应功能文档的「参数与约束」章节 |
 | 想完成一个具体任务（录制 bag、跨域互通、对接 ROS2…） | [手册入口](./manual/README.md) 的「我想……」场景导航表 |
 | 查环境变量与公共配置 | [环境变量与公共配置参考](./manual/env-vars-reference.md) |
@@ -106,7 +106,7 @@ docs/
 │   ├── discovery-server.md            发现服务器（UDP/TCP 直配、跨域互通）
 │   ├── xml-profiles.md                XML profiles 配置（三级提取链）
 │   ├── ros2-interop.md                ROS2 互通
-│   ├── debug-service.md               调试服务（宏 + yomkrpc 观察类）
+│   ├── debug-service.md               调试服务（宏 + yomkdds 观察类）
 │   └── bag-service.md                 Bag 录制/回放/转换
 └── manual/                            【用户使用手册册】
     ├── README.md                      手册总入口（学习路径 + 场景导航）
@@ -118,8 +118,8 @@ docs/
     ├── discovery-server-tutorial.md   发现服务器与跨域互通教程
     ├── xml-profiles-tutorial.md       XML profiles 配置教程
     ├── ros2-interop-tutorial.md       ROS2 互通教程
-    ├── cli-observe-handbook.md        yomkrpc 观察手册
-    ├── cli-publish-handbook.md        yomkrpc 发布与内省手册
+    ├── cli-observe-handbook.md        yomkdds 观察手册
+    ├── cli-publish-handbook.md        yomkdds 发布与内省手册
     ├── bag-handbook.md                Bag 录制回放手册
     └── env-vars-reference.md          环境变量与公共配置参考
 ```

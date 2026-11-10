@@ -6,12 +6,12 @@
  *       docs/manual/ros2-interop-tutorial.md。
  */
 
-#include <YomkRpc/YomkRpcAPI.h>
+#include <yomk/dds/YomkDdsAPI.h>
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 
-#include <YomkRpcMsg/YomkRpcMsg.hpp>
-#include <YomkRpcMsg/YomkRpcMsgPubSubTypes.hpp>
+#include <yomk/dds/YomkDdsStdMsgs.hpp>
+#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -33,26 +33,26 @@ static void onSignal(int)
 int main()
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkRpcService>().create();
+    ::yomk::server().srv<YomkDdsService>().create();
 
     // 1. 创建节点（域 0 对齐 ROS2 默认域）
-    auto resp = YOMKRPC_NODE("interop_pub", 0);
-    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+    auto resp = YOMKDDS_NODE("interop_pub", 0);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleRos2InteropPub").error("create node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleRos2InteropPub").error("create node failed: ", resp.msg);
         return 1;
     }
 
     // 2. 类型对象 new 后、移交前 set_name 成 ROS2 约定名（宏实参位内联 new 无法先改名）
-    auto *type = new YomkRpc::MStringPubSubType();
+    auto *type = new YomkDdsStd::MStringPubSubType();
     type->set_name("std_msgs::msg::dds_::String_");
     // QoS 用 ROS2 发布端默认底座：RELIABLE offered 对 ros2 topic echo 任意 requested 可匹配
-    resp = YOMKRPC_PUB_TOPIC("interop_pub", "rt/chatter_interop", type,
+    resp = YOMKDDS_PUB_TOPIC("interop_pub", "rt/chatter_interop", type,
                              DDSQosProfile::ros2DefaultPublisher());
-    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleRos2InteropPub").error("register pub topic failed: ", resp.m_msg);
-        YOMKRPC_DEL_NODE("interop_pub");
+        ::yomk::log().tag("ExampleRos2InteropPub").error("register pub topic failed: ", resp.msg);
+        YOMKDDS_DEL_NODE("interop_pub");
         return 1;
     }
 
@@ -63,10 +63,10 @@ int main()
     std::int64_t seq = 0;
     while (!g_stop.load())
     {
-        YomkRpc::MString msg;
+        YomkDdsStd::MString msg;
         msg.data("interop hello " + std::to_string(seq++));
-        resp = YOMKRPC_PUB_MSG("interop_pub", "rt/chatter_interop", &msg);
-        if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+        resp = YOMKDDS_PUB_MSG("interop_pub", "rt/chatter_interop", &msg);
+        if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
             ::yomk::log().tag("ExampleRos2InteropPub").error("[SEND] publish failed");
         }
@@ -78,10 +78,10 @@ int main()
     }
 
     // 4. 退出前显式销毁节点
-    resp = YOMKRPC_DEL_NODE("interop_pub");
-    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+    resp = YOMKDDS_DEL_NODE("interop_pub");
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleRos2InteropPub").error("delete node failed: ", resp.m_msg);
+        ::yomk::log().tag("ExampleRos2InteropPub").error("delete node failed: ", resp.msg);
         return 1;
     }
     return 0;

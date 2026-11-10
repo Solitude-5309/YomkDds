@@ -2,9 +2,9 @@
 #define FASTDDSNODE_H
 
 // 引 DDSQosProfile（端点 QoS 描述，公共头零 fastdds 依赖；平铺引号形式命中 include/，
-// 安装树经 YomkRpc/ 前缀提供同一头）与 ParticipantQosSpec（XML 配置通道 + serverLocator
+// 安装树经 yomk/dds/ 前缀提供同一头）与 ParticipantQosSpec（XML 配置通道 + serverLocator
 // 直配 spec；缺省实参需完整类型，自身引公共头与 fastdds）
-#include "YomkRpcService.h"
+#include "YomkDdsService.h"
 #include "FastDDSXmlHelper.h"
 
 #include <cstdint>
@@ -22,7 +22,7 @@
 #include <string>
 
 // 单个 DDS 节点的封装：持有一个 DomainParticipant 及其 publisher/subscriber，管理本节点下的
-// 发布主题（pubTopics_）与订阅主题（subTopics_）。全部公开方法内部以 mtx_ 串行化；由 YomkRpcService
+// 发布主题（pubTopics_）与订阅主题（subTopics_）。全部公开方法内部以 mtx_ 串行化；由 YomkDdsService
 // 持有（每个 nodeName 一个实例），析构时按 DataReader/Writer → Topic → Publisher/Subscriber → Participant 顺序清理。
 class FastDDSNode
 {
@@ -62,7 +62,7 @@ public:
     // discoveryServersList，节点名在提取后最终覆盖 XML name）。serverSpec 非法返回 false 并经
     // err 回填原因（可空指针，缺省不回填）。
     bool setDomainId(uint32_t domainId, const std::string& nodeName = "",
-        const yomkrpc_xml::ParticipantQosSpec& spec = yomkrpc_xml::ParticipantQosSpec{},
+        const yomkdds_xml::ParticipantQosSpec& spec = yomkdds_xml::ParticipantQosSpec{},
         std::string* err = nullptr);
     // 注册订阅主题：接管 type 所有权，收到消息时经 callback 交付；主题名冲突/类型名不符/资源创建失败返回 false。
     // qos：端点 QoS 描述（缺省全哨兵=Fast DDS 端点默认底座）；非哨兵项逐项覆盖

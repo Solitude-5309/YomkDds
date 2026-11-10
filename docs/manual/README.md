@@ -2,7 +2,7 @@
 
 本册是**面向操作**的手把手教程：每篇围绕一个目标，给出完整步骤、可直接复制执行的命令/代码、预期输出与排障方法，照做即可达成目标。
 
-- 想先了解「YomkRpc 有哪些功能、边界在哪」，请转到[功能文档册](../features/README.md)
+- 想先了解「YomkDds 有哪些功能、边界在哪」，请转到[功能文档册](../features/README.md)
 - 每篇教程开头声明覆盖范围与前提；遇到环境变量相关行为，统一查阅[环境变量与公共配置参考](./env-vars-reference.md)
 
 ## 一、学习路径
@@ -30,14 +30,14 @@ flowchart LR
 
 | 我想…… | 去这篇 |
 |---|---|
-| 安装依赖、编译并安装 YomkRpc | [setup-and-build.md](./setup-and-build.md) |
+| 安装依赖、编译并安装 YomkDds | [setup-and-build.md](./setup-and-build.md) |
 | 5 分钟跑通第一个发布订阅程序 | [quick-start.md](./quick-start.md) |
 | 理解订阅回调、消息类型定义、多节点跨进程收发 | [pub-sub-tutorial.md](./pub-sub-tutorial.md) |
 | 用零拷贝（loan）方式发布以提升性能 | [loan-tutorial.md](./loan-tutorial.md) |
 | 控制可靠性、持久化、历史深度等传输语义 | [qos-tutorial.md](./qos-tutorial.md) |
 | 在无多播/跨网段/跨域环境完成发现与互通 | [discovery-server-tutorial.md](./discovery-server-tutorial.md) |
 | 用 XML 文件集中配置节点的 QoS/传输/发现 | [xml-profiles-tutorial.md](./xml-profiles-tutorial.md) |
-| 让 YomkRpc 程序与 ROS2 节点互相收发 | [ros2-interop-tutorial.md](./ros2-interop-tutorial.md) |
+| 让 YomkDds 程序与 ROS2 节点互相收发 | [ros2-interop-tutorial.md](./ros2-interop-tutorial.md) |
 | 看看域里现在有什么（主题/节点/频率观察） | [cli-observe-handbook.md](./cli-observe-handbook.md) |
 | 不写代码就发一条消息、查看消息结构 | [cli-publish-handbook.md](./cli-publish-handbook.md) |
 | 把数据录制下来，再回放/裁剪/合并 | [bag-handbook.md](./bag-handbook.md) |

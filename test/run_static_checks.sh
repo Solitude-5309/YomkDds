@@ -1,5 +1,5 @@
 #!/bin/bash
-# YomkRpc 静态代码检查运行器（镜像 YomkPluginSystem/test/run_static_checks.sh 形态）
+# YomkDds 静态代码检查运行器（镜像 YomkPluginSystem/test/run_static_checks.sh 形态）
 # 用法:
 #   ./run_static_checks.sh              默认双跑 cppcheck + clang-tidy
 #   ./run_static_checks.sh --cppcheck   仅跑 cppcheck
@@ -66,8 +66,9 @@ SUMMARY="${LOG_ROOT}/summary.log"
 echo "-- 日志目录: ${LOG_ROOT}"
 
 # ---------- cppcheck：自有源码零告警验收（不检测第三方/生成代码） ----------
-# -I 三条仅用于解析依赖头（<fastdds/...>、<YomkServer/...>、<YomkRpc/...>、<YomkRpcMsg/...>，
-# 自有 API 头按安装树路径 include，源码树无 YomkRpc/ 目录层级，须依赖安装前缀解析）；
+# -I 三条仅用于解析依赖头（<fastdds/...>、<yomk/...>、<yomk/dds/...>，
+# 自有 API 头按安装树路径 include（源码树 include/dds/ 与安装树差一层 yomk/ 前缀，
+# 引用统一带 yomk/ 前缀、须依赖安装前缀解析）；
 # thirdparty/ 与 msg/ 全部路径级忽略——cppcheck 会沿 include 链把告警归到被包含的头文件，
 # 抑制后告警只可能来自 src/include/examples 自有源码。
 if [ ${RUN_CPPCHECK} -eq 1 ]; then
@@ -96,7 +97,7 @@ if [ ${RUN_CPPCHECK} -eq 1 ]; then
     cppcheck --enable=warning,performance,portability --std=c++17 --language=c++ \
         --verbose -j"$(nproc)" \
         --inline-suppr --suppress=missingIncludeSystem --suppress=toomanyconfigs \
-        -I "${REPO_DIR}/include" \
+        -I "${REPO_DIR}/include/dds" \
         -I "${REPO_DIR}/thirdparty/Fast-DDS-3.6.1/install/include" \
         -I "${YOMK_PREFIX_PATH:-/opt/yomk}/include" \
         --suppress='*:*/thirdparty/*' \
@@ -171,7 +172,7 @@ if [ ${RUN_TIDY} -eq 1 ]; then
         TIDY_IDX=$((TIDY_IDX + 1))
         echo "-- [${TIDY_IDX}/${TIDY_TOTAL}] $(basename "${f}")"
         if ! clang-tidy -p "${REPO_DIR}" \
-            --header-filter='.*/YomkRpc/(include|src)/.*' \
+            --header-filter='.*/YomkDds/(include|src)/.*' \
             "${STDLIB_INC_ARGS[@]}" \
             "${f}" >> "${TIDY_OUT}" 2>&1; then
             echo "    [FAIL] $(basename "${f}") 检出告警或编译错误"
@@ -193,11 +194,11 @@ if [ ${FAILED} -ne 0 ]; then
     echo "==========================================="
     echo " 静态代码检查未通过（日志目录: ${LOG_ROOT}）"
     echo "==========================================="
-    echo "YomkRpc 静态代码检查未通过" >> "${SUMMARY}"
+    echo "YomkDds 静态代码检查未通过" >> "${SUMMARY}"
     exit 1
 fi
 echo "==========================================="
 echo " 静态代码检查全部通过（日志目录: ${LOG_ROOT}）"
 echo "==========================================="
-echo "YomkRpc 静态代码检查全部通过" >> "${SUMMARY}"
+echo "YomkDds 静态代码检查全部通过" >> "${SUMMARY}"
 exit 0

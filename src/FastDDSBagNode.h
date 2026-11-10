@@ -24,7 +24,7 @@
 // encapsulation header 原样落盘 mcap：schema_id=0 无 schema 通道、encoding="cdr"、
 // thirdparty/mcap v2.1.3，实现仅在本节点 .cpp 单译元编译）建立订阅，收尾删除全部 reader
 // 后关闭 writer 补写 summary 并生成 metadata.json（顶层平铺元信息 + _format 可读时间伴生
-// 键）。停止/暂停标志由 YomkRpcBagService 提供（yomk::g_bagRecordStop/g_bagRecordPaused）。
+// 键）。停止/暂停标志由 YomkDdsBagService 提供（yomk::g_bagRecordStop/g_bagRecordPaused）。
 // 回放（play）为反向链路：预扫 metadata.json（主题 type/qos 快照）后按读播解耦架构发布
 // ——读线程经 mcap 索引逐条预读原始 CDR 字节入有界内存队列，播放线程按录制时间轴还原
 // 节奏，writer 按 bag 内快照按需创建（缺键回退 RELIABLE+VOLATILE）；停止/暂停标志
@@ -83,8 +83,8 @@ public:
     // 设置 DDS 域并创建 participant（挂发现监听）与 subscriber；仅可成功一次，失败/重复调用返回 false。
     // spec/err 语义同 FastDDSNode::setDomainId（XML 三级提取链——本节点无用户名，按名 profile
     // 无意义仅默认档可兜底；serverLocator 直配强制 CLIENT，节点唯一名在提取后置入）。
-    bool setDomainId(uint32_t domainId, const yomkrpc_xml::ParticipantQosSpec& spec =
-            yomkrpc_xml::ParticipantQosSpec{}, std::string* err = nullptr);
+    bool setDomainId(uint32_t domainId, const yomkdds_xml::ParticipantQosSpec& spec =
+            yomkdds_xml::ParticipantQosSpec{}, std::string* err = nullptr);
     // 录制主题列表（长驻阻塞：调用线程阻塞至 yomk::g_bagRecordStop 置位并完成收尾）。
     // ①启动校验——轮询发现缓存快照至收敛（0 值钳制默认 15 次/200ms，总窗不足
     //   kMinValidateWindowMs 自动提升防 SPDP 误判；清单项支持单 '*' 通配，模式项按发现

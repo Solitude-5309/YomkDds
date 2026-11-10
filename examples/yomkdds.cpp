@@ -1,0 +1,2960 @@
+/**
+ * @file yomkdds.cpp
+ * @brief yomkdds 命令行工具：观察任意 DDS 主题（持续打印消息）、列出域内主题或节点、
+ *       查询单个主题或单个节点的详情；bag 录制/信息/重建/转换/回放
+ *
+ * 子命令语法、示例、QoS 选项、环境变量与各子命令行为语义的完整手册见 docs/manual/
+ * （README.md 有目录导航）：cli-observe-handbook（topic print/list/info/type/find/hz、
+ * interface show/list、node list/info）、cli-publish-handbook（topic pub/-e/-ef）、
+ * bag-handbook（bag record/info/reindex/convert/play）、qos-tutorial（--qos-ros、
+ * --qos-* 与 --qos-file）、env-vars-reference（YOMKDDS_DDS_DOMAIN_ID、
+ * YOMKDDS_DDS_DISCOVER_ROUNDS、发现服务器直配与 XML profiles 环境变量——启动时无则
+ * 创建并幂等写入 ~/.bashrc，使新开终端可查看继承）、discovery-server-tutorial 与
+ * xml-profiles-tutorial；--help 输出为即用速查。
+ *
+ * 实现经 YomkDdsDebugService（YOMKDDS_DEBUG_*）与 YomkDdsBagService（YOMKDDS_BAG_*）
+ * 驱动内部调试/录制节点；各子命令退出前 YOMKDDS_DEBUG_QUIT() 显式清理，规避
+ * FastDDS 静态析构期段错误（同 ExampleYomkDdsSub 退出前 DEL_NODE 模式）。
+ */
+
+#include <yomk/dds/YomkDdsAPI.h>
+#include <yomk/dds/YomkDdsBagService.h>
+#include <yomk/server/YomkServerApi.h>
+#include <yomk/log/YomkLoggerApi.h>
+
+#include <nlohmann/json.hpp> // --qos-file 解析（vendored header-only，CMake 配 include 路径）
+
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <csignal>
+#include <cstdint>
+#include <cstdlib> // strtoul, getenv, setenv
+#include <ctime>
+#include <deque>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <mutex>
+#include <numeric>
+#include <sstream>
+#include <string>
+#include <poll.h>   // bag record 键盘监听线程：poll() 带超时轮询 stdin（响应 Ctrl+C）
+#include <termios.h> // bag record 键盘监听：非规范模式单字符读（SPACE/p/r）
+#include <thread>
+#include <unistd.h> // STDIN_FILENO, read()
+#include <vector>
+
+using namespace yomk;
+
+static std::atomic<bool> g_stop{false}; // SIGINT（Ctrl+C）退出标志
+
+static void onSignal(int)
+{
+    g_stop.store(true);
+    yomk::debugPubStop(); // topic pub -r 持续发布：无锁置位（async-signal-safe），节点层发布循环读它退出
+    yomk::bagRecordStop(); // bag record：无锁置位（async-signal-safe），节点层录制循环读它收尾退出
+    yomk::bagPlayStop();   // bag play：无锁置位（async-signal-safe），节点层回放循环读它收尾退出
+}
+
+static void printUsage(std::ostream &os)
+{
+    os << "Usage:\n"
+          "  yomkdds topic print [--qos-ros | --qos-KEY VAL ... | --qos-file FILE] <topic-name>\n"
+          "  yomkdds topic list [-t | --types]\n"
+          "  yomkdds topic info [-v | --verbose] <topic-name>\n"
+          "  yomkdds topic type <topic-name>\n"
+          "  yomkdds topic find <type-name>\n"
+          "  yomkdds topic hz [--window N] [--qos-ros | --qos-KEY VAL ... | --qos-file FILE] <topic-name>\n"
+          "  yomkdds interface show <type-name>\n"
+          "  yomkdds interface list\n"
+          "  yomkdds topic pub -e | --example <topic-name>\n"
+          "  yomkdds topic pub -ef | --example-file\n"
+          "          [-o <dir> | --output <dir>] <topic-name>\n"
+          "  yomkdds topic pub [-w N | --wait N] [-r N | --rate N] [-t N | --times N] [--qos-ros | --qos-KEY VAL ... | --qos-file FILE] <topic-name> <json>\n"
+          "  yomkdds topic pub [-w N | --wait N] [-r N | --rate N] [-t N | --times N] [--qos-ros | --qos-KEY VAL ... | --qos-file FILE] <topic-name> -f <file> | --file <file>\n"
+          "  yomkdds node list\n"
+          "  yomkdds node info <node-name>\n"
+          "  yomkdds bag record [-o <dir> | --output <dir>] [-b <bytes> | --max-bag-size <bytes>]\n"
+          "          [-d <sec> | --max-bag-duration <sec>] [-c <bytes> | --max-cache-size <bytes>]\n"
+          "          [--start-paused] <topic-name|pattern> [<topic-name|pattern> ...]\n"
+          "  yomkdds bag info <bag-path>\n"
+          "  yomkdds bag reindex <bag-path>\n"
+          "  yomkdds bag convert -i <bag-dir> [-i <bag-dir> ...] -o <cfg.json> | --output <cfg.json>\n"
+          "  yomkdds bag play [-r <rate> | --rate <rate>] [--topics T1 T2 ...] [--start-paused]\n"
+          "          [-l | --loop] [--start-offset SEC] [-d <sec> | --delay <sec>]\n"
+          "          [--wait-for-all-acked MS] [--remap old:=new ...]\n"
+          "          [--read-ahead-queue-size N] [--qos-profile-overrides-path FILE]\n"
+          "          <bag-path>\n"
+                    "          交互键（tty 下生效）：SPACE 从暂停态开始回放，p 暂停，r 继续，\n"
+          "          +/- 调节回放速率（±10% 步进），Ctrl+C 停止\n"
+          "  yomkdds -h | --help\n"
+          "\n"
+          "Options:\n"
+          "  -D, --domain <N>    手动指定 DDS 域号 N（合法范围 [0,232]）；显式指定优先于环境变量，\n"
+          "                      未指定时域号经 YOMKDDS_DDS_DOMAIN_ID 配置（默认 0；启动时无则\n"
+          "                      创建并写入 .bashrc，值非法报错退出）\n"
+          "  环境变量             收敛判定次数经 YOMKDDS_DDS_DISCOVER_ROUNDS 配置（连续 N 次\n"
+          "                      200ms 快照不变即输出，默认 5，topic list、topic info、topic type、\n"
+          "                      topic find、interface show、interface list、topic pub -e、\n"
+          "                      topic pub -ef、topic pub、node list 与 node info 生效；启动时无则\n"
+          "                      创建默认并写入 .bashrc，值非法报错退出）\n"
+          "  环境变量             发现服务器直配（语义见 README 5.7）：YOMKDDS_USE_DISCOVER_SERVER\n"
+          "                      总开关（默认 false，true/1 开启）、YOMKDDS_UDP_DISCOVER_SERVERS\n"
+          "                      与 YOMKDDS_TCP_DISCOVER_SERVERS 直配聚合串（默认空，分号分隔\n"
+          "                      多 server）；启动时无则创建默认值并写入 .bashrc，任意终端可查看\n"
+          "                      可继承，默认值与未设置行为一致（回落多播发现）\n"
+          "  环境变量             XML profiles 自动加载（语义见 README）：YOMKDDS_USE_XML_PROFILE\n"
+          "                      总开关（默认 false，true/1 开启）、YOMKDDS_XML_PROFILE_PATH\n"
+          "                      profiles 文件路径（默认空，相对/绝对均可）；开关开启且路径\n"
+          "                      非空时创建节点前自动加载（空路径静默跳过，加载失败报错退出），\n"
+          "                      启动时无则创建默认值并写入 .bashrc，任意终端可查看可继承\n"
+          "  -v, --verbose       端点详情模式（仅 topic info 生效）：追加逐端点 Node name、\n"
+          "                      Endpoint type、GUID 与 QoS profile 详情段\n"
+          "  -t, --types         类型名模式（仅 topic list 生效）：每行输出 \"主题名 [类型名]\"\n"
+          "  -o, --output <dir>  输出目录（topic pub -ef 生效：消息描述文件生成位置，相对/\n"
+          "                      绝对路径均可，缺省当前目录，目录不存在报错退出，不自动创建；\n"
+          "                      bag record 生效：bag 目录名/路径，缺省按时间戳命名，目录已\n"
+          "                      存在报错退出，父目录自动创建；bag convert 生效：输出配置文件\n"
+          "                      路径，JSON 顶层 output_bags 键为对象序列，每条目独立 uri/\n"
+          "                      topics/start_time/end_time/max_bagfile_size/\n"
+          "                      max_bagfile_duration，未知字段忽略；start_time/end_time 可\n"
+          "                      为非负整数纳秒或可读时间字符串 YYYY-MM-DD_HH-MM-SS_mmm-uuu-\n"
+          "                      nnn（本地时区，同 metadata `_format` 伴生键，拷贝即用））\n"
+          "  -i, --input <dir>   输入 bag 目录（仅 bag convert 生效，可重复指定多个，按\n"
+          "                      logTime 全局归并；重复目录报错退出）\n"
+          "  --start-paused      暂停态启动（bag record/play 生效）：record 为订阅与发现\n"
+          "                      照常、收到的消息丢弃不写入；play 为读线程照常预读、播放\n"
+          "                      挂起零发出；交互键（tty 下）：SPACE 开始，p 暂停，r 继续，\n"
+          "                      Ctrl+C 停止\n"
+          "  -l, --loop          循环回放（仅 bag play 生效）：到尾即回开头无限播放，\n"
+          "                      Ctrl+C 停止\n"
+          "  --start-offset SEC  起始偏移秒（仅 bag play 生效）：从 bag 内第 SEC 秒开始播\n"
+          "                      （读侧跳过前段消息，支持小数，须 >= 0）\n"
+          "  -d, --delay SEC     开播延迟秒（仅 bag play 生效）：每次开播（含每轮循环）\n"
+          "                      前先睡 SEC 秒等订阅端匹配就绪，支持小数，须 > 0；record\n"
+          "                      语境的 -d 仍为分片时长（短名语境分流同 -r）\n"
+          "  --wait-for-all-acked MS\n"
+          "                      退出前等全部 RELIABLE 订阅端确认收齐毫秒（仅 bag play\n"
+          "                      生效）：播毕或 Ctrl+C 停止后、销毁发布实体前逐 RELIABLE\n"
+          "                      主题等待，0=永等，>0 超时毫秒（逐主题各计）；BEST_EFFORT\n"
+          "                      主题跳过；超时仅告警不失败\n"
+          "  --remap old:=new ... | -m ...\n"
+          "                      主题重映射（仅 bag play 生效，空格分隔多值，对齐 ros2）：把 bag\n"
+          "                      里 old 主题的数据发到 new 主题——发布主题名精确匹配（无通配），\n"
+          "                      old 不在 bag 则规则静默无效；格式须为 old:=new（两侧非空，恒等\n"
+          "                      允许），old 重复报错退出\n"
+          "  --read-ahead-queue-size N\n"
+          "                      预读内存队列深度（仅 bag play 生效，对齐 ros2 同名选项）：读侧\n"
+          "                      吸收磁盘 IO 抖动保证确定性回放，大→占内存但防播放延迟；\n"
+          "                      缺省 1000，须为 >=1 的整数，0/负值报错退出\n"
+          "  --qos-profile-overrides-path FILE\n"
+          "                      按主题覆盖发布 QoS（仅 bag play 生效，对齐 ros2 同名选项）：\n"
+          "                      JSON 顶层键=bag 原主题名，值={reliability, durability} 枚举\n"
+          "                      名可独立给（未给档保持快照值）——reliability 取 RELIABLE/\n"
+          "                      BEST_EFFORT，durability 取 VOLATILE/TRANSIENT_LOCAL/\n"
+          "                      TRANSIENT/PERSISTENT（大写 DDS 标准拼写），如 {\"/chatter\":\n"
+          "                      {\"reliability\": \"BEST_EFFORT\"}}；三档优先级 文件命中 >\n"
+          "                      bag 快照 > 回退；未知字段键忽略，非法枚举值/文件不可读/\n"
+          "                      格式非法报错退出，不在 bag 清单的主题键静默无效\n"
+          "  --qos-ros           整体切 ROS2 底座 QoS（仅 topic pub 发布模式与 topic print/hz\n"
+          "                      生效，下同）：pub 端 KEEP_LAST(10)+RELIABLE+VOLATILE，\n"
+          "                      print/hz 端 KEEP_LAST(10)+BEST_EFFORT+VOLATILE（时间项 ∞）；\n"
+          "                      与 --qos-*/--qos-file 叠加时作底座被逐项覆盖\n"
+          "  --qos-reliability REL\n"
+          "                      逐项覆盖 reliability：reliable | best_effort（大小写不敏感，\n"
+          "                      ros2 小写与 DDS 大写均收；下同）\n"
+          "  --qos-durability DUR\n"
+          "                      逐项覆盖 durability：transient_local | volatile\n"
+          "  --qos-history HIST  逐项覆盖 history：keep_last | keep_all\n"
+          "  --qos-depth N       逐项覆盖 history depth（须 >=1 整数；keep_all 时忽略；未设\n"
+          "                      --qos-history 时底座即 keep_last，直接生效）\n"
+          "  --qos-deadline SEC  逐项覆盖 deadline 周期秒（非负小数，0=∞；下同）\n"
+          "  --qos-lifespan SEC  逐项覆盖 lifespan 秒（writer 侧策略，print/hz 订阅端忽略）\n"
+          "  --qos-liveliness KIND\n"
+          "                      逐项覆盖 liveliness：automatic | manual_by_topic\n"
+          "  --qos-liveliness-lease-duration SEC\n"
+          "                      逐项覆盖 liveliness 租约秒\n"
+          "  --qos-file FILE     从 JSON 文件加载逐项覆盖（扁平对象，键为 reliability/\n"
+          "                      durability/history/depth/deadline/lifespan/liveliness/\n"
+          "                      liveliness_lease_duration，值形态同对应 --qos-* 选项，如\n"
+          "                      {\"reliability\":\"reliable\",\"depth\":10,\"deadline\":0.5}）；\n"
+          "                      文件不存在/非法 JSON/顶层非对象/未知键/非法值报错退出；\n"
+          "                      优先级：命令行 --qos-* 逐项 > --qos-file 逐项 > --qos-ros\n"
+          "                      底座 > Fast DDS 默认（无任何 QoS 选项即现状行为）\n"
+          "  -f, --file <file>   发布 JSON 载荷文件（仅 topic pub 生效）：文件内容整体作为发布载荷\n"
+          "                      （与 topic pub -ef 导出文件对接，多行缩进 JSON 直接可发；文件\n"
+          "                      不存在或为空报错退出，相对/绝对路径均可）\n"
+          "  -w, --wait N        期望建匹配订阅端数（仅 topic pub 发布模式生效）：writer 的 matched\n"
+          "                      订阅端计数达到 N 才发布，否则每 200ms 轮询并打印等待进度日志一直\n"
+          "                      等待（Ctrl+C 中断报错退出）；省略则发现稳定即发（自动收敛）\n"
+          "  -r, --rate N        持续发布频率 Hz（仅 topic pub 发布模式生效）：首轮校验发布成功后\n"
+          "                      按该频率周期重发（尽力而为），Ctrl+C 停止并输出统计；省略则缺省\n"
+          "                      1Hz 持续发送。bag play 生效：回放速率倍率（>0，2.0 两倍速、\n"
+          "                      0.5 半倍速，对齐 ros2 --rate；<=0 报 not in the valid range\n"
+          "                      (> 0.0)；运行时 +/- 键 ±10% 步进动态调率）\n"
+          "  --topics T1 T2 ...  只回放指定主题（仅 bag play 生效，空格分隔多值，缺省全部）：\n"
+          "                      精确项须在 bag 内否则报错；项含一个 '*' 为通配，按 bag 内\n"
+          "                      主题清单展开（未命中/双 '*' 报错，对齐 record/convert 惯例）\n"
+          "  -t, --times N       发布条数上限（仅 topic pub 发布模式生效，含首轮）：发满 N 条自动\n"
+          "                      停止，排空 200ms 后退出并输出统计；省略则不限条数持续到 Ctrl+C。\n"
+          "                      短名 -t 复用判定：下一参数为整数时视为条数（topic pub 语境），\n"
+          "                      否则为 topic list 的类型名模式开关\n"
+          "  --window N          频率统计窗口大小（相邻消息间隔样本数上限，默认 10000，仅 topic hz 生效）\n"
+          "  -b, --max-bag-size <bytes>\n"
+          "                      单分片最大字节数（仅 bag record 生效）：写满即滚动 bag_N.mcap 分片，\n"
+          "                      0=不分片（缺省）；下限 1024 字节，过小报错退出；实际分片粒度受\n"
+          "                      存储层 chunk 缓冲影响不小于 chunk 落盘边界（默认 786432 字节）\n"
+          "  -d, --max-bag-duration <sec>\n"
+          "                      单分片最大时长秒（仅 bag record 生效）：时长达限即滚动 bag_N.mcap\n"
+          "                      分片，0=不分片（缺省），无下限校验；与 -b 同用先到先分；暂停期\n"
+          "                      不计入分片时长\n"
+          "  -c, --max-cache-size <bytes>\n"
+          "                      写缓存双缓冲字节数（仅 bag record 生效）：回调拷贝入队、独立线程\n"
+          "                      写盘，突发流量下落盘吞吐的兜底；默认 100 MiB，0=每条直写；最坏\n"
+          "                      占 2 倍内存；缓存满丢弃新消息并按主题计数，停止时打印丢条统计\n"
+          "  topic-name|pattern  录制清单项（仅 bag record 生效）：支持通配模式——恰好一个 '*'，\n"
+          "                      前缀 hello_* / 后缀 *_hello / 中间 pre*suf，单独 '*' 匹配全部主题，\n"
+          "                      ≥2 个 '*' 报错；模式按发现缓存匹配展开为实际主题集合（去重升序），\n"
+          "                      未命中任何主题报错；shell 下模式须加引号防 '*' 被 glob 展开\n"
+          "  -h, --help          显示帮助\n"
+          "\n"
+          "Examples:\n"
+          "  yomkdds topic print hello_world\n"
+          "  yomkdds topic list\n"
+          "  yomkdds topic list -t\n"
+          "  yomkdds topic info hello_world\n"
+          "  yomkdds topic info -v hello_world\n"
+          "  yomkdds topic type hello_world\n"
+          "  yomkdds topic find YomkDdsStd::MString\n"
+          "  yomkdds topic hz hello_world\n"
+          "  yomkdds interface show YomkDdsStd::MString\n"
+          "  yomkdds interface list\n"
+          "  yomkdds topic pub -e hello_world\n"
+          "  yomkdds topic pub -ef hello_world\n"
+          "  yomkdds topic pub -ef -o /tmp hello_world\n"
+          "  yomkdds topic pub hello_world '{\"data\":\"hi\"}'\n"
+          "  yomkdds topic pub hello_world -f msg.json\n"
+          "  yomkdds topic pub -w 2 hello_world '{\"data\":\"hi\"}'\n"
+          "  yomkdds topic pub -w 2 -r 10 hello_world '{\"data\":\"hi\"}'\n"
+          "  yomkdds topic pub -r 10 hello_world '{\"data\":\"hi\"}'\n"
+          "  yomkdds topic pub -r 1 hello_world -f msg.json\n"
+          "  yomkdds topic pub -t 5 hello_world '{\"data\":\"hi\"}'\n"
+          "  yomkdds topic pub -t 5 -r 5 -w 1 hello_world '{\"data\":\"hi\"}'\n"
+          "  yomkdds node list\n"
+          "  yomkdds node info my_node\n"
+          "  yomkdds bag record hello_world\n"
+          "  yomkdds bag record rt/chatter rt/tf\n"
+          "  yomkdds bag record 'hello_*' '*_world'   # 通配模式（引号防 shell 展开）\n"
+          "  yomkdds bag info bag_2026-01-01_12-00-00_000\n"
+          "  yomkdds bag reindex bag_2026-01-01_12-00-00_000\n"
+          "  yomkdds bag convert -i bag_2026-01-01_12-00-00_000 -o convert_cfg.json\n"
+          "  yomkdds bag play bag_2026-01-01_12-00-00_000\n"
+                    "  yomkdds bag play -r 2.0 bag_2026-01-01_12-00-00_000   # 2 倍速回放\n"
+          "  yomkdds bag play bag_2026-01-01_12-00-00_000 --topics hello_world   # 只回放指定主题\n"
+          "  export YOMKDDS_DDS_DOMAIN_ID=5    # 域号环境变量（写入 .bashrc 可持久化）\n"
+          "  yomkdds topic list                # 此后自动使用域号 5\n"
+          "  yomkdds --domain 5 topic list     # 或单次显式指定域号（优先于环境变量）\n"
+          "  export YOMKDDS_DDS_DISCOVER_ROUNDS=7  # 收敛判定次数（写入 .bashrc 可持久化）\n"
+          "  export YOMKDDS_USE_DISCOVER_SERVER=true   # 发现服务器总开关（写入 .bashrc 可持久化）\n"
+          "  export YOMKDDS_UDP_DISCOVER_SERVERS=127.0.0.1:11811  # UDP 直配串，须与 DS 一致\n"
+          "  export YOMKDDS_USE_XML_PROFILE=true       # XML profiles 自动加载开关\n"
+          "  export YOMKDDS_XML_PROFILE_PATH=/path/to/profiles.xml  # profiles 文件路径\n";
+}
+
+// 域 id 环境变量：CLI 未显式 --domain/-D 时的域号来源（启动时无则创建并设默认值 0，
+// 并幂等持久化到 ~/.bashrc）
+static constexpr char kDomainEnv[] = "YOMKDDS_DDS_DOMAIN_ID";
+
+// 发现收敛次数环境变量：查询类命令收敛判定次数（连续 N 次 200ms 快照不变即输出，
+// 默认 5）；启动时无则创建并设默认值 5；该变量为收敛次数唯一配置入口
+static constexpr char kDiscoverRoundsEnv[] = "YOMKDDS_DDS_DISCOVER_ROUNDS";
+
+// 发现服务器直配三环境变量：总开关 + UDP/TCP 双通道 server 聚合串（节点创建时经
+// DDSNode/DDSDebugNode/DDSBagNode 类内缺省初始化器读取，见 include/dds/YomkDdsService.h）。
+// 启动时无则分别创建并设默认值 false/空/空（进程内生效），并幂等持久化到 ~/.bashrc
+// 使新开任意终端可查看可继承；默认值与"未设置"行为完全一致（开关非 true/1、串空均
+// 回落多播发现），仅保证可见性，用户 export 改值即刻生效
+static constexpr char kUseDiscoverServerEnv[] = "YOMKDDS_USE_DISCOVER_SERVER";
+static constexpr char kUdpDiscoverServersEnv[] = "YOMKDDS_UDP_DISCOVER_SERVERS";
+static constexpr char kTcpDiscoverServersEnv[] = "YOMKDDS_TCP_DISCOVER_SERVERS";
+
+// XML profiles 自动加载双环境变量：总开关 + profiles 文件路径（YOMKDDS_LOAD_XML 无参形态
+// 经 DDSXmlLoad 类内缺省初始化器读取，见 include/dds/YomkDdsService.h）。启动时无则分别创建
+// 并设默认值 false/空（进程内生效），并幂等持久化到 ~/.bashrc 使新开任意终端可查看可
+// 继承；开关开启且路径非空时各子命令创建节点前自动加载该 profiles（见 autoLoadXmlProfile），
+// 默认值与"未设置"行为完全一致（开关非 true/1 即不加载），仅保证可见性，用户 export
+// 改值即刻生效
+static constexpr char kUseXmlProfileEnv[] = "YOMKDDS_USE_XML_PROFILE";
+static constexpr char kXmlProfilePathEnv[] = "YOMKDDS_XML_PROFILE_PATH";
+
+// 将默认环境变量持久化到 ~/.bashrc（幂等）：仅当 .bashrc 中不存在该变量（任一行含
+// name 即视为已存在）时追加一次 export 行，使新开任意终端可直接 echo 查看并自动继承。
+// 失败（无 HOME/无写权限）仅告警不致命——进程内 setenv 兜底已保证本进程行为正确。
+static void persistDefaultEnv(const char *name, const char *value, const char *note)
+{
+    const char *home = std::getenv("HOME");
+    if (home == nullptr)
+    {
+        return;
+    }
+    const std::string bashrc = std::string(home) + "/.bashrc";
+    std::ifstream in(bashrc);
+    if (in)
+    {
+        std::string line;
+        while (std::getline(in, line))
+        {
+            if (line.find(name) != std::string::npos)
+            {
+                return; // .bashrc 已含该变量（用户 export 或此前写入），不重复追加
+            }
+        }
+    }
+    std::ofstream out(bashrc, std::ios::app);
+    if (!out)
+    {
+        ::yomk::log().tag("yomkdds").error("persist default env failed: cannot append ", bashrc);
+        return;
+    }
+    out << "\n# added by yomkdds: " << note << "\n"
+        << "export " << name << "=" << value << "\n";
+}
+
+// XML profiles 自动加载：总开关 YOMKDDS_USE_XML_PROFILE=true 且 YOMKDDS_XML_PROFILE_PATH
+// 非空时，在各子命令创建调试/bag 节点前先经 YOMKDDS_LOAD_XML 无参形态（环境变量缺省）
+// 加载一次 profiles，server 侧 xmlCache 供本进程后续全部节点的三级提取链取用；开关关闭
+// 或路径空静默跳过（同发现服务器空串=不直配语义），加载失败报错返回 false（路径非法不
+// 静默降级，对齐 serverLocator 非法串创建失败回显）。返回 true=可继续创建节点。
+static bool autoLoadXmlProfile()
+{
+    const std::string path = YomkDdsDefaultXmlProfilePath();
+    if (path.empty())
+    {
+        return true;
+    }
+    // load_xml 端点在 /YomkDdsService 上，而本工具按需只注册调试/bag 服务——首次
+    // 触发自动加载时补注册 RPC 服务（static 守卫保证全进程仅注册一次）
+    static const bool rpcServiceReady = (::yomk::server().srv<YomkDdsService>().create() == 0);
+    if (!rpcServiceReady)
+    {
+        ::yomk::log().tag("yomkdds").error("register /YomkDdsService failed");
+        return false;
+    }
+    auto resp = YOMKDDS_LOAD_XML();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("auto load xml profile [", path, "] failed: ", resp.msg);
+        return false;
+    }
+    return true;
+}
+
+// 解析域号：十进制、无尾随非数字字符、合法范围 [0,232]
+static bool parseDomain(const char *text, uint32_t &domainId)
+{
+    char *end = nullptr;
+    unsigned long value = std::strtoul(text, &end, 10);
+    if (end == text || *end != '\0' || value > 232)
+    {
+        return false;
+    }
+    domainId = static_cast<uint32_t>(value);
+    return true;
+}
+
+// 解析收敛次数：十进制、无尾随非数字字符、须 >=1（上限 uint32_t）；
+// text 为 nullptr（环境变量不存在）防御性返回 false
+static bool parseDiscoverRounds(const char *text, uint32_t &rounds)
+{
+    if (text == nullptr)
+    {
+        return false;
+    }
+    char *end = nullptr;
+    unsigned long value = std::strtoul(text, &end, 10);
+    if (end == text || *end != '\0' || value == 0 || value > UINT32_MAX)
+    {
+        return false;
+    }
+    rounds = static_cast<uint32_t>(value);
+    return true;
+}
+
+// topic pub（发布模式）/topic print/topic hz 的 QoS 选项解析辅助
+// 优先级链：命令行 --qos-* 逐项 > --qos-file 逐项 > --qos-ros 底座 > Fast DDS 默认。
+// 实现为底座 + 两份逐项 profile 顺序合并（不可按 argv 出现顺序写同一份——--qos-file 与
+// --qos-* 顺序任意）；全哨兵=Fast DDS 默认底座，--qos-ros 分端点取 ROS2 底座。
+
+// 枚举值大小写不敏感归一（ros2 CLI 风格小写与 DDS 大写拼写均收）
+static std::string qosEnumLower(std::string text)
+{
+    std::transform(text.begin(), text.end(), text.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return text;
+}
+
+// --qos-reliability 取值：reliable | best_effort；命中填 value 返回 true
+static bool parseQosReliability(const std::string &text, DDSReliability &value)
+{
+    const std::string low = qosEnumLower(text);
+    if (low == "reliable")
+    {
+        value = DDSReliability::RELIABLE;
+        return true;
+    }
+    if (low == "best_effort")
+    {
+        value = DDSReliability::BEST_EFFORT;
+        return true;
+    }
+    return false;
+}
+
+// --qos-durability 取值：transient_local | volatile
+static bool parseQosDurability(const std::string &text, DDSDurability &value)
+{
+    const std::string low = qosEnumLower(text);
+    if (low == "transient_local")
+    {
+        value = DDSDurability::TRANSIENT_LOCAL;
+        return true;
+    }
+    if (low == "volatile")
+    {
+        value = DDSDurability::VOLATILE;
+        return true;
+    }
+    return false;
+}
+
+// --qos-history 取值：keep_last | keep_all
+static bool parseQosHistory(const std::string &text, DDSHistoryKind &value)
+{
+    const std::string low = qosEnumLower(text);
+    if (low == "keep_last")
+    {
+        value = DDSHistoryKind::KEEP_LAST;
+        return true;
+    }
+    if (low == "keep_all")
+    {
+        value = DDSHistoryKind::KEEP_ALL;
+        return true;
+    }
+    return false;
+}
+
+// --qos-liveliness 取值：automatic | manual_by_topic
+static bool parseQosLiveliness(const std::string &text, DDSLiveliness &value)
+{
+    const std::string low = qosEnumLower(text);
+    if (low == "automatic")
+    {
+        value = DDSLiveliness::AUTOMATIC;
+        return true;
+    }
+    if (low == "manual_by_topic")
+    {
+        value = DDSLiveliness::MANUAL_BY_TOPIC;
+        return true;
+    }
+    return false;
+}
+
+// 秒值校验 + 转纳秒（非负有限小数秒，对齐 ros2 CLI duration 语义；0→哨兵 -1 表 ∞=不覆盖，
+// 底座默认即 ∞）；parseQosSeconds 与 loadQosFile 共用的核心
+static bool qosSecondsToNs(double value, int64_t &ns)
+{
+    if (!std::isfinite(value) || value < 0.0 || value > static_cast<double>(INT64_MAX) / 1e9)
+    {
+        return false;
+    }
+    ns = (value == 0.0) ? -1 : static_cast<int64_t>(value * 1e9);
+    return true;
+}
+
+// 时间三项（deadline/lifespan/liveliness-lease-duration）字符串秒值解析
+static bool parseQosSeconds(const std::string &text, int64_t &ns)
+{
+    char *end = nullptr;
+    const double value = std::strtod(text.c_str(), &end);
+    if (end == text.c_str() || *end != '\0')
+    {
+        return false;
+    }
+    return qosSecondsToNs(value, ns);
+}
+
+// over 的非哨兵字段写入 into（哨兵=未设置不覆盖）：逐项合并语义与节点层翻译一致
+static void mergeQos(const DDSQosProfile &over, DDSQosProfile &into)
+{
+    if (over.historyKind != DDSHistoryKind::Unset)
+    {
+        into.historyKind = over.historyKind;
+    }
+    if (over.depth >= 0)
+    {
+        into.depth = over.depth;
+    }
+    if (over.reliability != DDSReliability::Unset)
+    {
+        into.reliability = over.reliability;
+    }
+    if (over.durability != DDSDurability::Unset)
+    {
+        into.durability = over.durability;
+    }
+    if (over.liveliness != DDSLiveliness::Unset)
+    {
+        into.liveliness = over.liveliness;
+    }
+    if (over.deadlineNs >= 0)
+    {
+        into.deadlineNs = over.deadlineNs;
+    }
+    if (over.lifespanNs >= 0)
+    {
+        into.lifespanNs = over.lifespanNs;
+    }
+    if (over.livelinessLeaseNs >= 0)
+    {
+        into.livelinessLeaseNs = over.livelinessLeaseNs;
+    }
+}
+
+// topic pub/print/hz 共用的 QoS 选项聚合：resolve(publisher) 按端点方向合成最终 profile
+struct QosArgs
+{
+    bool rosBase = false;       // --qos-ros：整体切 ROS2 底座（pub→ros2DefaultPublisher，
+                                // print/hz→ros2DefaultSubscriber）
+    DDSQosProfile fileProfile;  // --qos-file 逐项（优先级低于命令行逐项）
+    DDSQosProfile cliProfile;   // 命令行 --qos-* 逐项（最高优先级）
+
+    // profile 是否含任一显式设置项（全哨兵=false）
+    static bool isSet(const DDSQosProfile &p)
+    {
+        return p.historyKind != DDSHistoryKind::Unset || p.depth >= 0 ||
+               p.reliability != DDSReliability::Unset || p.durability != DDSDurability::Unset ||
+               p.liveliness != DDSLiveliness::Unset || p.deadlineNs >= 0 ||
+               p.lifespanNs >= 0 || p.livelinessLeaseNs >= 0;
+    }
+
+    // 有任一 QoS 输入：供非 topic pub/print/hz 命令的"选项不适用"拦截报错
+    bool any() const
+    {
+        return rosBase || isSet(fileProfile) || isSet(cliProfile);
+    }
+
+    // 合成最终 profile：底座（--qos-ros 分端点取 ROS2 工厂，否则全哨兵=Fast DDS 默认）
+    // 之上依次叠 --qos-file、命令行 --qos-* 的非哨兵项
+    DDSQosProfile resolve(bool publisher) const
+    {
+        DDSQosProfile p = rosBase ? (publisher ? DDSQosProfile::ros2DefaultPublisher()
+                                               : DDSQosProfile::ros2DefaultSubscriber())
+                                  : DDSQosProfile{};
+        mergeQos(fileProfile, p);
+        mergeQos(cliProfile, p);
+        return p;
+    }
+};
+
+// --qos-file JSON 文件加载：扁平对象，键与 --qos-* 同名去连字符转下划线
+// （reliability/durability/history/depth/deadline/lifespan/liveliness/
+// liveliness_lease_duration，值形态同对应 --qos-* 选项，如
+// {"reliability":"reliable","depth":10,"deadline":0.5}）；文件不存在/非法 JSON/顶层非
+// 对象/未知键/非法值置 errMsg 返回 false（调用方报错退出）
+static bool loadQosFile(const std::string &path, DDSQosProfile &profile, std::string &errMsg)
+{
+    std::ifstream in(path);
+    if (!in)
+    {
+        errMsg = "cannot open qos file: " + path;
+        return false;
+    }
+    nlohmann::json root;
+    try
+    {
+        in >> root;
+    }
+    catch (const nlohmann::json::parse_error &e)
+    {
+        errMsg = "invalid json in qos file \"" + path + "\": " + e.what();
+        return false;
+    }
+    if (!root.is_object())
+    {
+        errMsg = "qos file top-level must be a json object: " + path;
+        return false;
+    }
+    for (auto it = root.begin(); it != root.end(); ++it)
+    {
+        const std::string &key = it.key();
+        const nlohmann::json &val = it.value();
+        if (key == "reliability")
+        {
+            if (!val.is_string() ||
+                    !parseQosReliability(val.get<std::string>(), profile.reliability))
+            {
+                errMsg = "invalid value for key \"reliability\" in qos file \"" + path +
+                         "\" (expected \"reliable\" or \"best_effort\")";
+                return false;
+            }
+        }
+        else if (key == "durability")
+        {
+            if (!val.is_string() ||
+                    !parseQosDurability(val.get<std::string>(), profile.durability))
+            {
+                errMsg = "invalid value for key \"durability\" in qos file \"" + path +
+                         "\" (expected \"transient_local\" or \"volatile\")";
+                return false;
+            }
+        }
+        else if (key == "history")
+        {
+            if (!val.is_string() ||
+                    !parseQosHistory(val.get<std::string>(), profile.historyKind))
+            {
+                errMsg = "invalid value for key \"history\" in qos file \"" + path +
+                         "\" (expected \"keep_last\" or \"keep_all\")";
+                return false;
+            }
+        }
+        else if (key == "depth")
+        {
+            // 须为 >=1 的整数（浮点/布尔一律拒绝）
+            if (!val.is_number_integer() || val.is_boolean() || val.get<long long>() < 1)
+            {
+                errMsg = "invalid value for key \"depth\" in qos file \"" + path +
+                         "\" (expected integer >= 1)";
+                return false;
+            }
+            profile.depth = static_cast<int32_t>(val.get<long long>());
+        }
+        else if (key == "deadline" || key == "lifespan" || key == "liveliness_lease_duration")
+        {
+            // 须为非负数值（布尔拒绝）；0=∞（哨兵）
+            int64_t nsTmp = -1;
+            if (!val.is_number() || val.is_boolean() ||
+                    !qosSecondsToNs(val.get<double>(), nsTmp))
+            {
+                errMsg = "invalid value for key \"" + key + "\" in qos file \"" + path +
+                         "\" (expected non-negative seconds)";
+                return false;
+            }
+            if (key == "deadline")
+            {
+                profile.deadlineNs = nsTmp;
+            }
+            else if (key == "lifespan")
+            {
+                profile.lifespanNs = nsTmp;
+            }
+            else
+            {
+                profile.livelinessLeaseNs = nsTmp;
+            }
+        }
+        else
+        {
+            errMsg = "unknown key \"" + key + "\" in qos file \"" + path + "\"";
+            return false;
+        }
+    }
+    return true;
+}
+
+// topic print 子命令：登记主题持续打印消息，Ctrl+C 退出（原 main 业务体）；qos 为动态
+// 订阅 reader 的 QoS 描述（全哨兵=Fast DDS 默认底座）
+static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQosProfile &qos)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 登记调试主题：消息文本逐条经回调直出 stdout（输出权在调用方，工具侧不落日志）
+    auto onMessage = [](const std::string &text)
+    {
+        std::cout << text << std::endl; // 逐条直出并刷新
+    };
+    resp = YOMKDDS_DEBUG_TOPIC_PRINT(topicName, onMessage, qos);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("register debug topic failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT(); // 登记失败路径同样须清理已建调试节点
+        return 1;
+    }
+
+    // 3. 监听 Ctrl+C，主循环等待退出信号
+    std::signal(SIGINT, onSignal);
+    ::yomk::log().tag("yomkdds").info("debug printing topic \"", topicName, "\" on domain ", std::to_string(domainId), ", press Ctrl+C to exit");
+    while (!g_stop.load())
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    // 4. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// bag record 子命令：录制主题列表（透传原始 CDR 字节直写 mcap），服务端长驻阻塞至
+// Ctrl+C 触发收尾，返回后逐行打印统计（首行 bag 目录，其后每主题 "topic: N 条 / M 字节"），
+// 退出前删除 bag 节点；outputDir 非空时指定 bag 目录名/路径（相对/绝对均可），空则缺省
+// 时间戳名；startPaused 暂停态启动（订阅照常、消息丢弃不写入，等空格后启动录制）；
+// maxBagSize 单分片最大字节数（0=不分片，>0 写满滚动 bag_N.mcap）；maxBagDurationSec
+// 单分片最大时长秒（0=不分片，无下限，与 maxBagSize 同用先到先分）；maxCacheSize 写
+// 缓存双缓冲字节数（0=直写；>0 缓冲异步写盘，缓存满丢弃新消息）
+static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
+                     const std::string &outputDir, bool startPaused, uint64_t maxBagSize,
+                     uint64_t maxBagDurationSec, uint64_t maxCacheSize)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsBagService>().create();
+
+    // 1. 复位双标志（防上次会话残留置位导致秒退/不录）后创建 bag 节点（单节点模型）
+    yomk::bagRecordReset();
+    if (startPaused)
+    {
+        yomk::bagRecordPause(); // 暂停态启动：先置位再发起录制（订阅照常，写入暂停）
+    }
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_BAG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create bag node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 监听 Ctrl+C：处理函数经 yomk::bagRecordStop 无锁置位，节点层录制循环读它收尾
+    std::signal(SIGINT, onSignal);
+    std::string startSuffix;
+    if (!outputDir.empty())
+    {
+        // 回显 output dir（目录此时尚未创建，启动校验通过后落盘）：防 "-o 被忽略" 疑虑
+        startSuffix += ", output dir=" + outputDir;
+    }
+    if (maxBagSize > 0)
+    {
+        startSuffix += ", max bag size=" + std::to_string(maxBagSize);
+    }
+    if (maxBagDurationSec > 0)
+    {
+        startSuffix += ", max bag duration=" + std::to_string(maxBagDurationSec) + "s";
+    }
+    if (maxCacheSize > 0)
+    {
+        startSuffix += ", cache=" + std::to_string(maxCacheSize);
+    }
+    if (startPaused)
+    {
+        startSuffix += ", started paused, press SPACE to start, p/r to pause/resume, Ctrl+C to stop";
+    }
+    else
+    {
+        startSuffix += ", press p to pause, r to resume, Ctrl+C to stop";
+    }
+    ::yomk::log().tag("yomkdds").info("recording topics from ", std::to_string(topics.size()), " list item(s) on domain ", std::to_string(domainId), startSuffix);
+
+    // 3. 键盘监听线程（始终启动，tty 下生效）：SPACE=start，p=pause，r=resume，Ctrl+C 退出
+    //    poll() 100ms 超时轮询：每次超时后检查 g_bagRecordStop，Ctrl+C 后最多 100ms 内干净退出
+    //    并还原终端；非 tty（管道/重定向）时 tcgetattr 失败直接 return，Ctrl+C 退出路径不受影响
+    std::thread([]()
+    {
+        termios oldt {};
+        if (tcgetattr(STDIN_FILENO, &oldt) != 0)
+        {
+            return; // 非 tty：跳过键盘处理
+        }
+        termios raw = oldt;
+        raw.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+        while (!yomk::g_bagRecordStop.load(std::memory_order_relaxed))
+        {
+            struct pollfd pfd {STDIN_FILENO, POLLIN, 0};
+            if (poll(&pfd, 1, 100) <= 0)
+            {
+                continue; // 超时或错误：继续轮询（同时检查停止标志）
+            }
+            char ch = 0;
+            if (read(STDIN_FILENO, &ch, 1) != 1)
+            {
+                break;
+            }
+            if (ch == ' ')
+            {
+                if (yomk::g_bagRecordPaused.load(std::memory_order_relaxed))
+                {
+                    yomk::bagRecordResume();
+                    std::cout << "recording started" << std::endl;
+                }
+            }
+            else if (ch == 'r')
+            {
+                if (yomk::g_bagRecordPaused.load(std::memory_order_relaxed))
+                {
+                    yomk::bagRecordResume();
+                    std::cout << "recording resumed" << std::endl;
+                }
+            }
+            else if (ch == 'p')
+            {
+                if (!yomk::g_bagRecordPaused.load(std::memory_order_relaxed))
+                {
+                    yomk::bagRecordPause();
+                    std::cout << "recording paused" << std::endl;
+                }
+            }
+            // 其他键忽略
+        }
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt); // 还原终端（Ctrl+C 后干净退出）
+    }).detach();
+
+    // 4. 长驻阻塞：启动校验、订阅与录制、收尾落盘都在服务端完成，返回即录制结束
+    resp = YOMKDDS_BAG_RECORD(topics, outputDir, maxBagSize, maxBagDurationSec, maxCacheSize);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("bag record failed: ", resp.msg);
+        YOMKDDS_BAG_DEL_NODE(); // 失败路径同样须清理已建 bag 节点
+        return 2;
+    }
+
+    // 4. 输出统计：首行 bag 目录，其后每主题一行 "topic: N 条 / M 字节"
+    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (lines != nullptr)
+    {
+        for (const auto &line : lines->d)
+        {
+            std::cout << line << std::endl;
+        }
+    }
+
+    // 5. 退出前显式删除 bag 节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
+    resp = YOMKDDS_BAG_DEL_NODE();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("delete bag node failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// %g 风格格式化倍率（iostream 默认 general 格式等价 %g：去尾零，2.0 → "2"、0.5 → "0.5"）
+static std::string formatRate(double rate)
+{
+    std::ostringstream oss;
+    oss << rate;
+    return oss.str();
+}
+
+// bag play 子命令：回放 bag 目录（预扫 metadata.json 后按录制时间轴重建透传发布），服务端
+// 长驻阻塞至全部消息播毕或 SIGINT 停止；playbackRate 回放速率倍率（>0，对齐 ros2 --rate：
+// 倍率缩放消息间调度间隔，<=0 由主解析层报错退出）；topics 只回放清单内主题（空=全部，
+// 对齐 ros2 --topics 缺省语义；精确项须在 bag 清单否则报错，通配项经服务端按 bag 清单
+// 展开，语义同 YOMKDDS_BAG_PLAY 注释）；startPaused 暂停态启动（对齐 ros2
+// --start-paused 与 record 同名选项：读线程照常预读、播放挂起零发出，SPACE 开始）；
+// loop 循环回放（对齐 ros2 -l/--loop "starts back at the beginning on reaching the end
+// and plays indefinitely"：到尾即回开头无限播放，回显附 ", looping" 后缀，收尾统计为
+// 各轮累计）；startOffsetSec 起始偏移秒（对齐 ros2 --start-offset：从 bag 开始第 SEC
+// 秒起播，读侧跳过前段消息不入队不计收尾统计，回显附 ", offset=<值>" 后缀——仅非零
+// 时显示，负值由主解析层报错退出）；playDelaySec 开播延迟秒（对齐 ros2 -d/--delay
+// "Will delay at the beginning of each loop"：播放线程在每轮轮边界（首轮首条与每轮
+// 回卷轮）重锚前先睡 SEC 秒再播出——读播解耦下延迟落播放侧才能挡住每轮播出起点，
+// sleep 期间发布实体已建为订阅端留匹配窗口，回显附 ", delay=<值>" 后缀——仅非零
+// 时显示，<=0 由主解析层报错退出——0 也拒对齐 ros2 positive_float）；
+// playWaitAckedMs 退出前等全部 RELIABLE 订阅端确认收齐毫秒（对齐 ros2
+// --wait-for-all-acked MS：播毕或 Ctrl+C 停止后、销毁发布实体前逐 RELIABLE 主题
+// 分片等 ACK——RELIABLE 下"播完"升级为"确认送达"；0=永等可 Ctrl+C 中断，>0 超时
+// 逐主题各计，BEST_EFFORT 主题跳过，超时仅告警不失败；回显附 ", ack-wait=<值>"
+// 后缀——仅显式传参才显示含 0，负值由主解析层报错退出）；
+// playTopicRemaps 主题重映射规则（--remap/-m，对齐 ros2 "old_topic1:=new_topic1" 形态）：
+// 发布主题名精确匹配映射——bag 里 old 主题的数据发到 new 主题（旧数据喂新主题名的
+// 测试注入场景），透传 writer 本按需创建改名零额外成本；回显附 ", remap=<规则>" 后缀
+// （仅显式传参才显示）；空=不重映射恒等现行为；
+// playReadAheadQueueSize 预读内存队列深度（--read-ahead-queue-size，对齐 ros2 同名
+// 选项）：读侧吸收磁盘 IO 抖动保证确定性回放，大→占内存但防播放延迟；哨兵 -1=未
+// 显式传参取缺省 1000，<1 在主解析层报错退出；回显附 ", queue=<N>" 后缀（仅显式
+// 传参才显示）；
+// playQosOverridesPath QoS 覆盖文件路径（--qos-profile-overrides-path，对齐 ros2 同名
+// 选项 "Path to a yaml file defining overrides of the QoS profile for specific topics"，
+// 本仓 YAML 换 JSON 对齐 convert 先例）：按主题覆盖发布 QoS——JSON 顶层键=bag 原主题
+// 名，值={reliability, durability} 两枚大写 DDS 标准拼写枚举名（可独立给，只覆盖给定
+// 档）；三档优先级 文件命中 > bag 内快照 > 旧 bag 回退 RELIABLE+VOLATILE；未知字段键
+// 忽略（ros2 解析报 ValueError，本仓取宽容口径），非法枚举值/文件不可读/格式非法报
+// 错退出不播，不在 bag 清单的主题键静默无效（对齐 remap）；键为 bag 原名与 --remap
+// 正交；回显附 ", qos-override=<FILE>" 后缀（仅显式传参才显示）；空=缺省不加载恒等
+// 现行为；
+// tty 下额外起键盘监听线程：SPACE 从暂停态开始回放、p 暂停、r 继续（与 record 键位
+// 一致）、+/- 调节回放速率（±10% 步进，经 bagPlaySetRate 操作 yomk::g_bagPlayRate
+// 原子，对齐 ros2 Increase/Decrease Rate 10% 键位语义），Ctrl+C 经 yomk::bagPlayStop
+// 无锁置位不可逆整程退出；非 tty（管道/重定向）自动跳过键盘线程，仅剩开始/停止两通道
+static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playbackRate,
+        const std::vector<std::string> &topics, bool startPaused, bool loop,
+        double startOffsetSec, double playDelaySec, int64_t playWaitAckedMs,
+        const std::vector<std::string> &playTopicRemaps, long long playReadAheadQueueSize,
+        const std::string &playQosOverridesPath)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsBagService>().create();
+
+    // 1. 复位双标志（防上次会话残留置位导致秒退/开播即冻）后创建 bag 节点（单节点模型）；
+    //    暂停态启动：先置位再发起播放（对齐 record 先例——服务 handler 只清 stop 不清
+    //    paused，预置意图存活到播放线程）
+    yomk::bagPlayReset();
+    if (startPaused)
+    {
+        yomk::bagPlayPause();
+    }
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_BAG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create bag node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 监听 Ctrl+C：处理函数经 yomk::bagPlayStop 无锁置位，节点层回放循环读它收尾
+    std::signal(SIGINT, onSignal);
+    // 启动回显：速率非缺省 1.0 时附 rate=<g>（-r 显式传入的可见性）
+    std::string rateNote;
+    if (playbackRate != 1.0)
+    {
+        rateNote = ", rate=" + formatRate(playbackRate);
+    }
+    // 起始偏移非 0 时附 offset=<g>（--start-offset 显式传入的可见性；%g 风格去尾零复用）
+    std::string offsetNote;
+    if (startOffsetSec > 0.0)
+    {
+        offsetNote = ", offset=" + formatRate(startOffsetSec);
+    }
+    // 开播延迟非 0 时附 delay=<g>（-d/--delay 显式传入的可见性；%g 风格去尾零复用）
+    std::string delayNote;
+    if (playDelaySec > 0.0)
+    {
+        delayNote = ", delay=" + formatRate(playDelaySec);
+    }
+    // 退出确认等待显式传参时附 ack-wait=<ms>（--wait-for-all-acked 的可见性；
+    // 仅显式传参才显示含 0=永等）
+    std::string ackNote;
+    if (playWaitAckedMs >= 0)
+    {
+        ackNote = ", ack-wait=" + std::to_string(playWaitAckedMs);
+    }
+    // 主题重映射显式传参时附 remap=<old:=new,...>（--remap/-m 的可见性；规则逗号拼接）
+    std::string remapNote;
+    if (!playTopicRemaps.empty())
+    {
+        remapNote = ", remap=";
+        for (size_t ri = 0; ri < playTopicRemaps.size(); ++ri)
+        {
+            if (ri != 0)
+            {
+                remapNote += ",";
+            }
+            remapNote += playTopicRemaps[ri];
+        }
+    }
+    // 队列深度显式传参时附 queue=<N>（--read-ahead-queue-size 的可见性；-1 哨兵不显示）
+    std::string queueNote;
+    if (playReadAheadQueueSize >= 0)
+    {
+        queueNote = ", queue=" + std::to_string(playReadAheadQueueSize);
+    }
+    // QoS 覆盖文件显式传参时附 qos-override=<FILE>（--qos-profile-overrides-path 的
+    // 可见性；空串哨兵不显示）
+    std::string qosNote;
+    if (!playQosOverridesPath.empty())
+    {
+        qosNote = ", qos-override=" + playQosOverridesPath;
+    }
+    const char *startSuffix = startPaused
+        ? ", started paused, press SPACE to start, p/r to pause/resume, +/- rate, Ctrl+C to stop"
+        : ", press p to pause, r to resume, +/- rate, Ctrl+C to stop";
+    const char *loopNote = loop ? ", looping" : "";
+    ::yomk::log().tag("yomkdds").info("replaying bag [", bagDir, "] on domain ", std::to_string(domainId), rateNote, offsetNote, delayNote, ackNote, remapNote, queueNote, qosNote, loopNote, startSuffix);
+
+    // 3. 键盘监听线程（tty 下生效）：SPACE=start（仅暂停态），p=pause（仅运行态），
+    //    r=resume（仅暂停态，与 record 键位一致），+/-=rate ±10%，Ctrl+C 退出
+    //    poll() 100ms 超时轮询：每次超时后检查 g_bagPlayStop，Ctrl+C 后最多 100ms 内干净
+    //    退出并还原终端；非 tty（管道/重定向）时 tcgetattr 失败直接 return，仅剩开始/
+    //    停止两通道（同 record 主流程/键盘分工）
+    std::thread([]()
+    {
+        termios oldt {};
+        if (tcgetattr(STDIN_FILENO, &oldt) != 0)
+        {
+            return; // 非 tty：跳过键盘处理
+        }
+        termios raw = oldt;
+        raw.c_lflag &= ~(ICANON | ECHO);
+        tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+        while (!yomk::g_bagPlayStop.load(std::memory_order_relaxed))
+        {
+            struct pollfd pfd {STDIN_FILENO, POLLIN, 0};
+            if (poll(&pfd, 1, 100) <= 0)
+            {
+                continue; // 超时或错误：继续轮询（同时检查停止标志）
+            }
+            char ch = 0;
+            if (read(STDIN_FILENO, &ch, 1) != 1)
+            {
+                break;
+            }
+            if (ch == ' ')
+            {
+                if (yomk::g_bagPlayPaused.load(std::memory_order_relaxed))
+                {
+                    yomk::bagPlayResume();
+                    std::cout << "replay started" << std::endl;
+                }
+            }
+            else if (ch == 'p')
+            {
+                if (!yomk::g_bagPlayPaused.load(std::memory_order_relaxed))
+                {
+                    yomk::bagPlayPause();
+                    std::cout << "replay paused" << std::endl;
+                }
+            }
+            else if (ch == 'r')
+            {
+                if (yomk::g_bagPlayPaused.load(std::memory_order_relaxed))
+                {
+                    yomk::bagPlayResume();
+                    std::cout << "replay resumed" << std::endl;
+                }
+            }
+            else if (ch == '+' || ch == '-')
+            {
+                // 回放速率 ±10% 步进（对齐 ros2 Increase/Decrease Rate 10% 键位语义）；
+                // <=0 拒绝保持原值（对齐 ros2 set_rate 拒绝语义）
+                const double next = yomk::bagPlayGetRate() + (ch == '+' ? 0.1 : -0.1);
+                if (yomk::bagPlaySetRate(next))
+                {
+                    std::cout << "rate set to " << formatRate(yomk::bagPlayGetRate())
+                              << std::endl;
+                }
+                else
+                {
+                    std::cout << "failed to set rate to " << formatRate(next)
+                              << std::endl;
+                }
+            }
+            // 其他键忽略
+        }
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt); // 还原终端（Ctrl+C 后干净退出）
+    }).detach();
+
+    // 4. 长驻阻塞：预扫、读播解耦与收尾实体清理都在服务端完成，返回即回放结束；
+    //    开播回显（replaying topic=... 逐主题行与 bag 元信息行）由节点层直接输出；
+    //    哨兵换算：-1（未显式传参）归一为缺省 1000 后透传宏第九参，QoS 覆盖路径直透
+    //    宏第十参（空串=缺省不加载恒等现行为）
+    const size_t queueSizeArg = playReadAheadQueueSize >= 0
+        ? static_cast<size_t>(playReadAheadQueueSize) : 1000;
+    resp = YOMKDDS_BAG_PLAY(bagDir, playbackRate, topics, loop, startOffsetSec,
+                            playDelaySec, playWaitAckedMs, playTopicRemaps, queueSizeArg,
+                            playQosOverridesPath);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("bag play failed: ", resp.msg);
+        YOMKDDS_BAG_DEL_NODE(); // 失败路径同样须清理已建 bag 节点
+        return 2;
+    }
+
+    // 5. 输出统计：首行 bag 目录，其后每主题一行 "topic: N 条 / M 字节"
+    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (lines != nullptr)
+    {
+        for (const auto &line : lines->d)
+        {
+            std::cout << line << std::endl;
+        }
+    }
+
+    // 6. 退出前显式删除 bag 节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
+    resp = YOMKDDS_BAG_DEL_NODE();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("delete bag node failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// bag info 子命令：读 bag 目录下 metadata.json + 目录递归总大小，输出对齐 ros2 bag info
+// 的元信息文本（首行空行、Files/Bag size/Storage id/Duration/Start/End/Messages 与每主题
+// 一行 Topic information，续行 19 空格缩进对齐）；纯查询不建 bag 节点，服务端返回多行
+// 文本逐行打印，成功返回 0，失败（路径不存在/无 metadata/JSON 损坏）打印原因返回 1
+static int runBagInfo(const std::string &bagDir)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsBagService>().create();
+
+    auto resp = YOMKDDS_BAG_INFO(bagDir);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("bag info failed: ", resp.msg);
+        return 1;
+    }
+
+    // 逐行输出（首项为 ros2 对齐的空行，自然保留）
+    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (lines != nullptr)
+    {
+        for (const auto &line : lines->d)
+        {
+            std::cout << line << std::endl;
+        }
+    }
+    return 0;
+}
+
+// bag reindex 子命令：从 bag 目录内 mcap 分片文件重建被删除/损坏的 metadata.json（对齐
+// 参考实现 ros2 bag reindex 行为语义：收集 <前缀>_<编号>.mcap 按编号升序、逐文件读 mcap
+// summary 统计、主题名升序合并、无条件覆盖写出）；纯文件操作不建 bag 节点，成功打印
+// 一行 reindexing complete 返回 0，失败（路径不存在/非目录/无 mcap 分片/读取失败）
+// 打印原因返回 1
+static int runBagReindex(const std::string &bagDir)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsBagService>().create();
+
+    auto resp = YOMKDDS_BAG_REINDEX(bagDir);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("bag reindex failed: ", resp.msg);
+        return 1;
+    }
+
+    std::cout << "reindexing complete" << std::endl;
+    return 0;
+}
+
+// bag convert 子命令：读输入 bag 目录集与输出配置文件（JSON，顶层 output_bags 键），把输入
+// 消息按配置过滤合并写为新 bag（对齐参考实现 ros2 bag convert 的输出配置语义）；纯文件操作
+// 不建 bag 节点，服务端返回逐条目统计行（converted <uri>: N messages / M bytes / K topics）
+// 逐行打印，成功返回 0，失败（配置错误/转换失败）打印原因返回 1
+static int runBagConvert(const std::vector<std::string> &inputs, const std::string &cfgPath)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsBagService>().create();
+
+    auto resp = YOMKDDS_BAG_CONVERT(inputs, cfgPath);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("bag convert failed: ", resp.msg);
+        return 1;
+    }
+
+    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (lines != nullptr)
+    {
+        for (const auto &line : lines->d)
+        {
+            std::cout << line << std::endl;
+        }
+    }
+    return 0;
+}
+
+// topic hz 子命令：订阅主题测量消息接收频率（复用 topic print 的登记订阅链路，回调只记
+// 时间戳不打印消息），输出对齐 ros2 topic hz：主循环每秒打印一次滚动窗口统计——
+// "average rate"（窗口内相邻消息间隔均值的倒数，Hz）、min/max（间隔极值，秒）、
+// std dev（间隔的总体标准差，除以 n）、window（间隔样本数，上限 --window）；无新消息
+// 不重复打印（对齐 ros2 哨兵语义），首条消息前静默等待；Ctrl+C 退出
+static int runHz(uint32_t domainId, const std::string &topicName, size_t windowSize,
+        const DDSQosProfile &qos)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 登记调试主题：回调在 DDS 监听线程内逐条投递，仅锁内记录相邻消息间隔（消息内容
+    // 不使用），统计由主循环消费——回调极轻不阻塞交付
+    std::mutex hzMtx;
+    std::deque<double> hzTimes; // 窗口内相邻消息间隔（秒），size 上限 windowSize
+    std::chrono::steady_clock::time_point hzLast{};
+    bool hzHasLast = false;
+    auto onMessage = [&](const std::string &)
+    {
+        const auto now = std::chrono::steady_clock::now();
+        std::lock_guard<std::mutex> lock(hzMtx);
+        if (hzHasLast)
+        {
+            hzTimes.push_back(std::chrono::duration<double>(now - hzLast).count());
+            while (hzTimes.size() > windowSize)
+            {
+                hzTimes.pop_front(); // 滚动窗口（O(1) 收缩，对齐 ros2 pop(0) 语义）
+            }
+        }
+        hzLast = now;
+        hzHasLast = true;
+    };
+    resp = YOMKDDS_DEBUG_TOPIC_PRINT(topicName, onMessage, qos);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("register debug topic failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT(); // 登记失败路径同样须清理已建调试节点
+        return 1;
+    }
+
+    // 3. 主循环每秒打印一次统计（对齐 ros2 1s 打印线程节奏）：无新消息（末消息时间戳未变）
+    // 跳过；窗口空（尚无完整间隔，仅收到 0/1 条消息）跳过——首条消息前静默
+    std::signal(SIGINT, onSignal);
+    ::yomk::log().tag("yomkdds").info("measuring hz of topic \"", topicName, "\" on domain ", std::to_string(domainId), ", press Ctrl+C to exit");
+    auto lastPrinted = hzLast;
+    std::cout << std::fixed;
+    while (!g_stop.load())
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::deque<double> times;
+        {
+            std::lock_guard<std::mutex> lock(hzMtx);
+            if (!hzHasLast || hzLast == lastPrinted)
+            {
+                continue; // 尚未收到任何消息或无新消息：不重复打印
+            }
+            lastPrinted = hzLast;
+            times = hzTimes;
+        }
+        if (times.empty())
+        {
+            continue; // 仅 1 条消息（无完整间隔）：无统计意义
+        }
+        const double mean = std::accumulate(times.begin(), times.end(), 0.0) / times.size();
+        const double rate = mean > 0.0 ? 1.0 / mean : 0.0;
+        double sumSq = 0.0;
+        for (double t : times)
+        {
+            const double d = t - mean;
+            sumSq += d * d;
+        }
+        const double stdDev = std::sqrt(sumSq / times.size()); // 总体标准差（除以 n）
+        std::cout << "average rate: " << std::setprecision(3) << rate << "\n"
+                  << "        min: " << *std::min_element(times.begin(), times.end())
+                  << "s max: " << *std::max_element(times.begin(), times.end())
+                  << "s std dev: " << std::setprecision(5) << stdDev
+                  << "s window: " << times.size() << std::endl;
+    }
+
+    // 4. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print 不变式）
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// topic list 子命令：自适应收敛查询域内已发现主题与数据类型名（每 ~200ms 轮询一次发现缓存
+// 快照，连续 waitRounds 次集合不变即收敛立即输出；types 模式（-t）每行输出 "主题名 [类型名]"；
+// 无 Ctrl+C 循环，查完即退）
+static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 收敛查询：节点内部轮询发现缓存快照（~200ms 间隔），连续 waitRounds 次集合不变即返回，
+    //    发现重放完成即立即输出，无需固定等待窗口；types 模式（-t）每行 "主题名 [类型名]"
+    if (types)
+    {
+        resp = YOMKDDS_DEBUG_TOPIC_LIST_T(waitRounds, 200);
+    }
+    else
+    {
+        resp = YOMKDDS_DEBUG_TOPIC_LIST(waitRounds, 200);
+    }
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("list topics failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (arr == nullptr)
+    {
+        ::yomk::log().tag("yomkdds").error("list topics failed: unexpected response payload");
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    if (arr->d.empty())
+    {
+        std::cout << "no topics discovered on domain " << domainId << std::endl;
+    }
+    else
+    {
+        for (const auto &line : arr->d)
+        {
+            std::cout << line << "\n";
+        }
+        std::cout.flush();
+    }
+
+    // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print 不变式）
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// topic info 子命令：独立收敛查询单个主题的发现详情（节点内部轮询该主题快照——存在标志 +
+// 类型名 + 端点计数，连续 waitRounds 次不变即返回），输出三行：Type / Publisher count /
+// Subscription count；verbose 模式（-v）追加逐端点详情段（Node name/Endpoint type/GUID/
+// QoS profile，段间空行，count 为 0 的端点类型无清单段）；未发现主题报错退出（无 Ctrl+C
+// 循环，查完即退）
+static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t waitRounds,
+                   bool verbose = false)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 独立收敛查询单主题详情（与 list 查询完全分开的路径）：命中返回 StringArray，
+    //    行内容由服务层拼装（非 verbose 三行 / verbose 逐端点详情段），原样直出；
+    //    未发现主题（含收敛窗口内始终不可见）返回 eNo
+    if (verbose)
+    {
+        resp = YOMKDDS_DEBUG_TOPIC_INFO_V(topicName, waitRounds, 200);
+    }
+    else
+    {
+        resp = YOMKDDS_DEBUG_TOPIC_INFO(topicName, waitRounds, 200);
+    }
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("topic info failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (arr == nullptr)
+    {
+        ::yomk::log().tag("yomkdds").error("topic info failed: unexpected response payload");
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    for (const auto &line : arr->d)
+    {
+        std::cout << line << "\n";
+    }
+    std::cout.flush();
+
+    // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// topic type 子命令：查询单主题数据类型（topic info 的单值快捷方式，复用 /topic_info 非 verbose
+// 端点）：取首行 "Type: xxx" 去前缀裸出类型名（对齐 ros2 topic type，便于脚本 $() 取用）；
+// 未发现主题报错退出（无 Ctrl+C 循环，查完即退）
+static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_t waitRounds)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 独立收敛查询单主题详情（非 verbose 三行），仅消费首行类型名
+    resp = YOMKDDS_DEBUG_TOPIC_INFO(topicName, waitRounds, 200);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("topic type failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (arr == nullptr || arr->d.empty())
+    {
+        ::yomk::log().tag("yomkdds").error("topic type failed: unexpected response payload");
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    const std::string kTypePrefix = "Type: ";
+    const std::string &first = arr->d.front();
+    if (first.rfind(kTypePrefix, 0) == 0)
+    {
+        std::cout << first.substr(kTypePrefix.size()) << "\n"; // 裸类型名
+    }
+    else
+    {
+        std::cout << first << "\n"; // 防御：前缀不匹配时原样输出
+    }
+    std::cout.flush();
+
+    // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// topic find 子命令：按数据类型名反查域内主题列表（类型名精确匹配，对齐 ros2 topic find）：
+// 命中每行输出一个主题名（按主题名排序）；无匹配主题报错退出（可发现类型名拼写错误）。
+// 无 Ctrl+C 循环，查完即退
+static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t waitRounds)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 独立收敛按类型名反查主题列表
+    resp = YOMKDDS_DEBUG_TOPIC_FIND(typeName, waitRounds, 200);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("topic find failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (arr == nullptr || arr->d.empty())
+    {
+        ::yomk::log().tag("yomkdds").error("topic find failed: unexpected response payload");
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    for (const auto &line : arr->d)
+    {
+        std::cout << line << "\n";
+    }
+    std::cout.flush();
+
+    // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// interface show 子命令：按数据类型名输出该类型的 IDL 结构描述（类型名精确匹配，FastDDS
+// 无原生类型文本化能力，自设计对齐主流 schema 源语法形态）：命中逐行输出（struct 头 +
+// 四空格缩进字段行 + 结尾 };）；未发现类型报错退出（可发现类型名拼写错误）。
+// 无 Ctrl+C 循环，查完即退
+static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint32_t waitRounds)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 独立收敛按类型名查询 IDL 结构行集
+    resp = YOMKDDS_DEBUG_INTERFACE_SHOW(typeName, waitRounds, 200);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("interface show failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (arr == nullptr || arr->d.empty())
+    {
+        ::yomk::log().tag("yomkdds").error("interface show failed: unexpected response payload");
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    for (const auto &line : arr->d)
+    {
+        std::cout << line << "\n";
+    }
+    std::cout.flush();
+
+    // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// interface list 子命令：列出发现缓存中出现的全部数据类型名（去重字典序排序，每行一个，
+// interface show 的配套导航；同类型多主题仅出一行）；域内无任何类型报错退出（find 族语义）。
+// 无 Ctrl+C 循环，查完即退
+static int runInterfaceList(uint32_t domainId, uint32_t waitRounds)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 独立收敛收集发现缓存中的全部类型名
+    resp = YOMKDDS_DEBUG_INTERFACE_LIST(waitRounds, 200);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("interface list failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (arr == nullptr)
+    {
+        ::yomk::log().tag("yomkdds").error("interface list failed: unexpected response payload");
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    for (const auto &line : arr->d)
+    {
+        std::cout << line << "\n";
+    }
+    std::cout.flush();
+
+    // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// 将紧凑 JSON 展开为多行缩进形式（字符串感知单遍扫描；仅用于美化服务层返回的紧凑
+// JSON——json_serialize 输出无空白已实证，空对象/空数组保持单行）：{ / [ 后换行并加深缩进
+// （2 空格/层），, 后换行，: 后补空格，} / ] 前换行并收浅缩进；\" 转义对整体拷贝，
+// 不误判字符串边界；indentBase 为起始缩进层级（嵌进外层 JSON 时传外层深度，缺省 0）
+static std::string prettyJson(const std::string &json, int indentBase = 0)
+{
+    std::string out;
+    out.reserve(json.size() * 2);
+    int depth = indentBase;
+    bool inStr = false;
+    for (size_t i = 0; i < json.size(); ++i)
+    {
+        const char c = json[i];
+        if (inStr)
+        {
+            out += c;
+            if (c == '\\' && i + 1 < json.size())
+            {
+                out += json[++i]; // 转义对整体拷贝（含 \" ，不误判字符串边界）
+            }
+            else if (c == '"')
+            {
+                inStr = false;
+            }
+            continue;
+        }
+        switch (c)
+        {
+        case '"':
+            inStr = true;
+            out += c;
+            break;
+        case '{':
+        case '[':
+            out += c;
+            // 空对象/空数组保持单行（紧凑输入下紧邻即闭括号）
+            if (i + 1 < json.size() &&
+                    ((c == '{' && json[i + 1] == '}') || (c == '[' && json[i + 1] == ']')))
+            {
+                out += json[++i];
+                break;
+            }
+            ++depth;
+            out += "\n";
+            out.append(static_cast<size_t>(depth) * 2, ' ');
+            break;
+        case '}':
+        case ']':
+            --depth;
+            out += "\n";
+            out.append(static_cast<size_t>(depth) * 2, ' ');
+            out += c;
+            break;
+        case ',':
+            out += ",\n";
+            out.append(static_cast<size_t>(depth) * 2, ' ');
+            break;
+        case ':':
+            out += ": ";
+            break;
+        default:
+            out += c;
+            break;
+        }
+    }
+    return out;
+}
+
+// topic pub -ef 子命令：按主题名导出消息描述 JSON 文件（查完即退，不发布）：服务层返回
+// 两要素（d[0]=类型名仅用于 stdout 提示、d[1]=紧凑 msg JSON），本函数负责文件名拼装与
+// 落盘：文件名 <主题名>_msg_<年-月-日-时-分-秒-毫秒>.json；无 -o 时当前目录，有 -o 时
+// 指定目录（相对/绝对均可，目录不存在报错退出，不自动创建）；文件内容即 msg 默认值
+// 模板 JSON 本身（展开多行缩进），整体就是一份合法发布载荷，可直接 "$(cat 文件)" 填进
+// topic pub 发布命令
+static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
+        const std::string &outDir, uint32_t waitRounds)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 独立收敛查询消息描述两要素（StringArray 恰 2 行：类型名 + 紧凑 msg JSON）
+    resp = YOMKDDS_DEBUG_TOPIC_MSG(topicName, waitRounds, 200);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("topic msg failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (arr == nullptr || arr->d.size() != 2)
+    {
+        ::yomk::log().tag("yomkdds").error("topic msg failed: unexpected response payload");
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    const std::string &typeName = arr->d[0];
+    const std::string &compactJson = arr->d[1];
+
+    // 3. 输出目录检查：指定目录不存在报错退出（不自动创建；相对/绝对路径均可）
+    std::string dir = outDir;
+    if (!dir.empty() && dir.back() != '/')
+    {
+        dir += "/";
+    }
+    if (!dir.empty() &&
+            (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)))
+    {
+        ::yomk::log().tag("yomkdds").error("output directory not found: ", dir);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+
+    // 4. 时间戳文件名：<主题名>_msg_<年-月-日-时-分-秒-毫秒>.json（strftime 无毫秒，取
+    //    epoch 毫秒低 3 位手拼补零）
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t tt = std::chrono::system_clock::to_time_t(now);
+    const int msPart = static_cast<int>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch())
+                    .count() % 1000);
+    std::ostringstream ts;
+    ts << std::put_time(std::localtime(&tt), "%Y-%m-%d-%H-%M-%S-")
+       << std::setw(3) << std::setfill('0') << msPart;
+    const std::string filePath = dir + topicName + "_msg_" + ts.str() + ".json";
+
+    // 5. 写文件：文件内容即 msg 默认值模板 JSON 本身（经 prettyJson 展开多行缩进，顶层基准
+    //    缩进），整体就是一份合法发布载荷，可直接 "$(cat 文件)" 填进 topic pub 发布命令
+    std::ofstream out(filePath);
+    if (!out)
+    {
+        ::yomk::log().tag("yomkdds").error("cannot open file for write: ", filePath);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    out << prettyJson(compactJson) << "\n";
+    out.close();
+    std::cout << "message description written: " << filePath
+              << " (topic: " << topicName << ", type: " << typeName << ")\n";
+    std::cout.flush();
+
+    // 6. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同其余子命令不变式）
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// topic pub -e 子命令：按主题名输出发布示例三段行集（Type / IDL / example 可复制发布命令），供
+// 用户按 JSON 模板填好字段值后发布（查完即退，不发布）；调试节点内部依次收敛：类型名 →
+// IDL 行集 → JSON 示例，独立收敛参数同其余查询（无 Ctrl+C 循环）
+static int runTopicPubExample(uint32_t domainId, const std::string &topicName, uint32_t waitRounds)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 独立收敛查询发布示例三段行集
+    resp = YOMKDDS_DEBUG_TOPIC_EXAMPLE(topicName, waitRounds, 200);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("topic example failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (arr == nullptr)
+    {
+        ::yomk::log().tag("yomkdds").error("topic example failed: unexpected response payload");
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    for (const auto &line : arr->d)
+    {
+        // 段标题（IDL: / example:）前空一行，三段展示不拥挤（空行属展示层修饰，
+        // 不入数据行集）
+        if (line == "IDL:" || line == "example:")
+        {
+            std::cout << "\n";
+        }
+        std::cout << line << "\n";
+    }
+    std::cout.flush();
+
+    // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// topic pub 子命令：按主题名发布 JSON 载荷消息（缺省 1Hz 持续发送，Ctrl+C 停止并输出
+// 统计 total/failed；-w/--wait N 为期望建匹配订阅端数：writer 的 matched 订阅端计数达
+// 到 N 才开始发布，否则一直等待并打印等待进度日志，Ctrl+C 中断报错退出；-r/--rate N 调
+// 整持续发布频率：首轮完整校验后按 N Hz 周期重发；-t/--times N 条数上限：发满 N 条自动
+// 停止并排空 200ms 后退出；-w/-r/-t 独立识别可任意顺序叠加：先等匹配达标再首轮发布进入
+// 持续循环，发满上限即停）；调试节点内部依次：主题未发现时先等待主题出现
+// （requiredSubs>0，订阅端上线即宣告主题与类型）→ 发现收敛（主题+订阅者数稳定）→
+// 类型重建 + JSON 解析 → 临时 RELIABLE writer 匹配收敛（requiredSubs>0 先阻塞等待达
+// 标）→ write 一次 → 存在 RELIABLE 订阅者时 ack 确认送达（超时报错），全 BEST_EFFORT
+// 或无订阅者退化尽力而为；持续模式节点层保留发布链周期重复 write（尽力而为），Ctrl+C
+// 经停止标志退出并回传 total/failed 统计；maxTimes>0 发满即停（排空 200ms 后返回）
+static int runTopicPub(uint32_t domainId, const std::string &topicName, const std::string &json,
+        uint32_t waitRounds, double rateHz, uint32_t requiredSubs, uint32_t maxTimes,
+        const DDSQosProfile &qos)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 收敛后发布（ack 自适应确认）；未发现（未指定 -w 时，指定 -w 则等待主题出现）/
+    //    载荷不合法/未确认/等待被中断均报错退出。
+    //    无条件注册 SIGINT 处理（同 print/hz 框架）：缺省即 1Hz 持续发送必须可 Ctrl+C
+    //    停止，Ctrl+C 经 yomk::debugPubStop 置停止标志（无锁 store，async-signal-safe）
+    //    ——-w 等待期中断报错退出，持续循环退出并回传 total/failed
+    std::signal(SIGINT, onSignal);
+    if (maxTimes > 0)
+    {
+        ::yomk::log().tag("yomkdds").info("publishing to topic \"", topicName, "\" at ", std::to_string(rateHz), " Hz, limit ", std::to_string(maxTimes), " messages, press Ctrl+C to stop");
+    }
+    else
+    {
+        ::yomk::log().tag("yomkdds").info("publishing to topic \"", topicName, "\" at ", std::to_string(rateHz), " Hz, press Ctrl+C to stop");
+    }
+    const auto repeatIntervalMs =
+        std::max<uint32_t>(1, static_cast<uint32_t>(std::lround(1000.0 / rateHz)));
+    resp = YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, waitRounds, 200, repeatIntervalMs, requiredSubs,
+            maxTimes, qos);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("topic pub failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    // 持续发布统计：响应 data 为 StringArray { "total=N", "failed=M" }（含首轮）
+    uint32_t total = 1;
+    uint32_t failed = 0;
+    auto stats = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (stats != nullptr)
+    {
+        for (const auto &kv : stats->d)
+        {
+            const auto eq = kv.find('=');
+            if (eq == std::string::npos)
+            {
+                continue;
+            }
+            const auto key = kv.substr(0, eq);
+            const auto val =
+                static_cast<uint32_t>(std::strtoul(kv.c_str() + eq + 1, nullptr, 10));
+            if (key == "total")
+            {
+                total = val;
+            }
+            else if (key == "failed")
+            {
+                failed = val;
+            }
+        }
+    }
+    std::cout << "published total=" << total << " failed=" << failed
+              << " to topic " << topicName << std::endl;
+
+    // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// topic pub -f 子命令：按主题名发布 JSON 载荷文件（缺省 1Hz 持续发送，Ctrl+C 停止并输
+// 出统计；-w/--wait N、-r/--rate N 与 -t/--times N 语义同 runTopicPub，可任意顺序叠加）：
+// 文件内容整体
+// 作为发布载荷（与 topic
+// pub -ef 导出的消息描述
+// 文件对接，形成导出→改值→按文件发布闭环；json_deserialize 对载荷前后空白不敏感，多行
+// 缩进 JSON 直接可发）：文件不存在/打不开报错退出，内容裁剪首尾空白后为空也报错退出；
+// 发布链路复用 runTopicPub（发现收敛→类型重建→载荷解析→匹配收敛→write→ack 自适应确认）
+static int runTopicPubJsonFile(uint32_t domainId, const std::string &topicName,
+        const std::string &jsonFile, uint32_t waitRounds, double rateHz, uint32_t requiredSubs,
+        uint32_t maxTimes, const DDSQosProfile &qos)
+{
+    ::yomk::server().init();
+
+    // 1. 读文件：文件不存在/打不开报错退出（此时尚未创建调试节点，无需 DEBUG_QUIT）
+    std::ifstream in(jsonFile);
+    if (!in)
+    {
+        ::yomk::log().tag("yomkdds").error("cannot open json file: ", jsonFile);
+        return 1;
+    }
+    std::ostringstream buf;
+    buf << in.rdbuf();
+    const std::string raw = buf.str();
+    const auto first = raw.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos)
+    {
+        ::yomk::log().tag("yomkdds").error("json file is empty: ", jsonFile);
+        return 1;
+    }
+    const auto last = raw.find_last_not_of(" \t\r\n");
+    const std::string json = raw.substr(first, last - first + 1);
+
+    // 2. 复用发布链路
+    return runTopicPub(domainId, topicName, json, waitRounds, rateHz, requiredSubs, maxTimes,
+            qos);
+}
+
+// node list 子命令：独立收敛查询域内已发现的命名参与者（节点内部轮询参与者发现缓存快照，
+// 连续 waitRounds 次不变即返回），每行一个节点名（participant_name 非空才列出，空名参与者
+// 跳过），按名称排序；调试节点自身不在自身发现回调中，天然不列出（无 Ctrl+C 循环，查完即退）
+static int runNodeList(uint32_t domainId, uint32_t waitRounds)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 独立收敛查询域内命名参与者（与 topic 查询完全分开的路径）：命中返回 StringArray，
+    //    每行一个节点名；域内暂无命名参与者返回空列表（合法，输出提示行）
+    resp = YOMKDDS_DEBUG_NODE_LIST(waitRounds, 200);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("node list failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (arr == nullptr)
+    {
+        ::yomk::log().tag("yomkdds").error("node list failed: unexpected response payload");
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    if (arr->d.empty())
+    {
+        std::cout << "no nodes discovered on domain " << domainId << std::endl;
+    }
+    else
+    {
+        for (const auto &line : arr->d)
+        {
+            std::cout << line << "\n";
+        }
+        std::cout.flush();
+    }
+
+    // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list/info 不变式）
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+// node info 子命令：独立收敛查询指定节点名（participant_name）参与者的发布/订阅主题清单
+// （节点内部轮询归属快照，连续 waitRounds 次不变即返回；归属判定基于 RTPS 规范保证的
+// "端点 GUID 前缀 == 所属参与者 GUID 前缀"），输出对齐 ros2 node info 形态：节点名行 +
+// "  Subscribers:" 段 + 每行 "    topic: type" + "  Publishers:" 段同形态（类型名原样输出；
+// 空段仅打段头）；未发现节点名报错退出（无 Ctrl+C 循环，查完即退）
+static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t waitRounds)
+{
+    ::yomk::server().init();
+    ::yomk::server().srv<YomkDdsDebugService>().create();
+
+    // 1. 创建调试节点（单节点模型：重复创建须先删除）
+    if (!autoLoadXmlProfile())
+    {
+        return 1;
+    }
+    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        return 1;
+    }
+
+    // 2. 独立收敛查询单节点清单（与 list 查询完全分开的路径）：命中返回 StringArray 多行，
+    //    行文案由服务层拼装（节点名 + Subscribers/Publishers 段），原样直出；
+    //    未发现节点名（含收敛窗口内始终不可见）返回 eNo
+    resp = YOMKDDS_DEBUG_NODE_INFO(nodeName, waitRounds, 200);
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("node info failed: ", resp.msg);
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    if (arr == nullptr)
+    {
+        ::yomk::log().tag("yomkdds").error("node info failed: unexpected response payload");
+        YOMKDDS_DEBUG_QUIT();
+        return 1;
+    }
+    for (const auto &line : arr->d)
+    {
+        std::cout << line << "\n";
+    }
+    std::cout.flush();
+
+    // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同其余子命令不变式）
+    resp = YOMKDDS_DEBUG_QUIT();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        return 1;
+    }
+    return 0;
+}
+
+int main(int argc, char *argv[])
+{
+    // 环境变量：无 YOMKDDS_DDS_DOMAIN_ID 则创建并设默认值 0（进程内生效），并幂等
+    // 持久化到 ~/.bashrc 使新开终端可见可继承；用户已 export 时不写
+    if (std::getenv(kDomainEnv) == nullptr)
+    {
+        ::setenv(kDomainEnv, "0", 1);
+        persistDefaultEnv(kDomainEnv, "0", "default DDS domain id (env YOMKDDS_DDS_DOMAIN_ID, default 0)");
+    }
+
+    // 收敛次数环境变量：无 YOMKDDS_DDS_DISCOVER_ROUNDS 则创建并设默认值 5（进程内
+    // 生效），并幂等持久化到 ~/.bashrc 使新开终端可见可继承；该变量为查询类命令
+    // 收敛次数的唯一配置入口
+    if (std::getenv(kDiscoverRoundsEnv) == nullptr)
+    {
+        ::setenv(kDiscoverRoundsEnv, "5", 1);
+        persistDefaultEnv(kDiscoverRoundsEnv, "5",
+                          "discovery stable rounds for query commands (default 5)");
+    }
+
+    // 发现服务器三环境变量：无则创建并设默认值（总开关 false、UDP/TCP server 串空，
+    // 进程内生效），并幂等持久化到 ~/.bashrc 使新开终端可见可继承；默认值与"未设置"
+    // 行为完全一致（开关非 true/1、串空均回落多播发现），仅保证可见性不改行为；
+    // 用户 export YOMKDDS_USE_DISCOVER_SERVER=true 且填 server 串后即切 DS 直配
+    if (std::getenv(kUseDiscoverServerEnv) == nullptr)
+    {
+        ::setenv(kUseDiscoverServerEnv, "false", 1);
+        persistDefaultEnv(kUseDiscoverServerEnv, "false",
+                          "discover server master switch (true/1 enables direct config, default false)");
+    }
+    if (std::getenv(kUdpDiscoverServersEnv) == nullptr)
+    {
+        ::setenv(kUdpDiscoverServersEnv, "", 1);
+        persistDefaultEnv(kUdpDiscoverServersEnv, "\"\"",
+                          "UDP discover server locators, semicolon separated (default empty)");
+    }
+    if (std::getenv(kTcpDiscoverServersEnv) == nullptr)
+    {
+        ::setenv(kTcpDiscoverServersEnv, "", 1);
+        persistDefaultEnv(kTcpDiscoverServersEnv, "\"\"",
+                          "TCP discover server locators, semicolon separated (default empty)");
+    }
+
+    // XML profiles 双环境变量：无则创建并设默认值（总开关 false、路径空，进程内
+    // 生效），并幂等持久化到 ~/.bashrc 使新开终端可见可继承；默认值与"未设置"行为
+    // 完全一致（开关非 true/1 即不加载），仅保证可见性不改行为；用户 export
+    // YOMKDDS_USE_XML_PROFILE=true 且填 profiles 路径后各子命令创建节点前即自动加载
+    if (std::getenv(kUseXmlProfileEnv) == nullptr)
+    {
+        ::setenv(kUseXmlProfileEnv, "false", 1);
+        persistDefaultEnv(kUseXmlProfileEnv, "false",
+                          "xml profiles auto-load master switch (true/1 enables load, default false)");
+    }
+    if (std::getenv(kXmlProfilePathEnv) == nullptr)
+    {
+        ::setenv(kXmlProfilePathEnv, "", 1);
+        persistDefaultEnv(kXmlProfilePathEnv, "\"\"",
+                          "Fast DDS XML profiles file path (default empty)");
+    }
+
+    // 参数解析：-h/--help 即刻退出；位置参数（收敛次数无 CLI 选项恒读环境变量；
+    //      域号另有 -D/--domain 显式选项，未给时恒读环境变量）
+    uint32_t domainId = 0;
+    bool hasDomainArg = false;  // 显式 --domain/-D 在场：域号解析跳过 env 恒读（显式优先）
+    uint32_t waitRounds = 5; // 收敛判定次数（从环境变量 YOMKDDS_DDS_DISCOVER_ROUNDS 读取；查询类命令生效）
+    bool verbose = false;    // 端点详情模式（-v/--verbose；仅 topic info 生效）
+    bool types = false;      // 类型名模式（-t/--types；仅 topic list 生效）
+    bool startPaused = false; // 暂停态启动（--start-paused；bag record/play 生效）
+    bool playLoop = false;   // 循环回放（-l/--loop；仅 bag play 生效）
+    double startOffsetSec = 0.0;  // 起始偏移秒（--start-offset；仅 bag play 生效，>=0 支持小数）
+    double playDelaySec = 0.0;  // 开播延迟秒（-d/--delay；仅 bag play 生效，>0 支持小数）
+    int64_t playWaitAckedMs = -1;  // 退出确认等待毫秒（--wait-for-all-acked；仅 bag play
+                                   // 生效，-1 缺省不等待，0=永等，>0 超时毫秒）
+    long long playReadAheadQueueSize = -1;  // 预读队列深度（--read-ahead-queue-size；仅
+                                            // bag play 生效，-1 哨兵=未显式传参取缺省 1000）
+    std::string playQosOverridesPath;  // QoS 覆盖文件路径（--qos-profile-overrides-path；空=未显式传参）
+    uint64_t maxBagSize = 0;  // 单分片最大字节数（-b/--max-bag-size；仅 bag record 生效，0=不分片）
+    uint64_t maxBagDurationSec = 0;  // 单分片最大时长秒（--max-bag-duration；仅 bag record，0=不分片）
+    uint64_t maxCacheSize = 100 * 1024 * 1024;  // 写缓存双缓冲字节数（-c/--max-cache-size；仅
+                                                // bag record 生效，0=直写；默认 100 MiB 对齐参考实现）
+    size_t windowSize = 10000; // 频率统计窗口大小（--window；仅 topic hz 生效，对齐 ros2 默认）
+    // 输出目录（-o/--output；topic pub -ef=消息描述文件位置，bag record=bag 目录名/路径，
+    // bag convert=输出配置文件路径）
+    std::string msgOutDir;
+    std::vector<std::string> convertInputs; // 输入 bag 目录清单（-i/--input；仅 bag convert 生效，可重复）
+    std::string pubJsonFile; // 发布载荷文件（-f/--file；仅 topic pub <主题名> -f 生效）
+    double pubRateHz = 1.0;  // 持续发布频率 Hz（-r/--rate；仅 topic pub 发布模式生效，缺省 1Hz 持续发送，Ctrl+C 停止）
+    double playbackRate = 1.0;  // 回放速率倍率（-r/--rate；仅 bag play 生效，对齐 ros2 --rate，>0）
+        std::vector<std::string> playTopics;
+            // 只回放主题清单（--topics；仅 bag play 生效，空=全部，元素含一个 '*' 为通配，
+            // 按 bag 内主题清单展开，对齐 record/convert 惯例）
+    std::vector<std::string> playTopicRemaps;  // 主题重映射规则（--remap/-m；仅 bag play 生效）
+    uint32_t pubWaitSubs = 0; // 期望建匹配订阅端数（-w/--wait；仅 topic pub 发布模式生效，0=自动收敛）
+    uint32_t pubMaxTimes = 0; // 发布条数上限（-t/--times；仅 topic pub 发布模式生效，含首轮，0=不限）
+    QosArgs qosArgs;         // topic pub（发布模式）/print/hz 的 QoS 选项聚合
+                             // （--qos-ros/--qos-*/--qos-file，解析时逐项归入 cliProfile）
+    std::vector<std::string> pos;
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string arg = argv[i];
+        if (arg == "-h" || arg == "--help")
+        {
+            printUsage(std::cout);
+            return 0;
+        }
+        if (arg == "-o" || arg == "--output")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少输出目录参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            msgOutDir = argv[++i];
+            continue;
+        }
+        if (arg == "-i" || arg == "--input")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少输入 bag 目录参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            convertInputs.emplace_back(argv[++i]);
+            continue;
+        }
+        if (arg == "--start-paused")
+        {
+            startPaused = true;
+            continue;
+        }
+        if (arg == "-l" || arg == "--loop")
+        {
+            playLoop = true;
+            continue;
+        }
+        if (arg == "--start-offset")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少偏移参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            // 数值解析与校验对齐 -r 形态；负值文案对齐 ros2 check_not_negative_float
+            // （CLI 层报错拒绝，服务/节点层报 invalid start offset 快速拦截）
+            char *end = nullptr;
+            const double value = std::strtod(argv[++i], &end);
+            if (end == argv[i] || *end != '\0')
+            {
+                std::cerr << "yomkdds: 非法起始偏移 \"" << argv[i]
+                          << "\"（须为 >= 0 的数值，单位秒）\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            if (value < 0.0)
+            {
+                std::cerr << "yomkdds: " << value
+                          << " is not in the valid range (>= 0.0)\n";
+                return 2;
+            }
+            startOffsetSec = value;
+            continue;
+        }
+        if (arg == "-f" || arg == "--file")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少载荷文件参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            pubJsonFile = argv[++i];
+            continue;
+        }
+        if (arg == "-r" || arg == "--rate")
+        {
+            // 短名 -r 语境分流（-t 复用判定先例同款）：pos 已含 "bag play" 即回放倍率
+            // 语境（bag play <bag-path> -r <倍率>，>0，对齐 ros2 --rate），否则为 topic
+            // pub 的持续发布频率（Hz）
+            const bool bagPlayCtx =
+                pos.size() >= 2 && pos[0] == "bag" && pos[1] == "play";
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少频率参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            // -r 0 不再表示"仅发一次"（缺省已改 1Hz 持续发送，单次模式已移除）：仍须 >0
+            char *end = nullptr;
+            const double value = std::strtod(argv[++i], &end);
+            if (end == argv[i] || *end != '\0')
+            {
+                if (bagPlayCtx)
+                {
+                    // 非数字：报用法错（对齐 ros2 argparse invalid value 形态）
+                    std::cerr << "yomkdds: 非法回放倍率 \"" << argv[i]
+                              << "\"（须为数值，>0）\n";
+                    printUsage(std::cerr);
+                }
+                else
+                {
+                    std::cerr << "yomkdds: 非法频率 \"" << argv[i]
+                              << "\"（须为 >0 的数值，单位 Hz）\n";
+                }
+                return 2;
+            }
+            if (bagPlayCtx)
+            {
+                if (value <= 0.0)
+                {
+                    // <=0：文案对齐 ros2 check_positive_float
+                    std::cerr << "yomkdds: " << value
+                              << " is not in the valid range (> 0.0)\n";
+                    return 2;
+                }
+                playbackRate = value;
+            }
+            else
+            {
+                // -r 0 仍须 >0（topic pub 频率语境既有校验）
+                if (value <= 0.0)
+                {
+                    std::cerr << "yomkdds: 非法频率 \"" << argv[i]
+                              << "\"（须为 >0 的数值，单位 Hz）\n";
+                    return 2;
+                }
+                pubRateHz = value;
+            }
+            continue;
+        }
+        if (arg == "--topics")
+        {
+            // 语境分流（对齐 -r bagPlayCtx 先例）：仅 bag play 子命令生效；贪吃多值解析
+            // （对齐 ros2 nargs='+' 空格分隔语义）：收集其后全部非 '-' 开头 token 至遇
+            // '-' 开头参数或参数序列结束；逐项语义校验在服务端预扫完成（节点层对账
+            // bag 清单，报 not found in bag / matched no bag topic / 双 '*' 报错）
+            if (!(pos.size() >= 2 && pos[0] == "bag" && pos[1] == "play"))
+            {
+                std::cerr << "yomkdds: --topics 仅 bag play 生效\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            ++i;
+            while (i < argc && std::string(argv[i]).rfind("-", 0) != 0)
+            {
+                playTopics.push_back(argv[i]);
+                ++i;
+            }
+            --i; // 回退到非选项 token/末尾，交回主循环步进（若已超界则循环步进后结束）
+            if (playTopics.empty())
+            {
+                std::cerr << "yomkdds: --topics 缺少主题参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            continue;
+        }
+        if (arg == "-w" || arg == "--wait")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少订阅者数量参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            char *end = nullptr;
+            const unsigned long value = std::strtoul(argv[++i], &end, 10);
+            if (end == argv[i] || *end != '\0' || value == 0 || value > 0xFFFFFFFFul)
+            {
+                std::cerr << "yomkdds: 非法订阅者数量 \"" << argv[i] << "\"（须为 >=1 的整数）\n";
+                return 2;
+            }
+            pubWaitSubs = static_cast<uint32_t>(value);
+            continue;
+        }
+        if (arg == "-v" || arg == "--verbose")
+        {
+            verbose = true;
+            continue;
+        }
+        if (arg == "-t" || arg == "--types" || arg == "--times")
+        {
+            // -t 上下文判定（短名复用）：下一参数形如整数（可带负号，负值交由校验报错）即
+            // 条数候选（topic pub 语境，-t N | --times N），否则维持 topic list 的类型名模式
+            // 开关；长名 --times 恒为条数。检测到条数就用（校验 >=1），检测不到就不限制条数
+            bool numberNext = false;
+            if (i + 1 < argc)
+            {
+                const std::string s = argv[i + 1];
+                const size_t start = (!s.empty() && s[0] == '-') ? 1 : 0;
+                numberNext = !s.empty() &&
+                        s.find_first_not_of("0123456789", start) == std::string::npos;
+            }
+            if (arg == "--times" || numberNext)
+            {
+                if (i + 1 >= argc)
+                {
+                    std::cerr << "yomkdds: " << arg << " 缺少发布条数参数\n";
+                    printUsage(std::cerr);
+                    return 2;
+                }
+                char *end = nullptr;
+                const unsigned long value = std::strtoul(argv[++i], &end, 10);
+                if (end == argv[i] || *end != '\0' || value == 0 || value > 0xFFFFFFFFul)
+                {
+                    std::cerr << "yomkdds: 非法发布条数 \"" << argv[i] << "\"（须为 >=1 的整数）\n";
+                    return 2;
+                }
+                pubMaxTimes = static_cast<uint32_t>(value);
+            }
+            else
+            {
+                types = true;
+            }
+            continue;
+        }
+        if (arg == "--window")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少窗口大小参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            char *end = nullptr;
+            unsigned long value = std::strtoul(argv[++i], &end, 10);
+            if (end == argv[i] || *end != '\0' || value == 0)
+            {
+                std::cerr << "yomkdds: 非法窗口大小 \"" << argv[i] << "\"（须为 >=1 的整数）\n";
+                return 2;
+            }
+            windowSize = static_cast<size_t>(value);
+            continue;
+        }
+        if (arg == "-b" || arg == "--max-bag-size")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少分片大小参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            char *end = nullptr;
+            const unsigned long long value = std::strtoull(argv[++i], &end, 10);
+            if (end == argv[i] || *end != '\0' || argv[i][0] == '-')
+            {
+                std::cerr << "yomkdds: 非法分片大小 \"" << argv[i] << "\"（须为 >=0 的整数，0=不分片）\n";
+                return 2;
+            }
+            maxBagSize = value;
+            continue;
+        }
+        if (arg == "-d" || arg == "--delay" || arg == "--max-bag-duration")
+        {
+            // 短名 -d 语境分流（-r 复用判定先例同款）：pos 已含 "bag play" 即开播延迟
+            // 语境（对齐 ros2 -d/--delay），否则为 bag record 的单分片时长语境；两长名
+            // 语境专属，错误语境传入报错退出
+            const bool bagPlayCtx =
+                pos.size() >= 2 && pos[0] == "bag" && pos[1] == "play";
+            if ((bagPlayCtx && arg == "--max-bag-duration") ||
+                (!bagPlayCtx && arg == "--delay"))
+            {
+                std::cerr << "yomkdds: " << arg
+                          << (bagPlayCtx ? " 仅 bag record 生效" : " 仅 bag play 生效")
+                          << "\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            if (bagPlayCtx)
+            {
+                if (i + 1 >= argc)
+                {
+                    std::cerr << "yomkdds: " << arg << " 缺少延迟参数\n";
+                    printUsage(std::cerr);
+                    return 2;
+                }
+                // 数值解析与校验对齐 -r 回放语境形态；0 也拒对齐 ros2 positive_float
+                // （CLI 层报错拒绝，服务/节点层报 invalid delay 只拒负值快速拦截）
+                char *end = nullptr;
+                const double value = std::strtod(argv[++i], &end);
+                if (end == argv[i] || *end != '\0')
+                {
+                    std::cerr << "yomkdds: 非法延迟 \"" << argv[i]
+                              << "\"（须为数值，>0，单位秒）\n";
+                    printUsage(std::cerr);
+                    return 2;
+                }
+                if (value <= 0.0)
+                {
+                    // <=0：文案对齐 ros2 check_positive_float（0 也拒）
+                    std::cerr << "yomkdds: " << value
+                              << " is not in the valid range (> 0.0)\n";
+                    return 2;
+                }
+                playDelaySec = value;
+                continue;
+            }
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少分片时长参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            char *end = nullptr;
+            const unsigned long long value = std::strtoull(argv[++i], &end, 10);
+            if (end == argv[i] || *end != '\0' || argv[i][0] == '-')
+            {
+                std::cerr << "yomkdds: 非法分片时长 \"" << argv[i] << "\"（须为 >=0 的整数秒，0=不分片）\n";
+                return 2;
+            }
+            maxBagDurationSec = value;
+            continue;
+        }
+        if (arg == "--wait-for-all-acked")
+        {
+            // 长名全局唯一无语境分流（对齐 --start-offset 先例：仅 bag play 消费，
+            // 其余语境解析后闲置）；毫秒数 >=0，0=永等合法，负值报错退出
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少等待确认参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            char *end = nullptr;
+            const long long value = std::strtoll(argv[++i], &end, 10);
+            if (end == argv[i] || *end != '\0')
+            {
+                std::cerr << "yomkdds: 非法等待确认参数 \"" << argv[i]
+                          << "\"（须为 >=0 的整数毫秒，0=永等）\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            if (value < 0)
+            {
+                // 文案对齐 --start-offset valid range 形态
+                std::cerr << "yomkdds: " << value
+                          << " is not in the valid range (>= 0)\n";
+                return 2;
+            }
+            playWaitAckedMs = value;
+            continue;
+        }
+        if (arg == "--read-ahead-queue-size")
+        {
+            // 长名全局唯一无语境分流（对齐 --wait-for-all-acked 先例：仅 bag play 消费，
+            // 其余语境解析后闲置）；队列深度 >=1，0/负值报错退出（0 容量队列节点层
+            // push 背压恒真死锁必拦）
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少队列深度参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            char *end = nullptr;
+            const long long value = std::strtoll(argv[++i], &end, 10);
+            if (end == argv[i] || *end != '\0')
+            {
+                std::cerr << "yomkdds: 非法队列深度参数 \"" << argv[i]
+                          << "\"（须为 >=1 的整数）\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            if (value < 1)
+            {
+                // 文案对齐 --wait-for-all-acked valid range 形态
+                std::cerr << "yomkdds: " << value
+                          << " is not in the valid range (>= 1)\n";
+                return 2;
+            }
+            playReadAheadQueueSize = value;
+            continue;
+        }
+        if (arg == "--qos-profile-overrides-path")
+        {
+            // 长名全局唯一无语境分流（对齐 --read-ahead-queue-size/--wait-for-all-acked
+            // 先例：仅 bag play 消费，其余语境解析后闲置）；仅缺参校验，路径存在性/
+            // 合法性由节点层加载时校验（文件级错误先于 bag 触达快速返回）
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少QoS覆盖文件参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            playQosOverridesPath = argv[++i];
+            continue;
+        }
+        if (arg == "--qos-ros")
+        {
+            // topic pub（发布模式）/print/hz 的 QoS 选项（下同）：无参开关，整体切 ROS2
+            // 底座——pub 端 ros2DefaultPublisher（KEEP_LAST(10)+RELIABLE+VOLATILE），
+            // print/hz 端 ros2DefaultSubscriber（KEEP_LAST(10)+BEST_EFFORT+VOLATILE）；
+            // 与 --qos-*/--qos-file 叠加时作底座被逐项覆盖；其余语境解析后闲置
+            // （分派层拦截报错）
+            qosArgs.rosBase = true;
+            continue;
+        }
+        if (arg == "--qos-reliability")
+        {
+            // 8 项 --qos-* 逐项覆盖（下同）：reliable | best_effort（大小写不敏感，
+            // ros2 小写与 DDS 大写均收）
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少枚举值参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            if (!parseQosReliability(argv[++i], qosArgs.cliProfile.reliability))
+            {
+                std::cerr << "yomkdds: 非法 reliability 取值 \"" << argv[i]
+                          << "\"（reliable | best_effort）\n";
+                return 2;
+            }
+            continue;
+        }
+        if (arg == "--qos-durability")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少枚举值参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            if (!parseQosDurability(argv[++i], qosArgs.cliProfile.durability))
+            {
+                std::cerr << "yomkdds: 非法 durability 取值 \"" << argv[i]
+                          << "\"（transient_local | volatile）\n";
+                return 2;
+            }
+            continue;
+        }
+        if (arg == "--qos-history")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少枚举值参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            if (!parseQosHistory(argv[++i], qosArgs.cliProfile.historyKind))
+            {
+                std::cerr << "yomkdds: 非法 history 取值 \"" << argv[i]
+                          << "\"（keep_last | keep_all）\n";
+                return 2;
+            }
+            continue;
+        }
+        if (arg == "--qos-liveliness")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少枚举值参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            if (!parseQosLiveliness(argv[++i], qosArgs.cliProfile.liveliness))
+            {
+                std::cerr << "yomkdds: 非法 liveliness 取值 \"" << argv[i]
+                          << "\"（automatic | manual_by_topic）\n";
+                return 2;
+            }
+            continue;
+        }
+        if (arg == "--qos-depth")
+        {
+            // 须为 >=1 的整数（keep_all 时忽略；未设 --qos-history 时底座即 keep_last，
+            // depth 直接生效）
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少深度参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            char *end = nullptr;
+            const long long value = std::strtoll(argv[++i], &end, 10);
+            if (end == argv[i] || *end != '\0' || value < 1)
+            {
+                std::cerr << "yomkdds: 非法 depth \"" << argv[i]
+                          << "\"（须为 >=1 的整数）\n";
+                return 2;
+            }
+            qosArgs.cliProfile.depth = static_cast<int32_t>(value);
+            continue;
+        }
+        if (arg == "--qos-deadline" || arg == "--qos-lifespan" ||
+                arg == "--qos-liveliness-lease-duration")
+        {
+            // 时间三项同构解析：非负小数秒（0=∞），内部转纳秒存 profile
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少秒值参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            int64_t ns = -1;
+            if (!parseQosSeconds(argv[++i], ns))
+            {
+                std::cerr << "yomkdds: 非法 " << arg << " \"" << argv[i]
+                          << "\"（须为 >=0 的秒数，0=∞）\n";
+                return 2;
+            }
+            if (arg == "--qos-deadline")
+            {
+                qosArgs.cliProfile.deadlineNs = ns;
+            }
+            else if (arg == "--qos-lifespan")
+            {
+                qosArgs.cliProfile.lifespanNs = ns;
+            }
+            else
+            {
+                qosArgs.cliProfile.livelinessLeaseNs = ns;
+            }
+            continue;
+        }
+        if (arg == "--qos-file")
+        {
+            // JSON 文件加载逐项覆盖（fileProfile；优先级低于命令行逐项）：文件不存在/
+            // 非法 JSON/顶层非对象/未知键/非法值报错退出（错误五态在 loadQosFile 归类）
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少 JSON 文件路径参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            std::string qosFileErr;
+            if (!loadQosFile(argv[++i], qosArgs.fileProfile, qosFileErr))
+            {
+                std::cerr << "yomkdds: " << qosFileErr << "\n";
+                return 2;
+            }
+            continue;
+        }
+        if ((arg == "--remap" || arg == "-m") &&
+            !(pos.size() >= 2 && pos[0] == "bag" && pos[1] == "play"))
+        {
+            // record 解析区语境拦截（-c 块相邻先于后续解析分支）：--remap/-m 语义专属
+            // bag play，其余语境（record/info/convert/topic 等）报错退出；bag play 语境
+            // 放行至后续解析分支
+            std::cerr << "yomkdds: --remap 仅 bag play 生效\n";
+            printUsage(std::cerr);
+            return 2;
+        }
+        if (arg == "-c" || arg == "--max-cache-size")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少写缓存大小参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            char *end = nullptr;
+            const unsigned long long value = std::strtoull(argv[++i], &end, 10);
+            if (end == argv[i] || *end != '\0' || argv[i][0] == '-')
+            {
+                std::cerr << "yomkdds: 非法写缓存大小 \"" << argv[i] << "\"（须为 >=0 的整数，0=每条直写）\n";
+                return 2;
+            }
+            maxCacheSize = value;
+            continue;
+        }
+        if (arg == "--domain" || arg == "-D")
+        {
+            // 域号显式选项（参照 -c 模式：紧跟值、解析校验、非法报错退出码 2）；
+            // 校验复用 parseDomain（十进制、无尾随字符、[0,232]）
+            if (i + 1 >= argc)
+            {
+                std::cerr << "yomkdds: " << arg << " 缺少域号参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            uint32_t value = 0;
+            if (!parseDomain(argv[++i], value))
+            {
+                std::cerr << "yomkdds: 非法域号 \"" << argv[i] << "\"（合法范围 [0,232]）\n";
+                return 2;
+            }
+            hasDomainArg = true;
+            domainId = value;
+            continue;
+        }
+        if (arg == "--remap" || arg == "-m")
+        {
+            // 语境分流（对齐 --topics 先例；record 解析区已先行拦截非 play 语境，此处
+            // 判定为防御后备）：贪吃多值解析（对齐 ros2 nargs='+' 空格分隔语义）——收集
+            // 其后全部非 '-' 开头 token；逐项校验：首个 ":=" 切分两侧非空（恒等 old==new
+            // 允许）、old 查重——与节点层语义一致（对齐 ros2 rcl remap：精确匹配无通配，
+            // old 不在 bag 则规则静默无效）
+            if (!(pos.size() >= 2 && pos[0] == "bag" && pos[1] == "play"))
+            {
+                std::cerr << "yomkdds: --remap 仅 bag play 生效\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            ++i;
+            while (i < argc && std::string(argv[i]).rfind("-", 0) != 0)
+            {
+                const std::string rule = argv[i];
+                const auto sep = rule.find(":=");
+                if (sep == std::string::npos || sep == 0 || sep + 2 == rule.size())
+                {
+                    std::cerr << "yomkdds: invalid remap rule '" << rule
+                              << "' (expected old:=new)\n";
+                    printUsage(std::cerr);
+                    return 2;
+                }
+                const std::string oldTopic = rule.substr(0, sep);
+                for (const auto &existing : playTopicRemaps)
+                {
+                    if (existing.substr(0, existing.find(":=")) == oldTopic)
+                    {
+                        std::cerr << "yomkdds: duplicate remap rule '" << oldTopic << "'\n";
+                        printUsage(std::cerr);
+                        return 2;
+                    }
+                }
+                playTopicRemaps.push_back(rule);
+                ++i;
+            }
+            --i; // 回退到非选项 token/末尾，交回主循环步进（若已超界则循环步进后结束）
+            if (playTopicRemaps.empty())
+            {
+                std::cerr << "yomkdds: --remap 缺少重映射规则参数\n";
+                printUsage(std::cerr);
+                return 2;
+            }
+            continue;
+        }
+        pos.push_back(arg);
+    }
+
+    // 域 id 解析：显式 --domain/-D 优先；未给时恒从环境变量 YOMKDDS_DDS_DOMAIN_ID
+    //      读取（无则默认 0，语义不变）
+    if (!hasDomainArg)
+    {
+        const char *envVal = std::getenv(kDomainEnv);
+        if (!parseDomain(envVal, domainId))
+        {
+            std::cerr << "yomkdds: 环境变量 " << kDomainEnv << " 非法 \"" << envVal
+                      << "\"（合法范围 [0,232]）\n";
+            return 2;
+        }
+    }
+
+    // 收敛次数解析：恒从环境变量读取（默认 5，无 CLI 覆盖途径）
+    const char *roundsEnv = std::getenv(kDiscoverRoundsEnv);
+    if (!parseDiscoverRounds(roundsEnv, waitRounds))
+    {
+        std::cerr << "yomkdds: 环境变量 " << kDiscoverRoundsEnv << " 非法 \""
+                  << (roundsEnv == nullptr ? "(null)" : roundsEnv)
+                  << "\"（须为 >=1 的整数）\n";
+        return 2;
+    }
+
+    // 子命令分派：topic print <topic-name> / topic list / topic info <topic-name> /
+    //      node list / node info <node-name> / bag record <topic-name> ...
+    if (pos.size() == 3 && pos[0] == "topic" && pos[1] == "print" && !pos[2].empty())
+    {
+        return runPrint(domainId, pos[2], qosArgs.resolve(false));
+    }
+    if (pos.size() == 2 && pos[0] == "topic" && pos[1] == "list")
+    {
+        return runList(domainId, waitRounds, types);
+    }
+    if (pos.size() == 3 && pos[0] == "topic" && pos[1] == "type" && !pos[2].empty())
+    {
+        return runTopicType(domainId, pos[2], waitRounds);
+    }
+    if (pos.size() == 3 && pos[0] == "topic" && pos[1] == "find" && !pos[2].empty())
+    {
+        return runTopicFind(domainId, pos[2], waitRounds);
+    }
+    if (pos.size() == 3 && pos[0] == "interface" && pos[1] == "show" && !pos[2].empty())
+    {
+        return runInterfaceShow(domainId, pos[2], waitRounds);
+    }
+    if (pos.size() == 2 && pos[0] == "interface" && pos[1] == "list")
+    {
+        return runInterfaceList(domainId, waitRounds);
+    }
+    if (pos.size() == 4 && pos[0] == "topic" && pos[1] == "pub" &&
+            (pos[2] == "-e" || pos[2] == "--example") && !pos[3].empty())
+    {
+        return runTopicPubExample(domainId, pos[3], waitRounds);
+    }
+    if (pos.size() == 4 && pos[0] == "topic" && pos[1] == "pub" &&
+            (pos[2] == "-ef" || pos[2] == "--example-file") && !pos[3].empty())
+    {
+        return runTopicPubMsgFile(domainId, pos[3], msgOutDir, waitRounds);
+    }
+    if (pos.size() == 3 && pos[0] == "topic" && pos[1] == "pub" &&
+            !pos[2].empty() && !pubJsonFile.empty())
+    {
+        return runTopicPubJsonFile(domainId, pos[2], pubJsonFile, waitRounds, pubRateHz,
+                pubWaitSubs, pubMaxTimes, qosArgs.resolve(true));
+    }
+    if (pos.size() == 4 && pos[0] == "topic" && pos[1] == "pub" &&
+            !pos[2].empty() && !pos[3].empty())
+    {
+        return runTopicPub(domainId, pos[2], pos[3], waitRounds, pubRateHz, pubWaitSubs,
+                pubMaxTimes, qosArgs.resolve(true));
+    }
+    if (pos.size() >= 2 && pos[0] == "topic" && pos[1] == "pub")
+    {
+        std::cerr << "yomkdds: topic pub 支持 -e | --example <主题名>（示例模式）、-ef | --example-file <主题名>（导出消息描述文件）、<主题名> <json>（发布模式）或 <主题名> -f <文件>（按文件发布）\n";
+    }
+    if (pos.size() == 3 && pos[0] == "topic" && pos[1] == "hz" && !pos[2].empty())
+    {
+        return runHz(domainId, pos[2], windowSize, qosArgs.resolve(false));
+    }
+    if (pos.size() == 3 && pos[0] == "topic" && pos[1] == "info" && !pos[2].empty())
+    {
+        return runInfo(domainId, pos[2], waitRounds, verbose);
+    }
+    if (pos.size() == 2 && pos[0] == "node" && pos[1] == "list")
+    {
+        return runNodeList(domainId, waitRounds);
+    }
+    if (pos.size() == 3 && pos[0] == "node" && pos[1] == "info" && !pos[2].empty())
+    {
+        return runNodeInfo(domainId, pos[2], waitRounds);
+    }
+    if (pos.size() >= 3 && pos[0] == "bag" && pos[1] == "record")
+    {
+        std::vector<std::string> topics(pos.begin() + 2, pos.end());
+        return runRecord(domainId, topics, msgOutDir, startPaused, maxBagSize, maxBagDurationSec,
+                maxCacheSize);
+    }
+    if (pos.size() == 3 && pos[0] == "bag" && pos[1] == "info" && !pos[2].empty())
+    {
+        return runBagInfo(pos[2]);
+    }
+    if (pos.size() == 3 && pos[0] == "bag" && pos[1] == "reindex" && !pos[2].empty())
+    {
+        return runBagReindex(pos[2]);
+    }
+    if (pos.size() == 3 && pos[0] == "bag" && pos[1] == "play" && !pos[2].empty())
+    {
+        return runBagPlay(domainId, pos[2], playbackRate, playTopics, startPaused, playLoop,
+                          startOffsetSec, playDelaySec, playWaitAckedMs, playTopicRemaps,
+                          playReadAheadQueueSize, playQosOverridesPath);
+    }
+    if (pos.size() == 2 && pos[0] == "bag" && pos[1] == "convert")
+    {
+        if (convertInputs.empty() || msgOutDir.empty())
+        {
+            std::cerr << "yomkdds: bag convert 需要 -i <bag-dir>（至少 1 个，可重复）与 "
+                         "-o <cfg.json>（输出配置文件路径）\n";
+            return 2;
+        }
+        return runBagConvert(convertInputs, msgOutDir);
+    }
+    if (qosArgs.any())
+    {
+        // QoS 选项语境拦截（对齐 --remap 先例）：仅 topic pub 发布模式（json/-f）与
+        // topic print/hz 消费；-e/-ef 导出与查询类均不适用，显式报错优于静默忽略
+        std::cerr << "yomkdds: --qos-ros/--qos-*/--qos-file 仅 topic pub（发布模式）与 topic print/hz 生效\n";
+        printUsage(std::cerr);
+        return 2;
+    }
+    if (pos.size() == 2 && (pos[0] == "topic" || pos[0] == "node" || pos[0] == "bag"))
+    {
+        std::cerr << "yomkdds: 未知子命令 \"" << pos[1] << "\"\n";
+    }
+    else
+    {
+        std::cerr << "yomkdds: 用法错误\n";
+    }
+    printUsage(std::cerr);
+    return 2;
+}

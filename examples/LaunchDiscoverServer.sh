@@ -4,7 +4,7 @@
 # 用法: LaunchDiscoverServer.sh [--ip <监听IP>] [--port <监听端口>] [--type <udp|tcp>]
 #   --ip   监听地址，缺省 127.0.0.1
 #   --port 监听端口，缺省随 --type（udp→11811，tcp→42100）
-#   --type 监听协议，缺省 udp；tcp 模式 client 走 YOMKRPC_TCP_DISCOVER_SERVERS 直配
+#   --type 监听协议，缺省 udp；tcp 模式 client 走 YOMKDDS_TCP_DISCOVER_SERVERS 直配
 # 前台运行，Ctrl+C 停止；server id 固定 -i 0。
 #
 # 二进制定位：按序探测 YomkServer/Fast DDS 安装（thirdparty/Fast-DDS 编译安装产物）中的
@@ -109,10 +109,10 @@ fi
 # ===== 启动（前台运行，Ctrl+C 停止） =====
 if [ "${TYPE}" = "tcp" ]; then
     DS_TYPE_DESC="TCP（-t 监听地址 / -q 监听端口）"
-    DS_ENV_HINT="export YOMKRPC_TCP_DISCOVER_SERVERS=${IP}:${PORT}"
+    DS_ENV_HINT="export YOMKDDS_TCP_DISCOVER_SERVERS=${IP}:${PORT}"
 else
     DS_TYPE_DESC="UDP（-l 监听地址 / -p 监听端口）"
-    DS_ENV_HINT="export YOMKRPC_UDP_DISCOVER_SERVERS=${IP}:${PORT}"
+    DS_ENV_HINT="export YOMKDDS_UDP_DISCOVER_SERVERS=${IP}:${PORT}"
 fi
 echo "============================================================"
 echo " Fast DDS Discovery Server"
@@ -120,7 +120,7 @@ echo "   监听协议: ${DS_TYPE_DESC}"
 echo "   监听地址: ${IP}:${PORT}"
 echo "   client 等价直配串: ${IP}:${PORT}"
 echo "   client 环境变量自动直配（另开终端执行）："
-echo "     export YOMKRPC_USE_DISCOVER_SERVER=true"
+echo "     export YOMKDDS_USE_DISCOVER_SERVER=true"
 echo "     ${DS_ENV_HINT}"
 echo "   （另开两个终端运行 ExampleDiscoverServerPub/Sub，"
 echo "     域 id 100/200 跨域互通，详见 README 5.8）"

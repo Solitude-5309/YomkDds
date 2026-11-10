@@ -10,7 +10,7 @@
 # 安装后将扩展 lib 注册到系统动态库搜索路径（复用 yomk.conf）并刷新 ldconfig 缓存，新开任意终端即可找到扩展 so
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_NAME="YomkRpc"
+PROJECT_NAME="YomkDds"
 BUILD_DIR="${SCRIPT_DIR}/build"
 EXAMPLES_DIR="${SCRIPT_DIR}/examples"
 EXAMPLES_BUILD_DIR="${EXAMPLES_DIR}/build"
@@ -253,13 +253,13 @@ echo " YomkServer 路径: ${YOMK_SERVER_PATH}"
 echo " 动态库缓存:"
 ldconfig -p | grep -i "${PROJECT_NAME}" || true
 echo " 示例程序列表（安装于 ${INSTALL_DIR}/bin）:"
-for _BIN in "${INSTALL_DIR}"/bin/ExampleYomkRpc* "${INSTALL_DIR}"/bin/ExampleRos2Interop* "${INSTALL_DIR}"/bin/yomkrpc; do
+for _BIN in "${INSTALL_DIR}"/bin/ExampleYomkDds* "${INSTALL_DIR}"/bin/ExampleRos2Interop* "${INSTALL_DIR}"/bin/yomkdds; do
     [ -x "${_BIN}" ] && echo "   - $(basename "${_BIN}")"
 done
 unset _BIN
-echo " 可直接运行 ExampleYomkRpcTopic（发布订阅流程演示）/ ExampleYomkRpcTopicLoan（loan 借出机制演示）；"
-echo " 示例程序 ExampleYomkRpcPub/ExampleYomkRpcSub 可另开两个终端分别运行观察跨进程发布/订阅；"
-echo " 命令行工具 yomkrpc 观察任意主题：yomkrpc topic print <主题名>"
+echo " 可直接运行 ExampleYomkDdsTopic（发布订阅流程演示）/ ExampleYomkDdsTopicLoan（loan 借出机制演示）；"
+echo " 示例程序 ExampleYomkDdsPub/ExampleYomkDdsSub 可另开两个终端分别运行观察跨进程发布/订阅；"
+echo " 命令行工具 yomkdds 观察任意主题：yomkdds topic print <主题名>"
 echo "==========================================="
 echo "编译完成，扩展库已注册到系统动态库缓存，新开任意终端即可使用"
 }

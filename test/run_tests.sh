@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# YomkRpc 全量测试运行器
+# YomkDds 全量测试运行器
 #
 # 用法:
 #   ./run_tests.sh               全量运行（含 2 个 stress，编译期规模 5000/30）
@@ -41,8 +41,8 @@
 # 写磁盘操作审计（2026-09 逐文件核对，bag 八例新增时更新）：
 #   - 除 bag 八例外，其余测试程序与被测源码 src/*.cpp 均无写盘操作；唯一文件 IO 是 stress
 #     两例只读 /proc/self/status 与 /proc/self/fd 的资源采样器（VmRSS/Threads/fd）。
-#   - bag 八例的写盘（均落在运行时临时工作目录）：TestYomkRpcBagServiceLifecycle 与
-#     TestFastDDSBagNodeRecord 经真实 DDS 录制产 bag 目录；TestYomkRpcBagServiceContract
+#   - bag 八例的写盘（均落在运行时临时工作目录）：TestYomkDdsBagServiceLifecycle 与
+#     TestFastDDSBagNodeRecord 经真实 DDS 录制产 bag 目录；TestYomkDdsBagServiceContract
 #     （T7-T9）与 TestFastDDSBagNodeInfo/Reindex/Convert 经 mcap::McapWriter 造输入分片与
 #     info/重建/转换产物；TestFastDDSBagNodePlay 经 mcap::McapWriter + 手写 metadata.json
 #     造回放输入 bag（固定命名目录，用例收尾 remove_all 自清理）；仅
@@ -76,11 +76,11 @@ SAN_LIST=()
 # （~6s 时间轴 + 订阅端收数等待）；bag 产物写在各自临时工作目录（Play 用例自清理）
 ALL_TESTS=(
     TestHarnessSmoke
-    TestYomkRpcServiceContract
-    TestYomkRpcDebugServiceContract
-    TestYomkRpcBagServiceContract
-    TestYomkRpcDebugServiceLifecycle
-    TestYomkRpcBagServiceLifecycle
+    TestYomkDdsServiceContract
+    TestYomkDdsDebugServiceContract
+    TestYomkDdsBagServiceContract
+    TestYomkDdsDebugServiceLifecycle
+    TestYomkDdsBagServiceLifecycle
     TestFastDDSDebugNode
     TestFastDDSBagNodeInfo
     TestFastDDSBagNodeReindex
@@ -88,15 +88,15 @@ ALL_TESTS=(
     TestFastDDSBagNodeValidation
     TestFastDDSBagNodeRecord
     TestFastDDSBagNodePlay
-    TestYomkRpcNodeLifecycle
-    TestYomkRpcTopic
-    TestYomkRpcLoan
-    TestYomkRpcTypes
-    TestYomkRpcConcurrency
-    TestYomkRpcStressSerial
-    TestYomkRpcStressConcurrent
+    TestYomkDdsNodeLifecycle
+    TestYomkDdsTopic
+    TestYomkDdsLoan
+    TestYomkDdsTypes
+    TestYomkDdsConcurrency
+    TestYomkDdsStressSerial
+    TestYomkDdsStressConcurrent
 )
-STRESS_TESTS=(TestYomkRpcStressSerial TestYomkRpcStressConcurrent)
+STRESS_TESTS=(TestYomkDdsStressSerial TestYomkDdsStressConcurrent)
 
 usage() {
     sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -149,7 +149,7 @@ cleanup_workdir() {
 trap cleanup_workdir EXIT
 trap 'echo ""; echo "被用户中断"; exit 130' INT TERM
 
-# 定位每个测试可执行（兼容 test/build/{Harness,YomkRpcService}/ 与单 bin 目录两种布局）
+# 定位每个测试可执行（兼容 test/build/{Harness,YomkDdsService}/ 与单 bin 目录两种布局）
 declare -A TEST_BIN
 locate_tests() {
     TEST_BIN=()   # 多轮 sanitizer 间复用: 先清空，防上一轮 BIN_DIR 的旧路径残留误判为就绪
@@ -167,7 +167,7 @@ build_hint() {
     if [ "${SANITIZER}" = "off" ]; then
         echo "cmake -S ${SCRIPT_DIR} -B ${SCRIPT_DIR}/build -DCMAKE_PREFIX_PATH=\"\${YOMK_PREFIX_PATH:-/opt/yomk}\" && cmake --build ${SCRIPT_DIR}/build -j"
     else
-        echo "cmake -S ${SCRIPT_DIR} -B ${SCRIPT_DIR}/build-${SANITIZER} -DYOMKRPC_TEST_SANITIZER=${SANITIZER} -DCMAKE_PREFIX_PATH=\"\${YOMK_PREFIX_PATH:-/opt/yomk}\" && cmake --build ${SCRIPT_DIR}/build-${SANITIZER} -j"
+        echo "cmake -S ${SCRIPT_DIR} -B ${SCRIPT_DIR}/build-${SANITIZER} -DYOMKDDS_TEST_SANITIZER=${SANITIZER} -DCMAKE_PREFIX_PATH=\"\${YOMK_PREFIX_PATH:-/opt/yomk}\" && cmake --build ${SCRIPT_DIR}/build-${SANITIZER} -j"
     fi
 }
 
@@ -211,7 +211,7 @@ ensure_sanitizer_build() {
     echo "-- [sanitizer=${SANITIZER}] 测试可执行缺失，自动构建 ${bdir}（插桩全新全量编译需数分钟，进度逐行输出）..."
     local start=${SECONDS}
     local -a cfg=(-S "${SCRIPT_DIR}" -B "${bdir}"
-                  -DYOMKRPC_TEST_SANITIZER="${SANITIZER}"
+                  -DYOMKDDS_TEST_SANITIZER="${SANITIZER}"
                   -DCMAKE_PREFIX_PATH="${YOMK_PREFIX_PATH:-/opt/yomk}")
     if [ "${FULL_MODE}" -eq 1 ]; then
         cfg+=(-DSTRESS_ITERS=100000 -DSTRESS_CYCLES=50)
@@ -404,7 +404,7 @@ timeout_for() {
     local t="$1"
     if [ "${USER_TIMEOUT}" -eq 1 ]; then
         echo "${TIMEOUT_SECS}"
-    elif [ "${t}" = "TestYomkRpcStressSerial" ] || [ "${t}" = "TestYomkRpcStressConcurrent" ]; then
+    elif [ "${t}" = "TestYomkDdsStressSerial" ] || [ "${t}" = "TestYomkDdsStressConcurrent" ]; then
         echo 1800
     else
         echo "${TIMEOUT_SECS}"
@@ -413,14 +413,14 @@ timeout_for() {
 
 # --full：以闭环规模重配+重编 2 个 stress 目标（规模持久写入 <构建目录>/CMakeCache.txt）
 # 入参为构建根目录：默认模式 test/build；插桩轮为其对应 build-<套件> 目录
-# （重配沿用该目录既有 cache —— YOMKRPC_TEST_SANITIZER 已持久化，插桩标志不会被清除）
+# （重配沿用该目录既有 cache —— YOMKDDS_TEST_SANITIZER 已持久化，插桩标志不会被清除）
 rebuild_stress_full() {
     local bdir="$1"
     echo "-- full 模式: 重配 ${bdir} 为闭环规模 STRESS_ITERS=100000 STRESS_CYCLES=50"
     cmake -S "${SCRIPT_DIR}" -B "${bdir}" -DSTRESS_ITERS=100000 -DSTRESS_CYCLES=50 \
         || { echo "错误: stress 重配失败"; exit 1; }
     cmake --build "${bdir}" \
-        --target TestYomkRpcStressSerial TestYomkRpcStressConcurrent -j"$(nproc)" \
+        --target TestYomkDdsStressSerial TestYomkDdsStressConcurrent -j"$(nproc)" \
         || { echo "错误: stress 重编失败"; exit 1; }
     echo "-- 闭环规模已持久写入 ${bdir}/CMakeCache.txt（后续默认运行沿用）"
 }
@@ -502,7 +502,7 @@ run_one_suite() {
     # 1) suppressions 必须走 LSAN_OPTIONS/TSAN_OPTIONS（LSan 抑制走 ASAN_OPTIONS 在本机
     #    GCC libasan 上对任何非空 suppression 文件均 parse 失败）
     # 2) TSan 须禁用 ASLR（本机内核 high-entropy ASLR 下 TSan runtime 启动即
-    #    "unexpected memory mapping" 退出码 66，非 race、非 YomkRpc 缺陷）
+    #    "unexpected memory mapping" 退出码 66，非 race、非 YomkDds 缺陷）
     # 每轮环境隔离: 只保留本轮需要的 sanitizer 变量（多轮顺序执行时防上一轮残留）
     SAN_RUNNER=()
     case "${SANITIZER}" in
@@ -618,11 +618,11 @@ run_one_suite() {
 
     echo ""
     echo "==========================================="
-    echo " YomkRpc 全量测试通过: ${passed}/${total}"
+    echo " YomkDds 全量测试通过: ${passed}/${total}"
     echo " 总耗时: ${SECONDS}s"
     echo " 日志目录: ${log_root}"
     echo "==========================================="
-    echo "YomkRpc 全量测试通过: ${passed}/${total}" >> "${summary}"
+    echo "YomkDds 全量测试通过: ${passed}/${total}" >> "${summary}"
     return 0
 }
 

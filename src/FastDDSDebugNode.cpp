@@ -1,6 +1,6 @@
 #include "FastDDSDebugNode.h"
 
-#include "YomkRpcDebugService.h" // yomk::g_debugPubStop（topic pub 持续发布停止标志，API 头内联定义）
+#include "YomkDdsDebugService.h" // yomk::g_debugPubStop（topic pub 持续发布停止标志，API 头内联定义）
 
 #include <algorithm>
 #include <chrono>
@@ -620,7 +620,7 @@ FastDDSDebugNode::~FastDDSDebugNode()
 }
 
 bool FastDDSDebugNode::setDomainId(uint32_t domainId,
-    const yomkrpc_xml::ParticipantQosSpec& spec, std::string* err)
+    const yomkdds_xml::ParticipantQosSpec& spec, std::string* err)
 {
     std::lock_guard<std::mutex> lock(mtx_);
     if (participant_ != nullptr)
@@ -635,14 +635,14 @@ bool FastDDSDebugNode::setDomainId(uint32_t domainId,
     // XML 配置通道三级提取链先于置名执行：无用户名，按名 profile 无意义仅默认档可兜底，
     // 落空保持 DEFAULT 底座回退现状
     DomainParticipantQos qos = PARTICIPANT_QOS_DEFAULT;
-    yomkrpc_xml::participantQosFromXml(qos, "", spec.xml);
+    yomkdds_xml::participantQosFromXml(qos, "", spec.xml);
     // 发现服务器直配（仅 client 角色）：CLIENT + m_DiscoveryServers 重建，覆盖 XML
     // discoveryServersList（合并语义：直配 > XML 提取打底）；UDP/TCP 双通道任一非空即叠加，
     // TCP 通道自动补注入 TCPv4 传输；任一 spec 非法则整体失败
     if (!spec.udpServerSpec.empty() || !spec.tcpServerSpec.empty())
     {
         std::string serverErr;
-        if (!yomkrpc_xml::applyDiscoveryServers(qos, spec.udpServerSpec, spec.tcpServerSpec, serverErr))
+        if (!yomkdds_xml::applyDiscoveryServers(qos, spec.udpServerSpec, spec.tcpServerSpec, serverErr))
         {
             if (err != nullptr)
             {
@@ -651,7 +651,7 @@ bool FastDDSDebugNode::setDomainId(uint32_t domainId,
             return false;
         }
     }
-    qos.name(std::string("yomkrpc_debug_") + makeUidSuffix());
+    qos.name(std::string("yomkdds_debug_") + makeUidSuffix());
     participant_ = DomainParticipantFactory::get_instance()->create_participant(
         domainId, qos, listener_.get(), StatusMask::none());
     if (participant_ == nullptr)
@@ -942,7 +942,7 @@ bool FastDDSDebugNode::topicExample(const std::string& topicName,
     lines.insert(lines.end(), std::make_move_iterator(idl.begin()),
             std::make_move_iterator(idl.end()));
     lines.push_back("example:");
-    lines.push_back("yomkrpc topic pub " + topicName + " '" + json + "'");
+    lines.push_back("yomkdds topic pub " + topicName + " '" + json + "'");
     return true;
 }
 

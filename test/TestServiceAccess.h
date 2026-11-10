@@ -5,7 +5,7 @@
 // 改用框架公开的服务器路由接口，语义等价：
 //   server()->request(svcName + funcName, pkg)    ≡ svc->invoke(funcName, pkg)
 //   server()->serviceFuncInfos(svcName)           ≡ svc->funcInfos()
-// 其中服务名以 "/" 开头（如 "/YomkRpcService"），URL 拼接后仍满足
+// 其中服务名以 "/" 开头（如 "/YomkDdsService"），URL 拼接后仍满足
 // "/服务名/函数名" 的公开路由格式。
 //
 // 前置条件：被测服务已通过 srv_ptr(svc).add() 注册（所有测试均在调用前完成注册）。

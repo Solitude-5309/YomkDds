@@ -104,7 +104,7 @@ int main()
     auto *svc = new YomkDdsService(::yomk::server().instance().get());
     CHECK(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
 
-    // 内省：9 个 RPC 端点均已注册（闭环 4 增 /load_xml）
+    // 内省：9 个 dds 端点均已注册（闭环 4 增 /load_xml）
     auto infos = testFuncInfos(svc);
     CHECK(infos.size() == 9 && infos.count("/version") && infos.count("/load_xml") && infos.count("/create_node") && infos.count("/delete_node") && infos.count("/register_pub_topic") && infos.count("/register_sub_topic") && infos.count("/publish") && infos.count("/loan") && infos.count("/discard_loan"),
           "funcInfos 内省 9 端点齐全");

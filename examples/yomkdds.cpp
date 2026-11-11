@@ -336,9 +336,9 @@ static bool autoLoadXmlProfile()
         return true;
     }
     // load_xml 端点在 /YomkDdsService 上，而本工具按需只注册调试/bag 服务——首次
-    // 触发自动加载时补注册 RPC 服务（static 守卫保证全进程仅注册一次）
-    static const bool rpcServiceReady = (::yomk::server().srv<YomkDdsService>().create() == 0);
-    if (!rpcServiceReady)
+    // 触发自动加载时补注册 dds 服务（static 守卫保证全进程仅注册一次）
+    static const bool ddsServiceReady = (::yomk::server().srv<YomkDdsService>().create() == 0);
+    if (!ddsServiceReady)
     {
         ::yomk::log().tag("yomkdds").error("register /YomkDdsService failed");
         return false;

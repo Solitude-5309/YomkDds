@@ -2,7 +2,7 @@
 #include <yomk/dds/YomkDdsDebugService.h>
 #include <yomk/dds/YomkDdsService.h>
 
-// YomkDds 对外 API 宏：每个宏封装一次对 /YomkDdsService/*（RPC 服务）或 /YomkDdsDebugService/*
+// YomkDds 对外 API 宏：每个宏封装一次对 /YomkDdsService/*（dds 服务）或 /YomkDdsDebugService/*
 // （调试服务）端点的 yomk::server().url().msg().request() 调用。
 // 除 YOMKDDS_VERSION（无返回值）外，其余宏均返回 yomk::payload::Response，调用后须判 status==yomk::payload::ResStatus::Succeeded。
 

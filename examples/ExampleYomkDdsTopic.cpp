@@ -1,6 +1,6 @@
 /**
  * @file ExampleYomkDdsTopic.cpp
- * @brief 同节点同主题自发自收示例（rpc_demo_topic，MString）：单进程单节点先注册发布主题
+ * @brief 同节点同主题自发自收示例（dds_demo_topic，MString）：单进程单节点先注册发布主题
  *       再注册订阅主题，等待发现后发布 5 条并打印接收统计，退出前 DEL_NODE 清理。
  */
 #include <yomk/dds/YomkDdsAPI.h>
@@ -39,7 +39,7 @@ int main(int argc, char* argv[])
 
     // 2. 注册发布主题（type 所有权移交 FastDDSNode）
     ::yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsService::registerPubTopic ===");
-    resp = YOMKDDS_PUB_TOPIC("node0", "rpc_demo_topic", new YomkDdsStd::MStringPubSubType());
+    resp = YOMKDDS_PUB_TOPIC("node0", "dds_demo_topic", new YomkDdsStd::MStringPubSubType());
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopic").error("register pub topic failed: ", resp.msg);
@@ -61,7 +61,7 @@ int main(int argc, char* argv[])
         received++;
         ::yomk::log().tag("ExampleYomkDdsTopic").info("[RECV] 收到消息: ", msg->data());
     };
-    resp = YOMKDDS_SUB_TOPIC("node0", "rpc_demo_topic", new YomkDdsStd::MStringPubSubType(), onMessage);
+    resp = YOMKDDS_SUB_TOPIC("node0", "dds_demo_topic", new YomkDdsStd::MStringPubSubType(), onMessage);
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopic").error("register sub topic failed: ", resp.msg);
@@ -76,7 +76,7 @@ int main(int argc, char* argv[])
     {
         YomkDdsStd::MString msg;
         msg.data("Hello YomkDdsService " + std::to_string(i));
-        resp = YOMKDDS_PUB_MSG("node0", "rpc_demo_topic", &msg);
+        resp = YOMKDDS_PUB_MSG("node0", "dds_demo_topic", &msg);
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
             ::yomk::log().tag("ExampleYomkDdsTopic").error("[SEND] 发布失败: ", msg.data(), " status=", static_cast<int>(resp.status));

@@ -2,10 +2,10 @@ cmake_minimum_required(VERSION 3.14)
 
 # 编译器预选模块：g++ 优先，回退 clang++（必须在 project() 之前 include）
 include(cmake/AbiInfo.cmake)
-# YomkServer 版本系列检测模块：find_package(YomkServer) 之后调用 yomk_server_version_check()
+# YomkServer 版本检测模块：find_package(YomkServer) 之后调用 yomk_server_version_check()
 include(cmake/YomkServerVersionCheck.cmake)
 
-project(YomkDds VERSION 2.0.1 LANGUAGES CXX)
+project(YomkDds VERSION 2.0.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,7 +22,7 @@ add_custom_target(export_compile_commands ALL
 )
 
 find_package(YomkServer REQUIRED)
-# 版本系列检测：YomkDds 仅支持 YomkServer 3.6.x，非 3 系列直接报错终止配置
+# 版本检测：YomkDds 要求 YomkServer 3.6.18 及以上，版本过低直接报错终止配置
 yomk_server_version_check()
 message(STATUS "YomkServer version: ${YomkServer_VERSION}")  
 message(STATUS "YomkServer include dirs: ${YomkServer_INCLUDE_DIRS}")  

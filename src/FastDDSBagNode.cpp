@@ -1,4 +1,3 @@
-// FastDDSBagNode 实现（详见头注释）：发现校验 → 透传订阅 → mcap 同步直写 → Ctrl+C 收尾。
 // 透传类型：PassthroughPubSubType 不携带 TypeObject（不覆写 register_type_object_representation），
 // 发现层仅按主题名 + 类型名字符串匹配，与远端类型定义零耦合；deserialize 把接收 payload
 // （含 4 字节 encapsulation header）原样存入 Blob——录制即字节搬运，对任意 DDS 消息类型通用。
@@ -65,20 +64,20 @@ constexpr int kMsDigits = 3;                  // 定宽 3 位段位数（毫秒/
 constexpr int kClockDigits = 2;               // 定宽 2 位段位数（时/分/秒）
 constexpr uint32_t kBagMetadataVersion = 1;   // yomkdds 元信息格式自有版本号（1 起步，与参考来源 rosbag2 的 v5 无关）
 constexpr uint64_t kMinSplitFileSize = 1024;  // -b 分片下限（对齐 rosbag2 mcap 插件 kMinimumSplitFileSize）
-constexpr uint64_t kNsPerUs = 1000;                     // 纳秒每微秒
-constexpr uint64_t kNsPerMs = kNsPerUs * kNsPerUs;      // 纳秒每毫秒
-constexpr uint64_t kNsPerSecond = kNsPerMs * kNsPerUs;  // 纳秒每秒
-constexpr uint64_t kNsPerMinute = 60 * kNsPerSecond;    // 纳秒每分
-constexpr uint64_t kNsPerHour = 60 * kNsPerMinute;      // 纳秒每小时
+constexpr uint64_t kNsPerUs = 1000;
+constexpr uint64_t kNsPerMs = kNsPerUs * kNsPerUs;
+constexpr uint64_t kNsPerSecond = kNsPerMs * kNsPerUs;
+constexpr uint64_t kNsPerMinute = 60 * kNsPerSecond;
+constexpr uint64_t kNsPerHour = 60 * kNsPerMinute;
 
-// 参与者唯一后缀：12 位小写 hex（kUidHexChars 定宽，低位不足补零）。种子混入 random_device 与
-// 单调时钟——同进程重复调用不复现；单节点模型下跨进程碰撞概率可忽略。uid 后缀使多进程各自的
-// 调试/录制节点在 node list/node info 视角可区分（固定名参与者会同名列出、端点被合并）
+// 参与者唯一后缀：uid 使多进程各自的调试/录制节点在 node list/node info 视角可区分
+// （固定名参与者会同名列出、端点被合并）；种子混入 random_device 与单调时钟，同进程
+// 重复调用不复现
 std::string makeUidSuffix()
 {
-    constexpr int kUidHexChars = 12;                  // 后缀字符数（12 hex = 6 字节随机）
+    constexpr int kUidHexChars = 12;
     constexpr uint64_t kUidMask = (uint64_t{1} << (kUidHexChars * 4)) - 1;
-    constexpr int kRdBits = 32;                       // random_device 结果位宽（两次采样拼 64 位种子）
+    constexpr int kRdBits = 32;
     std::random_device rd;
     uint64_t seed = (static_cast<uint64_t>(rd()) << kRdBits) | rd();
     seed ^= static_cast<uint64_t>(
@@ -91,7 +90,6 @@ std::string makeUidSuffix()
 }
 
 // metadata 可读时间伴生键（_format）格式化
-// 毫秒-微秒-纳秒三段 → "mmm-uuu-nnn"（各 3 位补零，'-' 分隔）
 std::string formatSubSecondNs(uint64_t subNs)
 {
     const uint64_t ms = subNs / kNsPerMs;
@@ -104,7 +102,6 @@ std::string formatSubSecondNs(uint64_t subNs)
     return out.str();
 }
 
-// 纳秒时长 → "HH-MM-SS_mmm-uuu-nnn"（时-分-秒_毫秒-微秒-纳秒）
 std::string formatDurationNs(uint64_t totalNs)
 {
     const uint64_t hours = totalNs / kNsPerHour;
@@ -118,7 +115,6 @@ std::string formatDurationNs(uint64_t totalNs)
     return out.str();
 }
 
-// epoch 纳秒 → "YYYY-MM-DD_HH-MM-SS_mmm-uuu-nnn"（本地时区）
 std::string formatEpochNs(uint64_t epochNs)
 {
     const std::time_t secs = static_cast<std::time_t>(epochNs / kNsPerSecond);
@@ -131,8 +127,7 @@ std::string formatEpochNs(uint64_t epochNs)
     return out.str();
 }
 
-// QoS 枚举 → 标准 DDS 拼写名（录制落盘 qos 串用；与 FastDDSDebugNode 端点详情显示同款
-// 辅助，各节点 cpp 独立持有无共享头）
+// 与 FastDDSDebugNode 端点详情显示同款辅助，各节点 cpp 独立持有无共享头
 const char* reliabilityKindName(ReliabilityQosPolicyKind kind)
 {
     switch (kind)
@@ -163,8 +158,7 @@ const char* durabilityKindName(DurabilityQosPolicyKind kind)
     }
 }
 
-// 标准 DDS 拼写名 → 枚举(play 预扫恢复发布 QoS 用,与上方两个序列化辅助成对;未知拼写
-// 返回 false 由调用方报错——不静默回退,QoS 快照恢复是回放正确性的一部分)
+// 未知拼写返回 false 由调用方报错——不静默回退，QoS 快照恢复是回放正确性的一部分
 bool parseReliabilityKindName(const std::string& name, ReliabilityQosPolicyKind& kind)
 {
     if (name == "RELIABLE")
@@ -206,20 +200,19 @@ bool parseDurabilityKindName(const std::string& name, DurabilityQosPolicyKind& k
 }
 
 // "YYYY-MM-DD_HH-MM-SS_mmm-uuu-nnn"（formatEpochNs 产出形态，本地时区）→ epoch 纳秒。
-// 严格定宽解析：总长 31，数字位与分隔符位置固定；月 1-12、日 1-31、时 0-23、分秒 0-59。
-// mktime（tm_isdst=-1，本地时区，逆于 formatEpochNs 的 localtime_r）后 localtime_r 回读
-// 逐字段比对，拦截 Feb 30 等被 mktime 静默归一化的非法日期；结果早于 1970 纪元判非法
-// （epoch 纳秒为无符号承载）。成功才回填 epochNs。
+// 严格定宽解析 + mktime（tm_isdst=-1）后 localtime_r 回读逐字段比对，拦截 Feb 30 等被
+// mktime 静默归一化的非法日期；结果早于 1970 纪元判非法（epoch 纳秒为无符号承载）。
+// 成功才回填 epochNs。
 bool parseEpochFormatNs(const std::string& text, uint64_t& epochNs)
 {
     // 各段取值上限（月内天数正确性交由 mktime 回读比对兜底，日上限放 31 即可）
-    constexpr int kDigitBase = 10;     // 定宽数字段逐位累加进制
-    constexpr int kMaxMonth = 12;      // 月上限（1-12）
-    constexpr int kMaxDay = 31;        // 日上限（1-31）
-    constexpr int kMaxHour = 23;       // 时上限（0-23）
-    constexpr int kMaxMinute = 59;     // 分上限（0-59）
-    constexpr int kMaxSecond = 59;     // 秒上限（0-59）
-    constexpr int kTmYearBase = 1900;  // struct tm 年份基准（tm_year = 年份 - 1900）
+    constexpr int kDigitBase = 10;
+    constexpr int kMaxMonth = 12;
+    constexpr int kMaxDay = 31;
+    constexpr int kMaxHour = 23;
+    constexpr int kMaxMinute = 59;
+    constexpr int kMaxSecond = 59;
+    constexpr int kTmYearBase = 1900;
     // 定宽掩码：'9' 为数字位，其余字符须逐一匹配
     static const std::string kMask = "9999-99-99_99-99-99_999-999-999";
     if (text.size() != kMask.size())
@@ -253,7 +246,7 @@ bool parseEpochFormatNs(const std::string& text, uint64_t& epochNs)
     if (month < 1 || month > kMaxMonth || day < 1 || day > kMaxDay || hour > kMaxHour ||
         minute > kMaxMinute || second > kMaxSecond)
     {
-        return false;  // 各段基础范围（毫秒/微秒/纳秒三位恒在 0-999）
+        return false;
     }
     std::tm parts{};
     parts.tm_year = year - kTmYearBase;
@@ -282,12 +275,11 @@ bool parseEpochFormatNs(const std::string& text, uint64_t& epochNs)
 }
 
 // bag info 输出格式化（bagInfoText 用，对齐 ros2 bag info 输出形态）
-constexpr int kNsDigits = 9;             // 时间小数定宽位数（纳秒）
-constexpr double kBytesPerUnit = 1024.0; // 人类可读大小换算进制
+constexpr int kNsDigits = 9;
+constexpr double kBytesPerUnit = 1024.0;
 constexpr int kSizeUnitCount = 5;        // B/KiB/MiB/GiB/TiB 单位数（索引上限 4）
 constexpr int kInfoLabelWidth = 19;      // info 标签列宽（"Topic information: " 宽度）
 
-// 字节数 → 人类可读大小：1024 进制逐级换算，B 零小数、其余 1 位小数
 std::string formatBagFileSize(uint64_t bytes)
 {
     double size = static_cast<double>(bytes);
@@ -304,8 +296,6 @@ std::string formatBagFileSize(uint64_t bytes)
     return out.str();
 }
 
-// epoch 纳秒 → "Sep 30 2026 19:06:10.123456789 (1789652770.123456789)"（本地时区；
-// 人类可读段 %b %e %Y %H:%M:%S + 9 位纳秒，括号内 epoch 秒同小数位）
 std::string formatBagTimePoint(uint64_t epochNs)
 {
     const uint64_t secs = epochNs / kNsPerSecond;
@@ -321,7 +311,6 @@ std::string formatBagTimePoint(uint64_t epochNs)
     return out.str();
 }
 
-// 纳秒时长 → "12.000000000s"（秒 + 9 位纳秒小数）
 std::string formatBagDurationSec(uint64_t durationNs)
 {
     std::ostringstream out;
@@ -341,10 +330,8 @@ std::string bagInfoLabeledLine(const std::string& label, const std::string& cont
     return line + content;
 }
 
-// 分片文件名编号解析（collectBagShards 用；reindex/convert/play 共用）
-// 文件名 → 分片编号：去掉 .mcap 后缀后尾部 '_' 之后须全为数字（"bag_0.mcap" → 0，
-// 前导零按十进制折算），对齐参考实现 <前缀>_<编号>.<扩展名> 命名约定；
-// 无 .mcap 后缀/无尾段/尾段含非数字返回 false（调用方跳过该条目）
+// 文件名 → 分片编号：尾部 '_' 之后须全为数字，对齐 <前缀>_<编号>.mcap 命名约定；无
+// .mcap 后缀/无尾段/尾段含非数字返回 false（调用方跳过该条目）
 bool parseBagFileNumber(const std::string& fileName, uint64_t& outNumber)
 {
     constexpr const char* kMcapSuffix = ".mcap";
@@ -362,8 +349,7 @@ bool parseBagFileNumber(const std::string& fileName, uint64_t& outNumber)
     }
     const std::string digits = stem.substr(underscore + 1);
     uint64_t number = 0;
-    // from_chars 仅提供指针区间接口：尾指针经一次显式指针算术构造（NOLINT 豁免，同透传
-    // deserialize 的 payload.data + length 先例），后续比较复用尾指针不再算术
+    // from_chars 仅提供指针区间接口：尾指针经一次显式指针算术构造（NOLINT 豁免）
     const char* const digitsEnd = digits.data() + digits.size(); // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     const auto [endPtr, errc] = std::from_chars(digits.data(), digitsEnd, number);
     // 全数字才合法：endPtr 未达尾说明含非数字字符；errc 覆盖溢出
@@ -375,9 +361,8 @@ bool parseBagFileNumber(const std::string& fileName, uint64_t& outNumber)
     return true;
 }
 
-// 通配模式匹配：'*' 拆前缀/后缀夹逼（* 匹配任意主题名片段，不与首尾共享字符，对齐
-// fnmatch 语义）；pattern 已由输入校验保证恰好含一个 '*'——"pre*" 前缀、"*suf" 后缀、
-// "pre*suf" 中间，"*"（前后均空）即匹配全部主题。
+// 通配模式匹配：'*' 拆前缀/后缀夹逼（对齐 fnmatch 语义）。Precondition: pattern 恰含
+// 一个 '*'（输入校验保证）——"*"（前后均空）即匹配全部主题。
 bool matchTopicPattern(const std::string& pattern, const std::string& topic)
 {
     const std::size_t star = pattern.find('*');
@@ -394,9 +379,9 @@ struct Blob
     std::vector<uint8_t> bytes;
 };
 
-// 透传 TopicDataType：不解析数据，serialize/deserialize 均为原样字节拷贝。构造按远端发现的
-// 类型名命名（同名主题共享同一实例），使 create_topic 的类型名与远端端点公告一致——
-// DDS 匹配只比主题名 + 类型名字符串 + QoS 兼容，无需真实类型定义。
+// 透传 TopicDataType：serialize/deserialize 均为原样字节拷贝，不解析数据。构造按远端
+// 发现的类型名命名（同名主题共享同一实例），使 DDS 匹配（主题名 + 类型名 + QoS 兼容）
+// 无需真实类型定义。
 class PassthroughPubSubType : public TopicDataType
 {
 public:
@@ -404,7 +389,7 @@ public:
     {
         set_name(typeName);
         // 上限仅约束本端 serialize 的预判（本节点不发布，录制路径不触达）；接收侧
-        // deserialize 按实际 payload.length 拷贝不受限。64KB 覆盖常规消息。
+        // deserialize 按实际 payload.length 拷贝不受限
         max_serialized_type_size = kEncapsulationBytes + kMaxPayloadBytes;
         is_compute_key_provided = false;
     }
@@ -465,8 +450,7 @@ public:
     }
 };
 
-// 写缓存条目：双缓冲模式下回调深拷贝的透传消息（Blob 为复用接收缓冲，入队须拷出独立
-// 副本供消费线程写盘）。
+// 写缓存条目：Blob 为复用接收缓冲，入队须深拷出独立副本供消费线程写盘
 struct CachedMsg
 {
     mcap::ChannelId channelId = 0;
@@ -490,9 +474,9 @@ struct CachedMsg
 
 // 写缓存双缓冲（参考实现 MessageCache/CacheConsumer 同构最小自建）：producer（DDS 接收
 // 回调，多 reader 并发）push 深拷贝消息；consumer（record 内独立消费线程）wait→swap→
-// 逐条写盘→clear 贪婪轮转。单侧 buffer 字节上限 maxBytes：超限置丢弃标志（本条仍入队，
-// 超限至多一条的量），标志置位期间后续新消息丢弃并按 channelId 计数（收尾统一告警），
-// swap 后复位——满载丢弃不阻塞：阻塞仅把丢弃点转移到 DDS 接收队列，样本仍会丢。
+// 逐条写盘→clear 贪婪轮转。单侧 buffer 字节上限 maxBytes：超限置丢弃标志，标志置位期间
+// 后续新消息丢弃并按 channelId 计数（收尾统一告警），swap 后复位——满载丢弃不阻塞：
+// 阻塞仅把丢弃点转移到 DDS 接收队列，样本仍会丢。
 class BagMessageCache
 {
 public:
@@ -535,7 +519,7 @@ public:
             dataCv_.wait(lock, [this] { return dataReady_ || flushing_.load(std::memory_order_relaxed); });
             dataReady_ = false;
         }
-        consumer_.swap(producer_);  // 原 producer 成为空 buffer，字节量归零
+        consumer_.swap(producer_);
         bufferBytes_ = 0;
         dropNew_ = false;  // 丢弃标志随 swap 复位（参考实现同款）
     }
@@ -593,7 +577,7 @@ private:
     bool dropNew_ = false;          // producerMtx_ 保护（满载丢弃标志，swap 复位）
 };
 
-// 数据监听器共享的写盘上下文（record 局部对象所有，生命周期覆盖全部 listener）。
+// 数据监听器共享的写盘上下文（record 局部对象所有，生命周期覆盖全部 listener）
 struct McapWriteCtx
 {
     mcap::McapWriter* writer = nullptr;
@@ -623,7 +607,7 @@ mcap::Timestamp steadyToSystemNs()
 }
 
 // 写缓存丢条收尾告警（参考实现 MessageCache::log_dropped 同款语义）：仅在有丢条时一次性
-// 打印，按主题名升序逐行列出（channelId 经 channels 表反查主题名）
+// 打印，按主题名升序逐行列出
 void logCacheDropped(const BagMessageCache& cache,
                      const std::map<std::string, mcap::ChannelId>& channels)
 {
@@ -706,7 +690,6 @@ public:
                 }
                 continue;
             }
-            // 同步直写模式：接收线程锁内写前分片检查 + 落盘
             {
                 std::lock_guard<std::mutex> lock(*ctx_.payloadMtx);
                 shardCheckAndWrite(msg, nowNs);
@@ -725,15 +708,14 @@ public:
     }
 
 private:
-    // 分片检查（参考实现同款写前检查点，在写本条之前）+ 落盘 + 统计。仅限持有
-    // payloadMtx 调用：直写路径在回调线程，双缓冲路径在消费线程（两路各自串行）。
+    // 分片检查 + 落盘 + 统计。仅限持有 payloadMtx 调用：直写路径在回调线程，双缓冲路径
+    // 在消费线程（两路各自串行）。
     void shardCheckAndWrite(const mcap::Message& msg, mcap::Timestamp nowNs)
     {
         // size 与时长双条件先到先分（任一满足即滚动）——size 条件读上一条写后的落盘量
-        // （写前/写后逐条等价，达上限本条落新分片），时长条件用本条接收时间戳判断
-        // （超时本条落新分片）；新分片起始由其首条消息时间戳确定（0=尚无首条不判定）。
-        // size 仅在 chunk 落盘时增长（mcap 默认 chunk 缓冲批量 IO），size 分片触发点
-        // 落在 chunk 落盘边界；0 值任一=该条件禁用；暂停期消息不入写路径不计入分片时长
+        // （写前/写后逐条等价），时长条件用本条接收时间戳判断。size 仅在 chunk 落盘时
+        // 增长（mcap 默认 chunk 缓冲批量 IO），size 分片触发点落在 chunk 落盘边界；
+        // 0 值任一=该条件禁用；暂停期消息不入写路径不计入分片时长
         if (!ctx_.splitBroken->load(std::memory_order_relaxed))
         {
             bool shouldSplit = false;
@@ -761,7 +743,7 @@ private:
             bytes_ += msg.dataSize;
             if (*ctx_.shardStartNs == 0)
             {
-                *ctx_.shardStartNs = nowNs;  // 分片首条：确定本分片时长起点
+                *ctx_.shardStartNs = nowNs;
             }
         }
     }
@@ -789,9 +771,9 @@ private:
     uint64_t bytes_ = 0;  // 录制字节数（同步口径同 count_）
     uint32_t sequence_ = 0;  // per-topic 递增序号
 
-    // 滚动新分片：close 旧文件（补写 summary，内部含残留 chunk flush）→ open bag_<N+1>.mcap。
-    // 成功返回 true 且 filePaths/fileIndex 已推进；失败置 splitBroken（提示一次不再重试），
-    // 后续 write 全部失败丢弃。仅限 payloadMtx 锁内调用（McapWriter 非线程安全）
+    // 滚动新分片：close 旧文件（补写 summary）→ open bag_<N+1>.mcap。成功返回 true 且
+    // filePaths/fileIndex 已推进；失败置 splitBroken（提示一次不再重试），后续 write
+    // 全部失败丢弃。仅限 payloadMtx 锁内调用（McapWriter 非线程安全）
     bool tryRollShard()
     {
         ctx_.writer->close();
@@ -802,7 +784,7 @@ private:
         if (!splitStatus.ok())
         {
             // 滚动失败（磁盘满/权限等）：writer 已 closed，后续 write 全部失败丢弃；
-            // 提示一次且不再重试（splitBroken 跨 listener 共享）
+            // 提示一次不再重试
             if (!ctx_.splitBroken->exchange(true, std::memory_order_relaxed))
             {
                 std::cout << "bag split failed: " << splitStatus.message
@@ -817,7 +799,7 @@ private:
 };
 
 // 参与者监听器：writer/reader 发现回调仅缓存发现信息（不建订阅——订阅统一在 record 校验
-// 收敛后建立），回调内仅拿 seenMtx_ 叶子锁（锁序倒置防护见成员注释）。
+// 收敛后建立），回调内仅拿 seenMtx_ 叶子锁。
 class FastDDSBagNode::BagParticipantListener : public DomainParticipantListener
 {
 public:
@@ -852,7 +834,7 @@ public:
     }
 
 private:
-    FastDDSBagNode& node_;  // 反向引用宿主节点（仅转发发现事件）
+    FastDDSBagNode& node_;
 };
 
 FastDDSBagNode::FastDDSBagNode()
@@ -901,15 +883,12 @@ bool FastDDSBagNode::setDomainId(uint32_t domainId,
 
     // listener 仅服务发现回调（RTPS 层直接派发，不受 mask 控制）；mask 用 none() 对齐
     // FastDDSNode/FastDDSDebugNode——实测 all() 会使动态 reader 匹配成功但数据不交付。
-    // bag 节点唯一名：入域即被同域 nodeList 类工具辨识，创建后不可改；uid 后缀使多进程
-    // 各自的 bag 节点名称互不相同。
-    // XML 配置通道三级提取链先于置名执行：无用户名，按名 profile 无意义仅默认档可兜底，
-    // 落空保持 DEFAULT 底座
+    // bag 节点唯一名：入域即被同域 nodeList 类工具辨识，创建后不可改。
+    // XML 配置通道三级提取链先于置名执行：无用户名，仅默认档可兜底，落空保持 DEFAULT 底座
     DomainParticipantQos qos = PARTICIPANT_QOS_DEFAULT;
     yomkdds_xml::participantQosFromXml(qos, "", spec.xml);
     // 发现服务器直配（仅 client 角色）：CLIENT + m_DiscoveryServers 重建，覆盖 XML
-    // discoveryServersList（合并语义：直配 > XML 提取打底）；UDP/TCP 双通道任一非空即叠加，
-    // TCP 通道自动补注入 TCPv4 传输；任一 spec 非法则整体失败
+    // discoveryServersList（合并语义：直配 > XML 提取打底）；任一 spec 非法则整体失败
     if (!spec.udpServerSpec.empty() || !spec.tcpServerSpec.empty())
     {
         std::string serverErr;
@@ -987,8 +966,7 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
     {
         return fail("no topics given");
     }
-    // 通配模式：清单项支持恰好一个 '*'（前缀 pre* / 后缀 *suf / 中间 pre*suf），出现
-    // 两次及以上按输入有误拒绝
+    // 清单项支持恰好一个 '*'，出现两次及以上按输入有误拒绝
     for (const auto& topic : topics)
     {
         if (std::count(topic.begin(), topic.end(), '*') > 1)
@@ -1011,23 +989,23 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
             }
         }
     }
-    // 目录名检查 fail-fast 于发现校验前（纯输入错误）：outputDir 非空且已存在即拒绝，
-    // 对齐 ros2 避免混入旧数据；父目录不存在由②段 create_directories 自动创建，不在此拦
+    // 目录名检查 fail-fast 于发现校验前（纯输入错误）；父目录不存在由后续
+    // create_directories 自动创建，不在此拦
     if (!outputDir.empty() && std::filesystem::exists(outputDir))
     {
         return fail("bag directory [" + outputDir + "] already exists, remove it or choose another name");
     }
-    // -b 分片上限校验 fail-fast 于发现校验前（纯输入错误，不等待不落盘）：非 0 须不低于
-    // 最小分片文件大小（ros2 同款启动校验，mcap 存储层下限 1024 字节）；0=不分片不校验
+    // -b 分片上限校验 fail-fast 于发现校验前（纯输入错误，mcap 存储层下限 1024 字节）；
+    // 0=不分片不校验
     if (maxBagSize != 0 && maxBagSize < kMinSplitFileSize)
     {
         return fail("max bag size [" + std::to_string(maxBagSize) +
                     "] too small, minimum split file size is 1024 bytes (0 to disable splitting)");
     }
 
-    // ①启动校验：轮询发现缓存快照至收敛（含单 '*' 通配模式项按全表展开，展开集连续
-    // stableRounds 次不变也收敛；总窗不足 kMinValidateWindowMs 提升 rounds——SPDP 参与者
-    // 公告周期约 3s，短窗会把"发布者早已在线但发现未完成"误判为无端点）
+    // ①启动校验：轮询发现缓存快照至收敛（含通配模式项按全表展开）；总窗不足
+    // kMinValidateWindowMs 提升 rounds——SPDP 参与者公告周期约 3s，短窗会把"发布者早已
+    // 在线但发现未完成"误判为无端点
     std::vector<std::string> exactTopics;  // 精确名子集（无端点时按输入有误报错）
     std::vector<std::string> patterns;     // 通配模式子集（已保证恰好一个 '*'）
     for (const auto& topic : topics)
@@ -1051,7 +1029,6 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
         {
             std::set<std::string> known;  // 发现缓存全表主题名（锁内拷 key，短临界区）
             {
-                // 仅读发现缓存：seenMtx_ 叶子锁短临界区
                 std::lock_guard<std::mutex> seenLock(seenMtx_);
                 for (const auto& kv : seen_)
                 {
@@ -1077,7 +1054,7 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
             }
             const bool allExactPresent = std::all_of(exactTopics.begin(), exactTopics.end(),
                 [&known](const std::string& topic) { return known.count(topic) > 0; });
-            bool allPatternsHit = true;  // 每个模式在展开集中均有命中
+            bool allPatternsHit = true;
             for (const auto& pattern : patterns)
             {
                 bool hit = false;
@@ -1107,7 +1084,7 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
             }
             if (stableCount >= rounds)
             {
-                // 慢路径收敛：展开集已稳定仍不满足快路径，结算缺端点主题后按输入有误报错
+                // 慢路径收敛：结算缺端点主题后按输入有误报错
                 recordTopics = hasPatterns ? std::move(snapshot) : exactTopics;
                 for (const auto& topic : exactTopics)
                 {
@@ -1120,8 +1097,8 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
             }
             if (allExactPresent && allPatternsHit && (!hasPatterns || sameAsPrev))
             {
-                // 快路径收敛：全部精确项在线且模式全部命中（无模式保留原"全在线立即收敛"；
-                // 含模式再多等一轮确认展开集不再增长——匹配集开放无"到齐"信号，一轮无新增防抖）
+                // 快路径收敛：全部精确项在线且模式全部命中；含模式再多等一轮确认展开集
+                // 不再增长——匹配集开放无"到齐"信号，一轮无新增防抖
                 recordTopics = hasPatterns ? std::move(snapshot) : exactTopics;
                 break;
             }
@@ -1129,7 +1106,7 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
             std::this_thread::sleep_for(std::chrono::milliseconds(interval));
         }
     }
-    // 模式空命中结算：展开集里查不到该模式命中即输入有误（与缺端点主题合并逐行列出）
+    // 模式空命中结算（与缺端点主题合并逐行列出）
     std::vector<std::string> unmatchedPatterns;
     for (const auto& pattern : patterns)
     {
@@ -1176,10 +1153,9 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
         return fail(msg);
     }
 
-    // ②建 bag 目录 + mcap writer（校验通过才落盘，输入有误不产生任何文件）：
-    // outputDir 非空用指定目录名/路径（已存在已在①段拒绝）；为空按时间戳生成——目录名
-    // 精确到毫秒（同秒录制不重名）：strftime 无毫秒，取 epoch 毫秒低 3 位手拼补零；日期
-    // 与时间段格式与 metadata 可读时间伴生键（_format）保持一致
+    // ②建 bag 目录 + mcap writer（校验通过才落盘，输入有误不产生任何文件）；为空按时间
+    // 戳生成——目录名精确到毫秒（同秒录制不重名；strftime 无毫秒，取 epoch 毫秒低 3 位
+    // 手拼补零）
     std::string bagDirName;
     if (!outputDir.empty())
     {
@@ -1219,7 +1195,7 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
     }
 
     // -b/-d 分片滚动共享状态（bag_0 已打开即首分片；滚动仅在 payloadMtx 锁内串行执行，
-    // 无需原子；生命周期覆盖全部 listener，经 McapWriteCtx 指针共享）
+    // 无需原子；经 McapWriteCtx 指针共享）
     std::vector<std::string> filePaths{"bag_0.mcap"};
     uint64_t fileIndex = 0;
     std::atomic<bool> splitBroken{false};
@@ -1290,7 +1266,7 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
         }
 
         // 落盘 QoS 串：首见 writer 的 offered Reliability/Durability（与下方 reader QoS
-        // 跟随同源同刻快照）；仅订阅者主题无 offered 可取，存空串（读侧回退默认 QoS）
+        // 跟随同源同刻快照）；仅订阅者主题存空串（读侧回退默认 QoS）
         std::string qosStr;
         if (hasWriter)
         {
@@ -1298,7 +1274,7 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
                      durabilityKindName(writerInfo.durability.kind);
         }
 
-        // 透传类型按类型名共享注册（register_type 幂等；TypeSupport 以 shared_ptr 持所有权）
+        // 透传类型按类型名共享注册（register_type 幂等）
         const auto ins = types.emplace(typeName, TypeSupport(new PassthroughPubSubType(typeName)));
         if (ins.second)
         {
@@ -1312,8 +1288,8 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
             return fail("create topic [" + topic + "] failed");
         }
 
-        // reader QoS：Reliability/Durability 跟随远端 writer offered（requested ≤ offered 恒
-        // 成立）；仅订阅者场景无 offered 可跟随，用默认 QoS 由用户保证与后续发布者兼容
+        // reader QoS：Reliability/Durability 跟随远端 writer offered（requested ≤ offered
+        // 恒成立）；仅订阅者场景无 offered 可跟随，用默认 QoS 由用户保证与后续发布者兼容
         DataReaderQos rqos = DATAREADER_QOS_DEFAULT;
         if (hasWriter)
         {
@@ -1335,10 +1311,9 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
         ctx.maxBagSize = maxBagSize;
         ctx.maxBagDurationSec = maxBagDurationSec;
         ctx.cache = cache.get();
-        // 首见主题注册 mcap Channel：schema_id=0 无 schema 通道，encoding 记 "cdr"
-        // （原始 CDR 字节透传落盘的直接落点）；metadata 记类型名与 QoS 串——schemaless 无
-        // schema 可承载，bag reindex/bag play 据此恢复 topics type 与发布 QoS（分片滚动后
-        // mcap write 首见 channelId 自动补写 Channel 记录时一并携带）
+        // 首见主题注册 mcap Channel：schema_id=0 无 schema 通道，encoding 记 "cdr"；
+        // metadata 记类型名与 QoS 串——schemaless 无 schema 可承载，bag reindex/bag play
+        // 据此恢复 topics type 与发布 QoS
         auto channelIt = channels.find(topic);
         if (channelIt == channels.end())
         {
@@ -1346,8 +1321,7 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
                 mcap::KeyValueMap{{"type", typeName}, {"qos", qosStr}});
             // 前序主题的 reader 已活跃（直写回调/双缓冲消费线程持 payloadMtx 调
             // shardCheckAndWrite→write）：addChannel 扩容 vector<Channel> 会 relocate 既有
-            // 元素（移动构造写 string），与 write 侧读 Channel 构成数据竞态（McapWriter
-            // 非线程安全，TSan 实测多主题订阅期）——写路径同锁互斥
+            // 元素，与 write 侧读 Channel 构成数据竞态（TSan 实测多主题订阅期）——写路径同锁互斥
             std::lock_guard<std::mutex> lock(payloadMtx);
             writer.addChannel(channel);
             channels[topic] = channel.id;
@@ -1377,8 +1351,7 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
         }
         subs_[topic] = std::move(sub);
         byChannel[ctx.channelId] = subs_[topic].listener.get();
-        // 逐主题启动回执（裸 cout 对齐 FastDDSDebugNode 的 subscribed 提示惯例）：CLI 启动行
-        // 只显示清单项数，通配展开后的实际录制清单由此逐条可见
+        // 逐主题启动回执：CLI 启动行只显示清单项数，通配展开后的实际录制清单由此逐条可见
         std::cout << "recording topic=" << topic << " type=" << typeName << std::endl;
     }
 
@@ -1437,9 +1410,8 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
     }
     writer.close();  // 收尾写 summary（三层索引 + 统计）；close() 无返回值，索引异常经后续读回路径暴露
 
-    // metadata.json：顶层平铺 bag 元信息（storage_identifier=mcap；起始时间/时长各附
-    // _format 可读伴生键便于人工阅读；最小字段集：起始时间/时长/主题清单与计数，
-    // topic_metadata 内 name/type/qos 并列），nlohmann json 组装后 dump(4) 美化落盘
+    // metadata.json：顶层平铺 bag 元信息，起始时间/时长各附 _format 可读伴生键；最小
+    // 字段集（起始时间/时长/主题清单与计数，topic_metadata 内 name/type/qos 并列）
     uint64_t totalMessages = 0;
     nlohmann::json topicsWithCount = nlohmann::json::array();
     for (const auto& topic : recordTopics)
@@ -1456,7 +1428,7 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
     nlohmann::json info;
     info["version"] = kBagMetadataVersion;
     info["storage_identifier"] = "mcap";
-    info["relative_file_paths"] = filePaths;  // 全部分片相对名（bag_0.mcap, bag_1.mcap, ...）
+    info["relative_file_paths"] = filePaths;
     info["starting_time"]["nanoseconds_since_epoch"] = startNs;
     info["starting_time"]["nanoseconds_since_epoch_format"] = formatEpochNs(startNs);
     info["duration"]["nanoseconds"] = durationNs;
@@ -1468,8 +1440,7 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
         meta << info.dump(4) << "\n";
     }
 
-    // 统计回填（按录制清单顺序：纯精确清单为输入顺序，含模式为展开后去重升序；
-    // reader 已删，listener 计数稳定可直读）
+    // 统计回填（按录制清单顺序；reader 已删，listener 计数稳定可直读）
     stats.clear();
     stats.reserve(recordTopics.size());
     for (const auto& topic : recordTopics)
@@ -1500,8 +1471,8 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
     return true;
 }
 
-// 读 bag 目录 metadata.json 组装 info 文本行（实现见头注释）。纯文件读：不触任何 DDS 实体
-// 与节点状态，静态调用；JSON 字段缺失/类型不符经 nlohmann 异常统一转报错回填。
+// 纯文件读：不触任何 DDS 实体与节点状态，静态调用；JSON 字段缺失/类型不符经 nlohmann
+// 异常统一转报错回填
 bool FastDDSBagNode::bagInfoText(const std::string& bagDir, std::vector<std::string>& outLines,
     std::string* error)
 {
@@ -1525,7 +1496,7 @@ bool FastDDSBagNode::bagInfoText(const std::string& bagDir, std::vector<std::str
     {
         return fail("could not find metadata.json in bag directory [" + bagDir + "]");
     }
-    // 目录递归总大小（对齐参考实现语义：bag 目录全部文件字节数累加，含 metadata.json 自身）
+    // 目录递归总大小（含 metadata.json 自身）
     uint64_t dirBytes = 0;
     for (const auto& entry : std::filesystem::recursive_directory_iterator(dirPath, ec))
     {
@@ -1551,8 +1522,7 @@ bool FastDDSBagNode::bagInfoText(const std::string& bagDir, std::vector<std::str
         const auto files = info.at("relative_file_paths").get<std::vector<std::string>>();
         const auto topics = info.at("topics_with_message_count");
 
-        outLines.emplace_back("");  // 首行空行（对齐参考实现输出形态）
-        // Files：首文件跟标签，多分片续行缩进 19 空格
+        outLines.emplace_back("");
         if (files.empty())
         {
             outLines.emplace_back(bagInfoLabeledLine("Files:", ""));
@@ -1573,9 +1543,8 @@ bool FastDDSBagNode::bagInfoText(const std::string& bagDir, std::vector<std::str
         outLines.emplace_back(
             bagInfoLabeledLine("End:", formatBagTimePoint(startNs + durationNs)));
         outLines.emplace_back(bagInfoLabeledLine("Messages:", std::to_string(messages)));
-        // Topic information：每主题一行（首行跟标签、续行缩进 19 空格）；元信息不含
-        // serialization_format 字段——录制链路单格式 CDR，写死（中性技术标识同
-        // storage_identifier: mcap，不改元信息结构保旧 bag 兼容）
+        // Topic information：元信息不含 serialization_format 字段——录制链路单格式 CDR，
+        // 写死（不改元信息结构保旧 bag 兼容）
         bool firstTopic = true;
         for (const auto& topic : topics)
         {
@@ -1583,8 +1552,7 @@ bool FastDDSBagNode::bagInfoText(const std::string& bagDir, std::vector<std::str
             std::ostringstream line;
             line << "Topic: " << meta.at("name").get<std::string>()
                  << " | Type: " << meta.at("type").get<std::string>();
-            // QoS 段可选：metadata.json 无 qos 键（旧 bag）或空串（仅订阅者主题录制）时
-            // 该段不显示
+            // QoS 段可选：metadata.json 无 qos 键（旧 bag）或空串（仅订阅者主题录制）时不显示
             const auto qosIt = meta.find("qos");
             if (qosIt != meta.end() && qosIt->is_string() && !qosIt->get<std::string>().empty())
             {
@@ -1618,11 +1586,9 @@ bool FastDDSBagNode::bagInfoText(const std::string& bagDir, std::vector<std::str
 
 namespace
 {
-// bag convert：输入 bag 集 + 输出配置 → 逐条目过滤归并写新 bag
-
-// 收集目录内 <前缀>_<编号>.mcap 数据文件（其余条目跳过——限定存储格式，避免误开无关文件），
-// 按编号升序排序（bag_10 排 bag_2 之后：分片序列与录制侧滚动次序一致，非字典序）。返回目录
-// 条目总数（调用方据此区分"空目录"与"有文件无匹配分片"两类错误；bagReindex/convert 共用）。
+// 收集目录内 <前缀>_<编号>.mcap 数据文件（其余条目跳过），按编号升序排序（bag_10 排
+// bag_2 之后：分片序列与录制侧滚动次序一致，非字典序）。返回目录条目总数（调用方据此
+// 区分"空目录"与"有文件无匹配分片"两类错误；bagReindex/convert/play 共用）。
 std::size_t collectBagShards(const std::filesystem::path& dirPath,
     std::vector<std::pair<uint64_t, std::string>>& bagFiles)
 {
@@ -1654,18 +1620,10 @@ struct BagConvertEntry
     uint64_t maxBagDurationSec = 0;  // 单分片最大时长秒（0=不分片）
 };
 
-// 解析 bag convert 输出配置文件（JSON，顶层 output_bags 键为对象序列，每条目独立一组输出
-// 参数；未知字段宽容忽略——逐字段取值，不整体拒绝）。字段语义（缺省值对齐参考实现 ros2
-// bag convert 输出配置的默认行为）：
-//   uri                  必填 string 非空   输出 bag 目录（条目间重复拒绝）
-//   topics               可选 string[]     输出主题清单（缺省=全部；元素含一个 '*' 为通配）
-//   start_time           可选 number|string 收纳区间下界（缺省 0=不限，含边界）。两种写法：
-//                                          非负整数纳秒；或可读时间字符串 YYYY-MM-DD_HH-MM-
-//                                          SS_毫秒-微秒-纳秒（本地时区，metadata starting_time
-//                                          的 `_format` 伴生键同款，可从产物直接拷贝）
-//   end_time             可选 number|string 收纳区间上界（写法同 start_time）
-//   max_bagfile_size     可选 number       单分片最大字节数（缺省 0=不分片；>0 须 >=1024）
-//   max_bagfile_duration 可选 number       单分片最大时长秒（缺省 0=不分片）
+// 解析 bag convert 输出配置文件（JSON，顶层 output_bags 键为对象序列；未知字段宽容忽略
+// ——逐字段取值，不整体拒绝；缺省值对齐参考实现 ros2 bag convert 默认行为）。start_time/
+// end_time 支持非负整数纳秒或可读时间字符串——本地时区，与产物 metadata starting_time 的
+// `_format` 伴生键同款，可从产物直接拷贝。
 bool parseBagConvertCfg(const std::string& cfgPath, std::vector<BagConvertEntry>& entries,
     std::string* error)
 {
@@ -1798,7 +1756,7 @@ bool parseBagConvertCfg(const std::string& cfgPath, std::vector<BagConvertEntry>
         {
             return fail(fieldError);
         }
-        // end_time 为 0（不限）时不比区间；显式收窄且 start 超过 end 报错
+        // end_time 为 0（不限）时不比区间
         if (entry.endTimeNs != 0 && entry.startTimeNs > entry.endTimeNs)
         {
             return fail("cfg [" + cfgPath + "] start_time must not exceed end_time");
@@ -1814,8 +1772,8 @@ bool parseBagConvertCfg(const std::string& cfgPath, std::vector<BagConvertEntry>
 }
 
 // bag convert 输入游标：单输入的分片升序消息流（惰性开片 + 线性读视图）。消息先分解深拷贝
-// 再推进迭代器（LinearMessageView 复用内部缓冲，++ 后引用失效），供 k-way 归并比较与写侧
-// 稳定取用；分片尽自动切下一分片（升序续流，无需 summary——readMessages 逐 chunk 顺序读）。
+// 再推进迭代器（LinearMessageView 复用内部缓冲，++ 后引用失效）；分片尽自动切下一分片
+// （升序续流，无需 summary——readMessages 逐 chunk 顺序读）。
 class BagConvertCursor
 {
 public:
@@ -1841,9 +1799,8 @@ public:
             {
                 if (filePos_ >= files_.size())
                 {
-                    // 耗尽须清 hasMessage_：主循环 advance 只查 kError、valid() 以
-                    // hasMessage_ 为据——残留 true 会让已耗尽游标被反复选中反复写
-                    // 同一条残留消息（死循环）
+                    // 耗尽须清 hasMessage_：主循环 valid() 以 hasMessage_ 为据——残留 true
+                    // 会让已耗尽游标被反复选中反复写同一条残留消息（死循环）
                     hasMessage_ = false;
                     return Step::kExhausted;
                 }
@@ -1868,7 +1825,7 @@ public:
                 hasMessage_ = true;
                 return Step::kMessage;
             }
-            closeView();  // 当前分片尽：切下一分片（惰性开片）
+            closeView();
             ++filePos_;
         }
     }
@@ -1917,9 +1874,9 @@ private:
             }
             return false;
         }
-        // 经官方 readMessages 构造线性视图：内部以 byteRange 求字节区间（无 summary
-        // 时退化全数据区，兼容旧格式分片）；onProblem 必须传非空回调（忽略型 lambda）——
-        // mcap 读侧会直调该回调，空 std::function 抛 bad_function_call
+        // 经官方 readMessages 构造线性视图（无 summary 时退化全数据区，兼容旧格式分片）；
+        // onProblem 必须传非空回调（忽略型 lambda）——mcap 读侧会直调该回调，空
+        // std::function 抛 bad_function_call
         view_.emplace(reader_->readMessages([](const mcap::Status&) {},
                                             mcap::ReadMessageOptions{}));
         it_.emplace(view_->begin());
@@ -1953,9 +1910,8 @@ private:
 };
 }  // namespace
 
-// 从 bag 目录内 mcap 分片重建 metadata.json（实现见头注释）。纯文件操作：不触任何 DDS
-// 实体与节点状态，静态调用；统计取自 mcap summary（Statistics 记录含 per-channel 条数
-// 与全局起止时间），无 summary/损坏时 readSummary 回退线性扫描重建（覆盖中断录制的 bag）。
+// 纯文件操作：不触任何 DDS 实体与节点状态，静态调用；统计取自 mcap summary，无
+// summary/损坏时 readSummary 回退线性扫描重建（覆盖中断录制的 bag）。
 bool FastDDSBagNode::bagReindex(const std::string& bagDir, std::string* error)
 {
     auto fail = [&error](const std::string& reason) {
@@ -1977,8 +1933,7 @@ bool FastDDSBagNode::bagReindex(const std::string& bagDir, std::string* error)
         return fail("must specify a bag directory");
     }
 
-    // 收集 <前缀>_<编号>.mcap 数据文件（其余条目跳过——限定存储格式，避免误开无关文件）；
-    // 目录无任何条目与有文件无匹配分列报错（对齐参考实现两分支）
+    // 收集 <前缀>_<编号>.mcap 数据文件；目录无任何条目与有文件无匹配分列报错
     std::vector<std::pair<uint64_t, std::string>> bagFiles;  // (编号, 文件名)
     const std::size_t entryCount = collectBagShards(dirPath, bagFiles);
     if (entryCount == 0)
@@ -1991,7 +1946,7 @@ bool FastDDSBagNode::bagReindex(const std::string& bagDir, std::string* error)
     }
 
     // 逐分片读 mcap 统计：per-channel 条数经 channels() 映射主题名累加（std::map 迭代
-    // 升序即主题名升序，对齐参考实现输出序）；起止时间取全局 min/max，无消息分片不参与
+    // 升序即主题名升序）；起止时间取全局 min/max，无消息分片不参与
     std::map<std::string, uint64_t> topicCounts;
     std::map<std::string, std::string> topicTypes;  // 主题名 → 类型名（来自 Channel.metadata）
     std::map<std::string, std::string> topicQos;    // 主题名 → QoS 串（来自 Channel.metadata）
@@ -2030,8 +1985,8 @@ bool FastDDSBagNode::bagReindex(const std::string& bagDir, std::string* error)
             }
             const auto& topic = channelIt->second->topic;
             topicCounts[topic] += channelCount.second;
-            // 类型名恢复：录制侧经 Channel.metadata 落盘（{"type", 类型名}）；旧格式 bag
-            // 无该元数据时不覆盖保持空串回退（同主题跨分片 channel 声明一致，覆盖等值）
+            // 类型名恢复：录制侧经 Channel.metadata 落盘；旧格式 bag 无该元数据时保持空串
+            // 回退（同主题跨分片 channel 声明一致，覆盖等值）
             const auto typeIt = channelIt->second->metadata.find("type");
             if (typeIt != channelIt->second->metadata.end() && !typeIt->second.empty())
             {
@@ -2064,8 +2019,7 @@ bool FastDDSBagNode::bagReindex(const std::string& bagDir, std::string* error)
     const uint64_t durationNs = (hasMessage && endNs > startNs) ? endNs - startNs : 0;
 
     // 组装与写侧同构的 metadata.json（无条件覆盖：reindex 语义即从数据文件重建元信息）；
-    // type/qos 均取 Channel.metadata 恢复，旧格式 bag（无该元数据）回退空串——文件里没有就
-    // 不虚构
+    // 旧格式 bag（无 type/qos 元数据）回退空串——文件里没有就不虚构
     uint64_t totalMessages = 0;
     nlohmann::json topicsWithCount = nlohmann::json::array();
     for (const auto& topicCount : topicCounts)
@@ -2113,9 +2067,9 @@ bool FastDDSBagNode::bagReindex(const std::string& bagDir, std::string* error)
     return true;
 }
 
-// 将输入 bag 目录集按输出配置文件转换合并为新 bag（实现见头注释）。纯文件操作：预扫收集
-// 主题与类型名 → 逐条目重建游标 k-way 归并（logTime 全局升序，tie 按输入序）过滤写盘 →
-// metadata.json（reindex 同构）。单线程同步、不触任何 DDS 实体与节点状态，静态调用。
+// 纯文件操作：预扫收集主题与类型名 → 逐条目重建游标 k-way 归并（logTime 全局升序，
+// tie 按输入序）过滤写盘 → metadata.json（reindex 同构）。单线程同步、不触任何 DDS 实体
+// 与节点状态，静态调用。
 bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const std::string& cfgPath,
     std::vector<std::string>& outLines, std::string* error)
 {
@@ -2135,7 +2089,7 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
     }
 
     // ②输入收集：逐输入校验目录并收集分片（重复目录拒绝——同名目录重复归并会双写
-    // 同一消息，对转换语义属输入错误）
+    // 同一消息）
     struct InputShards
     {
         std::filesystem::path dir;
@@ -2176,8 +2130,8 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
     }
 
     // ③预扫：逐分片读 Channel 映射收集主题全集与主题→类型名/QoS 串（type 取自
-    // Channel.metadata，reindex 恢复同款；同主题类型冲突整体报错）；预扫后即关闭，
-    // 归并阶段重新线性读（无需 summary）
+    // Channel.metadata，同主题类型冲突整体报错）；预扫后即关闭，归并阶段重新线性读
+    // （无需 summary）
     std::set<std::string> inputTopics;
     std::map<std::string, std::string> topicTypes;
     std::map<std::string, std::string> topicQos;  // 主题名 → QoS 串（来自 Channel.metadata，旧格式 bag 缺省空串）
@@ -2217,7 +2171,7 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
                                     "] across inputs");
                     }
                 }
-                // QoS 串同款收集与冲突检测（对齐 type 口径）：防转换产物丢 QoS
+                // QoS 串同款收集与冲突检测：防转换产物丢 QoS
                 const auto qosIt = channel.second->metadata.find("qos");
                 if (qosIt != channel.second->metadata.end() && !qosIt->second.empty())
                 {
@@ -2240,8 +2194,8 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
     outLines.reserve(entries.size());
     for (const auto& entry : entries)
     {
-        // 主题展开：精确项须存在于输入主题集；模式项（恰一个 '*'）对输入主题全集匹配；
-        // 展开集 = 精确 ∪ 命中（去重升序）；清单为空 = 全部输入主题
+        // 主题展开：精确项须存在于输入主题集；模式项对输入主题全集匹配；展开集 = 精确 ∪
+        // 命中（去重升序）；清单为空 = 全部输入主题
         std::set<std::string> outTopics;
         for (const auto& item : entry.topics)
         {
@@ -2272,8 +2226,8 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
         {
             outTopics = inputTopics;
         }
-        // 入选主题类型名非空校验（schemaless 透传落盘的类型名是转换侧唯一类型来源，
-        // 旧格式 bag 无该元数据无从透传——拒转）；未入选主题不校验（不转换无须类型）
+        // 入选主题类型名非空校验（schemaless 透传落盘的类型名是转换侧唯一类型来源，旧格式
+        // bag 拒转）；未入选主题不校验（不转换无须类型）
         for (const auto& topic : outTopics)
         {
             const auto typeIt = topicTypes.find(topic);
@@ -2284,7 +2238,7 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
             }
         }
 
-        // 输出目录：已存在拒绝（防混入旧产物，同 record -o 口径）；父链自动多级创建
+        // 输出目录：已存在拒绝（防混入旧产物）；父链自动多级创建
         const std::filesystem::path outDir(entry.uri);
         std::error_code ec;
         if (std::filesystem::exists(outDir, ec))
@@ -2304,8 +2258,8 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
         {
             return fail("open output mcap file failed: " + openStatus.message);
         }
-        // 逐主题注册 Channel（record 同款：schema_id=0 无 schema 通道，encoding "cdr"，
-        // metadata 记类型名与 QoS 串——bag reindex/bag info 据此恢复）；map 迭代升序即注册序
+        // 逐主题注册 Channel（record 同款：schema_id=0、encoding "cdr"、metadata 记类型名
+        // 与 QoS 串——bag reindex/bag info 据此恢复）；map 迭代升序即注册序
         std::map<std::string, mcap::ChannelId> channelIds;
         for (const auto& topic : outTopics)
         {
@@ -2321,8 +2275,7 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
             channelIds[topic] = channel.id;
         }
 
-        // 归并写状态（每条目独立）：分片滚动状态同 record 口径（写前检查、先到先分、
-        // 新分片起始取本条 logTime）
+        // 归并写状态（每条目独立）：分片滚动状态同 record 口径（写前检查、先到先分）
         std::vector<std::string> filePaths{"bag_0.mcap"};
         uint64_t fileIndex = 0;
         uint64_t shardStartNs = 0;  // 当前分片首条消息 logTime（0=尚无首条不判定时长）
@@ -2333,16 +2286,15 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
         std::map<std::string, std::pair<uint64_t, uint64_t>> topicCounts;  // (count, bytes)
 
         // k-way 归并：每轮取当前消息 logTime 最小的游标（tie 按输入序稳定——同刻消息
-        // 先后仅影响写入顺序，升序约束不受影响）
+        // 先后仅影响写入顺序）
         std::vector<BagConvertCursor> cursors;
         cursors.reserve(perInput.size());
         for (const auto& in : perInput)
         {
             cursors.emplace_back(in.dir, in.files);
         }
-        // 各游标首取：构造为惰性开片，valid() 以 hasMessage_ 为据——未首取则首轮扫描
-        // 全无效、归并循环直接退出（0 消息写出）；首片损坏不可降级，整体 fail。
-        // （单遍首取：重复 advance 会把已取消息顶掉——单消息输入直接打耗尽游标）
+        // 各游标首取：valid() 以 hasMessage_ 为据——未首取则首轮扫描全无效、归并循环直接
+        // 退出（0 消息写出）；单遍首取，重复 advance 会把已取消息顶掉
         for (auto& cursor : cursors)
         {
             std::string stepError;
@@ -2365,7 +2317,7 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
             }
             if (best == cursors.size())
             {
-                break;  // 输入耗尽
+                break;
             }
             BagConvertCursor& cursor = cursors[best];
             const uint64_t logTime = cursor.logTime();
@@ -2434,7 +2386,7 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
                 }
                 if (shardStartNs == 0)
                 {
-                    shardStartNs = logTime;  // 分片首条：确定本分片时长起点
+                    shardStartNs = logTime;
                 }
             }
             std::string stepError;
@@ -2497,17 +2449,15 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
 // bag play 专属辅助（行为语义见 FastDDSBagNode.h play 声明注释）
 constexpr size_t kPlayWriterHistorySize = 1000;   // 发布端 history/resource 上限(TL latched
                                                   // 补发容量;独立常量不随 --read-ahead-queue-size
-                                                  // 联动——按参考实现语义该参数仅作用读侧内存队列)
+                                                  // 联动——该参数按参考实现语义仅作用读侧内存队列)
 constexpr uint32_t kStarvedWarnAfterMs = 500;     // 队列空等待多久才打 starved 告警(开局分片
-                                                  // open/loop 轮边界 open 的短暂空窗不告警,
-                                                  // 持续饿死才告——对齐参考实现 starved 告警
-                                                  // "提示加大队列"意图且规避异步读线程开局噪音)
+                                                  // open/loop 轮边界的短暂空窗不告警,持续饿死才告)
 constexpr uint32_t kPlayPausePollMs = 20;         // 暂停标志轮询间隔(短于录制轮询,暂停/恢复更跟手)
 constexpr uint32_t kPlayDelayPollMs = 50;         // 延迟窗停止标志轮询间隔(分段睡防大延迟卡 join)
 constexpr uint32_t kPlayAckWaitSliceMs = 200;     // 退出确认等待分片时长(片间轮询停止标志,永等可中断)
 
-// 读线程 → 播放线程单条消息(深拷贝所有权转移;eos 哨兵标志读毕;loopStart 轮边界哨兵——
-// 第二轮起每轮首条置位,播放线程据此重锚时间轴)
+// 读线程 → 播放线程单条消息(深拷贝所有权转移;eos 哨兵标志读毕;loopStart 轮边界哨兵供
+// 播放线程重锚时间轴)
 struct PlayMsg
 {
     std::string topic;
@@ -2533,11 +2483,10 @@ struct PlayQosOverride
     std::optional<DurabilityQosPolicyKind> durability;
 };
 
-// 解析 QoS 覆盖文件(JSON:顶层键=主题名 → 值={reliability, durability} 两枚枚举名对象,
-// 与 bag 快照串同款大写 DDS 标准拼写、复用同款解析函数;未知字段键忽略,非法枚举值/值非
-// string 报错——失败即整体拒播不静默回退,QoS 覆盖是发布正确性的一部分;主题命中判定
-// 留给预扫应用段静默处理——文件里含不在 bag 清单的主题键不算错误)。err 回填失败原因
-// 供调用方报错,成功返回 true 且 out 填充解析产物
+// 解析 QoS 覆盖文件(JSON:顶层键=主题名 → 值={reliability, durability} 枚举名对象，复用
+// bag 快照同款解析;非法枚举值/值非 string 报错——失败即整体拒播不静默回退,QoS 覆盖是
+// 发布正确性的一部分;不在 bag 清单的主题键不算错误,留给预扫应用段静默处理)。
+// err 回填失败原因,成功返回 true 且 out 填充解析产物
 bool loadPlayQosOverrides(const std::string& path,
     std::map<std::string, PlayQosOverride>& out, std::string& err)
 {
@@ -2596,7 +2545,7 @@ bool loadPlayQosOverrides(const std::string& path,
             }
             ovr.durability = durKind;
         }
-        out[it.key()] = ovr;  // PlayQosOverride trivially-copyable，拷贝即无开销
+        out[it.key()] = ovr;
     }
     return true;
 }
@@ -2613,10 +2562,8 @@ struct PlayWriterEntry
 
 // 读播解耦有界队列:读线程 push(满则背压阻塞)、播放线程 pop(空则等待)。双侧等待均
 // wait_for 带超时轮询停止谓词(不用无限 wait——TSan 规避同 record 消费线程先例);
-// notify 移出锁外避免被唤醒方立即撞锁。深度经构造注入(--read-ahead-queue-size,缺省
-// kPlayReadAheadQueueSizeDefault);队列空使播放持续等待超 kStarvedWarnAfterMs 打一次性 starved
-// 告警(读线程供给不上,播放将延迟——对齐参考实现 "Message queue starved..." 语义;
-// 开局/loop 轮边界 open 的短暂空窗不达阈值不打,eos 哨兵在队时 pop 即返不打)。
+// notify 移出锁外避免被唤醒方立即撞锁。队列空使播放持续等待超 kStarvedWarnAfterMs 打
+// 一次性 starved 告警(开局/loop 轮边界的短暂空窗不达阈值不打)。
 class PlayQueue
 {
 public:
@@ -2706,36 +2653,31 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
 
     stats.clear();
 
-    // 速率入参校验（快速返回不建任何 DDS 实体，对齐预扫失败路径；stats 已清空——失败
-    // 语义为"未播放任何消息"）；通过后注入原子初值，此后播放线程只认原子（运行时
-    // bagPlaySetRate 动态调节的唯一生效通道）
+    // 速率入参校验（快速返回不建任何 DDS 实体；stats 已清空——失败语义为"未播放任何
+    // 消息"）；通过后注入原子初值，此后播放线程只认原子（运行时 bagPlaySetRate 动态调节
+    // 的唯一生效通道）
     if (playbackRate <= 0.0)
     {
         return fail("invalid playback rate");
     }
     yomk::g_bagPlayRate.store(playbackRate, std::memory_order_relaxed);
 
-    // 起始偏移入参校验（同上快速返回路径，不建任何 DDS 实体）；负值非法——错误文案
-    // 对齐服务层锁外校验
+    // 起始偏移入参校验（快速返回路径）；负值非法——错误文案对齐服务层锁外校验
     if (startOffset < 0.0)
     {
         return fail("invalid start offset");
     }
 
-    // 开播延迟入参校验（同上快速返回路径，不建任何 DDS 实体）；只拒负值——0 为合法
-    // 缺省不延迟（有意偏离 ros2 API 层负值告警忽略按 0 播，对齐 rate/startOffset
-    // 快速拦截先例）；错误文案对齐服务层锁外校验
+    // 开播延迟入参校验（快速返回路径）；只拒负值——0 为合法缺省不延迟（有意偏离 ros2
+    // API 层负值告警忽略按 0 播，对齐 rate/startOffset 快速拦截先例）
     if (delay < 0.0)
     {
         return fail("invalid delay");
     }
 
-    // 主题重映射规则解析校验（同上快速返回路径，不建任何 DDS 实体）；对齐 ros2 --remap
-    // 语义（humble player.cpp 经 rclcpp::NodeOptions.arguments 委托节点级 remap）：
-    // "old:=new" 原始串按首个 ":=" 切分（两侧任一为空即格式非法——恒等 old==new 允许），
-    // old 重复报错（ros2 经 rclcpp 行为未定义，本仓快速拦截对齐 convert 重复目录拒绝
-    // 先例）；匹配规则为发布实体命名层精确比较（无通配），old 不在 bag 清单则规则
-    // 静默无效不报错（不命中即无效果）
+    // 主题重映射规则解析（快速返回路径）："old:=new" 按首个 ":=" 切分（两侧任一为空即
+    // 格式非法——恒等 old==new 允许），old 重复报错；匹配为发布实体命名层精确比较（无
+    // 通配），old 不在 bag 清单则规则静默无效
     std::vector<std::pair<std::string, std::string>> remapRules;
     remapRules.reserve(topicRemaps.size());
     for (const auto& rule : topicRemaps)
@@ -2756,15 +2698,14 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
         remapRules.emplace_back(oldTopic, rule.substr(sep + 2));
     }
 
-    // 预读队列深度入参校验（同上快速返回路径，不建任何 DDS 实体）；0 容量队列 push
-    // 背压 items_.size() >= 0 恒真死锁必拦；负值已由 CLI 解析层拦截，size_t 层仅余 0
+    // 预读队列深度入参校验（快速返回路径）；0 容量队列 push 背压恒真死锁必拦
     if (readAheadQueueSize < 1)
     {
         return fail("invalid read-ahead queue size");
     }
 
-    // QoS 覆盖文件加载解析（同上快速返回路径，不建任何 DDS 实体；文件级校验先于 bag
-    // 触达——路径打不开/格式非法/枚举非法立即拒播）；空=不加载
+    // QoS 覆盖文件加载解析（快速返回路径；文件级校验先于 bag 触达——路径打不开/格式
+    // 非法/枚举非法立即拒播）；空=不加载
     std::map<std::string, PlayQosOverride> qosOverrides;
     if (!qosOverridesPath.empty())
     {
@@ -2802,7 +2743,7 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
     }
 
     // 逐主题解析(name/type/qos 三键;type 空串旧格式 bag 拒播;qos 空串/缺失回退
-    // RELIABLE+VOLATILE 且回填生效口径保 replaying 行与实际发布一致;非法枚举名报错)
+    // RELIABLE+VOLATILE 且回填生效口径保 replaying 行与实际发布一致)
     std::vector<PlayTopic> playTopics;
     try
     {
@@ -2833,10 +2774,9 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
             {
                 return fail("topic [" + pt.topic + "] invalid qos string [" + pt.qos + "]");
             }
-            // QoS 覆盖文件命中(三档优先级最高档:文件 > 快照 > 回退——回退组合已在上方
-            // qos 空串时回填快照串,此处统一以生效快照恢复值为起点覆盖);只覆盖文件给定
-            // 的档;命中后回填 pt.qos 保 replaying 行与实际发布一致;键为 bag 原名与
-            // --remap 正交,不命中键静默无效(对齐 remap 先例)
+            // QoS 覆盖文件命中(三档优先级:文件 > 快照 > 回退);只覆盖文件给定的档;命中后
+            // 回填 pt.qos 保 replaying 行与实际发布一致;键为 bag 原名与 --remap 正交,
+            // 不命中键静默无效
             const auto ovrIt = qosOverrides.find(pt.topic);
             if (ovrIt != qosOverrides.end())
             {
@@ -2851,10 +2791,9 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
                 pt.qos = std::string(reliabilityKindName(pt.qosCfg.reliability().kind)) + "," +
                          durabilityKindName(pt.qosCfg.durability().kind);
             }
-            // history 与 resource 显式对齐设 kPlayWriterHistorySize:history 为本地行为
-            // 不参与匹配,设大支持 TRANSIENT_LOCAL 订阅端匹配建立后 latched 补发;FastDDS
-            // 默认 max_samples_per_instance=100 会触发 QoS 一致性检查拒绝,不依赖默认值;
-            // 独立常量不随 --read-ahead-queue-size 联动(该参数按参考实现语义仅作用读侧)
+            // history/resource 显式设 kPlayWriterHistorySize:history 为本地行为不参与
+            // 匹配,设大支持 TRANSIENT_LOCAL 订阅端 latched 补发;FastDDS 默认
+            // max_samples_per_instance=100 会触发 QoS 一致性检查拒绝
             pt.qosCfg.history().depth = kPlayWriterHistorySize;
             pt.qosCfg.resource_limits().max_samples_per_instance = kPlayWriterHistorySize;
             pt.qosCfg.resource_limits().max_samples = kPlayWriterHistorySize;
@@ -2878,10 +2817,9 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
         bagListedTopics.insert(pt.topic);
     }
 
-    // 主题过滤(topics 尾参,对齐 convert topics 先例与 ros2 --topics 缺省语义):空=全部;
-    // 精确项须在 bag 清单否则报错;模式项恰一个 '*' 按 bag 清单展开(双 '*' 报错 record
-    // 惯例,未命中报错 convert 惯例);入选集合 = 精确 ∪ 通配命中(去重升序),此后回显/
-    // 发布实体/读线程入队/收尾统计只含入选主题。失败快速返回不建任何 DDS 实体
+    // 主题过滤:空=全部;精确项须在 bag 清单否则报错;模式项按 bag 清单展开(未命中报错);
+    // 入选集合 = 精确 ∪ 通配命中(去重升序),此后回显/发布实体/读线程入队/收尾统计只含
+    // 入选主题。失败快速返回不建任何 DDS 实体
     if (!topics.empty())
     {
         std::set<std::string> picked;
@@ -2926,7 +2864,7 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
         playTopics = std::move(filtered);
     }
 
-    // 开播回显的 bag 元信息(缺键/类型不符容忍按 0 显示——回显辅助字段,不阻断回放)
+    // 开播回显的 bag 元信息(缺键/类型不符容忍按 0 显示——回显辅助字段不阻断回放)
     uint64_t metaMsgCount = 0;
     uint64_t metaStartNs = 0;
     uint64_t metaDurationNs = 0;
@@ -2941,7 +2879,7 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
         // 元信息缺失:回显按 0,回放主流程不受影响
     }
 
-    // 分片收集(空目录与无匹配分片分列报错,对齐 reindex 口径)
+    // 分片收集(空目录与无匹配分片分列报错)
     std::vector<std::pair<uint64_t, std::string>> bagFiles;
     if (collectBagShards(dirPath, bagFiles) == 0)
     {
@@ -2952,8 +2890,8 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
         return fail("no bag files found for playing");
     }
 
-    // 主题重映射查询:bag 原名→发布新名(规则不命中返回原名——old 不在 bag 静默无效;
-    // 定义于线程创建前供回显/播放线程/收尾统计共用,播放线程按引用捕获全量局部量)
+    // 主题重映射查询:bag 原名→发布新名(规则不命中返回原名;定义于线程创建前供回显/
+    // 播放线程/收尾统计共用)
     const auto remappedTopic = [&remapRules](const std::string& name)
     {
         for (const auto& rule : remapRules)
@@ -3014,17 +2952,16 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
     std::string readErrorMsg;
     std::string publishError;
 
-    // ②读线程：分片升序逐条预读深拷贝入队（满则背压；清单外主题告警一次跳过；读流失败
-    // 记错误不中断——已读消息照常播完，play 返回 false，循环出口统一推 EOS 哨兵）。loop
-    // 到尾回卷重新预读无限循环（每轮首条置 loopStart 轮边界标记供播放线程重锚）；
-    // startOffset 读侧跳过早于基准+偏移的消息（不入队不计统计）；delay 延迟落播放侧
-    // （见播放线程，读侧全速预读不设门）
+    // ②读线程：分片升序逐条预读深拷贝入队（满则背压；读流失败记错误不中断——已读消息
+    // 照常播完，play 返回 false，循环出口统一推 EOS 哨兵）。loop 到尾回卷重新预读无限
+    // 循环（每轮首条置 loopStart 供播放线程重锚）；startOffset 读侧跳过（不入队不计
+    // 统计）；delay 延迟落播放侧，读侧全速预读不设门
     std::thread readThread([&]()
     {
         uint32_t loopRound = 0;
         std::set<std::string> warnedTopics;  // 整场一次(跨轮回卷不重复告警)
         const int64_t startOffsetNs = std::llround(startOffset * 1e9);  // 秒→纳秒(入口已校验>=0)
-        int64_t bagBaseNs = -1;  // 全场首条(过滤前)logTime——偏移基准(对齐 ros2 metadata.starting_time)
+        int64_t bagBaseNs = -1;  // 全场首条(过滤前)logTime——偏移基准
         while (!stopped())
         {
             BagConvertCursor cursor(dirPath, bagFiles);  // 回卷=重新打开分片(每轮一次 open)
@@ -3076,7 +3013,7 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
             {
                 break;  // 读流错误不循环(错误语义保留)/单轮模式读毕
             }
-            ++loopRound;  // 回卷下一轮
+            ++loopRound;
         }
         PlayMsg eosMsg;
         eosMsg.eos = true;
@@ -3087,23 +3024,16 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
     std::thread playThread([&]()
     {
         // 时间轴锚定:anchor(steady_clock)对应 bag 时间 t0;第 i 条播放时刻 =
-        // anchor + (logTime_i - t0)/rate——倍率缩放消息间调度间隔(对齐 ros2 PlayerClock:
-        // 2.0 两倍速、0.5 半倍速)。等价进度式:当前 bag 时间 = t0 + (now - anchor) * rate。
-        // 暂停恢复重锚:anchor' = now - (logTime_当前 - t0)/rate(当前条立即播,后续按 bag
-        // 差值顺延——暂停时长不折算进回放节奏)。换率重锚:保持已播 bag 进度
-        // ((now - anchor) * 旧倍率)不跳变反解新锚点,后续调度即时按新倍率推进(对齐
-        // PlayerClock 进度连续语义,无跳发/重复)
+        // anchor + (logTime_i - t0)/rate(倍率缩放消息间调度间隔)。暂停恢复与换率均重锚:
+        // 暂停后 anchor' = now - (logTime_当前 - t0)/rate(暂停时长不折算进回放节奏);
+        // 换率保持已播 bag 进度不跳变反解新锚点,后续调度按新倍率推进
         std::chrono::steady_clock::time_point anchor{};
         uint64_t t0 = 0;
         bool anchored = false;
         double rate = 1.0;
-        // --delay 每轮轮边界延迟秒→纳秒(入口已校验>=0,0=不延迟):读播解耦下读侧全速
-        // 预读入队,延迟须落在播放侧才能真正挡住每轮播出起点——首轮首条(!anchored)与
-        // 每轮回卷轮边界(loopStart 哨兵)重锚前分段轮询睡 SEC(50ms 粒度轮询停止标志,
-        // 大延迟下 Ctrl+C/stop 即退不卡 join);sleep 期间发布实体已建,首条发出不早于
-        // 实体建立+SEC——订阅匹配窗口(根治 VOLATILE 匹配前必丢首条先例);对齐 ros2
-        // do-while 循环体开头 "Will delay at the beginning of each loop"(读播一体下
-        // sleep 天然挡播放,本仓解耦架构等价落点在播放侧轮边界)
+        // --delay 落播放侧:读播解耦下读侧全速预读入队,延迟须落在播放侧才能真正挡住每轮
+        // 播出起点——轮边界分段轮询睡(大延迟下 Ctrl+C 即退不卡 join);sleep 期间发布实体
+        // 已建,首条发出不早于实体建立+SEC——订阅匹配窗口(根治 VOLATILE 匹配前必丢首条先例)
         const int64_t delayNs = std::llround(delay * 1e9);
         PlayMsg msg;
         while (!stopped() && queue.pop(msg))
@@ -3134,9 +3064,9 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
             }
             else if (msg.loopStart)
             {
-                // 轮边界重锚(loop 循环回放):回卷后 logTime 重回小值,既有锚定公式会把
-                // deadline 落在过去导致整轮瞬间倾泻——新轮从当前时刻重新起锚,当前条
-                // 立即播、后续按 bag 差值顺延(对齐暂停恢复重锚形态);倍率取轮边界最新值
+                // 轮边界重锚(loop 回卷后 logTime 重回小值,既有锚定公式会把 deadline 落在
+                // 过去导致整轮瞬间倾泻)——新轮从当前时刻重新起锚,当前条立即播、后续按
+                // bag 差值顺延;倍率取轮边界最新值
                 anchor = std::chrono::steady_clock::now();
                 t0 = msg.logTime;
                 rate = yomk::g_bagPlayRate.load(std::memory_order_relaxed);
@@ -3145,15 +3075,14 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
             // 仅防御手造 bag 的乱序时间戳;uint64 差值先算再转 double 除速率)
             const double bagOffsetNs =
                 static_cast<double>(msg.logTime > t0 ? msg.logTime - t0 : 0);
-            // 目标时刻 = 锚点 + bag 偏移 / 倍率(倍率>1 间隔缩短快放,<1 间隔拉长慢放)
             auto deadline = anchor +
                 std::chrono::nanoseconds(static_cast<int64_t>(bagOffsetNs / rate));
             while (!stopped())
             {
                 if (yomk::g_bagPlayPaused.load(std::memory_order_relaxed))
                 {
-                    // 暂停:冻结时间轴短轮询等恢复;恢复后重锚(当前条立即播;暂停期间
-                    // 倍率可能经 bagPlaySetRate 变更,重锚按最新倍率反解)
+                    // 暂停:冻结时间轴短轮询等恢复;恢复后重锚(当前条立即播;暂停期间倍率
+                    // 可能经 bagPlaySetRate 变更,重锚按最新倍率反解)
                     while (!stopped() &&
                            yomk::g_bagPlayPaused.load(std::memory_order_relaxed))
                     {
@@ -3168,8 +3097,7 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
                                  static_cast<int64_t>(bagOffsetNs / rate));
                     break;
                 }
-                // 换率检测:分片醒后读原子,与当前倍率不同即重锚(已播 bag 进度不跳变),
-                // 立即按新 deadline 重新判定
+                // 换率检测:分片醒后读原子,与当前倍率不同即重锚(已播 bag 进度不跳变)
                 const double rateNew = yomk::g_bagPlayRate.load(std::memory_order_relaxed);
                 if (rateNew != rate)
                 {
@@ -3198,10 +3126,9 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
             {
                 break;
             }
-            // writer 按需创建:透传类型共享注册(同 record)+ create_topic +
-            // create_datawriter;失败置局部停止记错误,停止序列统一清理。create_topic
-            // 用 remap 后发布名(writers 键保持 bag 原名——播放线程按原名查表,发布
-            // 实体名与 DDS 发现图为新名)
+            // writer 按需创建:透传类型共享注册 + create_topic(用 remap 后发布名;writers
+            // 键保持 bag 原名——播放线程按原名查表)+ create_datawriter;失败置局部停止
+            // 记错误,停止序列统一清理
             auto entryIt = writers.find(msg.topic);
             if (entryIt == writers.end())
             {
@@ -3236,8 +3163,8 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
                 entry.published = pubTopic;
                 entryIt = writers.emplace(msg.topic, entry).first;
             }
-            // write 原始 CDR 字节(Blob 透传,含 encapsulation header);失败告警继续不
-            // 中断回放(单条丢弃,对齐录制侧单条写失败仅告警的口径)
+            // write 原始 CDR 字节;失败告警继续不中断回放(单条丢弃,对齐录制侧单条写失败
+            // 仅告警口径)
             Blob blob;
             blob.bytes = std::move(msg.data);
             if (entryIt->second.writer->write(&blob) != RETCODE_OK)
@@ -3259,12 +3186,10 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
     playThread.join();
     readThread.join();
 
-    // --wait-for-all-acked 退出确认等待(对齐 ros2:回放结束后销毁发布实体前等全部
-    // RELIABLE 订阅端确认收齐——RELIABLE 下"播完"升级为"确认送达",补齐大批量高速
-    // 回放的退出语义;BEST_EFFORT 不参与 ackNack 跳过;逐 writer 各等 MS 对齐 ros2
-    // 逐 publisher 同 timeout)。0=永等统一分片实现:每片 200ms 阻塞等 ACK,片间查
-    // 停止标志——永等下 Ctrl+C 即退不卡收尾;超时/中断仅告警不改变返回值(对齐
-    // ros2 WARN 继续)
+    // --wait-for-all-acked 退出确认等待:销毁发布实体前等全部 RELIABLE 订阅端确认收齐
+    // (RELIABLE 下"播完"升级为"确认送达";BEST_EFFORT 不参与 ackNack 跳过)。0=永等统一
+    // 分片实现:每片 200ms 阻塞等 ACK,片间查停止标志——永等下 Ctrl+C 即退不卡收尾;
+    // 超时/中断仅告警不改变返回值
     if (waitForAllAckedMs >= 0)
     {
         for (auto& kv : writers)

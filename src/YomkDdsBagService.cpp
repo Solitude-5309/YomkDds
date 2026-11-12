@@ -1,29 +1,19 @@
-// YomkDdsBagService 实现：将 /YomkDdsBagService/* 端点的请求分发到对应 handler，委托给内部的
-// FastDDSBagNode（类型无关录制节点：发现校验 → 透传订阅 → mcap 直写 → Ctrl+C 收尾；回放：
-// 预扫 metadata.json 后按录制时间轴重建透传发布）。
-//
-// 输出契约：/bag_record 与 /bag_play 成功时返回 StringArray（首行 bag 目录名，其后每主题
-// 一行 "topic: N 条 / M 字节"统计）；仅服务自身状态错误与录制/回放校验失败走 eNo（msg
-// 携带原因）。
-//
-// 线程安全：node_ 的增删查改与节点入口调用统一以 mtx_ 串行化（createNode 内的 setDomainId 即
-// create_participant，沿用 YomkDdsService::createNode 的既有结论：必须在锁内串行）；
 // /bag_record、/bag_play 长驻阻塞期间持锁——锁保护 node_ 生命周期不被并发 deleteNode 破坏
-// （同 YomkDdsDebugService::listTopics 持锁收敛等待的既有约定），停止经 yomk::bagRecordStop /
-// yomk::bagPlayStop 由 SIGINT 处理函数异步置位，不依赖本服务其他端点。
+// （同 YomkDdsDebugService 持锁收敛约定）；停止经 yomk::g_bagRecordStop / g_bagPlayStop 由
+// SIGINT 处理函数异步置位，不依赖本服务其他端点。
 #include "YomkDdsBagService.h"
 #include "YomkDdsMsg.h"
 #include "YomkDdsService.h"  // YomkDdsService::xmlCache()（XML profiles raw 串单例访问；本头未 include 公共头）
 
 #include "FastDDSBagNode.h"
-// 引 yomkdds_xml::ParticipantQosSpec（createNode 组 spec；FastDDSBagNode.h 传递亦可得）
+// 显式引入 yomkdds_xml::ParticipantQosSpec（FastDDSBagNode.h 传递亦可得，对齐 IWYU）
 #include "FastDDSXmlHelper.h"
 
 #include <utility>
 
 namespace
 {
-constexpr uint32_t kMaxDomainId = 232;  // DDS 域号上限
+constexpr uint32_t kMaxDomainId = 232;
 }  // namespace
 
 YomkDdsBagService::YomkDdsBagService(YomkServer* server) : YomkService(server)
@@ -82,8 +72,8 @@ yomk::payload::Response YomkDdsBagService::createNode(YomkMsgPtr pkg)
     }
 
     auto node = std::make_unique<FastDDSBagNode>();
-    // XML 配置通道 + 发现服务器直配（闭环 4）：xmlCache 经 YomkDdsService::xmlCache()
-    // 单例取用（load_xml 端点成功后非空）；双直配串空串=不直配现状
+    // xmlCache 经 YomkDdsService::xmlCache() 单例取用（load_xml 成功后非空）；
+    // 直配串空串=不直配现状
     auto spec = yomkdds_xml::ParticipantQosSpec{};
     spec.xml = YomkDdsService::xmlCache();
     spec.udpServerSpec = p->msg.udpDiscoverServerLocator;
@@ -114,8 +104,7 @@ yomk::payload::Response YomkDdsBagService::bagRecord(YomkMsgPtr pkg)
             ::yomk::payload::ResStatus::Failed, " pkg[DDSBagRecord] is dynamic_pointer_cast failed. ");
     };
 
-    // topics 校验锁外前置（对齐 createNode 的 domainId 锁外校验先例：纯输入校验不触 DDS，
-    // 也未建节点时可先于节点检查报出明确的输入问题）
+    // 纯输入校验锁外前置：不触 DDS，未建节点时也可先报出明确的输入问题
     if (p->msg.topics.empty())
     {
         ::yomk::log().tag("YomkDdsBagService::bagRecord").error("no topics given");
@@ -137,13 +126,12 @@ yomk::payload::Response YomkDdsBagService::bagRecord(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "bag node not created");
     }
 
-    // 兜底复位残留停止标志（上次会话 Ctrl+C 残留置位会导致录制秒退，对齐 debugPubReset 约定）；
-    // 只复位 stop 不动 paused——暂停标志是调用方启动意图（CLI --start-paused / 库用户
-    // bagRecordPause 置位后发起录制），handler 清除会使暂停态静默失效
+    // 兜底复位残留 stop 标志（上次 Ctrl+C 残留置位会致录制秒退）；只复位 stop 不动 paused——
+    // paused 是调用方启动意图（CLI --start-paused / bagRecordPause），handler 清除会使暂停态静默失效
     yomk::g_bagRecordStop.store(false);
 
-    // 长驻阻塞：录制至 SIGINT（yomk::g_bagRecordStop 置位）触发节点层收尾后返回；
-    // 启动校验失败（无端点主题）快速返回 eNo，msg 逐主题列出输入有误项
+    // 长驻阻塞：录制至 SIGINT（g_bagRecordStop 置位）触发节点层收尾返回；
+    // 启动校验失败（无端点主题）原因由节点层逐主题列于 msg
     std::string error;
     std::vector<FastDDSBagNode::BagTopicStat> stats;
     if (!node_->record(p->msg.topics, stats, &error, 0, 0, p->msg.outputDir, p->msg.maxBagSize,
@@ -157,8 +145,7 @@ yomk::payload::Response YomkDdsBagService::bagRecord(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
 
-    // 成功回执：首行 bag 目录名，其后每主题一行 "topic: N 条 / M 字节"（对齐 list_topics
-    // 的 StringArray 返回形态）
+    // 回执形态对齐 list_topics 的 StringArray 返回
     std::vector<std::string> lines;
     lines.reserve(stats.size() + 1);
     lines.emplace_back(node_->bagDir());
@@ -191,7 +178,7 @@ yomk::payload::Response YomkDdsBagService::bagInfo(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no bag dir given");
     }
 
-    // 纯文件读：bagInfoText 为静态函数不依赖 node_，不取 mtx_（无共享状态可保护）
+    // bagInfoText 为静态纯文件操作，不依赖 node_，不取 mtx_
     std::vector<std::string> lines;
     std::string error;
     if (!FastDDSBagNode::bagInfoText(p->msg.bagDir, lines, &error))
@@ -220,14 +207,14 @@ yomk::payload::Response YomkDdsBagService::bagReindex(YomkMsgPtr pkg)
             ::yomk::payload::ResStatus::Failed, " pkg[DDSBagReindex] is dynamic_pointer_cast failed. ");
     };
 
-    // bagDir 空校验锁外前置（对齐 bagInfo 的纯输入校验先例：不触节点状态）
+    // 纯输入校验锁外前置（同 bagRecord 先例：不触节点状态）
     if (p->msg.bagDir.empty())
     {
         ::yomk::log().tag("YomkDdsBagService::bagReindex").error("no bag dir given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no bag dir given");
     }
 
-    // 纯文件操作：bagReindex 为静态函数不依赖 node_，不取 mtx_（无共享状态可保护）
+    // bagReindex 为静态纯文件操作，不依赖 node_，不取 mtx_
     std::string error;
     if (!FastDDSBagNode::bagReindex(p->msg.bagDir, &error))
     {
@@ -255,7 +242,7 @@ yomk::payload::Response YomkDdsBagService::bagConvert(YomkMsgPtr pkg)
             ::yomk::payload::ResStatus::Failed, " pkg[DDSBagConvert] is dynamic_pointer_cast failed. ");
     };
 
-    // inputs/cfgPath 空校验锁外前置（对齐 bagInfo 的纯输入校验先例：不触节点状态）
+    // 纯输入校验锁外前置（同上先例）
     if (p->msg.inputs.empty())
     {
         ::yomk::log().tag("YomkDdsBagService::bagConvert").error("no input bag dir given");
@@ -267,7 +254,7 @@ yomk::payload::Response YomkDdsBagService::bagConvert(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no config file given");
     }
 
-    // 纯文件操作：bagConvert 为静态函数不依赖 node_，不取 mtx_（无共享状态可保护）
+    // bagConvert 为静态纯文件操作，不依赖 node_，不取 mtx_
     std::vector<std::string> lines;
     std::string error;
     if (!FastDDSBagNode::bagConvert(p->msg.inputs, p->msg.cfgPath, lines, &error))
@@ -296,29 +283,26 @@ yomk::payload::Response YomkDdsBagService::bagPlay(YomkMsgPtr pkg)
             ::yomk::payload::ResStatus::Failed, " pkg[DDSBagPlay] is dynamic_pointer_cast failed. ");
     };
 
-    // bagDir 空校验锁外前置（对齐 bagInfo 的纯输入校验先例：不触节点状态）
+    // 纯输入校验锁外前置（同 bagRecord 先例：不触节点状态）
     if (p->msg.bagDir.empty())
     {
         ::yomk::log().tag("YomkDdsBagService::bagPlay").error("no bag dir given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no bag dir given");
     }
-    // playbackRate 校验锁外前置（纯输入校验先于节点检查，同上先例）；错误文案对齐节点层
+    // 纯输入校验锁外前置（同上先例）
     if (p->msg.playbackRate <= 0.0)
     {
         ::yomk::log().tag("YomkDdsBagService::bagPlay").error("invalid playback rate");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "invalid playback rate");
     }
-    // startOffset 校验锁外前置（同上先例）；负值非法——对齐 ros2 CLI 层
-    // check_not_negative_float 拦截形态（有意偏离其 API 层告警忽略按 0 播：对齐 rate
-    // 快速拦截先例，失败快速暴露拼写错误）
+    // 负值非法：有意偏离 ros2 API 层“告警忽略按 0 播”，快速失败暴露拼写错误
+    // （对齐 ros2 CLI check_not_negative_float 拦截形态）
     if (p->msg.startOffset < 0.0)
     {
         ::yomk::log().tag("YomkDdsBagService::bagPlay").error("invalid start offset");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "invalid start offset");
     }
-    // delay 校验锁外前置（同上先例）；只拒负值——0 为合法缺省不延迟。有意偏离 ros2
-    // API 层负值告警忽略按 0 播（RCLCPP_WARN "Delay is disabled."）：对齐 rate/
-    // startOffset 快速拦截先例，失败快速暴露拼写错误
+    // 只拒负值（0 为合法缺省）；有意偏离 ros2 API 层负值告警按 0 播，快速失败暴露拼写错误
     if (p->msg.delay < 0.0)
     {
         ::yomk::log().tag("YomkDdsBagService::bagPlay").error("invalid delay");
@@ -332,14 +316,12 @@ yomk::payload::Response YomkDdsBagService::bagPlay(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "bag node not created");
     }
 
-    // 兜底复位残留停止标志（上次回放 Ctrl+C 残留置位会导致回放秒退，对齐 bagRecord
-    // handler 约定）；只复位 stop 不动 paused——暂停标志是调用方运行意图（键盘线程
-    // bagPlayPause 置位后期待播放线程冻结时间轴），handler 清除会使暂停态静默失效
+    // 兜底复位残留 stop 标志（上次 Ctrl+C 残留置位会致回放秒退）；只复位 stop 不动 paused——
+    // paused 是运行意图（键盘线程 bagPlayPause 置位后期待播放线程冻结时间轴），清除会静默失效
     yomk::g_bagPlayStop.store(false);
 
-    // 长驻阻塞：回放至 EOS 或 SIGINT（yomk::g_bagPlayStop 置位）触发节点层收尾后返回；
-    // 预扫失败（目录不存在/旧 bag 拒播/qos 非法/topics 清单未命中 bag 清单）快速返回 eNo，
-    // msg 携带原因
+    // 长驻阻塞：回放至 EOS 或 SIGINT（g_bagPlayStop 置位）触发节点层收尾返回；
+    // 预扫失败（目录不存在/旧 bag 拒播/qos 非法/topics 未命中 bag 清单）原因由节点层列于 msg
     std::string error;
     std::vector<FastDDSBagNode::BagTopicStat> stats;
     if (!node_->play(p->msg.bagDir, stats, &error, p->msg.playbackRate, p->msg.topics,
@@ -355,8 +337,7 @@ yomk::payload::Response YomkDdsBagService::bagPlay(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
 
-    // 成功回执：首行 bag 目录名，其后每主题一行 "topic: N 条 / M 字节"（对齐 bag_record
-    // 的 StringArray 返回形态）
+    // 回执形态对齐 bag_record 的 StringArray 返回
     std::vector<std::string> lines;
     lines.reserve(stats.size() + 1);
     lines.emplace_back(p->msg.bagDir);
@@ -378,6 +359,6 @@ yomk::payload::Response YomkDdsBagService::deleteNode(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsBagService::deleteNode").error("bag node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "bag node not created");
     }
-    node_.reset();  // 节点析构即按其内部顺序（reader → data → topic → subscriber → participant）清理
+    node_.reset();  // 析构按节点层内部顺序清理（reader → data → topic → subscriber → participant）
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }

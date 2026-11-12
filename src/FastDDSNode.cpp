@@ -10,9 +10,8 @@ using namespace eprosima::fastdds::dds;
 
 namespace
 {
-// 纳秒每秒（Duration_t 秒/纳秒分解用）
 constexpr int64_t kNsPerSec = 1000000000LL;
-// ROS2 底座工厂的 history depth（rmw_qos_profile_default/sensor_data 规范值）
+// ros2 底座工厂 history depth 规范值（对齐 rmw default/sensor_data 档）
 constexpr int32_t kRos2DefaultDepth = 10;
 constexpr int32_t kRos2SensorDataDepth = 5;
 
@@ -36,15 +35,14 @@ struct SubResGuard
     }
 };
 
-// 纳秒转 Duration_t（sec, nsec 分解；调用方保证 ns >= 0）。
+// Precondition: ns >= 0
 Duration_t toDuration(int64_t ns)
 {
     return Duration_t(static_cast<int32_t>(ns / kNsPerSec), static_cast<uint32_t>(ns % kNsPerSec));
 }
 
-// DDSQosProfile 翻译到 Fast DDS 端点 QoS：起点为调用方已拷贝的 *_QOS_DEFAULT 底座，
-// 非哨兵项（枚举非 Unset / 数值 >= 0）逐项覆盖，哨兵项保持底座默认；
-// 枚举到 policy 的映射在此显式完成（不做数值直译，公共头枚举与 Fast DDS 内部枚举解耦）。
+// 起点为调用方已拷贝的 *_QOS_DEFAULT 底座，非哨兵项（非 Unset / >= 0）逐项覆盖；
+// 枚举到 policy 显式映射，公共头枚举与 Fast DDS 内部枚举解耦，不做数值直译。
 void toWriterQos(const DDSQosProfile& p, DataWriterQos& qos)
 {
     if (p.historyKind != DDSHistoryKind::Unset)
@@ -52,7 +50,7 @@ void toWriterQos(const DDSQosProfile& p, DataWriterQos& qos)
         qos.history().kind =
             (p.historyKind == DDSHistoryKind::KEEP_LAST) ? KEEP_LAST_HISTORY_QOS : KEEP_ALL_HISTORY_QOS;
     }
-    // depth 在 KEEP_ALL 下忽略；未设 historyKind（底座即 KEEP_LAST）时同样生效
+    // 未设 historyKind 时底座即 KEEP_LAST，depth 覆盖同样生效
     if (p.depth >= 0 && p.historyKind != DDSHistoryKind::KEEP_ALL)
     {
         qos.history().depth = p.depth;
@@ -86,7 +84,7 @@ void toWriterQos(const DDSQosProfile& p, DataWriterQos& qos)
     }
 }
 
-// reader 版：无 lifespan（writer 侧策略，reader 翻译时忽略），其余同构。
+// reader 版：无 lifespan（writer 侧策略，翻译时忽略），其余同构 toWriterQos。
 void toReaderQos(const DDSQosProfile& p, DataReaderQos& qos)
 {
     if (p.historyKind != DDSHistoryKind::Unset)
@@ -124,9 +122,8 @@ void toReaderQos(const DDSQosProfile& p, DataReaderQos& qos)
 }
 }  // namespace
 
-// ===== DDSQosProfile ROS2 底座工厂（8 项全非哨兵 = 等价整包替换为 ROS2 底座） =====
-// 分端点裁定依据 requested≤offered 匹配方向（见公共头注释）；时间三项保持 -1（底座 ∞，
-// 与 ROS2 默认 ∞ 等值）。
+// 三档全字段非哨兵 = 整包替换为 ROS2 底座；时间三项保持 -1（底座 ∞ 等值 ROS2 默认）。
+// pub/sub 分端点裁定依据 requested≤offered 匹配方向（见公共头）。
 DDSQosProfile DDSQosProfile::ros2DefaultPublisher()
 {
     DDSQosProfile p;
@@ -165,11 +162,9 @@ class FastDDSNode::SubListener : public DataReaderListener
 public:
     SubListener(void* data, DataCallback cb) : data_(data), callback_(std::move(cb)) {}
 
-    // 数据交付两条路径，对齐性不同：
-    //   loan 零拷贝（loanSupported_）：指针指向接收缓冲 CDR body = base+4，仅 4 字节对齐——
-    //     plain 且 alignof>4 的类型（double/int64）须 memcpy 后再读，严格对齐 ARM 直接解引用触发 SIGBUS；
-    //   legacy 反序列化（legacyTake）：指针按 alignof(T) 对齐，全类型全架构可直接解引用。
-    // 类型选型与安全消费指引见 README。
+    // 两条交付路径对齐性不同：loan 零拷贝样本指针仅 4 字节对齐（CDR body = base+4），
+    // plain 且 alignof>4 类型须 memcpy 后再读，严格对齐 ARM 解引用触发 SIGBUS；
+    // legacy 反序列化按 alignof(T) 对齐，全类型可直解。消费指引见 README。
     void on_data_available(DataReader* reader) override
     {
         if (loanSupported_)
@@ -185,9 +180,8 @@ public:
                     {
                         if (infoSeq[i].valid_data && infoSeq[i].instance_state == ALIVE_INSTANCE_STATE && callback_)
                         {
-                            // buffer()[i] 是 LoanableCollection 唯一元素访问方式（无 operator[]/span）
-                            // ——FastDDS 官方惯用法；i 受 infoSeq.length() 界定 → 指针算术安全，
-                            // 抑制 clang-tidy 误报。
+                            // buffer()[i] 是 LoanableCollection 唯一元素访问方式（无 operator[]）；
+                            // i 受 infoSeq.length() 界定，指针算术安全，抑制 clang-tidy 误报。
                             callback_(dataSeq.buffer()[i]);  // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
                         }
                     }
@@ -196,7 +190,7 @@ public:
                 }
                 if (ret != RETCODE_NO_DATA)
                 {
-                    // 罕见保险：take 返回非预期错误码时永久回退传统反序列化路径（通用 take 正常不会走到这里）
+                    // 罕见保险：非预期错误码时永久回退 legacy 路径（正常不会走到）
                     loanSupported_ = false;
                     legacyTake(reader);
                 }
@@ -210,7 +204,6 @@ public:
     }
 
 private:
-    // 回退路径：反序列化进对齐的 data_ 后回调。
     void legacyTake(DataReader* reader)
     {
         SampleInfo info;
@@ -282,15 +275,11 @@ bool FastDDSNode::setDomainId(uint32_t domainId, const std::string& nodeName,
         return false;
     }
 
-    // nodeName 非空时下沉为参与者名称：SPDP 发现数据原生携带 participant_name，同域对端经
-    // 发现机制可读（创建时固化不可改）；string_255 定长 256 字节，超长自动截断。
-    // XML 配置通道三级提取链先于置名执行：按节点名 profile → 默认档 → 落空保持 DEFAULT
-    // 底座回退现状；提取整体填充 qos（含 name），节点名在提取后最终覆盖不可被 XML 顶掉
+    // 节点名经 SPDP 发现传播，创建时固化不可改，string_255 超长自动截断；XML 提取整体
+    // 填充 qos（含 name），节点名必须在提取后最终覆盖，不可被 XML 顶掉
     DomainParticipantQos qos = PARTICIPANT_QOS_DEFAULT;
     yomkdds_xml::participantQosFromXml(qos, nodeName, spec.xml);
-    // 发现服务器直配（仅 client 角色）：CLIENT + m_DiscoveryServers 重建，覆盖 XML
-    // discoveryServersList（合并语义：直配 > XML 提取打底）；UDP/TCP 双通道任一非空即叠加，
-    // TCP 通道自动补注入 TCPv4 传输；任一 spec 非法则整体失败
+    // 发现服务器直配覆盖 XML discoveryServersList（直配 > XML 打底）；任一 spec 非法整体失败
     if (!spec.udpServerSpec.empty() || !spec.tcpServerSpec.empty())
     {
         std::string serverErr;
@@ -324,7 +313,6 @@ Topic* FastDDSNode::getOrCreateTopic(const std::string& topicName, const std::st
     auto it = topics_.find(topicName);
     if (it != topics_.end())
     {
-        // 主题已存在：类型名必须一致才能复用
         if (it->second->get_type_name() != typeName)
         {
             return nullptr;
@@ -370,13 +358,11 @@ bool FastDDSNode::registerPubTopic(const std::string& topicName, void* type, con
         return false;
     }
 
-    // 端点 QoS：默认底座 + DDSQosProfile 非哨兵项逐项覆盖（全哨兵时翻译结果恒等现状）
     DataWriterQos wqos = DATAWRITER_QOS_DEFAULT;
     toWriterQos(qos, wqos);
     info.writer = publisher_->create_datawriter(topic, wqos);
     if (info.writer == nullptr)
     {
-        // 本次新创建的主题需回滚
         if (!topicExisted)
         {
             participant_->delete_topic(topic);
@@ -446,7 +432,6 @@ bool FastDDSNode::registerSubTopic(const std::string& topicName, void* type, Dat
     info.data = data;
     info.listener = std::make_unique<SubListener>(data, std::move(callback));
 
-    // 端点 QoS：默认底座 + DDSQosProfile 非哨兵项逐项覆盖（全哨兵时翻译结果恒等现状）
     DataReaderQos rqos = DATAREADER_QOS_DEFAULT;
     toReaderQos(qos, rqos);
     info.reader = subscriber_->create_datareader(topic, rqos, info.listener.get());

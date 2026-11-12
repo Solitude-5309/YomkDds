@@ -2,21 +2,21 @@
 
 #include "YomkDdsPayload.h"
 
-// YomkDds 扩展消息包（四件套之 Msg，与 SDK 各 Yomk{Module}Msg.h 同一设计：YOMK_DEFINE_MSG
-// 集中声明于此）。本头只承载 YOMK_DEFINE_MSG 消息包声明；用户载荷类型（MString/MInt32/...，
-// namespace YomkDdsStd）为 Fast DDS IDL 经 fastddsgen 生成（msg/YomkDdsStdMsgs.idl），随扩展
-// 安装为独立入口 <yomk/dds/YomkDdsStdMsgs.hpp>（+ PubSubTypes），经 DDS 线上传输（注册主题
-// 时的 type 实参即 new XxxPubSubType()），按需直接包含，不经本头。
-//
-// 新增请求/应答消息包：在 yomk::payload 定义数据结构（YomkDdsPayload.h）并在本头追加
-// YOMK_DEFINE_MSG；新增用户载荷类型：在 msg/YomkDdsStdMsgs.idl 追加 struct 并重跑 msg 构建
-// 重新生成。不在别处手写消息包声明。
+// Maintainer notes: the single home of all YOMK_DEFINE_MSG declarations
+// (four-suite Msg piece, same design as the SDK's Yomk{Module}Msg.h).
+// New request/response message: define the structure in YomkDdsPayload.h and
+// append one YOMK_DEFINE_MSG here — never declare message packages elsewhere.
+// User payload types (MString/MInt32..., namespace YomkDdsStd) are
+// fastddsgen-generated from msg/YomkDdsStdMsgs.idl and installed as the
+// separate entry <yomk/dds/YomkDdsStdMsgs.hpp> (types + PubSubTypes); include
+// it directly when needed, not through this header.
 
 // clang-format off
-// YOMK_DEFINE_MSG 是 YomkServer 第三方宏，cppcheck 未 --library 配置识别（unknownMacro 属工具配置需求，非自有源码缺陷）
+// YOMK_DEFINE_MSG is a third-party YomkServer macro; cppcheck needs --library
+// to know it (unknownMacro is a tooling config need, not a source defect)
 // cppcheck-suppress unknownMacro
 
-// ===== YomkDdsService（请求/响应结构见 YomkDdsPayload.h） =====
+// ===== YomkDdsService (structures in YomkDdsPayload.h) =====
 YOMK_DEFINE_MSG(yomk::payload::DDSNode, DDSNode, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSXmlLoad, DDSXmlLoad, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSTopic, DDSTopic, msg)

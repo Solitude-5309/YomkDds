@@ -1,13 +1,13 @@
 #pragma once
-// YomkDdsDebugService 对外头：服务类 YomkDdsDebugService 的声明与调试进程级控制标志。
-// 用户通常直接使用 YomkDdsAPI.h 中的 YOMKDDS_DEBUG_* 宏；请求结构见 YomkDdsPayload.h
-// （yomk::payload），消息包声明见 YomkDdsMsg.h。调试能力由内部的 FastDDSDebugNode 提供
-// （类型无关：经 DDS 发现机制取回远端 TypeObject 动态建订阅，消息以 JSON 文本投递给
-// 用户回调，零消息类型依赖）。
+// Maintainer notes: type-agnostic debugging service; FastDDSDebugNode rebuilds
+// subscriptions dynamically from remote XTypes TypeObject, so no message type
+// dependency exists anywhere in this service (messages are delivered to the
+// user callback as JSON text). Single debug node per process; node lifecycle
+// and entry calls are serialized by mtx_.
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 
-#include "YomkDdsPayload.h"  // 平铺引号三环境命中：安装树同目录/测试树平铺/主库平铺
+#include "YomkDdsPayload.h"  // flat quoted include: install tree, test tree and main tree all resolve same-dir
 
 #include <atomic>
 #include <memory>
@@ -15,6 +15,8 @@
 class FastDDSDebugNode;
 using namespace yomk::payload;
 
+/** @brief Type-agnostic debugging service: discovery inspection, JSON message tap and probe publish */
+// @zh: 类型无关调试服务：发现观察、消息 JSON 旁路与探针发布
 class YomkDdsDebugService : public YomkService
 {
 public:
@@ -39,16 +41,26 @@ private:
     yomk::payload::Response deleteNode(YomkMsgPtr pkg);
 
 private:
-    // 单 debug 节点：一个进程至多一个实例，重复 create 须先 delete；服务析构时自动销毁节点
-    // 并按节点内部顺序清理全部 DDS 实体（推荐进程退出前经 /delete_node 显式清理）。
+    // Single debug node: at most one per process, re-create requires delete
+    // first; destructor destroys the node and all its DDS entities in the
+    // node's internal order (explicit /delete_node before exit recommended)
     std::unique_ptr<FastDDSDebugNode> node_;
-    std::mutex mtx_;  // 串行化 node_ 的增删查改与节点入口调用
+    std::mutex mtx_;  // serializes node_ lifetime and all node entry calls
 };
 
-// topic pub 持续发布停止标志：发布循环（FastDDSDebugNode::topicPub 内部，repeatIntervalMs>0
-// 时）只读，SIGINT 处理函数（CLI onSignal）经 debugPubStop 写——atomic 无锁 store 保证
-// async-signal-safe（不可经 yomk 请求链停止：请求链路含锁与内存分配，handler 内禁用）。
-// 调用方在发起持续发布前应先 debugPubReset 复位，避免上次会话残留置位导致循环秒退。
+/**
+ * @brief Stop flag for a repeating YOMKDDS_DEBUG_TOPIC_PUB publish (async-signal-safe)
+ *
+ * The publish loop (repeatIntervalMs > 0) only reads the flag; SIGINT handlers
+ * write it through debugPubStop — an atomic lock-free store. Never stop a
+ * publish through the yomk request chain: it takes locks and allocates, both
+ * banned in a signal handler.
+ * @note Call debugPubReset() before starting a new publish session
+ */
+// @zh: YOMKDDS_DEBUG_TOPIC_PUB 持续发布的停止标志（async-signal-safe）
+// @zh: 发布循环（repeatIntervalMs > 0）只读；SIGINT handler 经 debugPubStop 写入——
+// @zh: atomic 无锁 store。不可经 yomk 请求链停止：请求链含锁与内存分配，handler 内禁用
+// @zh: note 发起持续发布前先 debugPubReset() 复位，避免上次会话残留置位导致循环秒退
 namespace yomk
 {
 inline std::atomic<bool> g_debugPubStop{false};

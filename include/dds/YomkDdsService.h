@@ -1,10 +1,14 @@
 #pragma once
-// YomkDdsService 对外头：服务类 YomkDdsService 的声明。用户通常直接使用 YomkDdsAPI.h
-// 中的宏；请求/响应结构见 YomkDdsPayload.h（yomk::payload），消息包声明见 YomkDdsMsg.h。
+// Maintainer notes: core communication service; owns one FastDDSNode per node
+// name in nodes_. The XML profiles raw cache is process-wide: the debug and
+// bag services read it through xmlCache() when creating their participants.
+// Ownership protocol: register_pub/sub_topic takes over the TypeSupport
+// instance unconditionally (failure paths included); publish borrows the
+// sample; loan hands out a writer-pool pointer reclaimed on write/discard.
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 
-#include "YomkDdsPayload.h"  // 平铺引号三环境命中：安装树同目录/测试树平铺/主库平铺
+#include "YomkDdsPayload.h"  // flat quoted include: install tree, test tree and main tree all resolve same-dir
 
 #include <map>
 #include <memory>
@@ -13,6 +17,8 @@
 class FastDDSNode;
 using namespace yomk::payload;
 
+/** @brief Core communication service: node lifecycle, pub/sub endpoints and zero-copy loan */
+// @zh: 核心通信服务：节点生命周期、发布/订阅端点与零拷贝借出
 class YomkDdsService : public YomkService
 {
 public:
@@ -33,15 +39,15 @@ private:
 
 private:
     std::map<std::string, std::unique_ptr<FastDDSNode>> nodes_;
-    std::mutex mtx_;
+    std::mutex mtx_;  // serializes all node entry calls (create/delete/register/publish)
 
-    // 已成功加载的 XML profiles raw 串（load_XML_profiles_file 成功后缓存）：get_*_qos_from_xml
-    // 系列吃 raw 串非文件路径，节点层 participant 三级提取链经 xmlCache() 取用；空串=未加载。
-    // 三服务同进程，Debug/Bag 节点创建时同样经此取 XML 串。
+    // XML profiles raw string cached after a successful load: get_*_qos_from_xml
+    // consumes the raw string, not a path; empty = not loaded. Written under
+    // mtx_ inside loadXml/createNode; readers only copy.
     static std::string xmlCache_;
 
 public:
-    // XML profiles raw 串访问器（线程安全：load 与 create_node 均在各自服务 mtx_ 内，
-    // 串写竞态由调用方 loadXml/createNode 的锁序保证；读取侧仅拷贝）。空串=未加载。
+    /** @brief Access the cached XML profiles raw string (thread-safe; empty = not loaded) */
+    // @zh: 已加载 XML profiles raw 串访问器（线程安全；空串=未加载）
     static const std::string& xmlCache();
 };

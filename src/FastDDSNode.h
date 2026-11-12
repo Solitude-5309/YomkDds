@@ -1,9 +1,8 @@
 #ifndef FASTDDSNODE_H
 #define FASTDDSNODE_H
 
-// 引 DDSQosProfile（端点 QoS 描述，公共头零 fastdds 依赖；平铺引号形式命中 include/，
-// 安装树经 yomk/dds/ 前缀提供同一头）与 ParticipantQosSpec（XML 配置通道 + serverLocator
-// 直配 spec；缺省实参需完整类型，自身引公共头与 fastdds）
+// 引公共头与 FastDDSXmlHelper：平铺引号命中 include/，安装树经 yomk/dds/ 前缀提供同一头；
+// 缺省实参需完整类型，必须引 YomkDdsService.h
 #include "YomkDdsService.h"
 #include "FastDDSXmlHelper.h"
 
@@ -21,28 +20,25 @@
 #include <mutex>
 #include <string>
 
-// 单个 DDS 节点的封装：持有一个 DomainParticipant 及其 publisher/subscriber，管理本节点下的
-// 发布主题（pubTopics_）与订阅主题（subTopics_）。全部公开方法内部以 mtx_ 串行化；由 YomkDdsService
-// 持有（每个 nodeName 一个实例），析构时按 DataReader/Writer → Topic → Publisher/Subscriber → Participant 顺序清理。
+// 由 YomkDdsService 持有（每个 nodeName 一个实例）；析构按 DataReader/Writer → Topic →
+// Publisher/Subscriber → Participant 顺序清理。
 class FastDDSNode
 {
-    class SubListener;  // DataReaderListener 实现：收到数据时交付用户回调（详见 .cpp 的两条交付路径与对齐契约）
-    using DataCallback = std::function<void(const void*)>;  // 交付消息实例指针，仅回调期间有效
-    // 发布主题登记项。
+    class SubListener;  // DataReaderListener 实现，对齐契约见 .cpp
+    using DataCallback = std::function<void(const void*)>;  // 消息指针仅回调期间有效
     struct PubInfo
     {
-        eprosima::fastdds::dds::TypeSupport type;  // 已注册类型（shared_ptr 持有 TopicDataType 所有权）
+        eprosima::fastdds::dds::TypeSupport type;  // shared_ptr 持有 TopicDataType 所有权
         eprosima::fastdds::dds::DataWriter* writer = nullptr;
     };
-    // 订阅主题登记项。
     struct SubInfo
     {
-        eprosima::fastdds::dds::TypeSupport type;  // 已注册类型（同 PubInfo.type）
+        eprosima::fastdds::dds::TypeSupport type;
         eprosima::fastdds::dds::DataReader* reader = nullptr;
         eprosima::fastdds::dds::TopicDataType* topicType =
             nullptr;           // 指向 type 所辖同一对象，仅供 delete_data(data)，不单独持有所有权
-        void* data = nullptr;  // 内部 create_data() 创建的对齐接收缓冲，析构时 delete_data() 释放
-        std::unique_ptr<SubListener> listener;  // reader 的数据监听器，持有 data 与用户回调
+        void* data = nullptr;  // create_data() 创建的对齐接收缓冲，析构时 delete_data() 释放
+        std::unique_ptr<SubListener> listener;  // 持有 data 与用户回调
     };
 
 public:
@@ -52,37 +48,26 @@ public:
     FastDDSNode& operator=(const FastDDSNode&) = delete;
 
 public:
-    // 设置 DDS 域并惰性创建 participant/publisher/subscriber；仅可成功一次，已创建或创建失败返回 false。
-    // nodeName 非空时下沉为参与者名称（DomainParticipantQos::name，随 SPDP 发现传播给同域对端，
-    // 创建时固化不可改；string_255 定长 256 字节，超长自动截断），空名不置名（participant 保持
-    // Fast DDS 默认名 RTPSParticipant；缺省参）。
-    // spec：participant 级配置（XML 配置通道 + 发现服务器直配，缺省两字段全空=零改动）。
-    // xml 非空按三级提取链叠加（按节点名 profile → is_default_profile 默认档 → 落空保持
-    // DEFAULT 底座）；serverSpec 非空强制 CLIENT + 直配 server 列表（覆盖 XML
-    // discoveryServersList，节点名在提取后最终覆盖 XML name）。serverSpec 非法返回 false 并经
-    // err 回填原因（可空指针，缺省不回填）。
+    // 仅可成功一次（惰性创建）。nodeName 非空时下沉为参与者名：经 SPDP 发现传播，创建时
+    // 固化不可改，string_255 超长自动截断。XML 提取整体填充 qos（含 name），节点名必须在
+    // 提取后最终覆盖，不可被 XML 顶掉；serverSpec 非空强制 CLIENT 直配。
     bool setDomainId(uint32_t domainId, const std::string& nodeName = "",
         const yomkdds_xml::ParticipantQosSpec& spec = yomkdds_xml::ParticipantQosSpec{},
         std::string* err = nullptr);
-    // 注册订阅主题：接管 type 所有权，收到消息时经 callback 交付；主题名冲突/类型名不符/资源创建失败返回 false。
-    // qos：端点 QoS 描述（缺省全哨兵=Fast DDS 端点默认底座）；非哨兵项逐项覆盖
-    // （如 reliability=BEST_EFFORT、depth；语义与 rclcpp::QoS "底座+逐项覆盖"同构）。
+    // 接管 type 所有权；qos 缺省全哨兵=端点默认底座，非哨兵项逐项覆盖。
     bool registerSubTopic(const std::string& topicName, void* type, DataCallback callback,
         const DDSQosProfile& qos = DDSQosProfile{});
-    // 注册发布主题：接管 type 所有权并创建 writer；主题名冲突/类型名不符/writer 创建失败返回 false。
-    // qos：同 registerSubTopic；缺省全哨兵=端点默认底座，非哨兵项逐项覆盖。
+    // 接管 type 所有权；qos 同 registerSubTopic。
     bool registerPubTopic(const std::string& topicName, void* type,
         const DDSQosProfile& qos = DDSQosProfile{});
-    // 同步发布一条消息（data 借用，write 内部完成序列化/拷贝）；主题未注册发布/data==nullptr/write 失败返回 false。
+    // data 仅借用，write 内部完成序列化/拷贝。
     bool publish(const std::string& topicName, const void* data);
-    // 借出 writer 池内样本（仅 plain 类型支持）：成功返回 true 且 sample 指向池内缓冲，填值后 publish 免序列化；
-    // 失败（非 plain/池耗尽）返回 false 且 sample=nullptr，回退普通发布路径。借出指针 write/discard 后失效。
+    // 仅 plain 类型支持；借出指针经 write/discard 后失效。
     bool loan(const std::string& topicName, void*& sample);
-    // 归还未发布的借出样本（loan 借出但不 publish 时须调用，否则池泄漏）；writer 不存在或 sample==nullptr 返回 false。
+    // loan 后未 publish 须调用，否则样本池泄漏。
     bool discardLoan(const std::string& topicName, void*& sample);
 
 private:
-    // 复用或新建主题：已存在则校验类型名一致（不符返回 nullptr），否则 create_topic 并登记到 topics_。
     eprosima::fastdds::dds::Topic* getOrCreateTopic(const std::string& topicName, const std::string& typeName);
 
 private:

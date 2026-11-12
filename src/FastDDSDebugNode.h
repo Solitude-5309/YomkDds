@@ -1,9 +1,7 @@
 #ifndef FASTDDSDEBUGNODE_H
 #define FASTDDSDEBUGNODE_H
 
-// 引 DDSQosProfile（端点 QoS 描述，公共头零 fastdds 依赖；平铺引号形式命中 include/，
-// 安装树经 yomk/dds/ 前缀提供同一头）与 ParticipantQosSpec（XML 配置通道 + serverLocator
-// 直配 spec；缺省实参需完整类型，自身引公共头与 fastdds）
+// 引号平铺形式命中 include/，安装树经 yomk/dds/ 前缀提供同一头；缺省实参需完整类型
 #include "YomkDdsService.h"
 #include "FastDDSXmlHelper.h"
 
@@ -29,18 +27,14 @@
 #include <utility>
 #include <vector>
 
-// 类型无关的调试节点：加入域后按主题名登记订阅意图，经 DDS 发现机制收到远端 DataWriter 携带的
-// XTypes TypeInformation → 从全局 TypeObjectRegistry 取回远端 TypeObject → 生成 DynamicType 并
-// 自动建立订阅者；收到消息经内置 json_serialize 结构化（JSON）输出，全程不依赖任何 IDL 生成类型。
-// 线程模型：发现回调仅缓存发现信息并唤醒工作线程，DataReader 的创建统一在工作线程完成
-// （实测发现回调线程内同步建 reader 会导致匹配成功但数据不交付）；公开方法以 mtx_ 串行化；
+// 类型无关的调试节点：TypeInformation → TypeObject → DynamicType 自动建订，JSON 输出，
+// 全程不依赖 IDL 生成类型。线程模型：发现回调仅缓存发现信息，DataReader 创建统一在工作线程
+// 完成（实测发现回调线程内同步建 reader 会导致匹配成功但数据不交付）；公开方法以 mtx_ 串行化；
 // 析构按停工作线程 → DataReader → Topic → Subscriber → Participant 顺序清理。
 class FastDDSDebugNode
 {
-    // 参与者监听器：writer/reader 发现回调 → onWriterDiscovered/onReaderDiscovered
     class DebugParticipantListener;
-    class DebugSubListener;          // 数据监听器：take 动态样本 → json_serialize 结构化输出
-    // 订阅登记项。
+    class DebugSubListener;
     struct DebugSub
     {
         eprosima::fastdds::dds::TypeSupport type;  // 持有 DynamicPubSubType（shared_ptr 所有权）
@@ -58,83 +52,62 @@ public:
     FastDDSDebugNode& operator=(const FastDDSDebugNode&) = delete;
 
 public:
-    // 输出回调：每条消息交付一次格式化文本；未设置时默认输出到 stdout
     using OutputSink = std::function<void(const std::string&)>;
-    // listTopics 收敛查询默认参数：连续 5 次快照集合不变即收敛（2 次窗口过短，域内 participant
-    // 间歇上线时易误判提前收敛漏主题）、200ms 快照轮询间隔（默认窗口约 1s）
+    // 收敛查询默认参数：连续 5 次快照集合不变即收敛（2 次窗口过短，域内 participant 间歇
+    // 上线时易误判提前收敛漏主题）、200ms 快照轮询间隔（默认窗口约 1s）
     static constexpr uint32_t kDefaultStableRounds = 5;
     static constexpr uint32_t kDefaultIntervalMs = 200;
-    // 订阅建立失败告警的节流窗口：工作线程每 100ms 重试一次，不节流则持续失败
-    // 会刷屏；全静默则调用方（topic print / topic hz）永久得不到失败原因。取 5s 对齐
-    // topicPub 匹配等待进度日志的既有节奏（logEveryRounds = max(1, 5000/intervalMs)）。
-    // 秒值单列一份供告警文本引用（毫秒值由秒值换算，避免文本里出现裸数字换算）
+    // 订阅失败告警节流窗口：工作线程每 100ms 重试，不节流刷屏、全静默则调用方永久得不到
+    // 失败原因；秒值单列供告警文本引用（毫秒值由秒值换算，避免文本里出现裸数字换算）
     static constexpr uint32_t kMsPerSecond = 1000;
     static constexpr uint32_t kSubWarnIntervalSec = 5;
     static constexpr uint32_t kSubWarnIntervalMs = kSubWarnIntervalSec * kMsPerSecond;
-    // 一次性"等待发布者"提示的宽限窗（毫秒）：调用方通常在 setDomainId 之后立即登记，
-    // 此时本端 SPDP/EDP 发现尚未完成（公告周期约 3s），即使发布者早已在线也不在发现
-    // 缓存中，登记即判定会对常规场景误报；改为登记满该宽限窗仍无 writer 才提示（由
-    // 工作线程打，登记路径不阻塞）
+    // 一次性"等待发布者"提示宽限窗：登记时本端 SPDP/EDP 发现尚未完成（公告周期约 3s），
+    // 登记即判定会对"发布者早已在线"误报，满窗仍无 writer 才由工作线程提示
     static constexpr uint32_t kPendingHintDelayMs = 3000;
-    // 设置 DDS 域并创建 participant（挂发现监听）与 subscriber；仅可成功一次，失败/重复调用返回 false。
-    // spec/err 语义同 FastDDSNode::setDomainId（XML 三级提取链——本节点无用户名，按名 profile
-    // 无意义仅默认档可兜底；serverLocator 直配强制 CLIENT，节点唯一名在提取后置入）。
+    // 仅可成功一次，失败/重复调用返回 false；spec/err 语义同 FastDDSNode::setDomainId
+    // （XML 三级提取链——本节点无用户名，按名 profile 无意义仅默认档可兜底；serverLocator
+    // 直配强制 CLIENT，节点唯一名在提取后置入）。
     bool setDomainId(uint32_t domainId, const yomkdds_xml::ParticipantQosSpec& spec =
             yomkdds_xml::ParticipantQosSpec{}, std::string* err = nullptr);
-    // 登记待调试主题：发现匹配的远端 DataWriter 后由工作线程自动解析类型并建立订阅者；
-    // 未 setDomainId / 重复登记返回 false；类型解析暂不可用时保持登记，工作线程持续重试。
-    // 失败原因经 error 出参回填（可空）：未入域 / subscriber 未建 / 主题名为空 / 重复登记
-    // 四类各自独立文本，不再统一报笼统 failed；登记后满 kPendingHintDelayMs 仍未发现
-    // writer 时由工作线程打一次性等待提示（登记本身不阻塞、不改返回值——订阅建立
-    // 本就是发现驱动的延迟行为）。
+    // 未 setDomainId / 重复登记返回 false；类型解析暂不可用时保持登记，工作线程持续重试；
+    // error 出参四类独立文本（未入域 / subscriber 未建 / 主题名为空 / 重复登记）。
     // qos 为动态订阅 reader 的 QoS 描述（可缺省尾参）：全哨兵=Fast DDS reader 默认底座
     // （KEEP_LAST(1)+BEST_EFFORT+VOLATILE）；对接 ROS2 高频流建议
-    // DDSQosProfile::ros2DefaultSubscriber()（KEEP_LAST(10) 防丢样本）。qos 随登记写入
-    // pendingQos_ 暂存，工作线程建订（tryStartSubscription）时取用：建订成功随 pending_
+    // DDSQosProfile::ros2DefaultSubscriber()（KEEP_LAST(10) 防丢样本）。建订成功随 pending_
     // 一同清除，失败保留供重试。
     bool subscribeTopic(const std::string& topicName, std::string* error = nullptr,
             const DDSQosProfile& qos = DDSQosProfile{});
-    // 设置输出目的地；须在订阅实际建立前调用（工作线程建订阅时按值捕获），用于测试注入。
+    // 须在订阅实际建立前调用（工作线程建订阅时按值捕获），用于测试注入。
     void setOutputSink(OutputSink sink);
-    // 列出已发现的远端主题与数据类型名（自适应收敛查询，基于发现缓存：远端 DataWriter 与
-    // DataReader 均记录——仅有订阅者而无发布者的主题同样列出；本节点入域时 EDP 全量重放既有
-    // 端点发现信息，域内既有 participant 上新增端点经实时发现事件追加，缓存单调累积）：
-    // 轮询缓存快照，连续 stableRounds 次集合不变即认为发现收敛，以最终快照填充
-    // topics 返回 true（未 setDomainId 返回 false，入域后列表可为空）。stableRounds=1 即单次
-    // 快照（免等待的快速查询语义）；等待期间远端新增端点会使快照变化并把不变计数重置为 1。
-    // stableRounds/intervalMs 传 0 时钳制为默认 5 次/200ms；阻塞调用（最长约
-    // stableRounds*intervalMs），等待中 Ctrl+C 依赖进程信号处理。集合不变判定基于有序对比较
-    // （快照合并后按主题名排序）。调用方无需再自设发现等待窗口。未入域 false（error=
-    // "debug node not created"）。
+    // 收敛查询已发现主题与类型名：轮询发现缓存快照（writer 与 reader 均记录——仅有订阅者
+    // 而无发布者的主题同样列出；缓存单调累积），连续 stableRounds 次集合不变即收敛返回；
+    // stableRounds=1 即单次快照，等待期间远端新增端点会重置不变计数。0 值钳制默认 5 次/200ms；
+    // 阻塞最长约 stableRounds*intervalMs，等待中 Ctrl+C 依赖进程信号处理。
+    // 未入域 false（error="debug node not created"）。
     bool listTopics(std::vector<std::pair<std::string, std::string>>& topics,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
-    // 单个远端端点的发现详情（topicInfo verbose 模式输出单元）：nodeName 经 GUID 前缀归属
-    // 匹配（RTPS 规范：端点 GUID 前缀 == 所属参与者 GUID 前缀），未发现对应参与者时为空串；
-    // guid 为 FastDDS 原生格式（ostringstream << GUID_t，“前缀|实体ID”点分十六进制）；
-    // qosLines 为已缩进（两空格）的 ROS2 风格键值行（QoS profile 段落，逐行输出）
+    // topicInfo verbose 模式输出单元：nodeName 经 GUID 前缀归属匹配，未发现对应参与者时为空串；
+    // guid 为 FastDDS 原生格式；qosLines 为已缩进的 ROS2 风格键值行
     struct EndpointDetail
     {
         std::string nodeName;
         std::string guid;
         std::vector<std::string> qosLines;
 
-        // 相等比较：供收敛轮询的快照相等性判定（std::tuple/vector 比较要求元素可比较）
+        // 供收敛轮询的快照相等性判定（tuple/vector 比较要求元素可比较）
         bool operator==(const EndpointDetail& rhs) const
         {
             return nodeName == rhs.nodeName && guid == rhs.guid && qosLines == rhs.qosLines;
         }
     };
-    // 查询单主题发现详情（独立收敛查询，与 listTopics 互不影响）：先检查入域状态，再轮询
-    // 该主题的详情快照（found 标志 + 类型名 + writer/reader 端点计数 + 可选端点详情），连续
-    // stableRounds 次不变即认为收敛返回。命中（任一 writer 或 reader 已发现）返回 true 并填充
-    // typeName（原始 DDS 类型名，不做任何转换）、publisherCount/subscriptionCount（远端端点
-    // 实例数）；publishers/subscribers 非 nullptr 时（verbose 模式）额外填充各端点详情
-    // （EndpointDetail；快照相等性含端点详情——等待期间端点变化会重置不变计数）；收敛时仍未
-    // 见该主题返回 false（未 setDomainId 亦 false，verbose 输出保持为空）。0 值钳制默认
-    // 5 次/200ms；最长阻塞约 stableRounds*intervalMs。失败原因经 error 出参回填（可空）：
-    // 未入域 "debug node not created"、收敛后仍未发现该主题 "topic [...] not found"。
+    // 收敛查询单主题详情（与 listTopics 互不影响）：命中（任一 writer 或 reader 已发现）返回
+    // true 并填充 typeName（原始 DDS 类型名）与端点计数；publishers/subscribers 非 nullptr 时
+    // （verbose 模式）额外填充各端点详情，快照相等性含端点详情。0 值钳制默认 5 次/200ms；
+    // 最长阻塞约 stableRounds*intervalMs。未入域 error="debug node not created"，未发现
+    // error="topic [...] not found"。
     bool topicInfo(const std::string& topicName, std::string& typeName,
             size_t& publisherCount, size_t& subscriptionCount,
             uint32_t stableRounds = kDefaultStableRounds,
@@ -142,107 +115,65 @@ public:
             std::vector<EndpointDetail>* publishers = nullptr,
             std::vector<EndpointDetail>* subscribers = nullptr,
             std::string* error = nullptr);
-    // 列出域内已发现的命名参与者（独立收敛查询，与 listTopics/topicInfo 互不影响）：先检查
-    // 入域状态，再轮询参与者名称快照，连续 stableRounds 次不变即认为收敛返回。仅列出
-    // participant_name 非空且非 "/" 的参与者（空名跳过；"/" 是 ROS2 参与者的默认占位名——
-    // rmw_fastrtps 把参与者名统一置为根 enclave "/"（rcl_init 兜底），节点名走另一通道，无
-    // 辨识价值——同样跳过），不输出 GUID 串；同名多参与者各自一行；发现缓存不含自身（自身
-    // 不在发现回调中）。未 setDomainId 返回 false；域内无有效命名参与者时返回 true 且
-    // names 为空。0 值钳制默认 5 次/200ms；最长阻塞约 stableRounds*intervalMs；等待期间
-    // 新参与者入域会使快照变化并重置计数。未入域 false（error="debug node not created"）。
+    // 收敛查询域内命名参与者（与 listTopics/topicInfo 互不影响）：仅列出 participant_name 非空
+    // 且非 "/" 者——"/" 是 ROS2 参与者默认占位名，rmw_fastrtps 统一置为根 enclave（rcl_init
+    // 兜底），节点名走另一通道无辨识价值；同名多参与者各自一行；发现缓存不含自身。
+    // 域内无有效命名参与者返回 true 且 names 为空。
     bool nodeList(std::vector<std::string>& names,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
-    // 查询指定节点名（participant_name）参与者的发布/订阅主题清单（独立收敛查询，与
-    // listTopics/topicInfo/nodeList 互不影响）：先检查入域状态，再轮询归属快照（found 标志 +
-    // 发布列表 + 订阅列表，均 (topicName, typeName) 对），连续 stableRounds 次不变即认为收敛
-    // 返回。归属判定：RTPS 规范保证端点 GUID 前缀 == 所属参与者 GUID 前缀，端点
-    // guid.guidPrefix 与目标名参与者前缀集合比对即得（不依赖 participant_guid 字段）。
-    // 命中返回 true 并填充 publishers/subscribers（按主题名排序、同主题去重取首命中端点类型
-    // 名；同名多参与者的端点合并归入同一清单）；收敛时仍无此名参与者返回 false（未
-    // setDomainId 亦 false）。"/" 与空名参与者不在此过滤（nodeList 的过滤仅是其快照私有
-    // 逻辑），按名可查——查 "/" 即该名称下全部参与者的端点合并。0 值钳制默认 5 次/200ms；
-    // 最长阻塞约 stableRounds*intervalMs；等待期间新发现使快照变化并重置计数。失败原因经
-    // error 出参回填（可空）：未入域 "debug node not created"、收敛后仍无此名参与者
-    // "node [...] not found"。
+    // 收敛查询指定 participant_name 参与者的发布/订阅清单（与 listTopics/topicInfo/nodeList
+    // 互不影响）。归属判定：RTPS 规范保证端点 GUID 前缀 == 所属参与者 GUID 前缀，与前缀集合
+    // 比对即得（不依赖 participant_guid 字段）；同名多参与者的端点合并归入同一清单。
+    // "/" 与空名参与者不在此过滤，按名可查——查 "/" 即该名称下全部参与者的端点合并。
+    // 未入域 error="debug node not created"，无此名参与者 error="node [...] not found"。
     bool nodeInfo(const std::string& nodeName,
             std::vector<std::pair<std::string, std::string>>& publishers,
             std::vector<std::pair<std::string, std::string>>& subscribers,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
-    // 按数据类型名查询单个类型的 IDL 结构描述（独立收敛查询，与 listTopics/topicInfo 互不影响）：
-    // 先检查入域状态，再轮询"类型命中 + 字段行快照"（发现缓存按 type_name 精确匹配，writer 优先、
-    // reader 补缺——两缓存均携带完整 TypeInformation），连续 stableRounds 次不变即认为收敛。命中
-    // 返回 true 并填充 lines（IDL 风格多行：struct 头 + 逐字段行 + 结尾 };；仅支持顶层为 struct
-    // 的类型）；未发现该类型（含 TypeObject 查询未就绪）返回 false（未 setDomainId 亦 false）。
-    // 0 值钳制默认 5 次/200ms；最长阻塞约 stableRounds*intervalMs。失败原因经 error 出参
-    // 回填（可空），三态区分：未入域 "debug node not created"、类型名未在域内出现
-    // "type [...] not found"、类型已发现但 TypeObject 不可得 "type object for [...] not
-    // available"（ROS2 rmw_fastrtps 等不参与 XTypes 类型发现的端点即此情形）、顶层非 struct
-    // "type [...] is not a struct, interface display unsupported"。
+    // 收敛查询类型 IDL 结构描述（与 listTopics/topicInfo 互不影响；仅支持顶层为 struct 的类型）。
+    // error 三态回填：未入域 "debug node not created"、类型未出现 "type [...] not found"、
+    // TypeObject 不可得 "type object for [...] not available"（ROS2 rmw_fastrtps 等不参与 XTypes
+    // 类型发现的端点即此情形）、顶层非 struct "type [...] is not a struct, ..."。
     bool interfaceShow(const std::string& typeName,
             std::vector<std::string>& lines,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
-    // 查询指定主题的发布示例三段行集（独立收敛查询，与 listTopics/topicInfo/interfaceShow 互不影响）：
-    // 依次收敛拿类型名（发现缓存按主题名查，未发现 false）→ IDL 行集（同 interfaceShow）→
-    // JSON 发布示例（同类型重建 DynamicType 后取默认值样本经 json_serialize 生成，与
-    // json_deserialize 输入格式对称，可直接作为发布载荷模板）。命中返回 true 并填充 lines：
-    // "Type: <类型名>" + "IDL:" + IDL 行集 + "example:" + 可复制发布命令；未发现主题或
-    // TypeObject/类型重建不可用返回 false（未 setDomainId 亦 false）。0 值钳制默认
-    // 5 次/200ms；最长阻塞约 2*stableRounds*intervalMs。失败原因经 error 出参回填（可空），
-    // 按三步各自归类而非统一报 not found：步骤①未发现主题 "topic [...] not found"；
-    // 步骤②同 interfaceShow 的三态文本；步骤③同 jsonExampleOfType（type rebuild failed /
-    // example generation failed）。
+    // 收敛查询指定主题的发布示例三段行集（Type / IDL / example，与 listTopics/topicInfo/
+    // interfaceShow 互不影响）：依次拿类型名 → IDL 行集 → JSON 发布示例（与 json_deserialize
+    // 输入格式对称，可直接作为发布载荷模板）。失败按步骤各自归类回填 error，不统一报 not found。
+    // 最长阻塞约 2*stableRounds*intervalMs。
     bool topicExample(const std::string& topicName,
             std::vector<std::string>& lines,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
-    // 查询指定主题的消息描述两要素（独立收敛查询，供导出消息描述文件用）：收敛拿类型名
-    // （发现缓存按主题名查，未发现 false）→ 同类型重建 DynamicType 取默认值样本经
-    // json_serialize 生成紧凑 JSON 发布模板（与 json_deserialize 输入格式对称）。命中返回
-    // true 并填充 typeName 与 json；未发现主题或 TypeObject/类型重建不可用返回 false（未
-    // setDomainId 亦 false）。0 值钳制默认 5 次/200ms；最长阻塞约 stableRounds*intervalMs。
-    // 失败原因经 error 出参回填（可空），按两步各自归类：步骤①未发现主题
-    // "topic [...] not found"；步骤②透传 jsonExampleOfType 的具体原因。
+    // 收敛查询指定主题的消息描述两要素（typeName + JSON 发布模板，供导出消息描述文件用）。
+    // 失败按步骤各自归类回填 error；最长阻塞约 stableRounds*intervalMs。
     bool topicMsgJson(const std::string& topicName,
             std::string& typeName,
             std::string& json,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
-    // 向指定主题发布消息（唯一写入型操作，与查询类互不影响）：四阶段链路——
-    // ①发现收敛（同 topicInfo 路径：类型名 + 订阅者数快照连续 stableRounds 轮不变；未发现
-    // 主题 false，error="topic [...] not found"）→ ②类型重建 + JSON 解析（json_deserialize
-    // EPROSIMA 格式，与 topic pub -e 模板对称；失败 false，error="invalid json ..."，不建
-    // writer）→ ③建临时发布链（DynamicPubSubType 注册 + create_topic/publisher/datawriter，
-    // QoS 经 qos 尾参描述：全哨兵=Fast DDS writer 默认底座 KEEP_LAST(1)+RELIABLE+
-    // TRANSIENT_LOCAL，≡既有固定值（请求 ≤ 提供规则下最大兼容），无参行为不变；ROS2
-    // 对接建议显式传 DDSQosProfile::ros2DefaultPublisher()）+ 匹配收敛（
-    // requiredSubscribers>0 时先阻塞等待 matched 订阅端计数达到
-    // 该值——每 intervalMs 轮询一次，计数变化或约每 5s 打印等待进度日志（stdout），一直等
-    // 待不设超时，yomk::g_debugPubStop 置位即中断返回 false（error="waiting for subscribers
-    // interrupted"）；=0 时跳过直接进入稳定收敛）+ publication matched 计数连续 stableRounds
-    // 轮不变；无订阅者恒 0 也收敛照发）→ ④write 恰一次 + ack 自适应确认：发现缓存该主题
-    // 存在 RELIABLE 订阅者
-    // 时 wait_for_acknowledgments(2s)，OK 才成功（全部 RELIABLE 订阅者已确认收到）、超时
-    // false（error="not all subscribers acknowledged"）；全 BEST_EFFORT 或无订阅者则退化
-    // 尽力而为：intervalMs 保底窗后即成功（BEST_EFFORT 无 ack 协议）。⑤repeatIntervalMs>0
-    // 持续发布：首轮校验成功后保留发布链按该周期重复 write（尽力而为：write 失败仅计入
-    // failed 不返回，不再等 ack），循环只读 yomk::g_debugPubStop（入口先 debugPubReset
-    // 复位残留）；maxTimes>0 为条数上限（含首轮）：发满即停止循环并在销毁发布链前保底
-    // 排空 200ms（进程即将退出、writer 即将销毁，末条消息失去协议重传窗口；Ctrl+C 中断
-    // 不排空），=0 持续到停止标志置位才退出。成败均清理临时发布链
-    // （delete_datawriter/publisher/topic；类型注册幂等不注销）。未入域 false（error=
-    // "debug node not created"）。0 值钳制默认 5 次/200ms；最长阻塞约
-    // 2*stableRounds*intervalMs + 2s（ack 可用时）；requiredSubscribers>0 时匹配等待不设
-    // 上限（直至达标或 g_debugPubStop 中断）；持续模式再叠加用户 Ctrl+C 或发满 maxTimes
-    // 前的全部间隔时长。total/failed 统计出参可空（仅持续模式回填；单次发布成功隐含 total=1）。
-    // qos 为临时发布 writer 的 QoS 描述（可缺省尾参，语义见上方阶段③说明）。
+    // 向指定主题发布消息（唯一写入型操作，与查询类互不影响）。四阶段链路：
+    // ①发现收敛 → ②类型重建 + JSON 解析（json_deserialize EPROSIMA 格式，与 topic pub -e
+    // 模板对称；失败不建 writer）→ ③建临时发布链（qos 全哨兵=Fast DDS writer 默认底座
+    // KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL，≡既有固定值，无参行为不变；ROS2 对接建议
+    // DDSQosProfile::ros2DefaultPublisher()。requiredSubscribers>0 时先阻塞等待 matched 计数
+    // 达标，不设超时，yomk::g_debugPubStop 置位即中断 error="waiting for subscribers
+    // interrupted"）→ ④write 恰一次 + ack 自适应：发现缓存该主题存在 RELIABLE 订阅者时
+    // wait_for_acknowledgments(2s)，超时 error="not all subscribers acknowledged"；全
+    // BEST_EFFORT 或无订阅者退化 intervalMs 保底窗（无 ack 协议）。⑤repeatIntervalMs>0 持续
+    // 发布：write 失败仅计入 failed 不返回、不再等 ack；maxTimes>0 发满即停并在销毁发布链前
+    // 保底排空 200ms（末条消息失去协议重传窗口；Ctrl+C 中断不排空）。成败均清理临时发布链
+    // （类型注册幂等不注销）。未入域 error="debug node not created"；最长阻塞约
+    // 2*stableRounds*intervalMs + 2s（ack 可用时），requiredSubscribers>0 时匹配等待不设上限。
+    // total/failed 仅持续模式回填（单次发布成功隐含 total=1）。
     bool topicPub(const std::string& topicName, const std::string& json,
             std::string& error,
             uint32_t stableRounds = kDefaultStableRounds,
@@ -255,129 +186,90 @@ public:
             const DDSQosProfile& qos = DDSQosProfile{});
 
 private:
-    // listTopics 的收敛轮询辅助（私有实现细节）：假定调用方已完成入域检查，仅承担快照轮询
-    // 循环——每次快照锁内合并拷贝 seen_ 与 seenReaders_（writer 优先、reader 补缺，按主题名
-    // 排序），连续 stableRounds 次相同即以最终快照填充 topics 返回 true；等待期间远端新增
-    // writer/reader 使快照变化并重置计数。
+    // Precondition: 调用方已完成入域检查
     bool waitForTopicsStable(std::vector<std::pair<std::string, std::string>>& topics,
             uint32_t stableRounds, uint32_t intervalMs);
-    // topicInfo 的收敛轮询辅助（独立于 waitForTopicsStable）：快照为单个目标主题的详情
-    // （found 标志 + 类型名 + writer 端点计数 + reader 端点计数 + 可选的 writer/reader 端点
-    // 详情列表），连续 stableRounds 次不变即收敛；caller 已完成入域检查。命中的最终快照填充
-    // 输出（verbose 指针非空才填充对应详情列表）并返回 true，未发现返回 false。
+    // Precondition: 调用方已完成入域检查
     bool waitForTopicInfoStable(const std::string& topicName, std::string& typeName,
             size_t& publisherCount, size_t& subscriptionCount,
             uint32_t stableRounds, uint32_t intervalMs,
             std::vector<EndpointDetail>* publishers = nullptr,
             std::vector<EndpointDetail>* subscribers = nullptr);
-    // nodeList 的收敛轮询辅助（独立于 waitForTopicsStable/waitForTopicInfoStable）：快照为
-    // 域内有效命名参与者名称列表（名称非空且非 "/" 者——空名与 ROS2 占位名 "/" 跳过——按名称
-    // 排序），连续 stableRounds 次不变即收敛；caller 已完成入域检查。最终快照填充输出并返回 true。
+    // Precondition: 调用方已完成入域检查
     bool waitForNodesStable(std::vector<std::string>& names,
             uint32_t stableRounds, uint32_t intervalMs);
-    // nodeInfo 的收敛轮询辅助（独立于其余 waitFor*Stable）：快照为三元组（found 标志 +
-    // 发布列表 + 订阅列表，均 (topicName, typeName) 对），连续 stableRounds 次不变即收敛；
-    // caller 已完成入域检查。found 的最终快照填充输出并返回 true，无此名参与者返回 false。
+    // Precondition: 调用方已完成入域检查
     bool waitForNodeInfoStable(const std::string& nodeName,
             std::vector<std::pair<std::string, std::string>>& publishers,
             std::vector<std::pair<std::string, std::string>>& subscribers,
             uint32_t stableRounds, uint32_t intervalMs);
-    // interfaceShow 的收敛轮询辅助（独立于其余 waitFor*Stable）：快照为二元组（found 标志 +
-    // IDL 行集），连续 stableRounds 次不变即收敛；caller 已完成入域检查。命中（发现缓存命中且
-    // TypeObject 可查询）的最终快照填充 lines 返回 true，未发现返回 false。失败时按收敛末轮
-    // 的实际原因归类写 error（可空）：类型名未出现 / TypeObject 不可得 / IDL 拼装失败三态。
+    // Precondition: 调用方已完成入域检查；失败按收敛末轮实际原因归类写 error
+    // （类型名未出现 / TypeObject 不可得 / IDL 拼装失败三态）。
     bool waitForInterfaceStable(const std::string& typeName,
             std::vector<std::string>& lines,
             uint32_t stableRounds, uint32_t intervalMs,
             std::string* error = nullptr);
-    // TypeObject → DynamicType → IDL 行集拼装：struct 头 + 逐字段行（"    <IDL类型> <成员名>;"）
-    // + 结尾 };。字段类型名经 DynamicTypeKind → IDL 名映射（bool/int16/int32/int64/uint16/
-    // uint32/uint64/float32/float64/char/string/wstring/octet；有界 string<N>；sequence<T>[,N]；
-    // T[N]；嵌套 struct/enum/alias 等仅显示成员子类型名，不递归展开）；仅支持顶层为 struct 的
-    // 类型，否则 false 并经 error（可空）回填 "type [...] is not a struct, interface display
-    // unsupported"。仅读取入参，不触及节点状态。
+    // TypeObject → DynamicType → IDL 行集拼装；仅支持顶层为 struct，否则 false 并经 error
+    // 回填 "type [...] is not a struct, interface display unsupported"。仅读取入参，不触及节点状态。
     bool buildInterfaceLines(const eprosima::fastdds::dds::xtypes::TypeObject& type_object,
             const std::string& typeName, std::vector<std::string>& lines,
             std::string* error = nullptr);
-    // 按类型名生成 JSON 发布示例（topicExample 第三段）：锁内仅查发现缓存与拷贝 TypeObject
-    // （writer 优先、reader 补缺，同 buildFromInfo 路径），锁外重建 DynamicType 后取
-    // DynamicDataFactory 默认值样本经 json_serialize 序列化（不注册类型不建订阅，纯类型内省）。
-    // 类型未发现或 TypeObject/类型重建不可用返回 false，四个失败分支各自经 error（可空）
-    // 回填具体原因（not available / rebuild failed / create_data / json_serialize）。
-    // 仅读取入参缓存，不触及节点状态。
+    // 锁内仅查发现缓存与拷贝 TypeObject，锁外重建 DynamicType 取默认值样本序列化
+    // （不注册类型不建订阅，纯类型内省）；失败分支各自经 error 回填具体原因。
     bool jsonExampleOfType(const std::string& typeName, std::string& out,
             std::string* error = nullptr);
-    // 按类型名从发现缓存查 TypeObject（writer 优先、reader 补缺，同 buildFromInfo 路径）：
-    // 仅拿 seenMtx_ 叶子锁做缓存查询与 TypeObject 拷贝，锁外重建留给调用方。类型未发现或
-    // TypeObject 未就绪返回 false。topicPub（阶段②类型重建）与 jsonExampleOfType 共用。
+    // 仅拿 seenMtx_ 叶子锁做缓存查询与 TypeObject 拷贝，锁外重建留给调用方；
+    // topicPub（阶段②类型重建）与 jsonExampleOfType 共用。
     bool fetchTypeObject(const std::string& typeName, eprosima::fastdds::dds::xtypes::TypeObject& type_object);
-    // 发现线程回调入口（DebugParticipantListener 转发）：新见 writer 追加进 seen_ 列表后唤醒
-    // 工作线程（发现事件对同一端点不重发，缓存供登记晚于发现时回放）；回调内不建订阅。回调运行于
-    // Fast DDS 发现锁临界区内，仅拿 seenMtx_ 叶子锁（锁序倒置死锁防护见成员注释）。
+    // 发现线程回调入口（DebugParticipantListener 转发）：缓存供登记晚于发现时回放，回调内
+    // 不建订阅。运行于 Fast DDS 发现锁临界区内，仅拿 seenMtx_ 叶子锁（锁序倒置防护见成员注释）。
     bool onWriterDiscovered(const std::string& topicName,
                             const eprosima::fastdds::rtps::PublicationBuiltinTopicData& info);
-    // 发现线程回调入口（DebugParticipantListener 转发）：新见 reader 追加进 seenReaders_ 列表
-    // （不唤醒工作线程——订阅建立仅由 writer 驱动，reader 缓存供 listTopics 列出仅有订阅者
-    // 的主题与 topicInfo 统计订阅者数）。回调运行于 Fast DDS PDP 锁临界区内，仅拿 seenMtx_ 叶子锁。
+    // 发现线程回调入口：不唤醒工作线程（订阅建立仅由 writer 驱动）。仅拿 seenMtx_ 叶子锁。
     bool onReaderDiscovered(const std::string& topicName,
                             const eprosima::fastdds::rtps::SubscriptionBuiltinTopicData& info);
-    // 发现线程回调入口（DebugParticipantListener 转发）：reader 离线（graceful dispose）按
-    // 端点 GUID 从 seenReaders_ 同步移除，使 topicPub 的 matched==0 校验只对"缓存仍有记录
-    // 却无一匹配"（挂起/异常死亡）生效，不对正常退出的订阅者误报。回调运行于 Fast DDS
-    // PDP 锁临界区内，仅拿 seenMtx_ 叶子锁。
+    // 发现线程回调入口：reader 离线同步移除，使 topicPub 的 GUID 校验只对"缓存仍有记录却无一
+    // 匹配"（挂起/异常死亡）生效。仅拿 seenMtx_ 叶子锁。
     bool onReaderRemoved(const std::string& topicName,
                          const eprosima::fastdds::rtps::SubscriptionBuiltinTopicData& info);
-    // 发现线程回调入口（DebugParticipantListener 转发）：新见 participant 缓存 GUID 前缀与
-    // 名称（幂等去重；不唤醒工作线程——订阅建立链路不依赖参与者发现）。回调运行于 Fast DDS
-    // PDP 锁临界区内，仅拿 seenMtx_ 叶子锁（锁序倒置防护同上）。
+    // 发现线程回调入口：不唤醒工作线程（订阅建立链路不依赖参与者发现）。仅拿 seenMtx_ 叶子锁。
     void onParticipantDiscovered(const eprosima::fastdds::rtps::ParticipantBuiltinTopicData& info);
-    // 建订阅链路（自加锁，仅由工作线程调用）：TypeInformation → TypeObject → DynamicType →
-    // Topic → DataReader，任一步失败放弃本次订阅。工作线程每 100ms 重试，故四类失败告警
-    // 统一经 warnAt_ 按（主题, 告警类型）节流：首次立即打印，之后距上次 ≥
-    // kSubWarnIntervalMs 才重复（既避免永久静默使调用方无从得知失败原因，也避免刷屏）。
+    // 建订阅链路（自加锁，仅由工作线程调用），任一步失败放弃本次订阅；四类失败告警统一经
+    // warnAt_ 按（主题, 告警类型）节流（首次立即打印，之后距上次 ≥ kSubWarnIntervalMs 才重复）。
     bool tryStartSubscription(const std::string& topicName,
                               const eprosima::fastdds::rtps::PublicationBuiltinTopicData& info);
-    // 订阅建立工作线程主体：轮询 pending_ × seen_ 交集并尝试建订阅；等待由 sleep 有界节奏驱动
-    // （刻意不用 cv：GCC 11.4 libtsan 死锁检测器对 cv 等待模式报确定性假阳性，见 test/tsan.supp 头注）。
-    // 并对登记满 kPendingHintDelayMs 仍无 writer 的主题打一次性等待提示（见 pendingSince_）。
+    // 订阅建立工作线程主体；等待刻意不用 cv（GCC 11.4 libtsan 对该模式报确定性假阳性，
+    // 见 .cpp 实现注释），并对登记满 kPendingHintDelayMs 仍无 writer 的主题打一次性提示。
     void workerLoop();
 
 private:
     eprosima::fastdds::dds::DomainParticipant* participant_ = nullptr;
     eprosima::fastdds::dds::Subscriber* subscriber_ = nullptr;  // 订阅者，拥有全部 reader
     std::unique_ptr<DebugParticipantListener> listener_;        // participant 的发现监听器
-    OutputSink sink_;  // 输出目的地，默认空 → stdout
+    OutputSink sink_;
     std::set<std::string> pending_;         // 已登记、待发现的主题（含解析失败等待重试者）
-    // 已发现 writer 缓存（topic → 发现信息列表，同主题每个远端 DataWriter 各占一项）：发现
-    // 事件不重发，供登记晚于发现时回放；列表长度即该主题远端发布者数（topicInfo 计数源，
-    // listTopics 快照取列表首项类型名）
+    // 已发现 writer 缓存（topic → 发现信息列表）：发现事件对同一端点不重发，供登记晚于发现
+    // 时回放；列表长度即该主题远端发布者数
     std::map<std::string, std::vector<eprosima::fastdds::rtps::PublicationBuiltinTopicData>> seen_;
-    // 已发现 reader 缓存（topic → 发现信息列表）：与 seen_ 并列，供 listTopics 列出仅有
-    // 订阅者而无发布者的主题、供 topicInfo 统计订阅者数（订阅建立链路不依赖此缓存）
+    // 已发现 reader 缓存：与 seen_ 并列，供 listTopics 列出仅有订阅者的主题、topicInfo 统计
+    // 订阅者数（订阅建立链路不依赖此缓存）
     std::map<std::string, std::vector<eprosima::fastdds::rtps::SubscriptionBuiltinTopicData>> seenReaders_;
-    // 已发现参与者缓存（GUID 前缀 → participant_name）：与 seen_/seenReaders_ 并列，供
-    // nodeList 列出域内命名参与者，供 nodeInfo 端点归属匹配（RTPS 规范保证端点 GUID 前缀 ==
-    // 所属参与者 GUID 前缀；前缀仅作幂等去重与归属匹配，不对外输出）
+    // GUID 前缀 → participant_name：前缀仅作幂等去重与 nodeInfo 归属匹配（RTPS 规范保证端点
+    // GUID 前缀 == 所属参与者 GUID 前缀），不对外输出
     std::map<eprosima::fastdds::rtps::GuidPrefix_t, std::string> seenParticipants_;
     std::map<std::string, DebugSub> subs_;  // 已建立订阅
-    // 订阅告警节流记录（key = "<主题名>|<告警类型>" → 上次打印时刻）：仅供
-    // tryStartSubscription 判定距上次告警是否已满 kSubWarnIntervalMs，受 mtx_ 保护
-    // （该函数入口即持 mtx_）；主题数有限且对象析构即释放，无需逐出。
+    // 订阅告警节流记录（"<主题名>|<告警类型>" → 上次打印时刻），受 mtx_ 保护，无需逐出
     std::map<std::string, std::chrono::steady_clock::time_point> warnAt_;
-    // 主题登记时刻（steady_clock）：工作线程据此判定"登记满 kPendingHintDelayMs 仍未发现
-    // writer"并打一次性等待提示，提示打过后置 time_point::max() 作已提示标记（不重复打）；
-    // 订阅建立成功时随 pending_ 一同清除。受 mtx_ 保护，主题数有限无需逐出
+    // 主题登记时刻：满 kPendingHintDelayMs 仍无 writer 打一次性提示，打过后置 time_point::max()
+    // 作已提示标记；订阅建立成功随 pending_ 一同清除，受 mtx_ 保护
     std::map<std::string, std::chrono::steady_clock::time_point> pendingSince_;
-    // 已登记主题的 QoS 暂存（topic → 描述）：subscribeTopic 登记成功处同步写入，工作线程
-    // tryStartSubscription 入口取用（无条目=全哨兵兜底），建订成功随 pending_ 一同清除，
-    // 失败保留供重试；节点析构随成员销毁释放（服务层删除节点即 node_.reset()）。生命周期
-    // 与 pending_/pendingSince_ 同步，受 mtx_ 保护（同锁域）
+    // 已登记主题的 QoS 暂存：tryStartSubscription 入口取用（无条目=全哨兵兜底），建订成功随
+    // pending_ 一同清除，失败保留供重试；受 mtx_ 保护（与 pending_/pendingSince_ 同锁域）
     std::map<std::string, DDSQosProfile> pendingQos_;
     std::mutex mtx_;  // 串行化公开方法与工作线程（participant_/pending_/subs_/workerRunning_）
-    // 发现缓存专用叶子锁（保护 seen_/seenReaders_/seenParticipants_）：发现回调在 Fast DDS 持有 PDP/EDP 内部
-    // 锁的临界区内被调用，只允许拿此锁——若拿 mtx_ 会与工作线程（tryStartSubscription 持
-    // mtx_ 调 create_topic/create_datareader，内部等 PDP 锁）形成锁序倒置死锁（实测 AB-BA）。
-    // 锁序固定：mtx_ → seenMtx_，seenMtx_ 永不反向嵌套。
+    // 发现缓存专用叶子锁（保护 seen_/seenReaders_/seenParticipants_）：发现回调运行于 Fast DDS
+    // 持有 PDP/EDP 内部锁的临界区内，只允许拿此锁——拿 mtx_ 会与工作线程（持 mtx_ 建 reader
+    // 内部等 PDP 锁）形成锁序倒置死锁（实测 AB-BA）。锁序固定：mtx_ → seenMtx_，永不反向嵌套。
     std::mutex seenMtx_;
     std::thread worker_;          // 订阅建立工作线程（setDomainId 成功后启动）
     bool workerRunning_ = false;  // 工作线程生命周期标志（mtx_ 保护）

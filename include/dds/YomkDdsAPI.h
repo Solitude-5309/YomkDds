@@ -5,37 +5,66 @@
 #include <yomk/dds/YomkDdsService.h>
 #include <yomk/dds/YomkDdsUrl.h>
 
-// YomkDds 模块 API（四件套之 Api，宏形态）：每个宏封装一次对 /YomkDdsService/*（dds 服务）、
-// /YomkDdsDebugService/*（调试服务）或 /YomkDdsBagService/*（bag 服务）端点的
-// yomk::server().url().msg().request() 调用——请求一律走统一请求接口，URL 全部引用
-// yomk::url 常量（YomkDdsUrl.h），不裸写字符串字面量。
-// 除 YOMKDDS_VERSION（无返回值）外，其余宏均返回 yomk::payload::Response，调用后须判 status==yomk::payload::ResStatus::Succeeded。
+// Maintainer notes: this header is the macro-form Api of the four-suite
+// (chained API intentionally not provided). Each macro wraps one unified
+// request: yomk::server().url(<yomk::url constant>).msg(<yomk::msgs message>).request().
+// URLs come from YomkDdsUrl.h, payload structures from YomkDdsPayload.h,
+// message declarations from YomkDdsMsg.h.
 
-/// @brief 加载 Fast DDS XML profiles（经 /YomkDdsService/load_xml 缓存 raw 串；须在 create_node
-///   前调用，再次调用以最新成功文件整体替换）。
-/// @param xmlPath 可缺省：显式路径（相对/绝对均可）；缺省时读环境变量 YOMKDDS_XML_PROFILE_PATH
-///   （总开关 YOMKDDS_USE_XML_PROFILE=true 才生效）。
-/// @retval Succeeded 文件可解析并缓存（仅证明文件可解析；后续 create_node 按三级提取链叠加：
-///   节点名 profile → is_default_profile 默认档 → 均未命中保持默认底座）。
-/// @retval Failed 路径不存在/文件为空/格式非法（msg 携带原因与 rc）。
-/// 详见 docs/features/xml-profiles.md
+
+// ===== YomkDdsService — core communication =====
+/**
+ * @brief Core communication macros (YomkDdsService endpoints)
+ *
+ * Every macro returns yomk::payload::Response; success requires
+ * status == yomk::payload::ResStatus::Succeeded, failure details in msg.
+ * Full behavior and constraints: docs/features/core-communication.md
+ */
+// @zh: 核心通信宏（YomkDdsService 端点）
+// @zh: 除 YOMKDDS_VERSION 外均返回 yomk::payload::Response，成功判定
+// @zh: status == Succeeded，失败原因读 msg；完整约束见 docs/features/core-communication.md
+
+/**
+ * @brief Load a Fast DDS XML profiles file
+ * @param[in] xmlPath (variadic tail, optional) explicit path, relative or absolute;
+ *            default reads YOMKDDS_XML_PROFILE_PATH gated by YOMKDDS_USE_XML_PROFILE=true
+ * @note Must be called before create_node; a later successful call replaces the
+ *       cache wholesale. Success only proves the file parses — profiles apply
+ *       via the three-level extraction chain when nodes are created
+ */
+// @zh: 加载 Fast DDS XML profiles 文件
+// @zh: xmlPath 可缺省尾参：显式路径（相对/绝对均可）；缺省时经总开关 YOMKDDS_USE_XML_PROFILE=true
+// @zh: 读取 YOMKDDS_XML_PROFILE_PATH
+// @zh: note 须在 create_node 前调用；再次成功调用整体替换缓存；成功仅证明文件可解析，
+// @zh: profiles 在后续 create_node 时按三级提取链叠加
+
 #define YOMKDDS_LOAD_XML(...) \
     ::yomk::server().url(::yomk::url::ddsLoadXml).msg(::yomk::msgs::DDSXmlLoad::shared(yomk::payload::DDSXmlLoad{##__VA_ARGS__})).request()
 
-/// @brief 创建 DDS 节点（每节点一个独立 DDS 参与者；nodeName 唯一，仅同域节点可互通）。
-/// @param nodeName 节点唯一名。
-/// @param domainId 可缺省：DDS 域号 [0,232]；缺省时读环境变量 YOMKDDS_DDS_DOMAIN_ID
-///   （无/非法/越界回落 0）。
-/// @param udpDiscoverServerLocator 可缺省尾参：UDP 发现服务器直配聚合串 "ip[:port]"（多 server
-///   分号分隔，port 缺省 11811），participant 以 CLIENT 发现协议直配；非法串创建失败回显。
-/// @param tcpDiscoverServerLocator 可再缺省尾参：TCP 发现服务器直配聚合串（port 为 server 的
-///   TCP 监听口），participant 补注入 TCPv4 传输；两通道可并用，任一通道 server 在场即完成
-///   发现（仅 TCP 直配时 UDP 通道传空串占位）。
-/// 详见 docs/features/core-communication.md、discovery-server.md
+/**
+ * @brief Create a DDS node (one dedicated DDS participant per node)
+ * @param[in] nodeName Unique node name, must not be empty; only same-domain nodes interoperate
+ * @param[in] ... variadic tails, all optional: domainId [0,232] (default reads
+ *            YOMKDDS_DDS_DOMAIN_ID), then UDP and TCP discovery-server locator
+ *            aggregates "ip[:port]" (semicolon-separated for multiple servers)
+ * @note Invalid locator input fails with the reason echoed back
+ */
+// @zh: 创建 DDS 节点（每节点一个独立 DDS 参与者）
+// @zh: nodeName 节点唯一名，不可为空；仅同域节点可互通
+// @zh: 可变尾参均可缺省：domainId [0,232]（缺省读 YOMKDDS_DDS_DOMAIN_ID）、UDP/TCP
+// @zh: 发现服务器直配聚合串 "ip[:port]"（多 server 分号分隔）
+// @zh: note 非法直配串创建失败并回显原因
+
 #define YOMKDDS_NODE(nodeName, ...) \
     ::yomk::server().url(::yomk::url::ddsCreateNode).msg(::yomk::msgs::DDSNode::shared(yomk::payload::DDSNode{nodeName, ##__VA_ARGS__})).request()
 
-/// @brief 查询扩展版本并打印（成功走 yomk::log().tag().info()、失败走 yomk::log().tag().error()）；无返回值。
+/**
+ * @brief Query the extension version and print it via yomk::log()
+ * @note No return value; failures are logged as errors
+ */
+// @zh: 查询扩展版本并打印（经 yomk::log()）
+// @zh: note 无返回值；失败走错误日志
+
 #define YOMKDDS_VERSION()                                                          \
     do                                                                             \
     {                                                                              \
@@ -54,38 +83,61 @@
         }                                                                          \
     } while (0)
 
-/// @brief 在指定节点上注册发布主题。
-/// @param type 消息类型实例（new XxxPubSubType()），所有权移交服务端——调用后 caller 不再
-///   持有/释放（无论成功或失败）。
-/// @param qos 可缺省尾参：端点 QoS 描述 DDSQosProfile；缺省全哨兵=保持 Fast DDS 端点默认
-///   底座；传 DDSQosProfile::ros2DefaultPublisher() 即 ROS2 默认底座
-///   （RELIABLE+KEEP_LAST(10)+VOLATILE），也可在底座上逐项覆盖（如只设 depth）。
-/// 详见 docs/features/qos-profiles.md
+/**
+ * @brief Register a publisher topic on a node
+ * @param[in] type Message type instance (new XxxPubSubType())
+ * @param[in] ... qos variadic tail: DDSQosProfile; all-sentinel default keeps
+ *            the Fast DDS base, DDSQosProfile::ros2DefaultPublisher() for ROS2
+ * @warning Ownership of type is transferred to the service; do not hold or
+ *          free it afterwards regardless of the result
+ */
+// @zh: 在节点上注册发布主题
+// @zh: type 消息类型实例（new XxxPubSubType()）
+// @zh: qos 可缺省尾参：端点 QoS 描述 DDSQosProfile；全哨兵=Fast DDS 默认底座，ROS2 用
+// @zh: DDSQosProfile::ros2DefaultPublisher()
+// @zh: warning type 所有权移交服务端，无论成败调用后 caller 不再持有/释放
+
 #define YOMKDDS_PUB_TOPIC(nodeName, topicName, type, ...) \
     ::yomk::server().url(::yomk::url::ddsRegisterPubTopic).msg(::yomk::msgs::DDSTopic::shared(yomk::payload::DDSTopic{nodeName, topicName, type, ##__VA_ARGS__})).request()
 
-/// @brief 在指定节点上注册订阅主题。
-/// @param type 同 YOMKDDS_PUB_TOPIC，所有权移交服务端。
-/// @param callback std::function<void(const void*)>，每收到一条消息调用一次（消息实例指针
-///   仅回调期间有效）。
-/// @param qos 可缺省尾参：语义同 YOMKDDS_PUB_TOPIC 的 qos；订阅端推荐
-///   DDSQosProfile::ros2DefaultSubscriber()（BEST_EFFORT requested 对任意 offered 均可匹配）。
-/// 详见 docs/features/qos-profiles.md
+/**
+ * @brief Register a subscriber topic on a node
+ * @param[in] type Same ownership transfer as YOMKDDS_PUB_TOPIC
+ * @param[in] callback Invoked once per received message; the sample pointer is
+ *            only valid during the callback
+ * @param[in] ... qos variadic tail: DDSQosProfile::ros2DefaultSubscriber() recommended for ROS2
+ */
+// @zh: 在节点上注册订阅主题
+// @zh: type 所有权语义同 YOMKDDS_PUB_TOPIC
+// @zh: callback 每收到一条消息调用一次；消息实例指针仅回调期间有效
+// @zh: qos 可缺省尾参；ROS2 推荐 DDSQosProfile::ros2DefaultSubscriber()
+
 #define YOMKDDS_SUB_TOPIC(nodeName, topicName, type, callback, ...) \
     ::yomk::server().url(\
         ::yomk::url::ddsRegisterSubTopic).msg(\
         ::yomk::msgs::DDSSubRequest::shared(yomk::payload::DDSSubRequest{nodeName, topicName, type, callback, ##__VA_ARGS__})).request()
 
-/// @brief 向指定节点的已注册发布主题发送一条消息。
-/// @param data 消息实例指针（&msg），借用（非所有权）——publish 同步写入，caller 保留并在
-///   调用后自行管理其生命周期。
+/**
+ * @brief Publish one message on a registered publisher topic
+ * @param[in] data Borrowed (non-owning) message instance pointer; publish
+ *            writes synchronously and the caller keeps managing its lifetime
+ */
+// @zh: 向已注册发布主题发送一条消息
+// @zh: data 借用（非所有权）：publish 同步写入，caller 保留并自行管理其生命周期
+
 #define YOMKDDS_PUB_MSG(nodeName, topicName, data) \
     ::yomk::server().url(::yomk::url::ddsPublish).msg(::yomk::msgs::DDSPublish::shared(yomk::payload::DDSPublish{nodeName, topicName, data})).request()
 
-/// @brief 借出发布缓冲（仅 plain 类型）：成功时 outPtr 指向 writer 池内待发样本，直接在池内
-///   填值后经 YOMKDDS_PUB_MSG 发布免序列化；类型不支持 loan（非 plain）或池耗尽时 outPtr
-///   保持 nullptr，回退普通发布路径。每次 write 后指针即被中间件收回，须重新借出。
-/// 详见 docs/features/loan-zero-copy.md
+/**
+ * @brief Loan a publish buffer for zero-copy write (plain types only)
+ * @param[out] outPtr Set to the writer-pool sample on success, nullptr on
+ *             failure (non-loanable type or pool exhausted)
+ * @warning The pointer is reclaimed after each write; loan again per send
+ */
+// @zh: 借出发布缓冲（仅 plain 类型，免序列化）
+// @zh: outPtr 成功时指向 writer 池内待发样本，失败（非 loan 类型/池耗尽）保持 nullptr
+// @zh: warning 每次 write 后指针即被中间件收回，须重新借出
+
 #define YOMKDDS_LOAN(nodeName, topicName, outPtr)                                                                      \
     do                                                                                                                 \
     {                                                                                                                  \
@@ -101,264 +153,327 @@
         }                                                                                                              \
     } while (0)
 
-/// @brief 归还未发布的借出样本（sample 为 YOMKDDS_LOAN 借出的指针），避免 writer 池泄漏。
+/**
+ * @brief Return an unpublished loaned sample to avoid writer-pool leak
+ * @param[in] sample Pointer obtained from YOMKDDS_LOAN
+ */
+// @zh: 归还未发布的借出样本，避免 writer 池泄漏
+// @zh: sample 为 YOMKDDS_LOAN 借出的指针
+
 #define YOMKDDS_DISCARD_LOAN(nodeName, topicName, sample) \
     ::yomk::server().url(::yomk::url::ddsDiscardLoan).msg(::yomk::msgs::DDSLoan::shared(yomk::payload::DDSLoan{nodeName, topicName, sample})).request()
 
-/// @brief 删除节点并销毁其全部 DDS 实体；nodeName 不存在时返回错误。
+/**
+ * @brief Delete a node and destroy all its DDS entities
+ * @note Fails when the node name is unknown
+ */
+// @zh: 删除节点并销毁其全部 DDS 实体
+// @zh: note nodeName 不存在时返回错误
+
 #define YOMKDDS_DEL_NODE(nodeName) ::yomk::server().url(::yomk::url::ddsDeleteNode).msg(::yomk::msgs::String::shared(nodeName)).request()
 
-// ===== YomkDdsDebugService 调试 API（端点定义见 YomkDdsDebugService.h） =====
 
-/// @brief 创建调试节点（单节点模型：一个进程至多一个，重复创建须先删除）。
-/// @param 可变参 [domainId[, udpDiscoverServerLocator[, tcpDiscoverServerLocator]]]：
-///   domainId 为 DDS 域号 [0,232]（仅同域节点的主题可被调试），缺省时读环境变量
-///   YOMKDDS_DDS_DOMAIN_ID；两个 server 直配聚合串语义同 YOMKDDS_NODE 尾参，缺省时读
-///   YOMKDDS_USE_DISCOVER_SERVER 门控的双 server 环境变量（调试节点无用户名，XML 提取链
-///   仅默认档可兜底）。
-/// 调试节点以唯一名 yomkdds_debug_<uid> 入域（uid 为 12 位随机 hex，可被 yomkdds node list 列出）。
+// ===== YomkDdsDebugService — type-agnostic debugging =====
+/**
+ * @brief Debugging macros (YomkDdsDebugService endpoints); equal CLI: yomkdds
+ *
+ * Every macro returns yomk::payload::Response and requires a created debug
+ * node (YOMKDDS_DEBUG_NODE) first. list/info/find share the convergence
+ * semantics: consecutive stableRounds unchanged snapshots, 0 clamped to
+ * defaults 5 rounds / 200ms. Full behavior: docs/features/debug-service.md
+ */
+// @zh: 调试宏（YomkDdsDebugService 端点，等价 CLI：yomkdds）
+// @zh: 均返回 yomk::payload::Response，且须先创建调试节点；list/info/find 组共用收敛语义：
+// @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
+
+/**
+ * @brief Create the debug node (type-agnostic domain observer)
+ * @param[in] ... variadic tails, all optional: same form as YOMKDDS_NODE
+ * @note Single node per process; delete it before re-creating
+ */
+// @zh: 创建调试节点（类型无关域观察者）
+// @zh: 可变尾参语义同 YOMKDDS_NODE
+// @zh: note 单节点模型：一个进程至多一个，重复创建须先删除
+
 #define YOMKDDS_DEBUG_NODE(...) \
     ::yomk::server().url(::yomk::url::ddsDebugCreateNode).msg(::yomk::msgs::DDSDebugNode::shared(yomk::payload::DDSDebugNode{__VA_ARGS__})).request()
 
-/// @brief 登记调试主题：发现匹配的远端 DataWriter 后自动解析类型并建立订阅，消息 JSON 文本
-///   逐条投递 output（DDSDebugOutputFunc，用户自定义，服务层不打印）；须先创建调试节点。
-/// @param qos 可缺省尾参：动态订阅 reader QoS DDSQosProfile；缺省全哨兵=Fast DDS reader
-///   默认底座（KEEP_LAST(1)+BEST_EFFORT+VOLATILE）；对接 ROS2 高频流建议
-///   DDSQosProfile::ros2DefaultSubscriber()（KEEP_LAST(10) 防丢样本）。
-/// 登记是发现驱动的延迟行为：主题尚无发布者时仍返回成功，订阅待 writer 出现后自动建立；
-/// 登记约 3s 后仍无 writer 由节点层工作线程打一次性等待提示（宽限窗避开发现未完成时的误报）。
-/// 重复登记同一主题返回错误。失败 msg 归因：debug node not created / subscriber not
-/// created / empty topic name / topic [...] already registered。
-/// 详见 docs/features/debug-service.md
+/**
+ * @brief Register a topic-print observer; JSON texts are delivered per message
+ * @param[in] output User callback (DDSDebugOutputFunc); must be thread-safe and quick
+ * @param[in] ... qos variadic tail: dynamic subscription reader QoS
+ * @note Discovery-driven deferred behavior: succeeds even when the topic has
+ *       no writer yet; repeated registration of the same topic fails
+ * @warning Empty output callback is rejected
+ */
+// @zh: 登记调试主题，消息 JSON 文本逐条投递 output
+// @zh: output 用户自定义回调（DDSDebugOutputFunc），须线程安全且快速返回
+// @zh: qos 可缺省尾参：动态订阅 reader QoS
+// @zh: note 发现驱动的延迟行为：主题尚无发布者仍返回成功；重复登记同一主题返回错误
+// @zh: warning 空输出回调拒绝
+
 #define YOMKDDS_DEBUG_TOPIC_PRINT(topicName, output, ...) \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugTopicPrint).msg(\
         ::yomk::msgs::DDSDebugTopic::shared(yomk::payload::DDSDebugTopic{topicName, output, ##__VA_ARGS__})).request()
 
-/// @brief 列出当前域内已发现的全部主题（仅主题名，按名排序，每行一项，列表可为空）；
-///   须先创建调试节点。仅有订阅者而无发布者的主题同样列出。
-/// 收敛语义（本组 list/info/find 接口同用，后文以「收敛语义同上」引用）：轮询发现缓存快照，
-/// 连续 stableRounds 次集合不变即返回；stableRounds=0 钳制为默认 5 次/200ms，=1 即单次快照
-/// 免等待，最长阻塞约 stableRounds*intervalMs。
+/**
+ * @brief List discovered topics in the domain (names only, sorted)
+ */
+// @zh: 列出域内已发现的全部主题（仅主题名，按名排序）
+
 #define YOMKDDS_DEBUG_TOPIC_LIST(stableRounds, intervalMs)                   \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugListTopics).msg(\
         ::yomk::msgs::DDSDebugList::shared(yomk::payload::DDSDebugList{stableRounds, intervalMs})).request()
 
-/// @brief 同 YOMKDDS_DEBUG_TOPIC_LIST 的 types 模式：每行输出 "主题名 [类型名]"（单空格 +
-///   方括号，对齐 ros2 topic list -t 形态，类型名原样输出）；收敛语义同上。须先创建调试节点。
+/**
+ * @brief List discovered topics with type names ("topic [type]" per line)
+ */
+// @zh: 列出域内主题并附类型名（每行 "主题名 [类型名]"）
+
 #define YOMKDDS_DEBUG_TOPIC_LIST_T(stableRounds, intervalMs)                 \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugListTopics).msg(\
         ::yomk::msgs::DDSDebugList::shared(yomk::payload::DDSDebugList{stableRounds, intervalMs, true})).request()
 
-/// @brief 查询单主题的发现详情（独立收敛，语义同上）：命中返回 StringArray 三行——
-///   Type: <原始 DDS 类型名>、Publisher count: <N>、Subscription count: <N>（类型名原样
-///   输出，无任何风格转换）；未发现主题返回错误。须先创建调试节点。
+/**
+ * @brief Query one topic's discovery details (type, publisher/subscriber counts)
+ * @note Fails when the topic is not discovered
+ */
+// @zh: 查询单主题的发现详情（类型、发布/订阅端计数）
+// @zh: note 未发现主题返回错误
+
 #define YOMKDDS_DEBUG_TOPIC_INFO(topicName, stableRounds, intervalMs)        \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugTopicInfo).msg(\
         ::yomk::msgs::DDSDebugInfo::shared(yomk::payload::DDSDebugInfo{topicName, stableRounds, intervalMs})).request()
 
-/// @brief 单主题端点详情（verbose，与 topic_info 同端点同收敛语义）：另逐端点输出 Node name
-///   （归属参与者名）、Endpoint type（PUBLISHER/SUBSCRIPTION）、GUID（FastDDS 原生格式）与
-///   QoS profile（ROS2 风格键值行，核心组恒输出、扩展组按发现数据携带情况追加）；count=0
-///   的端点类型无清单段；未发现主题返回错误。须先创建调试节点。
+/**
+ * @brief Verbose topic details: per-endpoint node name, GUID and QoS profile
+ */
+// @zh: 单主题端点详情（verbose）：逐端点输出节点名、GUID 与 QoS profile
+
 #define YOMKDDS_DEBUG_TOPIC_INFO_V(topicName, stableRounds, intervalMs)      \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugTopicInfo).msg(\
         ::yomk::msgs::DDSDebugInfo::shared(yomk::payload::DDSDebugInfo{topicName, stableRounds, intervalMs, true})).request()
 
-/// @brief 按数据类型名反查域内主题列表（类型名精确匹配，收敛语义同上）：命中返回 StringArray
-///   每行一个主题名（按名排序）；无匹配主题返回错误（type [...] not found）。
-///   须先创建调试节点。
+/**
+ * @brief Reverse-lookup topics by data type name (exact match)
+ * @note Fails when no topic matches the type
+ */
+// @zh: 按数据类型名反查主题列表（精确匹配）
+// @zh: note 无匹配主题返回错误
+
 #define YOMKDDS_DEBUG_TOPIC_FIND(typeName, stableRounds, intervalMs)         \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugTopicFind).msg(\
         ::yomk::msgs::DDSDebugFind::shared(yomk::payload::DDSDebugFind{typeName, stableRounds, intervalMs})).request()
 
-/// @brief 按数据类型名输出该类型的 IDL 结构描述（精确匹配，收敛语义同上）：命中返回
-///   StringArray 多行（IDL 源语法：struct 头 + 四空格缩进字段行 + 结尾 };）。失败 msg
-///   归因：type [...] not found（类型名未出现在发现缓存）/ type object for [...] not
-///   available（对端未提供 XTypes TypeObject，ROS2 rmw_fastrtps 端点即此情形）/ type [...]
-///   is not a struct, interface display unsupported / interface introspection failed
-///   for [...]。须先创建调试节点。
+/**
+ * @brief Dump the IDL struct description of a data type
+ * @note Requires the peer to provide XTypes TypeObject (ROS2 rmw_fastrtps
+ *       endpoints do not)
+ */
+// @zh: 按数据类型名输出 IDL 结构描述
+// @zh: note 需对端提供 XTypes TypeObject（ROS2 rmw_fastrtps 端点不提供）
+
 #define YOMKDDS_DEBUG_INTERFACE_SHOW(typeName, stableRounds, intervalMs)     \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugInterfaceShow).msg(\
         ::yomk::msgs::DDSDebugInterfaceShow::shared(yomk::payload::DDSDebugInterfaceShow{typeName, stableRounds, intervalMs})).request()
 
-/// @brief 列出发现缓存中出现的全部数据类型名（去重字典序，interface show 的配套导航；
-///   收敛语义同上）：域内无任何类型返回错误（no interface types discovered）。
-///   须先创建调试节点。
+/**
+ * @brief List all discovered data type names (deduplicated, sorted)
+ */
+// @zh: 列出发现缓存中出现的全部数据类型名（去重字典序）
+
 #define YOMKDDS_DEBUG_INTERFACE_LIST(stableRounds, intervalMs)              \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugInterfaceList).msg(\
         ::yomk::msgs::DDSDebugInterfaceList::shared(yomk::payload::DDSDebugInterfaceList{stableRounds, intervalMs})).request()
 
-/// @brief 按主题名查询发布示例三段行集（收敛语义同上）："Type: <类型名>" + "IDL:" + IDL
-///   行集 + "example:" + 可复制发布命令（JSON 默认值模板整体包单引号，改字段值即可发布）。
-///   失败 msg 按三步归因：topic [...] not found → 类型侧（同 interface_show）→ 示例
-///   生成侧（type rebuild failed for [...] / example generation failed for [...]:
-///   create_data 或 json_serialize）。须先创建调试节点。
+/**
+ * @brief Query a copy-pastable publish example for a topic (Type/IDL/example)
+ */
+// @zh: 按主题名查询发布示例三段行集（Type/IDL/example 命令）
+
 #define YOMKDDS_DEBUG_TOPIC_EXAMPLE(topicName, stableRounds, intervalMs)    \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugTopicExample).msg(\
         ::yomk::msgs::DDSDebugTopicExample::shared(yomk::payload::DDSDebugTopicExample{topicName, stableRounds, intervalMs})).request()
 
-/// @brief 按主题名查询消息描述（供导出消息描述文件；收敛语义同上）：命中返回 StringArray
-///   恰 2 行——d[0]=类型名、d[1]=紧凑 msg JSON（单行，可直接作为发布载荷模板）。失败 msg
-///   按两步归因：topic [...] not found → JSON 模板生成侧（同 topic_example 步骤 2/3）。
-///   须先创建调试节点。
+/**
+ * @brief Query a topic's message description: type name + compact msg JSON
+ */
+// @zh: 按主题名查询消息描述两要素：类型名 + 紧凑 msg JSON
+
 #define YOMKDDS_DEBUG_TOPIC_MSG(topicName, stableRounds, intervalMs)        \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugTopicMsg).msg(\
         ::yomk::msgs::DDSDebugTopicMsg::shared(yomk::payload::DDSDebugTopicMsg{topicName, stableRounds, intervalMs})).request()
 
-/// @brief 按主题名发布 JSON 载荷消息：发现收敛 → 类型重建 + json_deserialize 解析载荷 →
-///   建临时 RELIABLE+TRANSIENT_LOCAL writer 匹配收敛 → write 一次 → 存在 RELIABLE 订阅者时
-///   wait_for_acknowledgments 确认送达；全 BEST_EFFORT 或无订阅者退化尽力而为。
-///   须先创建调试节点。
-/// @param requiredSubscribers 期望建匹配订阅端数门槛（>0 达标才发布并打印等待进度，直至达标
-///   或停止标志置位中断；=0 自动收敛）。
-/// @param repeatIntervalMs >0 为持续发布模式：首轮校验成功后按该周期重复 write（尽力而为：
-///   write 失败仅计数不返回，不再等 ack），直到 yomk::g_debugPubStop 置位（CLI Ctrl+C 经
-///   debugPubStop 置，async-signal-safe）或发满 maxTimes 条（>0 时，含首轮）才退出清理。
-/// @param maxTimes 见 repeatIntervalMs；发满达标在销毁发布链前保底排空 200ms 后返回。
-/// @param qos 可缺省尾参：临时发布 writer QoS DDSQosProfile；缺省全哨兵=Fast DDS writer
-///   默认底座（KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL）；ROS2 底座建议
-///   DDSQosProfile::ros2DefaultPublisher()。
-/// @retval Failed 未发现主题（topic [...] not found）/ 载荷不合法（invalid json for type [...]）/
-///   送达未确认（not all subscribers acknowledged）。
-/// 详见 docs/features/debug-service.md
+/**
+ * @brief Publish a JSON payload to a topic with full first-shot validation
+ * @param[in] requiredSubscribers Delivery gate: publish only after that many
+ *            matched subscribers (0 = auto convergence)
+ * @param[in] repeatIntervalMs >0 keeps the publish chain alive and repeats
+ *            until the stop flag or maxTimes is reached
+ * @note Blocking until convergence and (for RELIABLE peers) acknowledgment
+ * @warning Stop a repeating publish via yomk::debugPubStop (async-signal-safe)
+ */
+// @zh: 按主题名发布 JSON 载荷消息（首轮完整强校验）
+// @zh: requiredSubscribers 期望建匹配订阅端数门槛（0=自动收敛）
+// @zh: repeatIntervalMs >0 为持续发布模式，直至停止标志置位或发满 maxTimes 条
+// @zh: note 阻塞至收敛完成（RELIABLE 订阅端还等送达确认）
+// @zh: warning 持续发布经 yomk::debugPubStop 停止（async-signal-safe）
+
 #define YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes, ...)  \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugTopicPub).msg(\
         ::yomk::msgs::DDSDebugTopicPub::shared(yomk::payload::DDSDebugTopicPub{topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes, ##__VA_ARGS__})).request()
 
-/// @brief 列出当前域内已发现的全部命名参与者（独立收敛，语义同上）：返回 StringArray 每行
-///   一个节点名（participant_name 非空才列出，空名参与者跳过，不输出 GUID 串），按名称排序，
-///   列表可为空。须先创建调试节点。
+/**
+ * @brief List named participants in the domain (sorted, empty names skipped)
+ */
+// @zh: 列出当前域内已发现的全部命名参与者（按名排序，空名参与者跳过）
+
 #define YOMKDDS_DEBUG_NODE_LIST(stableRounds, intervalMs)                    \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugListNodes).msg(\
         ::yomk::msgs::DDSNodeList::shared(yomk::payload::DDSNodeList{stableRounds, intervalMs})).request()
 
-/// @brief 查询指定节点名的发布/订阅主题清单（独立收敛，语义同上）：归属判定基于 RTPS 规范
-///   「端点 GUID 前缀 == 所属参与者 GUID 前缀」，同名多参与者端点合并。命中返回 StringArray：
-///   节点名行、"  Subscribers:" 段 + 每行 "    <topic>: <type>"、"  Publishers:" 段同形态
-///   （类型名原样输出；空段仅打段头）；未发现节点名返回错误。须先创建调试节点。
+/**
+ * @brief Query pub/sub topic lists of a named participant (GUID-prefix based)
+ * @note Endpoints of same-name participants are merged
+ */
+// @zh: 查询指定节点名的发布/订阅主题清单（按端点 GUID 前缀归属）
+// @zh: note 同名多参与者端点合并
+
 #define YOMKDDS_DEBUG_NODE_INFO(nodeName, stableRounds, intervalMs)          \
     ::yomk::server().url(\
         ::yomk::url::ddsDebugNodeInfo).msg(\
         ::yomk::msgs::DDSNodeInfo::shared(yomk::payload::DDSNodeInfo{nodeName, stableRounds, intervalMs})).request()
 
-/// @brief 退出调试：删除调试节点并销毁其全部 DDS 实体（未创建时返回错误）。
+/**
+ * @brief Quit debugging: delete the debug node and its DDS entities
+ * @note Fails when the debug node was not created
+ */
+// @zh: 退出调试：删除调试节点及其全部 DDS 实体
+// @zh: note 未创建时返回错误
+
 #define YOMKDDS_DEBUG_QUIT() ::yomk::server().url(::yomk::url::ddsDebugDeleteNode).msg(nullptr).request()
 
-// ===== YomkDdsBagService 录制 API（端点定义见 YomkDdsBagService.h） =====
 
-/// @brief 创建 bag 节点（单节点模型：一个进程至多一个，重复创建须先删除）。
-/// @param 可变参 [domainId[, udpDiscoverServerLocator[, tcpDiscoverServerLocator]]]：语义同
-///   YOMKDDS_DEBUG_NODE（缺省时经 DDSBagNode 类内缺省初始化器读同一组环境变量；bag 节点无
-///   用户名，XML 提取链仅默认档可兜底）。domainId 合法范围 [0,232]。
-/// bag 节点以唯一名 yomkdds_bag_<uid> 入域（uid 为 12 位随机 hex，可被 yomkdds node list 列出）。
+// ===== YomkDdsBagService — mcap bag record/replay =====
+/**
+ * @brief Bag record/replay macros (YomkDdsBagService endpoints)
+ *
+ * Every macro returns yomk::payload::Response. bag_record/bag_play block the
+ * calling thread until finished or stopped via the yomk::bag* flags.
+ * Full behavior: docs/features/bag-service.md
+ */
+// @zh: Bag 录制回放宏（YomkDdsBagService 端点）
+// @zh: 均返回 yomk::payload::Response；bag_record/bag_play 阻塞调用线程至收尾或经
+// @zh: yomk::bag* 标志停止；详见 docs/features/bag-service.md
+
+/**
+ * @brief Create the bag node (mcap record/replay)
+ * @param[in] ... variadic tails, all optional: same form as YOMKDDS_NODE
+ * @note Single node per process; delete it before re-creating
+ */
+// @zh: 创建 bag 节点（mcap 录制回放）
+// @zh: 可变尾参语义同 YOMKDDS_NODE
+// @zh: note 单节点模型：一个进程至多一个，重复创建须先删除
+
 #define YOMKDDS_BAG_NODE(...) \
     ::yomk::server().url(::yomk::url::ddsBagCreateNode).msg(::yomk::msgs::DDSBagNode::shared(yomk::payload::DDSBagNode{__VA_ARGS__})).request()
 
-/// @brief 录制主题（长驻阻塞：调用线程阻塞至录制收尾完成，SIGINT 经 yomk::bagRecordStop
-///   无锁置位后收尾返回）；须先创建 bag 节点。
-/// @param topics 清单项支持通配（恰好一个 '*'：前缀 pre* / 后缀 *suf / 中间 pre*suf，"*"
-///   匹配全部；≥2 个 '*' 返回错误），启动时按发现缓存全表展开为实际主题集合（去重升序，
-///   与精确项合并）；模式未命中、既无发布者也无订阅者的精确主题、清单重复/空名均整体报错
-///   （msg 逐项列出，不建 bag）。
-/// @param outputDir bag 目录：相对/绝对均可，父目录自动多级创建，已存在报错；为空缺省当前
-///   路径 bag_<YYYY-MM-DD_HH-MM-SS_mmm>（含 bag_0.mcap 与 metadata.json）。
-/// @param maxBagSize 单分片最大字节数（>0 写满即滚动 bag_N.mcap 分片；下限 1024 字节过小
-///   报错；0=不分片）。
-/// @param maxBagDurationSec 单分片最大时长秒（0=不分片，无下限校验；与 maxBagSize 同用先到
-///   先分）。
-/// @param maxCacheSize 写缓存双缓冲字节数（0=直写；>0 回调拷贝入队、服务端独立消费线程写盘，
-///   缓存满丢弃新消息并按主题计数）。
-/// 透传订阅：通过校验的主题以透传方式订阅，原始 CDR 字节直写 mcap。落盘元信息：每分片
-/// Channel.metadata 记 type+qos 两键（qos 取首见发布者 offered 的 Reliability/Durability 拼
-/// "<RELIABILITY>,<DURABILITY>" 串，仅订阅者主题空串），metadata.json 的 topic_metadata 内
-/// name/type/qos 并列（供 bag info 显示与 reindex 重建）。
-/// 成功 data 为 StringArray：首行 bag 目录名，其后每主题一行 "topic: N 条 / M 字节" 统计。
-/// 详见 docs/features/bag-service.md
+/**
+ * @brief Record topics into an mcap bag (blocks the calling thread until done)
+ * @param[in] topics At least 1; one '*' wildcard item expands over the
+ *            discovery snapshot; unmatched/wildcard-less-no-publisher items fail wholesale
+ * @param[in] outputDir Empty = timestamped default bag_<...>; existing dir fails
+ * @param[in] maxBagSize,maxBagDurationSec Per-file split thresholds (0 = no split)
+ * @param[in] maxCacheSize Write cache double-buffer bytes; 0 = direct write
+ * @note Stop via yomk::bagRecordStop (async-signal-safe); reset before reuse
+ */
+// @zh: 录制主题到 mcap bag（阻塞调用线程至录制收尾）
+// @zh: topics 至少 1 个；恰含一个 '*' 的通配项按发现快照展开；未命中/无效项整体报错
+// @zh: outputDir 空 = 缺省时间戳名；已存在报错
+// @zh: maxBagSize/maxBagDurationSec 单分片阈值（0=不分片）；maxCacheSize 写缓存字节数（0=直写）
+// @zh: note 经 yomk::bagRecordStop 停止（async-signal-safe）；复用前先 bagRecordReset 复位
+
 #define YOMKDDS_BAG_RECORD(topics, outputDir, maxBagSize, maxBagDurationSec, maxCacheSize) \
     ::yomk::server().url(::yomk::url::ddsBagRecord).msg(::yomk::msgs::DDSBagRecord::shared(yomk::payload::DDSBagRecord{(topics), (outputDir), (maxBagSize), (maxBagDurationSec), (maxCacheSize)})).request()
 
-/// @brief 查看 bag 元信息（纯文件读，不经 bag 节点，无须 create_node）：读 bagDir 的
-///   metadata.json 与目录递归总大小，输出对齐 ros2 bag info 形态的元信息文本（Files/Bag
-///   size/Storage id/Duration/Start/End/Messages/Topic information 各一行，多主题/多分片
-///   续行缩进对齐；Serialization Format 固定 cdr；topic_metadata 含非空 qos 键时 Topic
-///   information 行在 Type 后插 QoS 段，旧 bag/仅订阅者主题不显示）。成功 data 每项一行
-///   （首项为空行）；路径不存在/无 metadata.json/解析失败返回错误。
+/**
+ * @brief Show bag metadata (pure file read, no bag node needed)
+ * @note Fails when the path has no readable metadata.json
+ */
+// @zh: 查看 bag 元信息（纯文件读，不经 bag 节点）
+// @zh: note 路径无 metadata.json/解析失败返回错误
+
 #define YOMKDDS_BAG_INFO(bagDir) \
     ::yomk::server().url(::yomk::url::ddsBagInfo).msg(::yomk::msgs::DDSBagInfo::shared(yomk::payload::DDSBagInfo{(bagDir)})).request()
 
-/// @brief 重建 bag 元信息（纯文件操作，不经 bag 节点）：读 bagDir 全部 mcap 分片
-///   （<前缀>_<编号>.mcap 按编号升序）重建 metadata.json 并无条件覆盖写出（元信息文件缺失/
-///   损坏均可重建；对齐 ros2 bag reindex 行为语义）。主题 type 经各分片 Channel.metadata 的
-///   type 键恢复；旧格式 bag（无该元数据的既有分片）读不到则回退空串。路径不存在/非目录/
-///   无 mcap 分片/读取失败返回错误。
+/**
+ * @brief Rebuild metadata.json from the bag's mcap files (pure file op)
+ * @note Overwrites unconditionally; old bags without type metadata fall back
+ *       to an empty type string
+ */
+// @zh: 重建 bag 元信息（纯文件操作，读全部分片重建 metadata.json）
+// @zh: note 无条件覆盖写出；旧格式 bag（无 type 元数据）回退空串
+
 #define YOMKDDS_BAG_REINDEX(bagDir) \
     ::yomk::server().url(::yomk::url::ddsBagReindex).msg(::yomk::msgs::DDSBagReindex::shared(yomk::payload::DDSBagReindex{(bagDir)})).request()
 
-/// @brief 转换 bag（纯文件操作，不经 bag 节点）：读输入 bag 目录集与输出配置文件，把输入
-///   消息按配置过滤合并写为新 bag；多输入按 logTime 全局归并，同主题跨输入类型不一致报错。
-/// @param inputs 输入 bag 目录清单（至少 1 个，相对/绝对均可，重复目录拒绝）。
-/// @param cfgPath 输出配置文件路径（JSON，顶层 output_bags 键为对象序列，每条目独立一组输出
-///   参数）：uri 输出目录必填非空（已存在报错）；topics 输出主题清单（缺省全部，支持恰好
-///   一个 '*' 的通配模式，精确项不存在/模式未命中报错）；start_time/end_time 收纳区间
-///   （缺省 0=不限，start>end 报错，含头含尾；非负整数纳秒，或可读时间串
-///   YYYY-MM-DD_HH-MM-SS_毫秒-微秒-纳秒，本地时区）；max_bagfile_size 单分片最大字节数
-///   （0=不分片，>0 且 <1024 报错）；max_bagfile_duration 单分片最大时长秒（0=不分片，与
-///   size 同用先到先分）；未知字段忽略。任一条目失败整体报错（已产生的输出目录保留不回滚）。
-/// 成功 data 每条目一行 "converted <uri>: N messages / M bytes / K topics" 统计。
+/**
+ * @brief Filter/merge input bags into new bags per a JSON config file
+ * @param[in] inputs At least 1, duplicates rejected
+ * @param[in] cfgPath JSON, top-level output_bags array with per-entry params
+ * @note Multi-input merge is globally ordered by logTime; cross-input type
+ *       mismatch of the same topic fails; produced outputs are kept on failure
+ */
+// @zh: 转换 bag（按 JSON 配置过滤合并输入为新 bag）
+// @zh: inputs 至少 1 个，重复目录拒绝
+// @zh: cfgPath JSON，顶层 output_bags 键为对象序列，每条目独立一组输出参数
+// @zh: note 多输入按 logTime 全局归并；同主题跨输入类型不一致报错；失败不回滚已产生输出
+
 #define YOMKDDS_BAG_CONVERT(inputs, cfgPath) \
     ::yomk::server().url(::yomk::url::ddsBagConvert).msg(::yomk::msgs::DDSBagConvert::shared(yomk::payload::DDSBagConvert{(inputs), (cfgPath)})).request()
 
-/// @brief 回放 bag（长驻阻塞：调用线程阻塞至全部消息播毕或 SIGINT 经 yomk::bagPlayStop
-///   无锁置位后收尾返回）；须先创建 bag 节点。读播解耦：读线程逐条预读原始 CDR 字节入有界
-///   内存队列，播放线程按相邻时间戳差值定时发布；writer 按需创建，发布 QoS 按录制快照恢复
-///   （空串/缺失回退 RELIABLE+VOLATILE；旧格式 bag——任一主题 type 空串——报错拒播）；
-///   暂停/恢复经 yomk::bagPlayPause/bagPlayResume 键盘通道控制，不经协议传递。
-/// @param bagDir bag 目录（相对/绝对均可，须含 metadata.json）。
-/// @param playbackRate 回放速率倍率（对齐 ros2 --rate：2.0 两倍速、0.5 半倍速；<=0 报
-///   "invalid playback rate"；运行时经 yomk::bagPlaySetRate/bagPlayGetRate 动态调率，换率
-///   即时生效且已播进度连续）。
-/// @param topics 回放清单（空=全部，对齐 ros2 --topics；精确项须在 bag 清单否则报
-///   "not found in bag"；含一个 '*' 为通配按 bag 清单展开，未命中报 "matched no bag topic"；
-///   入选集合 = 精确 ∪ 通配命中，回显/发布实体/收尾统计只含入选主题）。
-/// @param loop 循环回放（对齐 ros2 -l/--loop：到尾即回开头无限播放；收尾统计为各轮累计；
-///   Ctrl+C 终止）。
-/// @param startOffset 起始偏移秒（对齐 ros2 --start-offset：从 bag 开始第 SEC 秒起播——读
-///   线程跳过 logTime 早于全场首条+偏移的消息，不入队不计收尾统计；与 loop 叠加每轮保持；
-///   负值报 "invalid start offset"；超全场时长则零消息播出正常播毕返回）。
-/// @param delay 开播延迟秒（对齐 ros2 -d/--delay：播放线程在每轮轮边界重锚前先睡 SEC 秒再
-///   播出，发布实体已建，为订阅端留匹配窗口；与 loop 叠加每轮保持；负值报 "invalid delay"；
-///   0 不延迟）。
-/// @param waitForAllAckedMs 退出前等全部 RELIABLE 订阅端确认收齐毫秒（对齐 ros2
-///   --wait-for-all-acked：回放结束后、销毁发布实体前，逐 RELIABLE writer 等待，BEST_EFFORT
-///   跳过；-1 不等待，0 永等（Ctrl+C 可中断），>0 逐主题各计超时；超时/中断仅告警不改变
-///   返回值）。
-/// @param topicRemaps 主题重映射 "old:=new" 原始串列表（对齐 ros2 --remap：发布主题名精确
-///   匹配改名，QoS/类型按 bag 快照照旧，topics 过滤在读取层按原名先过滤后改名；old 不在
-///   bag 清单则规则静默无效；空=不重映射）。
-/// @param readAheadQueueSize 预读内存队列深度（对齐 ros2 --read-ahead-queue-size：读侧吸收
-///   磁盘 IO 抖动保证确定性回放；<1 报 "invalid read-ahead queue size" 快速返回；发布端
-///   history 上限为独立常量不随其联动）。
-/// @param qosOverridesPath QoS 覆盖文件路径（JSON：键=bag 原主题名精确匹配，值={reliability,
-///   durability} 两枚大写 DDS 标准拼写枚举名可独立给，未给档保持 bag 快照恢复值；非法枚举值
-///   报 "invalid qos string" 拒播；不在 bag 的主题键静默无效；优先级：文件命中 > bag 内
-///   qos 快照 > 旧 bag 回退 RELIABLE+VOLATILE；空串=不加载）。
-/// 成功 data 为 StringArray：首行 bag 目录名，其后每主题一行 "topic: N 条 / M 字节" 统计。
-/// 详见 docs/features/bag-service.md
+/**
+ * @brief Replay an mcap bag on its recorded timeline (blocks until done)
+ * @param[in] playbackRate >0 speed multiplier
+ * @param[in] topics Empty = all; one '*' wildcard supported
+ * @param[in] loop Endless replay; startOffset skips seconds from bag start;
+ *            delay adds per-loop start latency
+ * @param[in] waitForAllAckedMs RELIABLE ack wait before exit (-1/0/>0)
+ * @param[in] topicRemaps "old:=new" rules; readAheadQueueSize pre-read queue
+ *            depth; qosOverridesPath JSON QoS overrides (file > bag snapshot > fallback)
+ * @note Pause/resume/rate at runtime via yomk::bagPlayPause/Resume/SetRate;
+ *       stop via yomk::bagPlayStop (async-signal-safe); legacy bags without
+ *       type metadata are rejected
+ */
+// @zh: 回放 mcap bag（阻塞至全部消息播毕或停止置位）
+// @zh: playbackRate >0 倍率；topics 空=全部（支持恰一个 '*' 通配）；loop 循环回放；
+// @zh: startOffset 起始偏移秒；delay 每轮开播延迟；waitForAllAckedMs 退出前等确认（-1/0/>0）；
+// @zh: topicRemaps "old:=new" 重映射；readAheadQueueSize 预读队列深度；
+// @zh: qosOverridesPath QoS 覆盖文件（文件 > bag 快照 > 回退三档）
+// @zh: note 运行时经 yomk::bagPlayPause/Resume/SetRate 控制；经 yomk::bagPlayStop 停止
+// @zh: （async-signal-safe）；旧格式 bag（type 空串）拒播
+
 #define YOMKDDS_BAG_PLAY(bagDir, playbackRate, topics, loop, startOffset, delay, waitForAllAckedMs, topicRemaps, readAheadQueueSize, qosOverridesPath) \
     ::yomk::server().url(::yomk::url::ddsBagPlay).msg(\
         ::yomk::msgs::DDSBagPlay::shared(yomk::payload::DDSBagPlay{(bagDir), (playbackRate), (topics), (loop), (startOffset), (delay), (waitForAllAckedMs), (topicRemaps), (readAheadQueueSize), (qosOverridesPath)})).request()
 
-/// @brief 退出录制：删除 bag 节点并销毁其全部 DDS 实体（未创建时返回错误）。
+/**
+ * @brief Quit bag mode: delete the bag node and its DDS entities
+ * @note Fails when the bag node was not created
+ */
+// @zh: 退出录制：删除 bag 节点及其全部 DDS 实体
+// @zh: note 未创建时返回错误
+
 #define YOMKDDS_BAG_DEL_NODE() ::yomk::server().url(::yomk::url::ddsBagDeleteNode).msg(nullptr).request()

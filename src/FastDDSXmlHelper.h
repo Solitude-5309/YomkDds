@@ -1,7 +1,6 @@
 #pragma once
-// Fast DDS participant 级 QoS 合成辅助（XML 配置通道三级提取链 + 发现服务器 serverLocator
-// 直配）：三个节点类（FastDDSNode/FastDDSDebugNode/FastDDSBagNode）的 setDomainId 合成链共用。
-// 纯头文件 inline 实现，无对应源文件；仅内部使用，不出现在公共头（公共头零 fastdds 依赖）。
+// participant 级 QoS 合成辅助，三个节点类的 setDomainId 合成链共用；纯头文件 inline 无对应
+// 源文件，仅内部使用不出现在公共头（公共头零 fastdds 依赖）。
 
 #include <fastdds/dds/core/detail/DDSReturnCode.hpp>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
@@ -21,8 +20,7 @@
 namespace yomkdds_xml
 {
 
-// participant 级配置来源：服务层从 YomkDdsService::xmlCache()（已成功加载的 XML raw 串）与
-// 负载发现服务器直配聚合串组装后传入 setDomainId；各字段均可为空（空=跳过该项配置）。
+// 服务层从 xmlCache() 与发现服务器直配聚合串组装后传入 setDomainId；字段空=跳过该项配置。
 struct ParticipantQosSpec
 {
     std::string xml;            // 已成功 load 的 XML profiles raw 串；空=未加载，跳过提取
@@ -30,12 +28,10 @@ struct ParticipantQosSpec
     std::string tcpServerSpec;  // TCP 发现服务器直配聚合串（格式同上，port 为 TCP 监听口）；空=不直配
 };
 
-// serverLocator port 合法上界（UDP 端口上限）
 constexpr uint32_t kDdsPortMax = 65535;
 
-// serverSpec 聚合串解析 → DDSServerInfo 列表：分号分隔（对齐 ROS_DISCOVERY_SERVER 官方格式）
-// "ip[:port]" 项，port 缺省 11811，
-// 合法范围 [1,65535]；空项/空 ip/非纯数字/越界 port 均为非法，err 回填具体项文本并返回 false。
+// 分号分隔 "ip[:port]" 项，对齐 ROS_DISCOVERY_SERVER 官方格式，port 缺省 11811；
+// 空项/空 ip/非纯数字/越界 port 均非法，err 回填具体项文本并返回 false。
 inline bool parseServerLocator(const std::string& spec,
         std::vector<DDSServerInfo>& out, std::string& err)
 {
@@ -86,13 +82,9 @@ inline bool parseServerLocator(const std::string& spec,
     return true;
 }
 
-// 发现服务器直配叠加：CLIENT 协议 + m_DiscoveryServers 重建（覆盖 XML discoveryServersList，
-// 双通道合并语义：直配 > XML 提取打底 > 默认）。3.6.1 client 连接 server 只需 ip:port +
-// CLIENT 协议（server 响应自报 GUID）。UDP/TCP 两聚合串分别解析：UDP 项填默认 UDPv4 locator，
-// TCP 项填 TCPv4 locator——participant 必须具备 TCPv4 传输才可达，builtin 默认集不含 TCP，
-// 故补注入 TCPv4TransportDescriptor（3.6 transport().user_transports 与 builtin "alongside"
-// 共存，UDP/SHM 数据通道不受影响；XML 提取已注入 TCPv4 描述符时跳过防重复）。任一 spec 非法时 err 回填
-// 返回 false（不改动 qos）；双空串=不直配（幂等返回 true）。
+// 合并语义：直配 > XML 提取打底 > 默认；3.6.1 client 连 server 仅需 ip:port + CLIENT。
+// TCP 项须 participant 具备 TCPv4 传输（builtin 默认集不含），故补注入 TCPv4TransportDescriptor
+// ——与 builtin alongside 共存不影响 UDP/SHM，XML 已注入时跳过防重复；spec 非法返回 false 不改 qos。
 inline bool applyDiscoveryServers(eprosima::fastdds::dds::DomainParticipantQos& qos,
         const std::string& udpServerSpec, const std::string& tcpServerSpec, std::string& err)
 {
@@ -150,13 +142,9 @@ inline bool applyDiscoveryServers(eprosima::fastdds::dds::DomainParticipantQos& 
     return true;
 }
 
-// participant 三级提取链（qos 入参须已置 PARTICIPANT_QOS_DEFAULT）：
-// ①按节点名 profile（profile_name 逐字全等无通配，配套约定 profile 名 = YomkDds 节点名）
-// → ②默认档（is_default_profile=true 兜底，factory 单值槽位语义，建议至多一个默认档）
-// → ③两级全落空保持 DEFAULT 底座（非错误）。节点名下沉由调用点既有逻辑在
-// 提取后执行（XML 提取会整体填充 qos 含 name，节点名必须最终覆盖，不可被 XML 顶掉；
-// xml 为空=未加载直接返回）。Debug/Bag 节点无用户名：按名 profile 无意义且 Fast DDS
-// 对空 profile 名固定打错误日志后拒绝（必然失败），空名直接跳过第①级仅默认档兜底。
+// Precondition: qos 已置 PARTICIPANT_QOS_DEFAULT。三级链：按节点名 profile（profile 名 =
+// YomkDds 节点名，逐字全等）→ 默认档兜底 → 全落空保持 DEFAULT 底座（非错误）；XML 提取
+// 整体填充 qos 含 name，节点名必须由调用点在提取后最终覆盖；空名跳过按名级（Fast DDS 固定拒绝空 profile 名）。
 inline void participantQosFromXml(eprosima::fastdds::dds::DomainParticipantQos& qos,
         const std::string& nodeName, const std::string& xml)
 {

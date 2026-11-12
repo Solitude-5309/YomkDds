@@ -1,16 +1,11 @@
-// YomkDdsDebugService 实现：将 /YomkDdsDebugService/* 端点的请求分发到对应 handler，委托给内部的
-// FastDDSDebugNode（类型无关调试节点：发现 → 动态类型 → 自动订阅 → JSON 结构化输出）。
-//
-// 输出契约：消息内容零打印进服务层——/topic_print 携带用户回调，经 setOutputSink 原样转交节点，
-// JSON 文本逐条投递给回调；仅服务自身状态错误走 YOMK_ERROR_TAG。
-//
-// 线程安全：node_ 的增删查改与节点入口调用统一以 mtx_ 串行化（createNode 内的 setDomainId 即
-// create_participant，沿用 YomkDdsService::createNode 的既有结论：必须在锁内串行，见其注释）。
+// 输出契约：消息内容零打印进服务层——/topic_print 携带用户回调经 setOutputSink 原样转交节点，
+// 仅服务自身状态错误走 YOMK_ERROR_TAG。
+// createNode 的 setDomainId 即 create_participant，必须在 mtx_ 内串行（同 YomkDdsService::createNode 注释）。
 #include "YomkDdsDebugService.h"
 #include "YomkDdsMsg.h"
 
 #include "FastDDSDebugNode.h"
-// 引 yomkdds_xml::ParticipantQosSpec（createNode 组 spec；FastDDSDebugNode.h 传递亦可得）
+// 显式引入 yomkdds_xml::ParticipantQosSpec（FastDDSDebugNode.h 传递亦可得，对齐 IWYU）
 #include "FastDDSXmlHelper.h"
 
 #include <set>
@@ -19,7 +14,7 @@
 
 namespace
 {
-constexpr uint32_t kMaxDomainId = 232;  // DDS 域号上限
+constexpr uint32_t kMaxDomainId = 232;
 }  // namespace
 
 YomkDdsDebugService::YomkDdsDebugService(YomkServer* server) : YomkService(server)
@@ -83,8 +78,8 @@ yomk::payload::Response YomkDdsDebugService::createNode(YomkMsgPtr pkg)
     }
 
     auto node = std::make_unique<FastDDSDebugNode>();
-    // XML 配置通道 + 发现服务器直配（闭环 4）：xmlCache 经 YomkDdsService::xmlCache()
-    // 单例取用（load_xml 端点成功后非空）；双直配串空串=不直配现状
+    // xmlCache 经 YomkDdsService::xmlCache() 单例取用（load_xml 成功后非空）；
+    // 直配串空串=不直配现状
     auto spec = yomkdds_xml::ParticipantQosSpec{};
     spec.xml = YomkDdsService::xmlCache();
     spec.udpServerSpec = p->msg.udpDiscoverServerLocator;
@@ -128,8 +123,7 @@ yomk::payload::Response YomkDdsDebugService::topicPrint(YomkMsgPtr pkg)
     }
     // 先 setOutputSink 后 subscribeTopic：sink 须在工作线程建立订阅前就位（FastDDSDebugNode 约定）。
     node_->setOutputSink(p->msg.output);
-    // 拒绝原因由节点层归类透传（未入域 / subscriber 未建 / 主题名空 / 重复登记），
-    // 不再统一报笼统 failed；保留 failed 字样以维持调用方对失败语义的既有判定
+    // 拒绝原因由节点层归类透传；保留 failed 字样前缀以维持调用方对失败语义的既有判定
     std::string error;
     if (!node_->subscribeTopic(p->msg.topicName, &error, p->msg.qos))
     {
@@ -167,13 +161,12 @@ yomk::payload::Response YomkDdsDebugService::listTopics(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::listTopics").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    // node_ 非空即已入域，listTopics 必返回 true；持锁收敛等待（最长约 stableRounds*intervalMs）：
-    // 锁保护 node_ 生命周期不被并发 deleteNode 破坏（同 createNode 锁内 setDomainId 的既有约定），
-    // 等待期间本服务其他端点请求被串行化（单用户 CLI 场景无实际影响）；0 值参数由节点层钳制默认
+    // 持锁阻塞收敛等待（最长约 stableRounds*intervalMs）：锁保护 node_ 生命周期不被并发
+    // deleteNode 破坏，等待期间本服务其他端点被串行化（单用户 CLI 场景可接受）；
+    // node_ 非空即已入域，listTopics 必返回 true；0 值收敛参数由节点层钳制默认
     std::vector<std::pair<std::string, std::string>> pairs;
     node_->listTopics(pairs, p->msg.stableRounds, p->msg.intervalMs);
-    // 非 types 模式仅主题名；types 模式每行 "主题名 [类型名]"（单空格 + 方括号，对齐
-    // ros2 topic list -t 形态；类型名原样输出，pair 已按主题名排序）
+    // 输出形态对齐 ros2 topic list -t；pairs 已按主题名排序
     std::vector<std::string> lines;
     lines.reserve(pairs.size());
     for (const auto& entry : pairs)
@@ -203,8 +196,7 @@ yomk::payload::Response YomkDdsDebugService::topicFind(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::topicFind").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    // 持锁取发现缓存全集快照（listTopics 已按主题名排序），按类型名精确匹配过滤；
-    // 无匹配按查询失败处理（info 族语义），便于调用方发现类型名拼写错误
+    // 无匹配按查询失败处理（find 族语义），便于暴露类型名拼写错误
     std::vector<std::pair<std::string, std::string>> pairs;
     node_->listTopics(pairs, p->msg.stableRounds, p->msg.intervalMs);
     std::vector<std::string> lines;
@@ -243,9 +235,8 @@ yomk::payload::Response YomkDdsDebugService::interfaceShow(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::interfaceShow").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    // 持锁取该类型的 IDL 行集（节点层收敛轮询：TypeInformation→TypeObject→DynamicType 内省）；
-    // 未发现该类型按查询失败处理（find 族语义），便于调用方发现类型名拼写错误。
-    // 失败原因由节点层归类透传：类型名未出现 / TypeObject 不可得 / 顶层非 struct / IDL 拼装失败
+    // 失败原因由节点层归类透传：类型名未出现 / TypeObject 不可得 / 顶层非 struct / IDL 拼装失败；
+    // 未发现该类型按查询失败处理（find 族语义），便于暴露类型名拼写错误
     std::vector<std::string> lines;
     std::string error;
     if (!node_->interfaceShow(p->msg.typeName, lines, p->msg.stableRounds, p->msg.intervalMs, &error))
@@ -280,9 +271,7 @@ yomk::payload::Response YomkDdsDebugService::interfaceList(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::interfaceList").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    // 持锁取发现缓存全集快照（listTopics 已按主题名排序），收集非空类型名去重排序
-    // （std::set 保证字典序，同类型多主题仅出一行）；域内无任何类型按查询失败处理
-    // （find 族语义），便于调用方发现域号或收敛参数配置错误
+    // 域内无任何类型按查询失败处理（find 族语义），便于暴露域号或收敛参数配置错误
     std::vector<std::pair<std::string, std::string>> pairs;
     node_->listTopics(pairs, p->msg.stableRounds, p->msg.intervalMs);
     std::set<std::string> typeNames;
@@ -322,9 +311,8 @@ yomk::payload::Response YomkDdsDebugService::topicExample(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::topicExample").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    // 持锁取该主题的发布示例三段行集（节点层依次收敛：类型名→IDL 行集→JSON 示例；
-    // 未发现主题按查询失败处理，info 族语义）。失败原因由节点层按步归类透传：
-    // 步骤 1 topic not found / 步骤 2 类型侧原因 / 步骤 3 示例生成侧原因
+    // 失败原因由节点层按步归类透传：步骤 1 topic not found / 步骤 2 类型侧 / 步骤 3 示例生成侧；
+    // 未发现主题按查询失败处理（info 族语义）
     std::vector<std::string> lines;
     std::string error;
     if (!node_->topicExample(p->msg.topicName, lines, p->msg.stableRounds, p->msg.intervalMs, &error))
@@ -359,10 +347,8 @@ yomk::payload::Response YomkDdsDebugService::topicMsg(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::topicMsg").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    // 持锁取该主题的消息描述两要素（节点层依次收敛：类型名→JSON 模板；未发现主题按
-    // 查询失败处理，info 族语义）；StringArray 恰 2 行：d[0]=类型名、d[1]=紧凑 msg JSON
-    // （机器可读契约，非展示行集）。失败原因由节点层按步归类透传：步骤 1 topic not found /
-    // 步骤 2 JSON 模板生成侧原因
+    // StringArray 恰 2 行：d[0]=类型名、d[1]=紧凑 msg JSON（机器可读契约，非展示行集）；
+    // 失败原因由节点层按步归类透传：步骤 1 topic not found / 步骤 2 JSON 模板生成侧
     std::string typeName;
     std::string json;
     std::string error;
@@ -400,13 +386,8 @@ yomk::payload::Response YomkDdsDebugService::topicPub(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::topicPub").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    // 持锁执行发布（节点层内部：发现收敛→类型重建→匹配收敛（requiredSubscribers>0 时先
-    // 阻塞等待期望建匹配数达标，可被停止标志中断）→write 一次→ack 自适应确认；失败原因
-    // 透传调用方：not found / invalid json / not all subscribers acknowledged /
-    // waiting for subscribers interrupted 等）；repeatIntervalMs>0 为持续发布模式：首轮
-    // 校验后节点层周期重复发送直到 g_debugPubStop 置位（CLI Ctrl+C）或发满 maxTimes 条
-    // （>0 时，发满达标在销毁发布链前保底排空 200ms），统计 total/failed
-    // （含首轮）经 StringArray 随响应带回
+    // 持锁长驻阻塞；repeatIntervalMs>0 为持续发布模式，节点层周期发送直到 g_debugPubStop
+    // （CLI Ctrl+C）置位或发满 maxTimes 条；total/failed（含首轮）经 StringArray 随响应带回
     std::string error;
     uint32_t total = 0;
     uint32_t failed = 0;
@@ -446,9 +427,8 @@ yomk::payload::Response YomkDdsDebugService::topicInfo(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::topicInfo").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    // node_ 非空即已入域；持锁对单个目标主题做独立收敛查询（最长约 stableRounds*intervalMs）：
-    // 锁保护 node_ 生命周期不被并发 deleteNode 破坏（同 listTopics 既有约定）；0 值参数由节点层钳制；
-    // verbose 模式同一次查询顺带取端点详情（避免二次收敛轮询）
+    // node_ 非空即已入域；持锁阻塞收敛（锁保护 node_ 生命周期，同 listTopics）；0 值参数由
+    // 节点层钳制；verbose 模式同一次查询顺带取端点详情（避免二次收敛轮询）
     std::string typeName;
     size_t publisherCount = 0;
     size_t subscriptionCount = 0;
@@ -462,8 +442,6 @@ yomk::payload::Response YomkDdsDebugService::topicInfo(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::topicInfo").error("topic [", p->msg.topicName, "] not found");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "topic [" + p->msg.topicName + "] not found");
     }
-    // 非 verbose 三行：类型名原样输出（不做任何风格转换）+ 两端点计数；verbose 追加逐端点
-    // 详情段（空行规则：Type 后一段、每端点块前一段；count 为 0 的端点类型无清单段）
     std::vector<std::string> lines;
     if (!p->msg.verbose)
     {
@@ -519,9 +497,8 @@ yomk::payload::Response YomkDdsDebugService::listNodes(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::listNodes").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    // node_ 非空即已入域，listNodes 必返回 true；持锁收敛等待（最长约 stableRounds*intervalMs）：
-    // 锁保护 node_ 生命周期不被并发 deleteNode 破坏（同 listTopics 既有约定）；0 值参数由节点层
-    // 钳制为默认。无 "not found" 分支——空列表合法（域内暂无命名参与者），语义同 list_topics 空域
+    // node_ 非空即已入域，listNodes 必返回 true；无 "not found" 分支——空列表合法（域内暂无
+    // 命名参与者）；0 值收敛参数由节点层钳制默认
     std::vector<std::string> names;
     node_->nodeList(names, p->msg.stableRounds, p->msg.intervalMs);
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(names));
@@ -547,8 +524,7 @@ yomk::payload::Response YomkDdsDebugService::nodeInfo(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::nodeInfo").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    // node_ 非空即已入域；持锁对单个目标节点名做独立收敛查询（最长约 stableRounds*intervalMs）：
-    // 锁保护 node_ 生命周期不被并发 deleteNode 破坏（同 listNodes 既有约定）；0 值参数由节点层钳制
+    // node_ 非空即已入域；持锁阻塞收敛（锁保护 node_ 生命周期，同 listNodes）；0 值参数由节点层钳制
     std::vector<std::pair<std::string, std::string>> publishers;
     std::vector<std::pair<std::string, std::string>> subscribers;
     if (!node_->nodeInfo(p->msg.nodeName, publishers, subscribers, p->msg.stableRounds, p->msg.intervalMs))
@@ -556,8 +532,7 @@ yomk::payload::Response YomkDdsDebugService::nodeInfo(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::nodeInfo").error("node [", p->msg.nodeName, "] not found");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node [" + p->msg.nodeName + "] not found");
     }
-    // 输出行（对齐 ros2 node info 形态）：节点名行 + Subscribers 段 + Publishers 段，每条主题
-    // 一行 "    <topic>: <type>"（类型名原样输出，无任何风格转换）；空段仅打段头
+    // 输出形态对齐 ros2 node info；类型名原样输出不做风格转换
     std::vector<std::string> lines;
     lines.reserve(3 + publishers.size() + subscribers.size());
     lines.emplace_back(p->msg.nodeName);
@@ -584,6 +559,6 @@ yomk::payload::Response YomkDdsDebugService::deleteNode(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::deleteNode").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    node_.reset();  // 节点析构即按其内部顺序（停工作线程 → reader → topic → subscriber → participant）清理
+    node_.reset();  // 析构按节点层内部顺序清理（停工作线程 → reader → topic → subscriber → participant）
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }

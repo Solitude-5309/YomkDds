@@ -1,17 +1,12 @@
-// YomkDdsService 实现：将 /YomkDdsService/* 端点的请求分发到对应 handler，再委托给 FastDDSNode 执行 DDS 操作。
-//
-// 内存所有权协议（贯穿全部 handler）：
-//   - type（DDSTopic/DDSSubRequest.type）：caller new，服务端全路径接管——无论成功或失败均由本服务 delete，caller 不再释放；
-//   - data（DDSPublish.data）：借用（非所有权），publish 同步写入后 caller 自行管理其生命周期；
-//   - sample（DDSLoan/DDSLoanResult.sample）：loan 从 writer 池借出，所有权经 write（发布）或 discard（归还）交回中间件。
-//
-// 线程安全：nodes_ 的增删查改统一以 mtx_ 串行化（见各 handler 的 lock_guard）；create_node 的并发约束详见其内部注释。
+// 内存所有权协议（贯穿全部 handler，无法从签名推导）：
+//   type（DDSTopic/DDSSubRequest.type）caller new、服务端全路径接管，无论成败均由本服务 delete；
+//   data（DDSPublish.data）借用（非所有权），publish 同步写入后归 caller 管理；
+//   sample（DDSLoan/DDSLoanResult.sample）从 writer 池借出，经 write（发布）或 discard（归还）交回中间件。
 #include "YomkDdsService.h"
 #include "YomkDdsMsg.h"
 
 #include "FastDDSNode.h"
-// 引 yomkdds_xml::ParticipantQosSpec（createNode 组 spec；FastDDSNode.h 传递亦可得，
-// 显式引入对齐 IWYU）
+// 显式引入 yomkdds_xml::ParticipantQosSpec（FastDDSNode.h 传递亦可得，对齐 IWYU）
 #include "FastDDSXmlHelper.h"
 
 #include <fstream>
@@ -19,8 +14,8 @@
 
 namespace
 {
-constexpr uint32_t kMaxDomainId = 232;  // DDS 域号上限
-// loan 响应构造期间的异常安全守卫：构造抛异常时栈展开归还池；成功后由 caller 解除（见 loan()）。
+constexpr uint32_t kMaxDomainId = 232;
+// 异常安全守卫：loan 响应构造抛异常时栈展开归还池，成功后由 caller 解除
 struct LoanGuard
 {
     FastDDSNode* node = nullptr;
@@ -82,7 +77,7 @@ yomk::payload::Response YomkDdsService::loadXml(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsService::loadXml").error("xml path is empty");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "xml path is empty");
     }
-    // 读 raw 串缓存：get_*_qos_from_xml 系列吃 raw 串非文件路径，节点层三级提取链经 xmlCache() 取用
+    // 缓存 raw 串：节点层 QoS 提取链吃 raw 串而非文件路径
     std::ifstream file(p->msg.xmlPath);
     if (!file)
     {
@@ -97,8 +92,8 @@ yomk::payload::Response YomkDdsService::loadXml(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsService::loadXml").error("xml file [", p->msg.xmlPath, "] is empty");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "xml file [" + p->msg.xmlPath + "] is empty");
     }
-    // Fast DDS 解析校验前置：文件格式非法在 load 时报（rc 为 int32_t 别名 ReturnCode_t，整值
-    // 回显便于对照官方错误码；成功仅证明文件可解析，缓存后由节点层按名/默认档提取）
+    // 此处仅证明文件可解析，QoS 提取由节点层经 xmlCache() 完成；rc 为 ReturnCode_t（int32_t），
+    // 整值回显便于对照官方错误码
     auto* factory = eprosima::fastdds::dds::DomainParticipantFactory::get_instance();
     const auto rc = factory->load_XML_profiles_file(p->msg.xmlPath);
     if (rc != eprosima::fastdds::dds::RETCODE_OK)
@@ -108,7 +103,7 @@ yomk::payload::Response YomkDdsService::loadXml(YomkMsgPtr pkg)
             yomk::payload::ResStatus::Failed,
             "load_XML_profiles_file [" + p->msg.xmlPath + "] failed, rc=" + std::to_string(rc));
     }
-    // 缓存更新在服务 mtx_ 内（防同服务并发 load 交错写）；读取侧（Debug/Bag 服务经 xmlCache()）仅拷贝
+    // 缓存更新须在 mtx_ 内（防并发 load 交错写）；读取侧（Debug/Bag 服务）仅拷贝
     std::lock_guard<std::mutex> lock(mtx_);
     xmlCache_ = xml;
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
@@ -140,11 +135,9 @@ yomk::payload::Response YomkDdsService::createNode(YomkMsgPtr pkg)
             yomk::payload::ResStatus::Failed, "domainId [" + std::to_string(p->msg.domainId) + "] out of valid range [0,232]");
     }
 
-    // create_participant（经 setDomainId）必须在全局 mtx_ 内串行，不可“锁外构造”优化：
-    // FastDDS 3.6.1 的 DomainParticipantFactory 单例 lazy-init(get_shared_instance/load_profiles) 与
-    // SystemInfo::get_username()(→ 非线程安全 getpwuid，写 libc 静态缓冲) 在并发 create_participant 下
-    // data race。tsan 实证：移出锁后 A1 3 race / stress 2 race（create-vs-create），锁内串行则 0 race
-    // （git stash 基线对照 6×0）。并发安全优先于该罕见路径（create_node 多在启动期）的微优化。
+    // create_participant（经 setDomainId）必须在 mtx_ 内串行，不可锁外构造：FastDDS 3.6.1 的
+    // factory 单例 lazy-init 与 SystemInfo::get_username()（非线程安全 getpwuid，写 libc 静态缓冲）
+    // 并发下 data race；tsan 实证锁外有 race、锁内 0 race。并发安全优先于启动期路径的微优化
     std::lock_guard<std::mutex> lock(mtx_);
     if (nodes_.find(p->msg.nodeName) != nodes_.end())
     {
@@ -153,8 +146,8 @@ yomk::payload::Response YomkDdsService::createNode(YomkMsgPtr pkg)
     }
 
     auto node = std::make_unique<FastDDSNode>();
-    // XML 配置通道 + 发现服务器直配（闭环 4）：spec 组装——xmlCache_ 空串=未加载，提取链
-    // 跳过回退现状；双直配串空串=不直配现状。非法 serverSpec 经 err 回显具体非法项
+    // xmlCache_ 空串=未加载（提取链跳过回退现状）；直配串空串=不直配现状；
+    // 非法 serverSpec 经 err 回显具体非法项
     yomkdds_xml::ParticipantQosSpec spec;
     spec.xml = xmlCache_;
     spec.udpServerSpec = p->msg.udpDiscoverServerLocator;
@@ -216,7 +209,7 @@ yomk::payload::Response YomkDdsService::registerPubTopic(YomkMsgPtr pkg)
     if (it == nodes_.end())
     {
         ::yomk::log().tag("YomkDdsService::registerPubTopic").error("node [", p->msg.nodeName, "] not exists");
-        // type 所有权无条件接管：节点不存在未委托到节点层，须在此释放，避免泄漏。
+        // type 所有权无条件接管：未委托到节点层，须在此释放避免泄漏
         delete static_cast<eprosima::fastdds::dds::TopicDataType*>(p->msg.type);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node [" + p->msg.nodeName + "] not exists");
     }
@@ -248,7 +241,7 @@ yomk::payload::Response YomkDdsService::registerSubTopic(YomkMsgPtr pkg)
     if (it == nodes_.end())
     {
         ::yomk::log().tag("YomkDdsService::registerSubTopic").error("node [", p->msg.nodeName, "] not exists");
-        // type 所有权无条件接管：节点不存在未委托到节点层，须在此释放，避免泄漏。
+        // type 所有权无条件接管：未委托到节点层，须在此释放避免泄漏
         delete static_cast<eprosima::fastdds::dds::TopicDataType*>(p->msg.type);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node [" + p->msg.nodeName + "] not exists");
     }
@@ -319,7 +312,7 @@ yomk::payload::Response YomkDdsService::loan(YomkMsgPtr pkg)
         return yomk::payload::Response(
             yomk::payload::ResStatus::Failed, "loan [" + p->msg.topicName + "] failed on node [" + p->msg.nodeName + "]");
     }
-    // 异常安全：响应包构造若抛 bad_alloc，守卫在栈展开时归还池，避免借出样本滞留致池耗尽。
+    // 构造抛异常（如 bad_alloc）时守卫栈展开归还池，避免样本滞留致池耗尽
     LoanGuard loanGuard{it->second.get(), &p->msg.topicName, sample};
     yomk::payload::Response resp(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::DDSLoanResult::shared(DDSLoanResult{sample}));
     loanGuard.sample = nullptr;  // 响应已持有 sample，解除守卫

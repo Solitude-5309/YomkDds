@@ -1,13 +1,13 @@
 #pragma once
-// YomkDdsBagService 对外头：服务类 YomkDdsBagService 的声明与录制/回放进程级控制标志。
-// 用户通常直接使用 YomkDdsAPI.h 中的 YOMKDDS_BAG_* 宏；请求结构见 YomkDdsPayload.h
-// （yomk::payload），消息包声明见 YomkDdsMsg.h。录制能力由内部的 FastDDSBagNode 提供
-// （类型无关：透传原始 CDR 字节直写 mcap，schema_id=0 无 schema 通道，零消息类型依赖）；
-// 回放能力同节点（读 mcap 分片重建透传 writer，按录制时间轴发布）。
+// Maintainer notes: mcap bag record/replay service; FastDDSBagNode writes raw
+// CDR bytes straight to mcap (schema_id=0, no-schema channels) and replays by
+// rebuilding pass-through writers on the recorded timeline — no message type
+// dependency. Single bag node per process; record/play block the calling
+// thread under mtx_, so long-running stops rely on the yomk::bag* flags below.
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 
-#include "YomkDdsPayload.h"  // 平铺引号三环境命中：安装树同目录/测试树平铺/主库平铺
+#include "YomkDdsPayload.h"  // flat quoted include: install tree, test tree and main tree all resolve same-dir
 
 #include <atomic>
 #include <memory>
@@ -15,6 +15,8 @@
 class FastDDSBagNode;
 using namespace yomk::payload;
 
+/** @brief Bag record/replay service: mcap recording, inspection, conversion and timeline replay */
+// @zh: Bag 录制回放服务：mcap 录制、元信息查看、转换与按时间轴回放
 class YomkDdsBagService : public YomkService
 {
 public:
@@ -33,22 +35,29 @@ private:
     yomk::payload::Response bagPlay(YomkMsgPtr pkg);
 
 private:
-    // 单 bag 节点：一个进程至多一个实例，重复 create 须先 delete；服务析构时自动销毁节点
-    // 并按节点内部顺序清理全部 DDS 实体（推荐进程退出前经 /delete_node 显式清理）。
+    // Single bag node: at most one per process, re-create requires delete
+    // first; destructor destroys the node and all its DDS entities in the
+    // node's internal order (explicit /delete_node before exit recommended)
     std::unique_ptr<FastDDSBagNode> node_;
-    std::mutex mtx_;  // 串行化 node_ 的增删查改与节点入口调用
+    std::mutex mtx_;  // serializes node_ lifetime and all node entry calls
 };
 
-// bag record 录制停止标志：录制循环（FastDDSBagNode::record 内部，每 100ms 轮询）只读，
-// SIGINT 处理函数（CLI onSignal）经 bagRecordStop 写——atomic 无锁 store 保证
-// async-signal-safe（不可经 yomk 请求链停止：请求链路含锁与内存分配，handler 内禁用）。
-// 调用方在发起录制前应先 bagRecordReset 复位，避免上次会话残留置位导致秒退；
-// bag 服务 handler 录制前亦兜底复位 stop（只复位 stop 不动 paused——暂停是调用方启动意图）。
-//
-// bag record 暂停标志（--start-paused）：暂停态由 CLI --start-paused 或库用户
-// bagRecordPause 置位，回调写路径（BagSubListener）每条消息检查——置位期间照常 take
-// 排空（防恢复后旧数据涌入）但丢弃不写，bagRecordResume 后开始写入。订阅与落盘路径
-// 不受影响；不经 DDSBagRecord 协议传递（CLI 与 bag 服务同进程，全局标志直读）。
+/**
+ * @brief Stop/pause flags for YOMKDDS_BAG_RECORD (async-signal-safe)
+ *
+ * The record loop polls the stop flag every 100ms and the subscriber write
+ * path checks the pause flag per message. SIGINT handlers write stop through
+ * bagRecordStop — an atomic lock-free store; never stop a record through the
+ * yomk request chain (locks and allocation are banned in a signal handler).
+ * @note Call bagRecordReset() before starting a new record session; the
+ *       record handler resets stop only, never paused — pausing is caller
+ *       intent and clearing it silently would look like "records nothing"
+ */
+// @zh: YOMKDDS_BAG_RECORD 的停止/暂停标志（async-signal-safe）
+// @zh: 录制循环每 100ms 轮询 stop，订阅写路径逐条检查 paused。SIGINT handler 经
+// @zh: bagRecordStop 写入——atomic 无锁 store；不可经 yomk 请求链停止（handler 内禁锁与分配）
+// @zh: note 发起录制前先 bagRecordReset() 复位；录制 handler 只复位 stop 不动 paused
+// @zh: ——暂停是调用方启动意图，静默清除表现为“什么都不录”
 namespace yomk
 {
 inline std::atomic<bool> g_bagRecordStop{false};
@@ -68,31 +77,34 @@ inline void bagRecordResume()
 inline void bagRecordReset()
 {
     g_bagRecordStop.store(false);
-    g_bagRecordPaused.store(false);  // 双复位：防上次会话残留暂停态（表现为何都不录）
+    g_bagRecordPaused.store(false);  // reset both: leftover pause looks like "records nothing"
 }
 }  // namespace yomk
 
-// bag play 回放停止标志：播放线程（读线程/播放线程各阻塞处）只读，SIGINT 处理函数
-//（CLI onSignal）经 bagPlayStop 写——atomic 无锁 store 保证 async-signal-safe（同
-// bagRecordStop 约定：不可经 yomk 请求链停止）。调用方在发起回放前应先 bagPlayReset
-// 复位，避免上次会话残留置位导致秒退；bag 服务 handler 回放前亦兜底复位 stop（只复位
-// stop 不动 paused——暂停是调用方运行意图）。
-//
-// bag play 暂停标志：置位后播放线程冻结时间轴不再发布新消息（读线程被队列满反压自然
-// 停住），恢复后重锚时间基准继续按录制节奏发布。暂停/恢复由 CLI 键盘交互键（p/SPACE
-// 暂停、r 继续）或库用户 bagPlayPause/bagPlayResume 置位；不经 DDSBagPlay 协议传递
-//（CLI 与 bag 服务同进程，全局标志直读）。
-//
-// bag play 回放速率标志：播放线程每条消息调度前读取（对齐 ros2 PlayerClock 的
-// set_rate 原语——倍率缩放消息间调度间隔，2.0 两倍速、0.5 半倍速）。初值由 play 入口
-// 注入（playbackRate 参数校验通过后 store），此后播放线程只认原子；运行时经
-// bagPlaySetRate 动态调节（换率即时作用于后续调度，已播进度不跳变）；不经 DDSBagPlay
-// 协议传递（CLI 与 bag 服务同进程，全局标志直读）。
+/**
+ * @brief Stop/pause/rate controls for YOMKDDS_BAG_PLAY (async-signal-safe)
+ *
+ * Playback threads read the flags at every blocking point. Pause freezes the
+ * timeline (the reader thread back-pressures on the full queue) and resume
+ * re-anchors the time base; rate scales the inter-message scheduling interval
+ * (2.0 = double speed, 0.5 = half speed, ros2 PlayerClock set_rate semantics).
+ * Pause/resume/rate are set by CLI keyboard interaction or library callers;
+ * none travel through the DDSBagPlay protocol (CLI and bag service share the
+ * process, reading the globals directly).
+ * @note bagPlaySetRate rejects rate <= 0 and keeps the previous value;
+ *       call bagPlayReset() before starting a new playback session
+ */
+// @zh: YOMKDDS_BAG_PLAY 的停止/暂停/速率控制（async-signal-safe）
+// @zh: 播放线程在各阻塞处读标志。暂停冻结时间轴（读线程被队列满反压自然停住），恢复后
+// @zh: 重锚时间基准；速率缩放消息间调度间隔（2.0 两倍速、0.5 半倍速，对齐 ros2 PlayerClock
+// @zh: set_rate 语义）。暂停/恢复/速率由 CLI 键盘交互或库调用方设置；不经 DDSBagPlay 协议
+// @zh: 传递（CLI 与 bag 服务同进程，全局标志直读）
+// @zh: note bagPlaySetRate 拒绝 rate<=0 并保持原值；发起回放前先 bagPlayReset() 复位
 namespace yomk
 {
 inline std::atomic<bool> g_bagPlayStop{false};
 inline std::atomic<bool> g_bagPlayPaused{false};
-inline std::atomic<double> g_bagPlayRate{1.0};  // 回放速率倍率（初值由 play 入口注入）
+inline std::atomic<double> g_bagPlayRate{1.0};  // initial value injected by the play entry
 inline void bagPlayStop()
 {
     g_bagPlayStop.store(true);
@@ -105,8 +117,8 @@ inline void bagPlayResume()
 {
     g_bagPlayPaused.store(false);
 }
-// 设置回放速率倍率（对齐 ros2 ~/set_rate 服务语义）：rate<=0 拒绝返回 false 并保持
-// 原值（调用方可打印失败提示），合法值即时生效于后续消息调度
+/** @brief Set the playback rate multiplier (takes effect on subsequent scheduling) */
+// @zh: 设置回放速率倍率（即时作用于后续消息调度）
 inline bool bagPlaySetRate(double rate)
 {
     if (rate <= 0.0)
@@ -116,7 +128,8 @@ inline bool bagPlaySetRate(double rate)
     g_bagPlayRate.store(rate, std::memory_order_relaxed);
     return true;
 }
-// 查询当前回放速率倍率（对齐 ros2 ~/get_rate 服务语义）
+/** @brief Query the current playback rate multiplier */
+// @zh: 查询当前回放速率倍率
 inline double bagPlayGetRate()
 {
     return g_bagPlayRate.load(std::memory_order_relaxed);
@@ -124,7 +137,7 @@ inline double bagPlayGetRate()
 inline void bagPlayReset()
 {
     g_bagPlayStop.store(false);
-    g_bagPlayPaused.store(false);  // 双复位：防上次会话残留暂停态（表现为开播即冻住）
-    g_bagPlayRate.store(1.0, std::memory_order_relaxed);  // 速率复位：防上次会话残留倍率
+    g_bagPlayPaused.store(false);  // reset both: leftover pause looks like "frozen on start"
+    g_bagPlayRate.store(1.0, std::memory_order_relaxed);  // leftover rate persists across sessions
 }
 }  // namespace yomk

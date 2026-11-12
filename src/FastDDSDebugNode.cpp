@@ -1,6 +1,6 @@
 #include "FastDDSDebugNode.h"
 
-#include "YomkDdsDebugService.h" // yomk::g_debugPubStop（topic pub 持续发布停止标志，API 头内联定义）
+#include "YomkDdsDebugService.h" // yomk::g_debugPubStop 持续发布停止标志（API 头内联定义）
 
 #include <algorithm>
 #include <chrono>
@@ -44,12 +44,11 @@ namespace rtps = eprosima::fastdds::rtps;
 
 namespace
 {
-// 本地时间戳 hh:mm:ss.uuuuuu（调试输出头部用）
 std::string nowStamp()
 {
     using Clock = std::chrono::system_clock;
-    constexpr int kMicroDigits = 6;              // 微秒固定位数
-    constexpr long long kMicrosPerSec = 1000000; // 每秒微秒数
+    constexpr int kMicroDigits = 6;
+    constexpr long long kMicrosPerSec = 1000000;
     const auto now = Clock::now();
     std::time_t sec = Clock::to_time_t(now);
     const auto us = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -62,14 +61,13 @@ std::string nowStamp()
     return os.str();
 }
 
-// 参与者唯一后缀：12 位小写 hex（kUidHexChars 定宽，低位不足补零）。种子混入 random_device 与
-// 单调时钟——同进程重复调用不复现；单节点模型下跨进程碰撞概率可忽略。uid 后缀使多进程各自的
-// 调试/录制节点在 node list/node info 视角可区分（固定名参与者会同名列出、端点被合并）
+// 种子混入 random_device 与单调时钟，同进程重复调用不复现；uid 后缀使多进程各自的调试/
+// 录制节点在 node list/node info 视角可区分（固定名参与者会同名列出、端点被合并）
 std::string makeUidSuffix()
 {
-    constexpr int kUidHexChars = 12;  // 后缀字符数（12 hex = 6 字节随机）
+    constexpr int kUidHexChars = 12;
     constexpr std::uint64_t kUidMask = (std::uint64_t{1} << (kUidHexChars * 4)) - 1;
-    constexpr int kRdBits = 32;  // random_device 结果位宽（两次采样拼 64 位种子）
+    constexpr int kRdBits = 32;
     std::random_device rd;
     std::uint64_t seed = (static_cast<std::uint64_t>(rd()) << kRdBits) | rd();
     seed ^= static_cast<std::uint64_t>(
@@ -82,11 +80,7 @@ std::string makeUidSuffix()
 }
 
 // ---- topic info verbose 的端点详情辅助（EndpointDetail.qosLines 的行来源） ----
-// 展示名对齐 ros2 topic info -v 的输出习惯（去 _QOS 后缀），枚举拼写对齐 FastDDS 3.6.1
-// QosPolicies.hpp；Duration 判 Infinite 用官方 Time_t::is_infinite（时长结构 seconds/nanosec）
-
-// Duration_t → "Infinite" 或 "<秒>.<纳秒> s"（dds::Time_t 公开成员 seconds/nanosec，
-// Infinite 判定用官方 Time_t::is_infinite）
+// 展示名对齐 ros2 topic info -v 的输出习惯（去 _QOS 后缀），枚举拼写对齐 FastDDS 3.6.1 QosPolicies.hpp
 std::string formatDuration(const Duration_t& duration)
 {
     if (Time_t::is_infinite(duration))
@@ -97,15 +91,13 @@ std::string formatDuration(const Duration_t& duration)
     os << duration.seconds;
     if (duration.nanosec != 0)
     {
-        // 纳秒部分固定位数补零
-        constexpr int kNanosDigits = 9;              // 纳秒位数（10^-9 秒）
+        constexpr int kNanosDigits = 9;
         os << '.' << std::setw(kNanosDigits) << std::setfill('0') << duration.nanosec;
     }
     os << " s";
     return os.str();
 }
 
-// 端点 GUID → FastDDS 原生格式（ostringstream << GUID_t，“12字节前缀|4字节实体ID”点分十六进制）
 std::string guidString(const rtps::GUID_t& guid)
 {
     std::ostringstream os;
@@ -113,8 +105,7 @@ std::string guidString(const rtps::GUID_t& guid)
     return os.str();
 }
 
-// 端点归属参与者名（GUID 前缀比对，RTPS 规范保证端点 GUID 前缀 == 所属参与者 GUID 前缀）；
-// 调用方须已持 seenMtx_（快照锁内调用），未发现对应参与者返回空串
+// Precondition: 调用方须已持 seenMtx_；归属判定依赖 RTPS 规范保证的端点 GUID 前缀 == 所属参与者 GUID 前缀
 std::string participantNameOf(
         const std::map<rtps::GuidPrefix_t, std::string>& participants, const rtps::GUID_t& guid)
 {
@@ -193,7 +184,7 @@ const char* destinationOrderKindName(DestinationOrderQosPolicyKind kind)
     }
 }
 
-// Partition 名单 → "[a, b]"（空名单 "[]"；Partition_t 内部为长度前缀 + C 字符串）
+// Partition_t 名字为长度前缀 + 非 NUL 结尾字符串，须以 (name, size) 追加
 std::string partitionNames(const PartitionQosPolicy& partition)
 {
     std::string out = "[";
@@ -211,8 +202,7 @@ std::string partitionNames(const PartitionQosPolicy& partition)
     return out;
 }
 
-// ROS2 对齐组前两行：History/Depth 独立两行同源判定（发现数据携带输出实值，KEEP_ALL 时 Depth
-// 为发现数据原值 0）；为空时两行均 not advertised（显式标注替代静默跳过）
+// ROS2 对齐组：KEEP_ALL 时发现数据 Depth 为原值 0，照实输出；未携带时显式标 not advertised 而非静默跳过
 void appendHistoryDepthLines(std::vector<std::string>& lines,
         const eprosima::fastcdr::optional<HistoryQosPolicy>& history)
 {
@@ -237,8 +227,7 @@ void appendResourceLimitsLine(std::vector<std::string>& lines,
             ", max_samples_per_instance=" + std::to_string(limits.max_samples_per_instance));
 }
 
-// writer 端点的 QoS profile 行集：ROS2 对齐组恒 8 行前置（History/Depth 同源判定，其余六项
-// 为发现数据值成员恒输出）+ DDS 扩展组后置按发现数据携带情况追加（optional 一行不删）
+// writer 端点 QoS 行集：ROS2 对齐组 8 行恒前置，DDS 扩展组按发现数据携带情况追加（optional 一行不删）
 std::vector<std::string> writerQosLines(const rtps::PublicationBuiltinTopicData& writer)
 {
     std::vector<std::string> lines;
@@ -251,7 +240,6 @@ std::vector<std::string> writerQosLines(const rtps::PublicationBuiltinTopicData&
     lines.emplace_back(std::string("  Liveliness: ") + livelinessKindName(writer.liveliness.kind));
     lines.emplace_back(
         "  Liveliness lease duration: " + formatDuration(writer.liveliness.lease_duration));
-    // DDS 扩展组：发现数据携带情况决定（值成员恒输出 / optional 追加），一行不删
     lines.emplace_back("  Latency Budget: " + formatDuration(writer.latency_budget.duration));
     lines.emplace_back(std::string("  Ownership: ") + ownershipKindName(writer.ownership.kind));
     lines.emplace_back("  Ownership Strength: " + std::to_string(writer.ownership_strength.value));
@@ -282,8 +270,7 @@ std::vector<std::string> writerQosLines(const rtps::PublicationBuiltinTopicData&
     return lines;
 }
 
-// reader 端点的 QoS profile 行集：ROS2 对齐组恒 8 行前置（同 writer 构成同序）+ DDS 扩展组
-// 后置（无 Ownership Strength、多 Time Based Filter，optional 一行不删）
+// reader 端点 QoS 行集：同 writer 构成同序（无 Ownership Strength、多 Time Based Filter），optional 一行不删
 std::vector<std::string> readerQosLines(const rtps::SubscriptionBuiltinTopicData& reader)
 {
     std::vector<std::string> lines;
@@ -296,7 +283,6 @@ std::vector<std::string> readerQosLines(const rtps::SubscriptionBuiltinTopicData
     lines.emplace_back(std::string("  Liveliness: ") + livelinessKindName(reader.liveliness.kind));
     lines.emplace_back(
         "  Liveliness lease duration: " + formatDuration(reader.liveliness.lease_duration));
-    // DDS 扩展组：发现数据携带情况决定（值成员恒输出 / optional 追加），一行不删
     lines.emplace_back("  Latency Budget: " + formatDuration(reader.latency_budget.duration));
     lines.emplace_back(std::string("  Ownership: ") + ownershipKindName(reader.ownership.kind));
     lines.emplace_back(
@@ -311,7 +297,6 @@ std::vector<std::string> readerQosLines(const rtps::SubscriptionBuiltinTopicData
     return lines;
 }
 
-// 单端点详情拼装：归属节点名 + FastDDS 原生 GUID + QoS profile 行集
 FastDDSDebugNode::EndpointDetail makeWriterDetail(
         const rtps::PublicationBuiltinTopicData& writer, const std::string& nodeName)
 {
@@ -334,18 +319,16 @@ FastDDSDebugNode::EndpointDetail makeReaderDetail(
 
 // ===== DDSQosProfile 翻译（与 FastDDSNode.cpp 版本同构，独立持有不跨 cpp 共享） =====
 
-// 纳秒每秒（Duration_t 秒/纳秒分解用）
 constexpr int64_t kNsPerSec = 1000000000LL;
 
-// 纳秒转 Duration_t（sec, nsec 分解；调用方保证 ns >= 0）。
+// Precondition: ns >= 0
 Duration_t toDuration(int64_t ns)
 {
     return Duration_t(static_cast<int32_t>(ns / kNsPerSec), static_cast<uint32_t>(ns % kNsPerSec));
 }
 
-// DDSQosProfile 翻译到 Fast DDS 端点 QoS：起点为调用方已拷贝的 *_QOS_DEFAULT 底座，
-// 非哨兵项（枚举非 Unset / 数值 >= 0）逐项覆盖，哨兵项保持底座默认；
-// 枚举到 policy 的映射在此显式完成（不做数值直译，公共头枚举与 Fast DDS 内部枚举解耦）。
+// 翻译到端点 QoS：起点为 *_QOS_DEFAULT 底座，非哨兵项（枚举非 Unset / 数值 >= 0）逐项覆盖，
+// 哨兵项保持底座默认；枚举映射在此显式完成，不做数值直译（公共头枚举与 Fast DDS 内部枚举解耦）
 void toWriterQos(const DDSQosProfile& p, DataWriterQos& qos)
 {
     if (p.historyKind != DDSHistoryKind::Unset)
@@ -430,7 +413,8 @@ class FastDDSDebugNode::DebugParticipantListener : public DomainParticipantListe
 public:
     explicit DebugParticipantListener(FastDDSDebugNode& node) : node_(node) {}
 
-    // 仅处理 DISCOVERED_WRITER（QoS 变更/移除忽略）；回调内仅缓存发现信息，不建订阅。
+    // 仅处理 DISCOVERED_WRITER；回调内仅缓存发现信息，不建订阅（回调线程内同步建 reader
+    // 会导致匹配成功但数据不交付）
     void on_data_writer_discovery(
             DomainParticipant* /*participant*/,
             rtps::WriterDiscoveryStatus reason,
@@ -444,8 +428,8 @@ public:
         }
     }
 
-    // 处理 DISCOVERED_READER 与 REMOVED_READER（QoS 变更忽略）；回调内仅缓存/移除发现
-    // 信息，供 listTopics 列出仅有订阅者的主题（不参与订阅建立链路）。
+    // 处理 DISCOVERED_READER 与 REMOVED_READER；回调内仅缓存/移除发现信息，
+    // 供 listTopics 列出仅有订阅者的主题（不参与订阅建立链路）。
     void on_data_reader_discovery(
             DomainParticipant* /*participant*/,
             rtps::ReaderDiscoveryStatus reason,
@@ -463,8 +447,8 @@ public:
         }
     }
 
-    // 仅处理 DISCOVERED_PARTICIPANT（QoS 变更/移除忽略）；回调内仅缓存 GUID 与名称，
-    // 供 nodeList 列出域内命名参与者（不参与订阅建立链路）。
+    // 仅处理 DISCOVERED_PARTICIPANT；回调内仅缓存 GUID 与名称，供 nodeList 列出域内
+    // 命名参与者（不参与订阅建立链路）。
     void on_participant_discovery(
             DomainParticipant* /*participant*/,
             rtps::ParticipantDiscoveryStatus reason,
@@ -482,7 +466,6 @@ private:
     FastDDSDebugNode& node_;
 };
 
-// reader 专属数据监听器：无共享状态（topic/类型名/样本缓冲/输出 sink 均为实例私有）。
 class FastDDSDebugNode::DebugSubListener : public DataReaderListener
 {
 public:
@@ -506,7 +489,6 @@ public:
         }
     }
 
-    // 匹配状态反馈（调试工具核心信息：确认 reader/writer 是否真正匹配）
     void on_subscription_matched(DataReader* /*reader*/,
                                  const SubscriptionMatchedStatus& info) override
     {
@@ -517,7 +499,6 @@ public:
         }
     }
 
-    // 循环 take 直到无数据；样本为 DynamicData，经内置 json_serialize 结构化（JSON）输出。
     void on_data_available(DataReader* reader) override
     {
         SampleInfo info;
@@ -541,7 +522,7 @@ public:
     }
 
 private:
-    // 样本缓冲分配：失败即抛（构造失败语义），由 onWriterDiscovered 的回滚路径承接
+    // 样本缓冲分配失败即抛，由 tryStartSubscription 的回滚路径承接
     static DynamicData::_ref_type* createSample(TopicDataType* topicType)
     {
         auto* sample = static_cast<DynamicData::_ref_type*>(topicType->create_data());
@@ -552,7 +533,6 @@ private:
         return sample;
     }
 
-    // 输出交付：未设置 sink 时默认 stdout
     void deliver(const std::string& text)
     {
         if (sink_)
@@ -565,12 +545,12 @@ private:
         }
     }
 
-    std::string topic_;      // 调试主题名（输出头部）
-    std::string typeName_;   // 远端类型名（输出头部）
+    std::string topic_;
+    std::string typeName_;
     TopicDataType* topicType_;        // 仅供 create/delete_data 样本缓冲，不持有所有权
-    OutputSink sink_;                 // 建订阅时按值捕获的输出目的地
+    OutputSink sink_;                 // 建订阅时按值捕获（订阅建立后换 sink 不生效）
     DynamicData::_ref_type* sample_;  // 堆上 shared_ptr 样本缓冲，析构经 delete_data 释放
-    uint64_t seq_ = 0;                // 交付序号
+    uint64_t seq_ = 0;
 };
 
 FastDDSDebugNode::FastDDSDebugNode()
@@ -580,8 +560,8 @@ FastDDSDebugNode::FastDDSDebugNode()
 
 FastDDSDebugNode::~FastDDSDebugNode()
 {
-    // 先停工作线程（不再触碰 subs_/participant_），再按 DataReader → Topic → Subscriber →
-    // Participant 顺序清理；停止标志由工作线程下一轮轮询感知（等待 ≤ kWorkerInterval）
+    // 析构顺序约束：先停工作线程（不再触碰 subs_/participant_），再按
+    // DataReader → Topic → Subscriber → Participant 清理；停止由工作线程下一轮轮询感知
     {
         std::lock_guard<std::mutex> lock(mtx_);
         workerRunning_ = false;
@@ -598,7 +578,7 @@ FastDDSDebugNode::~FastDDSDebugNode()
 
     if (subscriber_ != nullptr)
     {
-        // 先逐个停掉 reader（停回调），再删主题；监听器与样本缓冲随 subs_/listener_ 成员析构释放
+        // 先删 reader（停回调）再删主题；监听器与样本缓冲随 subs_/listener_ 成员析构释放
         for (auto& kv : subs_)
         {
             if (kv.second.reader != nullptr)
@@ -628,17 +608,13 @@ bool FastDDSDebugNode::setDomainId(uint32_t domainId,
         return false;
     }
 
-    // listener 仅服务发现回调（RTPS 层直接派发，不受 mask 控制）；mask 用 none() 对齐
-    // FastDDSNode——实测 all() 会使本节点上的动态 reader 匹配成功但数据不交付。
-    // 调试节点唯一名：入域即被同域 nodeList 列出（发现层面可辨识），创建后不可改；
-    // uid 后缀使多进程各自的调试节点名称互不相同。
-    // XML 配置通道三级提取链先于置名执行：无用户名，按名 profile 无意义仅默认档可兜底，
-    // 落空保持 DEFAULT 底座回退现状
+    // mask 用 none() 对齐 FastDDSNode——实测 all() 会使本节点上的动态 reader 匹配成功但数据不交付
+    // （listener 仅服务发现回调，RTPS 层直接派发不受 mask 控制）；uid 唯一名使多进程调试节点互不相同。
+    // XML 提取先于置名执行：本节点无用户名，按名 profile 无意义仅默认档可兜底，落空保持 DEFAULT 底座
     DomainParticipantQos qos = PARTICIPANT_QOS_DEFAULT;
     yomkdds_xml::participantQosFromXml(qos, "", spec.xml);
-    // 发现服务器直配（仅 client 角色）：CLIENT + m_DiscoveryServers 重建，覆盖 XML
-    // discoveryServersList（合并语义：直配 > XML 提取打底）；UDP/TCP 双通道任一非空即叠加，
-    // TCP 通道自动补注入 TCPv4 传输；任一 spec 非法则整体失败
+    // 发现服务器直配（仅 client 角色）：合并语义为直配 > XML 提取打底，TCP 通道自动补注入
+    // TCPv4 传输；任一 spec 非法则整体失败
     if (!spec.udpServerSpec.empty() || !spec.tcpServerSpec.empty())
     {
         std::string serverErr;
@@ -667,7 +643,7 @@ bool FastDDSDebugNode::setDomainId(uint32_t domainId,
         return false;
     }
 
-    // 工作线程承担全部订阅建立（发现回调内同步建 reader 会导致匹配成功但数据不交付）
+    // 订阅建立全部由工作线程承担（回调内同步建 reader 会匹配成功但数据不交付）
     workerRunning_ = true;
     try
     {
@@ -689,7 +665,6 @@ bool FastDDSDebugNode::subscribeTopic(const std::string& topicName, std::string*
         const DDSQosProfile& qos)
 {
     std::lock_guard<std::mutex> lock(mtx_);
-    // 四类拒绝原因各自归类（原单一 return false 使服务层只能报笼统 failed）
     if (participant_ == nullptr || subscriber_ == nullptr)
     {
         if (error != nullptr)
@@ -715,16 +690,12 @@ bool FastDDSDebugNode::subscribeTopic(const std::string& topicName, std::string*
         return false;
     }
     pending_.insert(topicName);
-    // qos 随登记暂存，工作线程建订（tryStartSubscription）时取用，建订成功处随 pending_
-    // 一同清除（失败保留供重试）
     pendingQos_[topicName] = qos;
-    // 记录登记时刻作为一次性等待提示的宽限起点（提示由工作线程在满
-    // kPendingHintDelayMs 仍无 writer 时打）。不在此处直接查发现缓存判定：调用方
-    // 通常在 setDomainId 之后立即登记，本端发现尚未完成会对"发布者早已在线"误报
+    // 宽限起点记录在工作线程：不在此处直接查发现缓存判定——调用方通常在 setDomainId 之后
+    // 立即登记，本端 SPDP/EDP 发现尚未完成，会对"发布者早已在线"误报
     pendingSince_[topicName] = std::chrono::steady_clock::now();
-    // 订阅建立由工作线程完成（含 writer 先于登记、TypeObject 稍后就绪等时序），此处仅登记，
-    // 由工作线程按 kWorkerInterval 轮询取件（刻意不用 cv 即时唤醒：GCC 11.4 libtsan 死锁
-    // 检测器对 cv 等待模式报确定性 double lock 假阳性，定罪链见 test/tsan.supp 头注）
+    // 此处仅登记，建订由工作线程轮询取件（刻意不用 cv 即时唤醒：GCC 11.4 libtsan 死锁检测器
+    // 对该 cv 等待模式报确定性 double lock 假阳性，定罪链见 test/tsan.supp 头注）
     return true;
 }
 
@@ -753,7 +724,7 @@ bool FastDDSDebugNode::listTopics(std::vector<std::pair<std::string, std::string
             {
                 *error = "debug node not created";
             }
-            return false;  // 未入域
+            return false;
         }
     }
     return waitForTopicsStable(topics, stableRounds, intervalMs);
@@ -781,7 +752,7 @@ bool FastDDSDebugNode::topicInfo(const std::string& topicName, std::string& type
             {
                 *error = "debug node not created";
             }
-            return false;  // 未入域
+            return false;
         }
     }
     if (!waitForTopicInfoStable(
@@ -816,7 +787,7 @@ bool FastDDSDebugNode::nodeList(std::vector<std::string>& names,
             {
                 *error = "debug node not created";
             }
-            return false;  // 未入域
+            return false;
         }
     }
     return waitForNodesStable(names, stableRounds, intervalMs);
@@ -843,7 +814,7 @@ bool FastDDSDebugNode::nodeInfo(const std::string& nodeName,
             {
                 *error = "debug node not created";
             }
-            return false;  // 未入域
+            return false;
         }
     }
     if (!waitForNodeInfoStable(nodeName, publishers, subscribers, stableRounds, intervalMs))
@@ -877,7 +848,7 @@ bool FastDDSDebugNode::interfaceShow(const std::string& typeName,
             {
                 *error = "debug node not created";
             }
-            return false;  // 未入域
+            return false;
         }
     }
     return waitForInterfaceStable(typeName, lines, stableRounds, intervalMs, error);
@@ -903,10 +874,9 @@ bool FastDDSDebugNode::topicExample(const std::string& topicName,
             {
                 *error = "debug node not created";
             }
-            return false;  // 未入域
+            return false;
         }
     }
-    // 1) 收敛拿类型名（topicInfo 单值路径）；未发现主题 false
     std::string typeName;
     size_t publisherCount = 0;
     size_t subscriptionCount = 0;
@@ -919,23 +889,18 @@ bool FastDDSDebugNode::topicExample(const std::string& topicName,
         }
         return false;
     }
-    // 2) 收敛拿 IDL 行集（类型名刚命中，TypeObject 大概率已就绪）；失败原因由
-    // waitForInterfaceStable 归类回填（类型名未出现 / TypeObject 不可得 / 非 struct），
-    // 不再与步骤 1 笼统合并为 topic not found
     std::vector<std::string> idl;
     if (!waitForInterfaceStable(typeName, idl, stableRounds, intervalMs, error))
     {
         return false;
     }
-    // 3) 同类型重建 DynamicType 生成 JSON 发布示例（默认值模板，json_deserialize 可直接接受）
+    // 默认值模板与 json_deserialize 输入格式对称；example 命令的 JSON 整体包单引号，防 shell
+    // 剥内层双引号（裸传会被剥成 {data:123} 解析失败）
     std::string json;
     if (!jsonExampleOfType(typeName, json, error))
     {
         return false;
     }
-    // 三段行集：Type / IDL / example（CLI 逐行原样输出）。example 段直接给可复制执行的
-    // 完整命令：JSON 整体包单引号防 shell 剥内层双引号（裸传会被剥成 {data:123} 解析失败），
-    // 用户改字段值即可发布
     lines.clear();
     lines.push_back("Type: " + typeName);
     lines.push_back("IDL:");
@@ -967,10 +932,9 @@ bool FastDDSDebugNode::topicMsgJson(const std::string& topicName,
             {
                 *error = "debug node not created";
             }
-            return false;  // 未入域
+            return false;
         }
     }
-    // 1) 收敛拿类型名（topicInfo 单值路径）；未发现主题 false
     size_t publisherCount = 0;
     size_t subscriptionCount = 0;
     if (!waitForTopicInfoStable(topicName, typeName, publisherCount, subscriptionCount,
@@ -982,17 +946,13 @@ bool FastDDSDebugNode::topicMsgJson(const std::string& topicName,
         }
         return false;
     }
-    // 2) 同类型重建 DynamicType 生成紧凑 JSON 发布模板（json_deserialize 可直接接受）；
-    // 失败原因由 jsonExampleOfType 归类回填，不再与步骤 1 笼统合并为 topic not found
     return jsonExampleOfType(typeName, json, error);
 }
 
 bool FastDDSDebugNode::waitForTopicsStable(std::vector<std::pair<std::string, std::string>>& topics,
         uint32_t stableRounds, uint32_t intervalMs)
 {
-    // 快照：锁内合并拷贝 seen_（writer）与 seenReaders_（reader——仅有订阅者的主题同样
-    // 列出），类型名取各主题列表首项，writer 优先、reader 补缺，末尾按主题名排序
-    //（两 map 各自有序但合并后交错）。只拿 seenMtx_ 叶子锁（不持锁睡眠，发现事件线程可并行写入）
+    // 快照仅拿 seenMtx_ 叶子锁（不持锁睡眠，发现事件线程可并行写入）
     auto snapshot = [this]()
     {
         std::lock_guard<std::mutex> lock(seenMtx_);
@@ -1024,7 +984,7 @@ bool FastDDSDebugNode::waitForTopicsStable(std::vector<std::pair<std::string, st
         }
         else
         {
-            prev = std::move(cur);  // 又有新发现，重置不变计数
+            prev = std::move(cur);
             unchanged = 1;
         }
     }
@@ -1037,10 +997,8 @@ bool FastDDSDebugNode::waitForTopicInfoStable(const std::string& topicName, std:
         uint32_t stableRounds, uint32_t intervalMs,
         std::vector<EndpointDetail>* publishers, std::vector<EndpointDetail>* subscribers)
 {
-    // 快照：锁内构建目标主题详情（found 标志 / 类型名 / 发布者数 / 订阅者数 / verbose 端点
-    // 详情列表——仅调用方传入对应指针时构建）；类型名 writer 优先、reader 补缺；只拿 seenMtx_
-    // 叶子锁（不持锁睡眠，发现事件线程可并行写入）。端点详情纳入快照相等性：等待期间远端
-    // 端点新增（含 QoS 重发）会使快照变化并重置不变计数
+    // 快照仅拿 seenMtx_ 叶子锁（不持锁睡眠，发现事件线程可并行写入）；端点详情纳入快照
+    // 相等性：等待期间远端端点新增（含 QoS 重发）会重置不变计数
     auto snapshot = [this, &topicName, publishers, subscribers]()
     {
         std::lock_guard<std::mutex> lock(seenMtx_);
@@ -1051,8 +1009,7 @@ bool FastDDSDebugNode::waitForTopicInfoStable(const std::string& topicName, std:
             return std::make_tuple(false, std::string(), size_t{0}, size_t{0},
                 std::vector<EndpointDetail>(), std::vector<EndpointDetail>());
         }
-        // 类型名 writer 优先、reader 补缺（前述早退保证至少一端命中；else-if 守卫消除
-        // cppcheck 对 r 迭代器有效性的路径分析盲区）
+        // else-if 守卫：消除 cppcheck 对 r 迭代器有效性的路径分析盲区
         std::string name;
         if (w != seen_.end())
         {
@@ -1099,15 +1056,14 @@ bool FastDDSDebugNode::waitForTopicInfoStable(const std::string& topicName, std:
         }
         else
         {
-            prev = std::move(cur);  // 端点变化，重置不变计数
+            prev = std::move(cur);
             unchanged = 1;
         }
     }
     const bool found = std::get<0>(prev);
     if (found)
     {
-        // 快照 tuple 元素序号（0-4 在既有 get 调用中直用；详情列表序号命名以免 magic number）
-        constexpr size_t kSubDetailsIdx = 5;  // 订阅者端点详情列表的元素序号
+        constexpr size_t kSubDetailsIdx = 5;
         typeName = std::get<1>(prev);
         publisherCount = std::get<2>(prev);
         subscriptionCount = std::get<3>(prev);
@@ -1126,10 +1082,8 @@ bool FastDDSDebugNode::waitForTopicInfoStable(const std::string& topicName, std:
 bool FastDDSDebugNode::waitForNodesStable(std::vector<std::string>& names,
         uint32_t stableRounds, uint32_t intervalMs)
 {
-    // 快照：锁内拷贝参与者名称列表（仅有效命名参与者：名称非空且非 "/"——"/" 是 ROS2 参与
-    // 者的默认占位名，rmw_fastrtps 把参与者名统一置为根 enclave "/"（rcl_init 兜底），节点名
-    // 走另一通道，无辨识价值——跳过），末尾按名称排序。同名多参与者各自一行（缓存以 GUID 前缀
-    // 为 key，每参与者一项）。只拿 seenMtx_ 叶子锁（不持锁睡眠，发现事件线程可并行写入）
+    // 快照仅拿 seenMtx_ 叶子锁（不持锁睡眠，发现事件线程可并行写入）；过滤 "/"——ROS2 参与
+    // 者默认占位名，rmw_fastrtps 统一置为根 enclave（rcl_init 兜底），节点名走另一通道无辨识价值
     auto snapshot = [this]()
     {
         std::lock_guard<std::mutex> lock(seenMtx_);
@@ -1157,7 +1111,7 @@ bool FastDDSDebugNode::waitForNodesStable(std::vector<std::string>& names,
         }
         else
         {
-            prev = std::move(cur);  // 又有新参与者入域，重置不变计数
+            prev = std::move(cur);
             unchanged = 1;
         }
     }
@@ -1170,11 +1124,8 @@ bool FastDDSDebugNode::waitForNodeInfoStable(const std::string& nodeName,
         std::vector<std::pair<std::string, std::string>>& subscribers,
         uint32_t stableRounds, uint32_t intervalMs)
 {
-    // 快照：锁内先收集目标名称参与者的 GUID 前缀集合（同名多参与者均归属——匹配源为 RTPS
-    // 规范保证的"端点 GUID 前缀 == 所属参与者 GUID 前缀"，不依赖 participant_guid 字段），
-    // 再扫 writer/reader 缓存：前缀命中 → 每主题一条 (topic, 类型名)（同主题去重，取首命中
-    // 端点的类型名），两列表末尾按主题名排序。只拿 seenMtx_ 叶子锁（不持锁睡眠，发现事件
-    // 线程可并行写入）
+    // 快照仅拿 seenMtx_ 叶子锁（不持锁睡眠，发现事件线程可并行写入）；归属判定基于 RTPS 规范
+    // 保证的"端点 GUID 前缀 == 所属参与者 GUID 前缀"，不依赖 participant_guid 字段
     auto snapshot = [this, &nodeName]()
     {
         std::lock_guard<std::mutex> lock(seenMtx_);
@@ -1226,13 +1177,13 @@ bool FastDDSDebugNode::waitForNodeInfoStable(const std::string& nodeName,
         }
         else
         {
-            prev = std::move(cur);  // 新发现使快照变化，重置不变计数
+            prev = std::move(cur);
             unchanged = 1;
         }
     }
     if (!std::get<0>(prev))
     {
-        return false;  // 收敛时仍无此名参与者
+        return false;
     }
     publishers = std::move(std::get<1>(prev));
     subscribers = std::move(std::get<2>(prev));
@@ -1242,10 +1193,8 @@ bool FastDDSDebugNode::waitForNodeInfoStable(const std::string& nodeName,
 // XTypes 无界 string/sequence 的 bound 专用表示（等同无界，非实际长度）
 constexpr uint32_t kUnboundedBound = 0xFFFFFFFFu;
 
-// DynamicType → IDL 类型名文本（递归展开容器类型）：基础标量直接映射（ROS2/IDL4 风格名），
-// 有界 string 携带 bound 上限，sequence/array 递归展开元素类型，其余（嵌套 struct/enum/alias
-// 等命名类型）仅显示子类型名不递归展开（IDL 源语法中的引用形态）。kind 无对应 IDL 文本
-// （如 map 匿名键值对、minimal TypeObject 下无名子类型）返回 false，宁可失败不输出非法 IDL
+// DynamicType → IDL 类型名文本：基础标量映射 ROS2/IDL4 风格名，sequence/array 递归展开元素
+// 类型，嵌套命名类型仅显示子类型名不展开；kind 无对应 IDL 文本时返回 false，宁可失败不输出非法 IDL
 bool idlTypeNameOf(const traits<DynamicType>::ref_type& type, std::string& out)
 {
     if (type == nullptr)
@@ -1271,8 +1220,8 @@ bool idlTypeNameOf(const traits<DynamicType>::ref_type& type, std::string& out)
         case xtypes::TK_CHAR16: out = "wchar"; return true;
         default: break;
     }
-    // 容器与命名类型需读 TypeDescriptor（bound / 元素类型 / 子类型名）；descriptor 须预分配
-    // 非空实例（官方 traits<>::make_shared()），get_descriptor 以 overwrite 语义填充
+    // 容器与命名类型需读 TypeDescriptor；descriptor 须预分配非空实例（traits<>::make_shared()），
+    // get_descriptor 以 overwrite 语义填充
     auto desc = traits<TypeDescriptor>::make_shared();
     if (RETCODE_OK != type->get_descriptor(desc) || desc == nullptr)
     {
@@ -1285,7 +1234,6 @@ bool idlTypeNameOf(const traits<DynamicType>::ref_type& type, std::string& out)
         {
             out = (xtypes::TK_STRING16 == type->get_kind()) ? "wstring" : "string";
             const auto& bound = desc->bound();
-            // 无界 string 的 bound 为 0xFFFFFFFF（XTypes 规范表示），等同无界
             if (!bound.empty() && bound[0] > 0 && bound[0] != kUnboundedBound)
             {
                 out += "<" + std::to_string(bound[0]) + ">";
@@ -1326,7 +1274,6 @@ bool idlTypeNameOf(const traits<DynamicType>::ref_type& type, std::string& out)
         }
         default:
         {
-            // 命名类型（嵌套 struct/union/enum/alias/bitmask 等）：仅显示子类型名
             std::string name = desc->name().to_string();
             if (name.empty())
             {
@@ -1342,25 +1289,17 @@ bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
         std::vector<std::string>& lines,
         uint32_t stableRounds, uint32_t intervalMs, std::string* error)
 {
-    // 收敛末轮的失败原因归类（仅供收敛结束后回填 error，不参与快照相等性比较，因此不
-    // 影响收敛判定）：0=类型名未在发现缓存出现，1=TypeObject 不可得（ROS2
-    // rmw_fastrtps 等不参与 XTypes 类型发现的端点即此情形），2=IDL 拼装失败（具体文本存
-    // lastDetail）。每轮快照开头重置为 0，端点离线使类型名消失时能正确回退到"未发现"
+    // 失败原因归类仅用于收敛后回填 error，不参与快照相等性；每轮开头重置，端点离线使类型名
+    // 消失时能回退到"未发现"（1=TypeObject 不可得：ROS2 rmw_fastrtps 等不参与 XTypes 类型发现）
     int lastReason = 0;
     std::string lastDetail;
-    // 快照：锁内（seenMtx_ 叶子锁，不持锁构造 DynamicType——registry 查询与类型拼装都在锁外
-    // 尾段）按类型名精确匹配发现缓存（两缓存 key 均为主题名，须遍历值列表比对 type_name；
-    // writer 优先、reader 补缺），命中即取其 TypeInformation（complete 优先、未设 TK_NONE 时
-    // 回退 minimal，对齐 tryStartSubscription）查 TypeObject registry 并拼装 IDL 行集；
-    // TypeObject 未就绪（TypeLookup 尚未取回）视为本轮未命中继续等待。快照为（found 标志 +
-    // 行集）对，连续 stableRounds 次不变即收敛
+    // 快照仅拿 seenMtx_ 叶子锁，registry 查询与类型拼装不持锁；TypeObject 未就绪（TypeLookup
+    // 尚未取回）视为本轮未命中继续等待
     auto snapshot = [this, &typeName, &lastReason, &lastDetail]()
             -> std::pair<bool, std::vector<std::string>>
     {
         lastReason = 0;
         std::lock_guard<std::mutex> lock(seenMtx_);
-        // TypeInformation → TypeObject → IDL 行集（writer/reader 发现数据结构同构，泛型
-        // lambda 复用同一段取用逻辑）
         auto buildFromInfo = [this, &typeName, &lastReason, &lastDetail](const auto& info,
                 std::vector<std::string>& out) -> bool
         {
@@ -1374,12 +1313,12 @@ bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
                         .get_type_object(tid, type_object))
             {
                 lastReason = 1;
-                return false;  // TypeObject 未就绪，视为本轮未命中
+                return false;
             }
             if (!buildInterfaceLines(type_object, typeName, out, &lastDetail))
             {
                 lastReason = 2;
-                return false;  // TypeObject 已取回但 IDL 拼装失败（顶层非 struct 等）
+                return false;
             }
             return true;
         };
@@ -1394,7 +1333,7 @@ bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
                     {
                         return {true, std::move(out)};
                     }
-                    // writer 命中但 TypeObject 未就绪：不回退 reader（同类型同一 TypeObject）
+                    // 命中但 TypeObject 未就绪：不回退 reader（同类型同一 TypeObject）
                     return {false, {}};
                 }
             }
@@ -1428,14 +1367,13 @@ bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
         }
         else
         {
-            prev = std::move(cur);  // 发现变化（未命中→命中或行集变化），重置不变计数
+            prev = std::move(cur);
             unchanged = 1;
         }
     }
     if (!prev.first)
     {
-        // 按收敛末轮的实际原因归类回填，不再统一报"type not found"（该文本会误导调用方
-        // 以为类型名拼错，而实际可能是对端不提供 TypeObject）
+        // 按收敛末轮实际原因归类回填，避免统一报 "type not found" 误导调用方以为类型名拼错
         if (error != nullptr)
         {
             if (1 == lastReason)
@@ -1452,7 +1390,7 @@ bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
                 *error = "type [" + typeName + "] not found";
             }
         }
-        return false;  // 收敛时仍无此类型（或 TypeObject 始终未就绪）
+        return false;
     }
     lines = std::move(prev.second);
     return true;
@@ -1461,8 +1399,7 @@ bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
 bool FastDDSDebugNode::buildInterfaceLines(const xtypes::TypeObject& type_object,
         const std::string& typeName, std::vector<std::string>& lines, std::string* error)
 {
-    // TypeObject → DynamicType（shared_ptr 持有，离开作用域自动释放；不注册类型不建订阅，
-    // 纯类型内省）
+    // TypeObject → DynamicType（shared_ptr 持有；不注册类型不建订阅，纯类型内省）
     auto dyn_type = DynamicTypeBuilderFactory::get_instance()->create_type_w_type_object(
                 type_object)->build();
     if (dyn_type == nullptr || xtypes::TK_STRUCTURE != dyn_type->get_kind())
@@ -1471,9 +1408,8 @@ bool FastDDSDebugNode::buildInterfaceLines(const xtypes::TypeObject& type_object
         {
             *error = "type [" + typeName + "] is not a struct, interface display unsupported";
         }
-        return false;  // 仅支持顶层为 struct 的类型
+        return false;
     }
-    // IDL 源语法行集：struct 头 + 逐字段行（四空格缩进）+ 结尾 }
     lines.clear();
     lines.push_back("struct " + typeName + " {");
     const uint32_t count = dyn_type->get_member_count();
@@ -1488,8 +1424,6 @@ bool FastDDSDebugNode::buildInterfaceLines(const xtypes::TypeObject& type_object
     }
     for (const auto& pair : members)  // map 按 MemberId 升序 == struct 成员声明序
     {
-        // 成员 descriptor 须预分配非空实例（官方 traits<>::make_shared()），get_descriptor
-        // 以 overwrite 语义填充
         auto desc = traits<MemberDescriptor>::make_shared();
         if (RETCODE_OK != pair.second->get_descriptor(desc) || desc == nullptr)
         {
@@ -1509,8 +1443,7 @@ bool FastDDSDebugNode::buildInterfaceLines(const xtypes::TypeObject& type_object
 bool FastDDSDebugNode::fetchTypeObject(const std::string& typeName,
         xtypes::TypeObject& type_object)
 {
-    // 仅拿 seenMtx_ 叶子锁做缓存查询与 TypeObject 拷贝（writer 优先、reader 补缺，
-    // 同 buildFromInfo 路径），锁外重建留给调用方
+    // 仅拿 seenMtx_ 叶子锁做缓存查询与 TypeObject 拷贝，锁外重建留给调用方
     std::lock_guard<std::mutex> lock(seenMtx_);
     auto fetch = [&type_object, &typeName](const auto& entries) -> bool
     {
@@ -1546,9 +1479,9 @@ bool FastDDSDebugNode::jsonExampleOfType(const std::string& typeName, std::strin
         {
             *error = "type object for [" + typeName + "] not available";
         }
-        return false;  // 类型未发现或 TypeObject 未就绪
+        return false;
     }
-    // 锁外重建 DynamicType 并取默认值样本序列化为 JSON 示例（不注册类型不建订阅，纯类型内省）
+    // 锁外重建 DynamicType，不注册类型不建订阅（纯类型内省）
     auto dyn_type = DynamicTypeBuilderFactory::get_instance()->create_type_w_type_object(
                 type_object)->build();
     if (dyn_type == nullptr)
@@ -1596,7 +1529,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
     {
         *failed = 0;
     }
-    yomk::debugPubReset();  // 复位上次会话残留的停止请求（此后 SIGINT handler 的置位才对本轮生效）
+    yomk::debugPubReset();  // 复位上次会话残留的停止请求，此后 SIGINT 置位才对本轮生效
     if (stableRounds == 0)
     {
         stableRounds = kDefaultStableRounds;
@@ -1611,15 +1544,11 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         if (participant_ == nullptr)
         {
             error = "debug node not created";
-            return false;  // 未入域
+            return false;
         }
     }
-    // ⓪ 期望订阅者等待前置段（requiredSubscribers>0，CLI -w N）：主题尚未被发现时（域内
-    // 无任何该主题端点，典型为订阅端尚未上线的"先发布后订阅"场景）无法重建类型，先无限
-    // 轮询等待主题出现——订阅端上线即宣告主题与类型，出现后进入既有稳定收敛。每
-    // intervalMs 轮询一次，首轮打印提示、约每 5s 重复打印防静默（stdout，与等待订阅者
-    // 进度同通道）；yomk::g_debugPubStop 置位（CLI Ctrl+C）即中断，报错返回不发布（此
-    // 时未创建任何实体，直接返回）
+    // ⓪ requiredSubscribers>0：主题未被发现时无法重建类型，先无限轮询等主题出现（"先发布后
+    // 订阅"场景）；g_debugPubStop 置位即中断报错返回，此时未创建任何实体
     if (requiredSubscribers > 0)
     {
         const uint32_t topicLogEveryRounds = std::max<uint32_t>(1, 5000 / intervalMs);
@@ -1657,7 +1586,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
             return false;
         }
     }
-    // ① 发现收敛：类型名 + 订阅者数快照稳定（订阅者不再新增）
+    // ① 发现收敛
     std::string typeName;
     size_t publisherCount = 0;
     size_t subscriptionCount = 0;
@@ -1667,7 +1596,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         error = "topic [" + topicName + "] not found";
         return false;
     }
-    // ② 类型重建 + JSON 解析（解析失败不建任何发布实体）
+    // ② 类型重建 + JSON 解析（失败不建任何发布实体）
     xtypes::TypeObject type_object;
     if (!fetchTypeObject(typeName, type_object))
     {
@@ -1688,7 +1617,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         error = "invalid json for type [" + typeName + "]";
         return false;
     }
-    // ③ 临时发布链：注册类型 + topic/publisher/datawriter（QoS 最大兼容：请求 ≤ 提供）
+    // ③ 临时发布链（QoS 语义：请求 ≤ 提供的最大兼容）
     TypeSupport ts(new DynamicPubSubType(dyn_type));
     if (RETCODE_OK != ts.register_type(participant_))
     {
@@ -1717,18 +1646,13 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         error = "create datawriter failed";
         return false;
     }
-    // 期望订阅者等待（requiredSubscribers>0，CLI -w N）：阻塞等待 matched 订阅端计数达到 N
-    // 才继续发布流程（用户显式指定期望匹配数时的收敛判据，防自动收敛过早、订阅者尚未全部
-    // 上线即发布漏发）；每 intervalMs 轮询一次，计数变化或约每 5s 打印等待进度日志
-    // （stdout，与持续发布 publishing 进度同通道），一直等待不设超时；yomk::g_debugPubStop
-    // 置位（CLI Ctrl+C）即中断——清理发布链后报错返回，不发布不追发。计数口径为
-    // PublicationMatchedStatus.current_count（含 BEST_EFFORT 订阅端，与 ros2 topic pub -w
-    // 的 get_subscription_count 口径一致）；调试节点自身不订阅目标主题，无 intra-participant
-    // 计数干扰。状态查询失败视为匹配情况未知，放弃等待交由稳定收敛与 GUID 校验把关。
+    // requiredSubscribers>0：阻塞等待 matched 计数达标，不设超时（防订阅者未全部上线即漏发）；
+    // 计数口径 PublicationMatchedStatus.current_count 含 BEST_EFFORT（与 ros2 topic pub -w 一致），
+    // 调试节点自身不订阅目标主题故无 intra-participant 干扰；状态查询失败视为匹配未知，放弃等待
     if (requiredSubscribers > 0)
     {
         int32_t lastLogged = -1;
-        uint32_t quietRounds = 0;  // 计数无变化轮数（约每 5s 重复打印进度防完全静默）
+        uint32_t quietRounds = 0;
         const uint32_t logEveryRounds = std::max<uint32_t>(1, 5000 / intervalMs);
         bool interrupted = false;
         while (true)
@@ -1741,11 +1665,11 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
             PublicationMatchedStatus status;
             if (RETCODE_OK != writer->get_publication_matched_status(status))
             {
-                break;  // 状态查询失败：放弃等待（匹配情况未知），交由稳定收敛/GUID 校验
+                break;
             }
             if (status.current_count >= static_cast<int32_t>(requiredSubscribers))
             {
-                break;  // 达标：以 N 作为收敛结束，进入稳定确认后发布
+                break;
             }
             if (status.current_count != lastLogged || quietRounds >= logEveryRounds)
             {
@@ -1771,7 +1695,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
             return false;
         }
     }
-    // 匹配收敛：matched 计数连续 stableRounds 轮不变（无订阅者恒 0 也收敛照发）
+    // 匹配收敛：无订阅者恒 0 也收敛照发
     uint32_t unchanged = 0;
     int32_t lastMatched = -1;
     while (unchanged < stableRounds)
@@ -1779,7 +1703,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         PublicationMatchedStatus status;
         if (RETCODE_OK != writer->get_publication_matched_status(status))
         {
-            break;  // 状态查询失败：放弃收敛等待，直接发布（尽力而为）
+            break;  // 状态查询失败视为未知，放弃收敛直接发布
         }
         unchanged = (status.current_count == lastMatched) ? unchanged + 1 : 1;
         lastMatched = status.current_count;
@@ -1788,13 +1712,10 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
             std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
         }
     }
-    // 匹配收敛后校验：枚举临时 writer 实际匹配的订阅端 GUID 集，与发现缓存中该主题的
-    // RELIABLE 订阅者逐个比对——缓存里有订阅者却未出现在匹配集（订阅者在匹配建立前已
-    // 挂起或异常退出，EDP 不可达，wait_for_all_acked 无法发现它们）则不发布、如实报失败，
-    // 避免"订阅者收不到却报成功"。自身订阅链路 reader 的 intra-participant 匹配不影响
-    // 集合比对；BEST_EFFORT 订阅者不参与 ack，不纳入比对；离线清理保证正常退出的订阅
-    // 者已移出缓存不误报；异常死亡在 lease 过期前的窗口内可能误报，重试即可。枚举失败
-    // （get_matched_subscriptions 非 OK）视为匹配情况未知，放弃校验仍尽力而为发布。
+    // 校验：发现缓存中该主题的 RELIABLE 订阅者须全部出现在实际匹配集（缓存有记录却无一匹配
+    // = 订阅者挂起/异常死亡，wait_for_all_acked 无法发现它们），否则不发布避免"订阅者收不到
+    // 却报成功"。BEST_EFFORT 不参与 ack 不纳入比对；正常退出者已清出缓存不误报，异常死亡在
+    // lease 过期前窗口内可能误报（重试即可）；枚举失败视为未知放弃校验仍尽力而为发布
     std::vector<rtps::GUID_t> expectGuids{};
     {
         std::lock_guard<std::mutex> lock(seenMtx_);
@@ -1848,10 +1769,8 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
     }
     // ④ write 恰一次 + ack 自适应确认
     // DynamicPubSubType 约定 void* 指向 DynamicData::_ref_type（智能指针地址，非裸指针，
-    // 见源码 calculate_serialized_size/serialize 的 static_cast），传 &data 而非 data.get()
-    // 逐条回执附带消息内容：从实际待发的 DynamicData 经 json_serialize 转出（非 CLI 原始
-    // 输入文本，所见即所发），与 topic print 订阅端同 API 同格式可对账；内容固定，发前
-    // 序列化一次复用全程（失败占位符对齐 topic print 惯例，不影响发布流程）
+    // 见源码 calculate_serialized_size/serialize 的 static_cast），故传 &data 而非 data.get()。
+    // 回执内容取实际待发样本序列化（所见即所发，与 topic print 可对账），发前一次复用全程
     std::ostringstream payloadOs;
     if (RETCODE_OK != json_serialize(data, DynamicDataJsonFormat::EPROSIMA, payloadOs))
     {
@@ -1861,11 +1780,8 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
     bool ok = RETCODE_OK == writer->write(&data);
     if (ok)
     {
-        // 首条回执（循环内条目从 #2 起，此处补齐 #1 使逐条回执连续；write 失败不回执，
-        // 对齐循环内"write 成功即计"语义，不等 ack）
         std::cout << "publishing #1 to topic " << topicName << ": " << payloadJson << std::endl;
-        // 发现缓存该主题存在 RELIABLE 订阅者才启用 ack（仅 RELIABLE reader 参与 ackNack；
-        // 全 BEST_EFFORT 或无订阅者退化尽力而为）
+        // 仅缓存中存在 RELIABLE 订阅者才启用 ack（仅 RELIABLE reader 参与 ackNack）
         bool ackUsable = false;
         {
             std::lock_guard<std::mutex> lock(seenMtx_);
@@ -1884,7 +1800,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         }
         if (ackUsable)
         {
-            // RELIABLE 订阅者全部确认收到才算成功；超时有限不卡死，如实报失败
+            // 全部 RELIABLE 订阅者确认才算成功；超时有限不卡死，如实报失败
             static const Duration_t kAckTimeout{2, 0};
             if (RETCODE_OK != writer->wait_for_acknowledgments(kAckTimeout))
             {
@@ -1894,7 +1810,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         }
         else
         {
-            // 退化方案 A：保底窗覆盖异步发送（BEST_EFFORT 送达无协议保证）
+            // 无 ack 协议保证，保底窗覆盖异步发送
             std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
         }
     }
@@ -1902,24 +1818,20 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
     {
         error = "write failed";
     }
-    // ⑤ 持续发布模式（repeatIntervalMs>0）：首轮校验（含 ack 确认）成功后保留发布链按周期
-    // 重复 write，尽力而为（write 失败仅计数不返回；RELIABLE 的 NACK 重传由协议自主完成，
-    // 不再同步等 ack），直到 yomk::g_debugPubStop 置位（CLI Ctrl+C 经 debugPubStop，无锁
-    // store）或发满 maxTimes 条（>0 时，含首轮）才退出并落到底部清理。total/failed 含首轮
-    // 1 条。发布节拍为绝对时刻网格（对齐
-    // ros2 rcl_timer：next 基于首发时刻按周期累加而非 now，平均频率精确贴合 -r 标称值）。
+    // ⑤ 持续发布模式：首轮成功后按周期重复 write，尽力而为（RELIABLE 的 NACK 重传由协议
+    // 自主完成，不再同步等 ack）；发布节拍为绝对时刻网格，对齐 ros2 rcl_timer 使平均频率贴合 -r
     if (ok && repeatIntervalMs > 0)
     {
         uint32_t sent = 1;
         uint32_t failCount = 0;
         const auto interval = std::chrono::milliseconds(repeatIntervalMs);
-        auto next = std::chrono::steady_clock::now() + interval;  // 首个网格点 = 首发时刻 + 周期
+        auto next = std::chrono::steady_clock::now() + interval;
         while (!yomk::g_debugPubStop.load() && (maxTimes == 0 || sent < maxTimes))
         {
             std::this_thread::sleep_until(next);
             if (yomk::g_debugPubStop.load())
             {
-                break;  // 睡眠中收到停止信号：本轮不再发送
+                break;
             }
             if (RETCODE_OK == writer->write(&data))
             {
@@ -1931,9 +1843,8 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
             {
                 ++failCount;
             }
-            // 绝对网格推进（对齐 rcl_timer）：next 按首发时刻 + k*周期 累加，write 耗时与
-            // 过睡不累积进周期；单轮延迟超过周期（下一网格点已过期）时跳到未来最近网格
-            // 点，不连续追发、防止唤醒风暴
+            // 绝对网格推进：write 耗时与过睡不累积进周期；下一网格点已过期时跳到未来最近
+            // 网格点，不连续追发防唤醒风暴
             next += interval;
             const auto now = std::chrono::steady_clock::now();
             if (next <= now)
@@ -1941,11 +1852,8 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
                 next += interval * (1 + (now - next) / interval);
             }
         }
-        // 发满 maxTimes 条达标退出（非 Ctrl+C 中断）：进程即将退出、临时发布链（writer）
-        // 即将销毁，末条消息失去一切后续重传机会——销毁前保底排空 200ms 等待异步传输落地
-        // （RELIABLE 首轮已有 ack 确认，持续轮尽力而为在此收尾；BEST_EFFORT 全靠此窗）；
-        // Ctrl+C 用户主动停止立即退出不排空。排空必须在 delete_datawriter 之前（writer 销毁
-        // 即切断重传路径）
+        // 发满 maxTimes 退出（非 Ctrl+C）：writer 即将销毁、末条消息失去重传窗口，销毁前保底
+        // 排空 200ms 等异步传输落地；排空必须在 delete_datawriter 之前（writer 销毁即切断重传路径）
         static constexpr uint32_t kPubDrainMs = 200;
         if (maxTimes > 0 && !yomk::g_debugPubStop.load())
         {
@@ -1960,7 +1868,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
             *failed = failCount;
         }
     }
-    // 清理临时发布链（逆序：writer → publisher → topic；类型注册幂等不注销）
+    // 清理临时发布链；类型注册幂等不注销
     publisher->delete_datawriter(writer);
     participant_->delete_publisher(publisher);
     participant_->delete_topic(topic);
@@ -1968,10 +1876,8 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
     return ok;
 }
 
-// 发现线程回调入口：新见 writer 追加进 seen_ 列表（由工作线程按 kWorkerInterval 轮询取件）；
-// 回调内不建订阅。
-// 仅拿 seenMtx_ 叶子锁：本回调在 Fast DDS EDP 锁临界区内被调用，拿 mtx_ 会与工作线程
-// （持 mtx_ 建 reader 内部等 PDP/EDP 锁）锁序倒置死锁（详见 seenMtx_ 成员注释）。
+// 发现线程回调入口：仅缓存，不建订阅。仅拿 seenMtx_ 叶子锁——本回调在 Fast DDS EDP 锁
+// 临界区内被调用，拿 mtx_ 会与工作线程（持 mtx_ 建 reader 内部等 PDP/EDP 锁）锁序倒置死锁。
 bool FastDDSDebugNode::onWriterDiscovered(const std::string& topicName,
         const rtps::PublicationBuiltinTopicData& info)
 {
@@ -1980,9 +1886,8 @@ bool FastDDSDebugNode::onWriterDiscovered(const std::string& topicName,
     return true;
 }
 
-// 发现线程回调入口：新见 reader 追加进 seenReaders_ 列表；不唤醒工作线程（订阅建立仅由
-// writer 驱动，reader 缓存供 listTopics 列出仅有订阅者的主题与 topicInfo 统计订阅者数）。
-// 仅拿 seenMtx_ 叶子锁（本回调在 Fast DDS PDP 大锁临界区内被调用，锁序倒置防护同上）。
+// 发现线程回调入口：不唤醒工作线程（订阅建立仅由 writer 驱动）。仅拿 seenMtx_ 叶子锁
+// （本回调在 Fast DDS PDP 大锁临界区内被调用，锁序倒置防护同上）。
 bool FastDDSDebugNode::onReaderDiscovered(const std::string& topicName,
         const rtps::SubscriptionBuiltinTopicData& info)
 {
@@ -1991,9 +1896,8 @@ bool FastDDSDebugNode::onReaderDiscovered(const std::string& topicName,
     return true;
 }
 
-// 发现线程回调入口：reader 离线（graceful dispose）按端点 GUID 从 seenReaders_ 同步移除，
-// 使 topicPub 的 matched==0 校验只对"缓存仍有记录却无一匹配"（挂起/异常死亡，EDP 不可达）
-// 生效——正常退出的订阅者已清出缓存，不会误报。仅拿 seenMtx_ 叶子锁（同上锁序防护）。
+// 发现线程回调入口：reader 离线同步移除，使 topicPub 的 GUID 校验只对"缓存仍有记录却无一
+// 匹配"（挂起/异常死亡）生效，正常退出者已清出缓存不误报。仅拿 seenMtx_ 叶子锁（同上锁序防护）。
 bool FastDDSDebugNode::onReaderRemoved(const std::string& topicName,
         const rtps::SubscriptionBuiltinTopicData& info)
 {
@@ -2018,9 +1922,8 @@ bool FastDDSDebugNode::onReaderRemoved(const std::string& topicName,
     return false;
 }
 
-// 发现线程回调入口：新见 participant 缓存 GUID 前缀与名称（前缀仅作幂等去重与 nodeInfo
-// 归属匹配，emplace 重复发现不覆盖）；不唤醒工作线程（订阅建立链路不依赖参与者发现）。
-// 仅拿 seenMtx_ 叶子锁（本回调在 Fast DDS PDP 大锁临界区内被调用，锁序倒置防护同上）。
+// 发现线程回调入口：不唤醒工作线程（订阅建立链路不依赖参与者发现）。仅拿 seenMtx_ 叶子锁
+// （本回调在 Fast DDS PDP 大锁临界区内被调用，锁序倒置防护同上）。
 void FastDDSDebugNode::onParticipantDiscovered(const rtps::ParticipantBuiltinTopicData& info)
 {
     std::lock_guard<std::mutex> lock(seenMtx_);
@@ -2028,24 +1931,21 @@ void FastDDSDebugNode::onParticipantDiscovered(const rtps::ParticipantBuiltinTop
             std::string(info.participant_name.to_string()));
 }
 
-// 官方文档 15.16 "Remote type discovery and endpoint matching" 接收端形态：
-// TypeInformation → TypeObject → DynamicType → DynamicPubSubType → Topic → DataReader。
-// 失败告警统一经 warnThrottled 节流：本函数由工作线程每 100ms 重试一次，全静默会使
-// topic print / topic hz 的调用方永久得不到失败原因（尤其是 ROS2 端点不提供 TypeObject
-// 这类不可恢复情形），不节流则持续失败刷屏。
+// 官方文档 15.16 接收端形态：TypeInformation → TypeObject → DynamicType → DynamicPubSubType
+// → Topic → DataReader。失败告警统一经 warnThrottled 节流（本函数每 100ms 重试一次：全静默
+// 会使调用方永久得不到失败原因，不节流则持续失败刷屏）。
 bool FastDDSDebugNode::tryStartSubscription(const std::string& topicName,
         const rtps::PublicationBuiltinTopicData& info)
 {
     std::lock_guard<std::mutex> lock(mtx_);
-    // 未登记 / 已建立订阅 → 忽略（同名 writer 重复发现由此去重）
+    // 未登记/已建立订阅 → 忽略（同名 writer 重复发现由此去重）
     if (pending_.count(topicName) == 0 || subs_.count(topicName) > 0 ||
             participant_ == nullptr || subscriber_ == nullptr)
     {
         return false;
     }
 
-    // 登记时暂存的 QoS 描述（subscribeTopic 写入 pendingQos_）：无条目=全哨兵兜底
-    // （防御：正常路径登记与建订一一对应）
+    // 登记时暂存的 QoS 描述；无条目=全哨兵兜底（防御：正常路径登记与建订一一对应）
     DDSQosProfile qos;
     const auto qosIt = pendingQos_.find(topicName);
     if (qosIt != pendingQos_.end())
@@ -2053,7 +1953,6 @@ bool FastDDSDebugNode::tryStartSubscription(const std::string& topicName,
         qos = qosIt->second;
     }
 
-    // 按（主题, 告警类型）节流：首次立即打印，之后距上次打印 ≥ kSubWarnIntervalMs 才重复。
     // warnAt_ 受 mtx_ 保护（本函数入口即持 mtx_）
     auto warnThrottled = [this, &topicName](const char* kind, const std::string& text)
     {
@@ -2070,7 +1969,7 @@ bool FastDDSDebugNode::tryStartSubscription(const std::string& topicName,
         std::cout << "warning: " << text << std::endl;
     };
 
-    // 远端 TypeInformation → TypeObject：complete 优先、未设（TK_NONE）时回退 minimal，
+    // TypeInformation → TypeObject：complete 优先、未设（TK_NONE）时回退 minimal，
     // 对齐 DynamicPubSubType 构造的类型标识选择逻辑
     const auto& ti = info.type_information.type_information;
     const auto& tid = (xtypes::TK_NONE != ti.complete().typeid_with_size().type_id()._d())
@@ -2092,7 +1991,6 @@ bool FastDDSDebugNode::tryStartSubscription(const std::string& topicName,
         return false;
     }
 
-    // TypeObject → DynamicType → 注册 DynamicPubSubType
     auto dyn_type = DynamicTypeBuilderFactory::get_instance()->create_type_w_type_object(
                 type_object)->build();
     if (dyn_type == nullptr)
@@ -2117,7 +2015,7 @@ bool FastDDSDebugNode::tryStartSubscription(const std::string& topicName,
         return false;
     }
 
-    // 登记订阅项；reader 建立前任何失败仅回滚本次新建资源，主题保持 pending 等待重试
+    // reader 建立前任何失败仅回滚本次新建资源，主题保持 pending 等待重试
     try
     {
         DebugSub& entry = subs_[topicName];
@@ -2158,21 +2056,17 @@ bool FastDDSDebugNode::tryStartSubscription(const std::string& topicName,
     return true;
 }
 
-// 订阅建立工作线程：轮询 pending_ × seen_ 交集建订阅；sleep 有界节奏兼顾"新发现/新登记响应"
-// 与"TypeObject 稍后就绪的重试"。查交集时按锁序 mtx_ → seenMtx_ 嵌套。
-// 等待刻意不用 condition_variable：GCC 11.4 libtsan 死锁检测器对「常驻 unique_lock +
-// cv_.wait_for + 主线程顺序二次获取同一锁」模式报确定性 double lock 假阳性并级联假 data
-// race（定罪链见 test/tsan.supp 头注），sleep 轮询为等价规避，新登记响应延迟 ≤ kWorkerInterval。
-// 附带职责：对登记满 kPendingHintDelayMs 仍无 writer 的主题打一次性等待提示，消除
-// 主题名拼错 / 发布者未上线 / 仅有订阅者无发布者三种情形下 topic print 与 topic hz 的
-// 永久静默（仅提示，不改登记状态与返回值：后续 writer 上线仍会自动建订）。
+// 订阅建立工作线程：sleep 有界轮询兼顾"新发现/新登记响应"与"TypeObject 稍后就绪的重试"，
+// 查交集按锁序 mtx_ → seenMtx_ 嵌套。等待刻意不用 condition_variable：GCC 11.4 libtsan 死锁
+// 检测器对该模式报确定性 double lock 假阳性并级联假 data race（定罪链见 test/tsan.supp 头注）。
+// 附带职责：登记满 kPendingHintDelayMs 仍无 writer 的主题打一次性等待提示（仅提示不改状态）。
 void FastDDSDebugNode::workerLoop()
 {
-    constexpr auto kWorkerInterval = std::chrono::milliseconds(100);  // 空闲轮询/重试节奏
+    constexpr auto kWorkerInterval = std::chrono::milliseconds(100);
     while (true)
     {
         std::string todo;
-        std::string undiscovered;  // 宽限期满仍无 writer 的主题（待打一次性提示）
+        std::string undiscovered;
         rtps::PublicationBuiltinTopicData info;
         {
             std::lock_guard<std::mutex> lock(mtx_);
@@ -2188,11 +2082,11 @@ void FastDDSDebugNode::workerLoop()
                     if (it != seen_.end())
                     {
                         todo = name;
-                        info = it->second.front();  // 取任一同主题 writer 发现信息快照，解锁后使用
+                        info = it->second.front();  // 取任一同主题 writer 快照，解锁后使用
                         break;
                     }
-                    // 无 writer（含仅见 reader 的情形，建订只由 writer 驱动）：登记满宽限窗且
-                    // 尚未提示过（已提示者值为 time_point::max()）→ 记一个待提示主题
+                    // 无 writer（含仅见 reader：建订只由 writer 驱动），登记满宽限窗且未提示过
+                    // （已提示者值为 time_point::max()）
                     auto since = pendingSince_.find(name);
                     if (pendingSince_.end() != since &&
                             std::chrono::steady_clock::time_point::max() != since->second &&
@@ -2206,7 +2100,7 @@ void FastDDSDebugNode::workerLoop()
             }
             if (!undiscovered.empty())
             {
-                // 先置 max() 作已提示标记再打印（打印挪到锁外），保证同一主题只提示一次
+                // 先置 max() 再打印（打印在锁外），保证同一主题只提示一次
                 pendingSince_[undiscovered] = std::chrono::steady_clock::time_point::max();
             }
         }

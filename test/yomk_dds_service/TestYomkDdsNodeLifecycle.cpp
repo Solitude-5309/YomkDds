@@ -45,6 +45,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 #include "YomkDdsService.h" // 服务/DDSNode/String/YOMK_* 宏
+#include "YomkDdsMsg.h"
 #include "FastDDSNode.h"    // Part B 直接单元测试 setDomainId
 #include "YomkDdsDebugService.h" // C-2d：DDSDebugNode 无参全缺省聚合初始化 env 读回
 #include "YomkDdsBagService.h"   // C-2d：DDSBagNode 无参全缺省聚合初始化 env 读回

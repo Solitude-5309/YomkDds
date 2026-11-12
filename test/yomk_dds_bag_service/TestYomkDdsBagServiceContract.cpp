@@ -40,6 +40,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 #include "YomkDdsBagService.h" // 服务/DDSBagNode/DDSBagRecord/String/YOMK_* 宏
+#include "YomkDdsMsg.h"
 
 #include <mcap/writer.hpp> // T8 造最小 mcap 分片（实现经链接库内单译元，仅声明头）
 

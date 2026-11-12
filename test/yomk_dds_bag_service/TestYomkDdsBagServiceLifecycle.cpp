@@ -31,6 +31,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 #include "YomkDdsBagService.h" // 服务/DDSBagNode/DDSBagRecord/DDSBagReindex/yomk::bagRecordStop
+#include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（完整录制用例的远端发布端）
 

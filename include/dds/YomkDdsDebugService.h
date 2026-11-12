@@ -1,21 +1,19 @@
 #pragma once
-// YomkDdsDebugService 对外头：定义 YOMKDDS_DEBUG_* 宏（见 YomkDdsAPI.h）所打包的请求结构
-// （DDSDebugNode/DDSDebugTopic）、调试输出回调类型 DDSDebugOutputFunc，以及服务类
-// YomkDdsDebugService 的声明。调试能力由内部的 FastDDSDebugNode 提供（类型无关：经 DDS 发现
-// 机制取回远端 TypeObject 动态建订阅，消息以 JSON 文本投递给用户回调，零消息类型依赖）。
+// YomkDdsDebugService 对外头：服务类 YomkDdsDebugService 的声明与调试进程级控制标志。
+// 用户通常直接使用 YomkDdsAPI.h 中的 YOMKDDS_DEBUG_* 宏；请求结构见 YomkDdsPayload.h
+// （yomk::payload），消息包声明见 YomkDdsMsg.h。调试能力由内部的 FastDDSDebugNode 提供
+// （类型无关：经 DDS 发现机制取回远端 TypeObject 动态建订阅，消息以 JSON 文本投递给
+// 用户回调，零消息类型依赖）。
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
-// 引 DDSQosProfile（DDSDebugTopic/DDSDebugTopicPub 的 qos 尾参）；平铺引号三环境命中：
-// 安装树同目录/测试树平铺/主库平铺
-#include "YomkDdsService.h"
+
+#include "YomkDdsPayload.h"  // 平铺引号三环境命中：安装树同目录/测试树平铺/主库平铺
 
 #include <atomic>
-#include <functional>
 #include <memory>
 #include <mutex>
-#include <string>
 class FastDDSDebugNode;
-using namespace yomk;
+using namespace yomk::payload;
 
 class YomkDdsDebugService : public YomkService
 {
@@ -63,151 +61,3 @@ inline void debugPubReset()
     g_debugPubStop.store(false);
 }
 }  // namespace yomk
-
-// 调试输出回调：每条消息投递一次格式化 JSON 文本，由 /topic_print 调用方自定义（服务层不打印）。
-// 回调在 DDS 数据接收线程被调用，须线程安全且快速返回。
-using DDSDebugOutputFunc = std::function<void(const std::string&)>;
-
-// create_node 请求负载。
-struct DDSDebugNode
-{
-    // DDS 域号，合法范围 [0,232]；缺省（YOMKDDS_DEBUG_NODE 无参形态）经类内缺省初始化器读
-    // 环境变量 YOMKDDS_DDS_DOMAIN_ID（无/非法/超范围回落 0），语义同 DDSNode。
-    uint32_t domainId = YomkDdsDefaultDomainId();
-    // 发现服务器直配聚合串（可缺省尾参，UDP 通道）：空串=不直配；格式 "ip[:port]"，
-    // 多 server 分号分隔，port 缺省 11811。非空时 participant 以 CLIENT 发现协议直配
-    // （覆盖 XML discoveryServersList）；非法串（空项/空 ip/越界 port）创建失败回显。
-    // 缺省（YOMKDDS_DEBUG_NODE 省略该尾参）经类内缺省初始化器读环境变量：总开关
-    // YOMKDDS_USE_DISCOVER_SERVER=true 时取 YOMKDDS_UDP_DISCOVER_SERVERS，否则空串。
-    std::string udpDiscoverServerLocator = YomkDdsDefaultUdpDiscoverServers();
-    // 发现服务器直配聚合串（可缺省尾参，TCP 通道）：格式同上，port 为 server 的 TCP 监听口，
-    // 非空时 participant 补注入 TCPv4 传输并以 TCPv4 locator 直配。语义同 DDSNode。
-    // 缺省读 YOMKDDS_TCP_DISCOVER_SERVERS，门控同 UDP 通道。
-    std::string tcpDiscoverServerLocator = YomkDdsDefaultTcpDiscoverServers();
-};
-
-// topic_print 请求负载。
-struct DDSDebugTopic
-{
-    std::string topicName;      // 待调试主题
-    DDSDebugOutputFunc output;  // 用户自定义输出回调；空回调拒绝
-    DDSQosProfile qos;          // 动态订阅 reader QoS（可缺省尾参）；全哨兵=Fast DDS reader 默认底座
-                                // （KEEP_LAST(1)+BEST_EFFORT+VOLATILE）；对接 ROS2 高频流
-                                // 建议 DDSQosProfile::ros2DefaultSubscriber()（KEEP_LAST(10) 防丢样本）
-};
-
-// list_topics 请求负载：自适应收敛参数（0 值由节点层钳制为默认 5 次/200ms）
-struct DDSDebugList
-{
-    uint32_t stableRounds;  // 连续不变快照次数阈值；1 即单次快照免等待
-    uint32_t intervalMs;    // 快照轮询间隔毫秒
-    bool types = false;     // 类型名模式：true 时每行输出 "主题名 [类型名]"
-};
-
-// topic_info 请求负载：单主题详情查询（独立收敛参数，语义同 list_topics，0 值由节点层钳制为默认）
-struct DDSDebugInfo
-{
-    std::string topicName;  // 待查询主题
-    uint32_t stableRounds;  // 连续不变快照次数阈值；1 即单次快照免等待
-    uint32_t intervalMs;    // 快照轮询间隔毫秒
-    bool verbose = false;   // 端点详情模式：true 时逐端点输出 Node name/GUID/QoS profile
-};
-
-// list_nodes 请求负载：域内命名参与者列表查询（独立收敛参数，语义同 topic_info，0 值由节点层钳制为默认）
-struct DDSNodeList
-{
-    uint32_t stableRounds;  // 连续不变快照次数阈值；1 即单次快照免等待
-    uint32_t intervalMs;    // 快照轮询间隔毫秒
-};
-
-// node_info 请求负载：指定节点名（participant_name）的发布/订阅主题清单查询（独立收敛参数，
-// 语义同 list_nodes，0 值由节点层钳制为默认）
-struct DDSNodeInfo
-{
-    std::string nodeName;   // 待查询节点名（participant_name 精确匹配）
-    uint32_t stableRounds;  // 连续不变快照次数阈值；1 即单次快照免等待
-    uint32_t intervalMs;    // 快照轮询间隔毫秒
-};
-
-// topic_find 请求负载：按数据类型名反查主题列表（独立收敛参数，语义同 list_topics，
-// 0 值由节点层钳制为默认）
-struct DDSDebugFind
-{
-    std::string typeName;   // 待查询数据类型名（精确匹配）
-    uint32_t stableRounds;  // 连续不变快照次数阈值；1 即单次快照免等待
-    uint32_t intervalMs;    // 快照轮询间隔毫秒
-};
-
-// interface_show 请求负载：按数据类型名输出 IDL 结构描述（独立收敛参数，语义同 topic_find，
-// 0 值由节点层钳制为默认）
-struct DDSDebugInterfaceShow
-{
-    std::string typeName;   // 待查询数据类型名（精确匹配）
-    uint32_t stableRounds;  // 连续不变快照次数阈值；1 即单次快照免等待
-    uint32_t intervalMs;    // 快照轮询间隔毫秒
-};
-
-// interface_list 请求负载：列出发现缓存中出现的全部数据类型名（去重排序，interface show
-// 的配套导航；独立收敛参数，0 值由节点层钳制为默认）
-struct DDSDebugInterfaceList
-{
-    uint32_t stableRounds;  // 连续不变快照次数阈值；1 即单次快照免等待
-    uint32_t intervalMs;    // 快照轮询间隔毫秒
-};
-
-// topic_example 请求负载：按主题名查询发布示例三段行集（Type/IDL/example 命令；独立收敛
-// 参数，0 值由节点层钳制为默认）
-struct DDSDebugTopicExample
-{
-    std::string topicName;  // 待查询主题名（精确匹配）
-    uint32_t stableRounds;  // 连续不变快照次数阈值；1 即单次快照免等待
-    uint32_t intervalMs;    // 快照轮询间隔毫秒
-};
-
-// topic_msg 请求负载：按主题名查询消息描述两要素（供导出消息描述文件；StringArray 恰
-// 2 行：d[0]=类型名、d[1]=紧凑 msg JSON；独立收敛参数，0 值由节点层钳制为默认）
-struct DDSDebugTopicMsg
-{
-    std::string topicName;  // 待查询主题名（精确匹配）
-    uint32_t stableRounds;  // 连续不变快照次数阈值；1 即单次快照免等待
-    uint32_t intervalMs;    // 快照轮询间隔毫秒
-};
-
-// topic_pub 请求负载：按主题名发布 JSON 载荷消息（首轮完整强校验：节点层先发现收敛+
-// 匹配收敛再发布，存在 RELIABLE 订阅者时以 wait_for_acknowledgments 确认送达，全
-// BEST_EFFORT 或无订阅者退化尽力而为；收敛参数 0 值由节点层钳制为默认）。requiredSubscribers
-// >0 为期望建匹配订阅端数门槛（CLI -w N）：matched 计数达到该值才继续发布，否则一直等待
-// （节点层打印等待进度日志）直至达标或停止标志置位中断（不设超时）；=0 自动收敛。repeatIntervalMs
-// >0 为持续发布模式：首轮校验成功后保留发布链按该周期重复 write（尽力而为：write 失败仅
-// 计数不返回，不再等 ack），直到停止标志 g_debugPubStop 置位（CLI Ctrl+C 经 debugPubStop）
-// 或发满 maxTimes 条（>0 时）才退出并清理：发满达标路径在销毁发布链前保底排空 200ms（进程
-// 即将退出、writer 即将销毁，末条消息失去重传窗口），发布条数统计经出参 total/failed 带回响应
-struct DDSDebugTopicPub
-{
-    std::string topicName;  // 目标主题名（须已在域内被发现）
-    std::string json;       // 发布载荷（JSON 格式，与 topic_example 输出模板同构）
-    uint32_t stableRounds;  // 连续不变快照次数阈值；1 即单次快照免等待
-    uint32_t intervalMs;    // 快照轮询间隔毫秒
-    uint32_t repeatIntervalMs = 0;  // 持续发布间隔毫秒；0=仅发一次（尾部缺省字段）
-    uint32_t requiredSubscribers = 0;  // 期望建匹配订阅端数门槛；0=自动收敛（尾部缺省字段）
-    uint32_t maxTimes = 0;  // 发布条数上限（含首轮）；0=不限（尾部缺省字段）
-    DDSQosProfile qos;  // 临时发布 writer QoS（可缺省尾参）；全哨兵=Fast DDS writer 默认底座
-                        // （KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL）；
-                        // ROS2 底座建议 DDSQosProfile::ros2DefaultPublisher()
-};
-
-// clang-format off
-// YOMK_DEFINE_MSG 是 YomkServer 第三方宏，cppcheck 未 --library 配置识别（unknownMacro 属工具配置需求，非自有源码缺陷）
-// cppcheck-suppress unknownMacro
-YOMK_DEFINE_MSG(::DDSDebugNode, DDSDebugNode, msg)
-YOMK_DEFINE_MSG(::DDSDebugTopic, DDSDebugTopic, msg)
-YOMK_DEFINE_MSG(::DDSDebugList, DDSDebugList, msg)
-YOMK_DEFINE_MSG(::DDSDebugInfo, DDSDebugInfo, msg)
-YOMK_DEFINE_MSG(::DDSNodeList, DDSNodeList, msg)
-YOMK_DEFINE_MSG(::DDSNodeInfo, DDSNodeInfo, msg)
-YOMK_DEFINE_MSG(::DDSDebugFind, DDSDebugFind, msg)
-YOMK_DEFINE_MSG(::DDSDebugInterfaceShow, DDSDebugInterfaceShow, msg)
-YOMK_DEFINE_MSG(::DDSDebugInterfaceList, DDSDebugInterfaceList, msg)
-YOMK_DEFINE_MSG(::DDSDebugTopicExample, DDSDebugTopicExample, msg)
-YOMK_DEFINE_MSG(::DDSDebugTopicMsg, DDSDebugTopicMsg, msg)
-YOMK_DEFINE_MSG(::DDSDebugTopicPub, DDSDebugTopicPub, msg)

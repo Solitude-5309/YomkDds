@@ -12,6 +12,7 @@
 // （同 YomkDdsDebugService::listTopics 持锁收敛等待的既有约定），停止经 yomk::bagRecordStop /
 // yomk::bagPlayStop 由 SIGINT 处理函数异步置位，不依赖本服务其他端点。
 #include "YomkDdsBagService.h"
+#include "YomkDdsMsg.h"
 #include "YomkDdsService.h"  // YomkDdsService::xmlCache()（XML profiles raw 串单例访问；本头未 include 公共头）
 
 #include "FastDDSBagNode.h"

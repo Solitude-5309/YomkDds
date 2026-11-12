@@ -33,6 +33,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 #include "YomkDdsService.h" // 服务 + DDSTopic/DDSSubRequest/DDSPublish + String + YOMK_* 宏
+#include "YomkDdsMsg.h"
 
 // 引消息类型：YomkDdsStd::MFloat32/MFloat64/MInt64/MBool/MString/MByteArray 数据类
 #include <yomk/dds/YomkDdsStdMsgs.hpp>

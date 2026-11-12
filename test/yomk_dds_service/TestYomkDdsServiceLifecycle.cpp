@@ -20,6 +20,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 #include "YomkDdsService.h" // 服务/DDSNode/DDSXmlLoad/String/YOMK_* 宏 + xmlCache() 静态访问器
+#include "YomkDdsMsg.h"
 
 #include <cstdint>
 #include <fstream>

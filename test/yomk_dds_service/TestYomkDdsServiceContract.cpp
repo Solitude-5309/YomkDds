@@ -18,6 +18,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 #include "YomkDdsService.h" // 引入 YomkServerApi.h 域头、DDS 结构体与 YOMK_DEFINE_MSG 声明、String 内建类型
+#include "YomkDdsMsg.h"
 
 namespace
 {

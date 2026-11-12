@@ -7,6 +7,7 @@
 // 线程安全：node_ 的增删查改与节点入口调用统一以 mtx_ 串行化（createNode 内的 setDomainId 即
 // create_participant，沿用 YomkDdsService::createNode 的既有结论：必须在锁内串行，见其注释）。
 #include "YomkDdsDebugService.h"
+#include "YomkDdsMsg.h"
 
 #include "FastDDSDebugNode.h"
 // 引 yomkdds_xml::ParticipantQosSpec（createNode 组 spec；FastDDSDebugNode.h 传递亦可得）

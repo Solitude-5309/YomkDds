@@ -27,6 +27,7 @@
 #include "TestServiceAccess.h"
 #include "FastDDSDebugNode.h"   // debug 节点直测（topicInfo 类型名读回）
 #include "YomkDdsService.h"     // 服务 + DDSTopic/DDSSubRequest/DDSPublish + String + YOMK_* 宏
+#include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MString 数据类
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（set_name 主体）

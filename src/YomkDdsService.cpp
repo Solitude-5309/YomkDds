@@ -7,6 +7,7 @@
 //
 // 线程安全：nodes_ 的增删查改统一以 mtx_ 串行化（见各 handler 的 lock_guard）；create_node 的并发约束详见其内部注释。
 #include "YomkDdsService.h"
+#include "YomkDdsMsg.h"
 
 #include "FastDDSNode.h"
 // 引 yomkdds_xml::ParticipantQosSpec（createNode 组 spec；FastDDSNode.h 传递亦可得，

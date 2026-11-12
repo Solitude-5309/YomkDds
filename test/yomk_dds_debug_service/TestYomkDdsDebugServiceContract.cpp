@@ -32,6 +32,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 #include "YomkDdsDebugService.h" // 服务/DDSDebugNode/DDSDebugTopic/String/YOMK_* 宏
+#include "YomkDdsMsg.h"
 
 #include <cstdint>
 #include <string>

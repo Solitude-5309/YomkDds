@@ -31,6 +31,7 @@
 #include "TestServiceAccess.h"
 // 引服务头：DDSLoan/DDSLoanResult/DDSTopic/DDSSubRequest/DDSPublish + String + YOMK_* 宏
 #include "YomkDdsService.h"
+#include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MInt32 / MString
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MInt32PubSubType / MStringPubSubType

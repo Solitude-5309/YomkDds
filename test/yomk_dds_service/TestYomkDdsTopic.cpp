@@ -29,6 +29,7 @@
 // 引服务头：YomkDdsService + DDSQosProfile + DDSTopic/DDSSubRequest/DDSPublish +
 // String + YOMK_* 宏
 #include "YomkDdsService.h"
+#include "YomkDdsMsg.h"
 #include "YomkDdsDebugService.h" // YomkDdsDebugService + DDSDebugNode/DDSDebugInfo（QoS-B4 读回链路）
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MString / MInt32 数据类

@@ -36,6 +36,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 #include "YomkDdsDebugService.h" // 服务/DDSDebugNode/DDSDebugTopic/DDSDebugInfo/YOMK_* 宏
+#include "YomkDdsMsg.h"
 #include "FastDDSDebugNode.h"    // qos 下传用例的直连 observer（发现 QoS 行读回）
 
 // 引 MStringPubSubType（仅 topic_info/node_info 命中用例的最小远端发布端）

@@ -44,6 +44,7 @@
 // 引服务头：YomkDdsService + DDSNode/DDSTopic/DDSSubRequest/DDSPublish/DDSLoan/
 // DDSLoanResult/String + YOMK_* 宏
 #include "YomkDdsService.h"
+#include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MInt32
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MInt32PubSubType

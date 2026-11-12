@@ -184,7 +184,11 @@ cd "${_ORIG_DIR}"
 YOMK_LDCONF_FILE="/etc/ld.so.conf.d/yomk.conf"
 if ! grep -qxF "${INSTALL_DIR}/lib" "${YOMK_LDCONF_FILE}" 2>/dev/null; then
     echo "-- 注册动态库搜索路径: ${YOMK_LDCONF_FILE}"
-    echo "${INSTALL_DIR}/lib" | sudo tee -a "${YOMK_LDCONF_FILE}" >/dev/null
+    if ! echo "${INSTALL_DIR}/lib" | sudo tee -a "${YOMK_LDCONF_FILE}" >/dev/null; then
+        echo "错误: 动态库搜索路径注册失败"
+        cd "${_ORIG_DIR}"
+        return 1
+    fi
 fi
 # 刷新动态库缓存：新增的 so 不会自动进入 ld.so.cache，必须重新执行 ldconfig
 echo "-- 刷新动态库缓存 (ldconfig)..."

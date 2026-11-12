@@ -18,6 +18,7 @@
  */
 
 #include <yomk/dds/YomkDdsAPI.h>
+#include <yomk/dds/YomkDdsMsg.h>
 #include <yomk/dds/YomkDdsBagService.h>
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>

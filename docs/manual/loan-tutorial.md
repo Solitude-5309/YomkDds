@@ -1,6 +1,6 @@
 # 使用手册：Loan 零拷贝发布教程
 
-> **本文档覆盖范围**：用借出（loan）样本方式发布 plain 类型消息——链式 `loan()` 借出、判空、池内填值、`pub()` 发布、未用样本 `YOMKDDS_DISCARD_LOAN` 归还的完整流程（README 5.2 示例全文走读），plain 类型判定规则、失败回退路径与何时用/不用 loan（README 5.3 机制说明）。订阅端的零拷贝读取约束见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)。
+> **本文档覆盖范围**：用借出（loan）样本方式发布 plain 类型消息——链式 `loan()` 借出、判空、池内填值、`pub()` 发布、未用样本 `return_loan()` 归还的完整流程（README 5.2 示例全文走读），plain 类型判定规则、失败回退路径与何时用/不用 loan（README 5.3 机制说明）。订阅端的零拷贝读取约束见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)。
 
 ## 目标
 
@@ -25,7 +25,7 @@ loan 发布的四步循环：
 1. `void* sample = yomk::dds().node_name(nodeName).topic(topicName).loan();` 借出——返回值即池内样本指针，判空即失败判定（`nullptr` 为失败）；
 2. **判空**：`nullptr` 则回退普通发布路径；
 3. 借出成功：直接在池内填值后经 `...data(...).pub()` 发布，免序列化；**write 后中间件收回指针，不可再访问**；
-4. 借出后不发布时，用 `YOMKDDS_DISCARD_LOAN(nodeName, topicName, sample)` 归还，避免池泄漏。
+4. 借出后不发布时，用 `...topic(topicName).sample(sample).return_loan()` 归还，避免池泄漏。
 
 ### 第 2 步：完整示例程序
 
@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
     void *discardSample = yomk::dds().node_name("node0").topic("int_topic").loan();
     if (discardSample != nullptr)
     {
-        YOMKDDS_DISCARD_LOAN("node0", "int_topic", discardSample);
+        yomk::dds().node_name("node0").topic("int_topic").sample(discardSample).return_loan();
     }
 
     // 5. 退出前删除节点（显式销毁 DDS 实体）
@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 | `static_cast<YomkDdsStd::MInt32 *>(sample)->data(i);` | 直接在池内样本上填值，免序列化 |
 | `yomk::dds().node_name("node0").topic("int_topic").data(sample).pub();` | 用与普通发布相同的 pub() 链发布借出样本；write 后指针即被中间件收回，**不可再访问、须重新借出** |
 | `else` 分支 | loan 失败回退普通发布路径：栈上实例填值后按借用指针发布 |
-| `YOMKDDS_DISCARD_LOAN(...)` | 归还未发布的借出缓冲，避免池泄漏；仅对借出后**未发布**的样本调用 |
+| `...topic(topicName).sample(sample).return_loan()` | 归还未发布的借出缓冲，避免池泄漏；仅对借出后**未发布**的样本调用 |
 
 ### plain 类型判定与失败回退
 
@@ -129,7 +129,7 @@ yomkdds topic print int_topic
 |---|---|
 | 链式 `loan()` 返回 `nullptr` | 两种正常原因：1）主题类型非 plain（含 string/sequence 成员，如 MString），loan 不支持——走普通发布回退路径即可；2）池耗尽——稍后重试或走回退路径。示例程序的判空分支即为此设计 |
 | 借出并发布后再访问 `sample` 崩溃或数据错乱 | write 后指针即被中间件收回，不可再访问；每次发布须重新借出 |
-| 未发布的借出样本既不发布也不归还 | 造成 writer 池泄漏：借出后决定不发布时，调用 `YOMKDDS_DISCARD_LOAN` 归还 |
+| 未发布的借出样本既不发布也不归还 | 造成 writer 池泄漏：借出后决定不发布时，调用 `sample(...).return_loan()` 归还 |
 | 把非 plain 类型硬改成 loan 发布 | 无需如此：含 string/sequence 的类型 loan 失败返回 nullptr，自动回退普通发布；保持判空分支即可 |
 | `int_topic` 上 `yomkdds topic print` 收不到 | 域号或 discovery 时序问题：确认观察端与发布端同域（`YOMKDDS_DDS_DOMAIN_ID`），观察端先启动再运行发布端 |
 

@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("借出指针=", (loanPtr != nullptr ? "非空" : "空"));
     if (loanPtr != nullptr)
     {
-        resp = YOMKDDS_DISCARD_LOAN("node0", "loan_topic", loanPtr);
+        resp = yomk::dds().node_name("node0").topic("loan_topic").sample(loanPtr).return_loan();
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
             ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("discard loan failed: ", resp.msg);

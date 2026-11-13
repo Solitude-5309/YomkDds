@@ -17,7 +17,7 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 | 注册订阅主题 | `yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()` | `/YomkDdsService/register_sub_topic` | callback 收到消息时回调，接收缓冲 data 由内部自动创建 |
 | 发布数据 | `yomk::dds().node_name(nodeName).topic(topicName).data(data).pub()` | `/YomkDdsService/publish` | data 为数据实例指针（借用，同步写入，caller 保留所有权） |
 | 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | `/YomkDdsService/load_xml` | participant 级配置入口，详见 [xml-profiles.md](./xml-profiles.md) |
-| Loan 借出零拷贝发布 | `yomk::dds().node_name(nodeName).topic(topicName).loan()` / `YOMKDDS_DISCARD_LOAN(nodeName, topicName, sample)` | `/YomkDdsService/loan`、`/YomkDdsService/discard_loan` | 详见 [loan-zero-copy.md](./loan-zero-copy.md) |
+| Loan 借出零拷贝发布 | `yomk::dds().node_name(nodeName).topic(topicName).loan()` / `...topic(topicName).sample(sample).return_loan()` | `/YomkDdsService/loan`、`/YomkDdsService/discard_loan` | 详见 [loan-zero-copy.md](./loan-zero-copy.md) |
 
 返回值约定：除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
@@ -178,7 +178,7 @@ auto onMessage = [&](const void *data)
 - **XML profiles**：`yomk::dds().load_cfg()` 是 participant 级发现/传输/QoS 配置入口，三级提取链与「必须先于建节点」时序约束见 [xml-profiles.md](./xml-profiles.md)。
 - **发现服务器直配**：`yomk::dds().node_name(nodeName)` 的 udp_ds()/tcp_ds() 累积器（及同名环境变量自动直配）承担发现服务器直配，UDP/TCP 格式、CLIENT 协议、跨域互通见 [discovery-server.md](./discovery-server.md)。
 - **QoS**：主题注册宏的 qos 尾参（`DDSQosProfile` 8 项与 ROS2 预置底座）见 [qos-profiles.md](./qos-profiles.md)。
-- **Loan 借出零拷贝发布**：链式 `loan()`/宏 `YOMKDDS_DISCARD_LOAN` 在本篇的发布链路上提供 plain 类型免序列化路径，见 [loan-zero-copy.md](./loan-zero-copy.md)。
+- **Loan 借出零拷贝发布**：链式 `loan()`/`return_loan()` 在本篇的发布链路上提供 plain 类型免序列化路径，见 [loan-zero-copy.md](./loan-zero-copy.md)。
 
 ## 教程链接
 

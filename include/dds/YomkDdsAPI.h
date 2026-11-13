@@ -75,6 +75,7 @@ class DdsTopicBuilder
     yomk::payload::DDSQosProfile m_qos;
     yomk::payload::DDSCallbackFunc m_callback;
     void* m_data = nullptr;
+    void* m_sample = nullptr;
 public:
     DdsTopicBuilder(std::string nodeName, std::string topicName)
         : m_nodeName(std::move(nodeName)), m_topicName(std::move(topicName))
@@ -226,6 +227,38 @@ public:
         }
         auto loan = yomk::msgs::unpack<yomk::msgs::DDSLoanResult>(resp.data);
         return loan ? loan->msg.sample : nullptr;
+    }
+    /**
+     * @brief Accumulate the loaned sample pointer to return
+     * @param[in] sample Pointer obtained from the chained loan()
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积待归还的借出样本指针
+    // @zh: sample 须为链式 loan() 借出的指针
+    // @zh: return 自身链式引用
+    DdsTopicBuilder& sample(void* sample)
+    {
+        m_sample = sample;
+        return *this;
+    }
+    /**
+     * @brief Return an unpublished loaned sample to avoid writer-pool leak (request terminator)
+     * @return Response; success requires status == Succeeded, failure details in msg
+     * @note The pointer becomes invalid once returned; do not access it afterwards
+     */
+    // @zh: 归还未发布的借出样本，避免 writer 池泄漏（请求终结）
+    // @zh: return Response，成功判定 status == Succeeded，失败原因读 msg
+    // @zh: note 归还成功后指针即失效，不得再访问
+    yomk::payload::Response return_loan()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsDiscardLoan)
+            .msg(yomk::msgs::DDSLoan::shared(
+                yomk::payload::DDSLoan{std::move(m_nodeName), std::move(m_topicName), m_sample}))
+            .request();
     }
 };
 
@@ -428,16 +461,6 @@ inline detail::DdsBuilder dds()
 // @zh: 核心通信宏（YomkDdsService 端点）
 // @zh: 均返回 yomk::payload::Response，成功判定 status == Succeeded，失败原因读 msg
 // @zh: （链式 loan() 终结除外，其返回值即样本指针）；完整约束见 docs/features/core-communication.md
-
-/**
- * @brief Return an unpublished loaned sample to avoid writer-pool leak
- * @param[in] sample Pointer obtained from the chained loan()
- */
-// @zh: 归还未发布的借出样本，避免 writer 池泄漏
-// @zh: sample 为链式 loan() 借出的指针
-
-#define YOMKDDS_DISCARD_LOAN(nodeName, topicName, sample) \
-    ::yomk::server().url(::yomk::url::ddsDiscardLoan).msg(::yomk::msgs::DDSLoan::shared(yomk::payload::DDSLoan{nodeName, topicName, sample})).request()
 
 /**
  * @brief Delete a node and destroy all its DDS entities

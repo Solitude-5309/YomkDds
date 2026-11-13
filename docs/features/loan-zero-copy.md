@@ -1,6 +1,6 @@
 # 功能文档：Loan 借出零拷贝发布
 
-> **本文档覆盖范围**：Loan（借出）零拷贝发布机制——链式 `loan()` 与宏 `YOMKDDS_DISCARD_LOAN` 的用法、plain 类型判定、借出→填值→发布→归还完整流程、池语义与失败回退、指针生命周期，以及订阅端自动受益的零拷贝接收。
+> **本文档覆盖范围**：Loan（借出）零拷贝发布机制——链式 `loan()` / `return_loan()` 的用法、plain 类型判定、借出→填值→发布→归还完整流程、池语义与失败回退、指针生命周期，以及订阅端自动受益的零拷贝接收。
 
 ## 功能定位
 
@@ -8,10 +8,10 @@
 
 ## 能力清单
 
-| 能力 | 链式/宏 API | URL 端点 | 说明 |
+| 能力 | 链式 API | URL 端点 | 说明 |
 |---|---|---|---|
 | 借出发送缓冲 | `yomk::dds().node_name(nodeName).topic(topicName).loan()` | `/YomkDdsService/loan` | 返回值即 `DDSLoanResult{sample}` 池内样本指针，失败为 nullptr（判空即失败判定）；仅 plain 类型支持 |
-| 归还未发布的借出缓冲 | `YOMKDDS_DISCARD_LOAN(nodeName, topicName, sample)` | `/YomkDdsService/discard_loan` | 归还未发布样本避免池泄漏 |
+| 归还未发布的借出缓冲 | `yomk::dds().node_name(nodeName).topic(topicName).sample(sample).return_loan()` | `/YomkDdsService/discard_loan` | 归还未发布样本避免池泄漏；sample 须为 loan() 借出的指针 |
 | 订阅端零拷贝接收 | —（自动，无需调用） | — | `FastDDSNode` 内部自动使用 reader loan 接收，回调接口与指针语义不变 |
 
 返回值约定同核心通信：宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；链式 `loan()` 除外——返回值即借出样本指针，判空即失败判定。
@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
     void *discardSample = yomk::dds().node_name("node0").topic("int_topic").loan();
     if (discardSample != nullptr)
     {
-        YOMKDDS_DISCARD_LOAN("node0", "int_topic", discardSample);
+        yomk::dds().node_name("node0").topic("int_topic").sample(discardSample).return_loan();
     }
 
     // 5. 退出前删除节点（显式销毁 DDS 实体）
@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
 2. **判空**：返回值非 `nullptr` 才是借出成功；失败（非 plain 或池耗尽）走 else 分支回退普通发布路径。
 3. **填值**：`static_cast<YomkDdsStd::MInt32 *>(sample)->data(i)` 直接在池内填值，免序列化。
 4. **发布**：`yomk::dds().node_name("node0").topic("int_topic").data(sample).pub()` 发布（与普通发布同一 pub() 链）；write 后中间件收回指针，不可再访问，下一条消息须重新借出。
-5. **归还**：借出后决定不发布时，用 `YOMKDDS_DISCARD_LOAN("node0", "int_topic", sample)` 归还，避免池泄漏。
+5. **归还**：借出后决定不发布时，用 `...node_name("node0").topic("int_topic").sample(sample).return_loan()` 归还，避免池泄漏。
 
 ## 参数与约束
 
@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
 ## 错误与边界行为
 
 - **loan 失败的两种情形**：非 plain 类型（含 string/sequence 的类型）/ 池耗尽——返回 nullptr，须以判空分支回退普通发布，不可假定借出必然成功。
-- **未归还即池泄漏**：借出后不发布须 `YOMKDDS_DISCARD_LOAN` 归还。
+- **未归还即池泄漏**：借出后不发布须经 `sample(...).return_loan()` 归还。
 - **write 后访问指针非法**：发布后指针被中间件收回，不可再访问。
 - **宏返回值**：两宏均返回 `yomk::payload::Response`，须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败可读 `m_msg` 获取错误信息。
 

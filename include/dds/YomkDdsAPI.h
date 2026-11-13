@@ -198,6 +198,35 @@ public:
                 yomk::payload::DDSPublish{std::move(m_nodeName), std::move(m_topicName), m_data}))
             .request();
     }
+    /**
+     * @brief Loan a publish buffer for zero-copy write, plain types only (request terminator)
+     * @return Writer-pool sample pointer; nullptr on failure (non-loanable type or
+     *         pool exhausted) or when YomkServer is not initialized
+     * @note The only terminator that does not return Response — emptiness check
+     *       on the return value is the failure test
+     * @warning The pointer is reclaimed after each write; loan again per send
+     */
+    // @zh: 借出发布缓冲（仅 plain 类型，免序列化，请求终结）
+    // @zh: return writer 池内待发样本指针；失败（非 loan 类型/池耗尽）或未初始化返回 nullptr
+    // @zh: note 唯一非 Response 终结——返回值判空即失败判定
+    // @zh: warning 每次 write 后指针即被中间件收回，须重新借出
+    void* loan()
+    {
+        if (!requireServer())
+        {
+            return nullptr;
+        }
+        auto resp = yomk::server().url(yomk::url::ddsLoan)
+            .msg(yomk::msgs::DDSLoan::shared(
+                yomk::payload::DDSLoan{std::move(m_nodeName), std::move(m_topicName), nullptr}))
+            .request();
+        if (resp.status != yomk::payload::ResStatus::Succeeded || !resp.data)
+        {
+            return nullptr;
+        }
+        auto loan = yomk::msgs::unpack<yomk::msgs::DDSLoanResult>(resp.data);
+        return loan ? loan->msg.sample : nullptr;
+    }
 };
 
 /**
@@ -397,40 +426,15 @@ inline detail::DdsBuilder dds()
  * Full behavior and constraints: docs/features/core-communication.md
  */
 // @zh: 核心通信宏（YomkDdsService 端点）
-// @zh: 除 YOMKDDS_LOAN（借出指针经出参）外均返回 yomk::payload::Response，成功判定
-// @zh: status == Succeeded，失败原因读 msg；完整约束见 docs/features/core-communication.md
-
-/**
- * @brief Loan a publish buffer for zero-copy write (plain types only)
- * @param[out] outPtr Set to the writer-pool sample on success, nullptr on
- *             failure (non-loanable type or pool exhausted)
- * @warning The pointer is reclaimed after each write; loan again per send
- */
-// @zh: 借出发布缓冲（仅 plain 类型，免序列化）
-// @zh: outPtr 成功时指向 writer 池内待发样本，失败（非 loan 类型/池耗尽）保持 nullptr
-// @zh: warning 每次 write 后指针即被中间件收回，须重新借出
-
-#define YOMKDDS_LOAN(nodeName, topicName, outPtr)                                                                      \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        (outPtr) = nullptr;                                                                                            \
-        auto __resp = ::yomk::server().url(::yomk::url::ddsLoan).msg(::yomk::msgs::DDSLoan::shared(yomk::payload::DDSLoan{nodeName, topicName, nullptr})).request(); \
-        if (__resp.status == yomk::payload::ResStatus::Succeeded && __resp.data)                                                     \
-        {                                                                                                              \
-            auto __loan = ::yomk::msgs::unpack<::yomk::msgs::DDSLoanResult>(__resp.data);                                                        \
-            if (__loan)                                                                                                \
-            {                                                                                                          \
-                (outPtr) = __loan->msg.sample;                                                                         \
-            }                                                                                                          \
-        }                                                                                                              \
-    } while (0)
+// @zh: 均返回 yomk::payload::Response，成功判定 status == Succeeded，失败原因读 msg
+// @zh: （链式 loan() 终结除外，其返回值即样本指针）；完整约束见 docs/features/core-communication.md
 
 /**
  * @brief Return an unpublished loaned sample to avoid writer-pool leak
- * @param[in] sample Pointer obtained from YOMKDDS_LOAN
+ * @param[in] sample Pointer obtained from the chained loan()
  */
 // @zh: 归还未发布的借出样本，避免 writer 池泄漏
-// @zh: sample 为 YOMKDDS_LOAN 借出的指针
+// @zh: sample 为链式 loan() 借出的指针
 
 #define YOMKDDS_DISCARD_LOAN(nodeName, topicName, sample) \
     ::yomk::server().url(::yomk::url::ddsDiscardLoan).msg(::yomk::msgs::DDSLoan::shared(yomk::payload::DDSLoan{nodeName, topicName, sample})).request()

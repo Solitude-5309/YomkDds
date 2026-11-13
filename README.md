@@ -45,7 +45,7 @@
 
 对外头文件按标准扩展四件套组织（安装后统一 `<yomk/dds/...>` 引用）：`YomkDdsUrl.h`（`yomk::url` 命名空间 URL 常量，请求链一律引用常量不裸写字面量）、`YomkDdsPayload.h`（扩展专属载荷 `yomk::payload`：请求/响应结构、回调类型、QoS 描述与公共配置辅助）、`YomkDdsMsg.h`（消息包：全部 `YOMK_DEFINE_MSG` 集中声明，生成 `yomk::msgs::Xxx`；用户 DDS 载荷为 IDL 生成类型，独立入口 `<yomk/dds/YomkDdsStdMsgs.hpp>`）、`YomkDdsAPI.h`（宏形态 Api，本节内容）。
 
-> 除 `YOMKDDS_LOAN`（借出结果经 outPtr 出参获取）外，其余核心通信宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
+> 除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余核心通信宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 **核心通信（YomkDdsService）** — 详见 [功能文档：核心通信](docs/features/core-communication.md)：
 
@@ -58,7 +58,7 @@
 | `yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()` | 注册发布主题（qos 详见 [qos-profiles](docs/features/qos-profiles.md)） |
 | `yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()` | 注册订阅主题 |
 | `yomk::dds().node_name(nodeName).topic(topicName).data(data).pub()` | 发布数据 |
-| `YOMKDDS_LOAN(nodeName, topicName, outPtr)` | 借出发送缓冲（详见 [loan-zero-copy](docs/features/loan-zero-copy.md)） |
+| `yomk::dds().node_name(nodeName).topic(topicName).loan()` | 借出发送缓冲，返回值判空即失败判定（详见 [loan-zero-copy](docs/features/loan-zero-copy.md)） |
 | `YOMKDDS_DISCARD_LOAN(nodeName, topicName, sample)` | 归还未发布的借出缓冲 |
 
 **调试服务（YomkDdsDebugService）** — 详见 [功能文档：调试服务](docs/features/debug-service.md)，等价 CLI 见 `yomkdds` 命令：

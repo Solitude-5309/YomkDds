@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
 | `yomk::dds().node_name("node0").topic("my_topic").data(&msg).pub()` | 发布数据；data 为数据实例指针（借用，同步写入，caller 保留所有权） |
 | `YOMKDDS_DEL_NODE("node0")` | 退出前删除节点，显式销毁 DDS 实体 |
 
-除 `YOMKDDS_LOAN`（借出结果经 outPtr 出参获取）外，其余核心通信宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。（上例为最小篇幅省略了判断，正式代码建议参照 `examples/ExampleYomkDdsTopic.cpp` 逐宏判错）。
+除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余核心通信宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。（上例为最小篇幅省略了判断，正式代码建议参照 `examples/ExampleYomkDdsTopic.cpp` 逐宏判错）。
 
 ### 第 3 步：编译并运行
 

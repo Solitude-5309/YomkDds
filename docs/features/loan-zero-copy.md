@@ -1,6 +1,6 @@
 # 功能文档：Loan 借出零拷贝发布
 
-> **本文档覆盖范围**：Loan（借出）零拷贝发布机制——`YOMKDDS_LOAN` / `YOMKDDS_DISCARD_LOAN` 两个宏的用法、plain 类型判定、借出→填值→发布→归还完整流程、池语义与失败回退、指针生命周期，以及订阅端自动受益的零拷贝接收。
+> **本文档覆盖范围**：Loan（借出）零拷贝发布机制——链式 `loan()` 与宏 `YOMKDDS_DISCARD_LOAN` 的用法、plain 类型判定、借出→填值→发布→归还完整流程、池语义与失败回退、指针生命周期，以及订阅端自动受益的零拷贝接收。
 
 ## 功能定位
 
@@ -8,13 +8,13 @@
 
 ## 能力清单
 
-| 能力 | 宏 API | URL 端点 | 说明 |
+| 能力 | 链式/宏 API | URL 端点 | 说明 |
 |---|---|---|---|
-| 借出发送缓冲 | `YOMKDDS_LOAN(nodeName, topicName, outPtr)` | `/YomkDdsService/loan` | outPtr 为输出参数，成功指向 `DDSLoanResult{sample}` 池内样本、失败置 nullptr；仅 plain 类型支持 |
+| 借出发送缓冲 | `yomk::dds().node_name(nodeName).topic(topicName).loan()` | `/YomkDdsService/loan` | 返回值即 `DDSLoanResult{sample}` 池内样本指针，失败为 nullptr（判空即失败判定）；仅 plain 类型支持 |
 | 归还未发布的借出缓冲 | `YOMKDDS_DISCARD_LOAN(nodeName, topicName, sample)` | `/YomkDdsService/discard_loan` | 归还未发布样本避免池泄漏 |
 | 订阅端零拷贝接收 | —（自动，无需调用） | — | `FastDDSNode` 内部自动使用 reader loan 接收，回调接口与指针语义不变 |
 
-返回值约定同核心通信：宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；`YOMKDDS_LOAN` 的借出结果另经 outPtr 判空获取。
+返回值约定同核心通信：宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；链式 `loan()` 除外——返回值即借出样本指针，判空即失败判定。
 
 ## 使用方式概述
 
@@ -46,8 +46,7 @@ int main(int argc, char *argv[])
     std::this_thread::sleep_for(std::chrono::seconds(1));
     for (int i = 0; i < 5; ++i)
     {
-        void *sample = nullptr;
-        YOMKDDS_LOAN("node0", "int_topic", sample);
+        void *sample = yomk::dds().node_name("node0").topic("int_topic").loan();
         if (sample != nullptr)
         {
             // 直接在池内填值后发布，免序列化；write 后中间件收回指针，不可再访问
@@ -65,8 +64,7 @@ int main(int argc, char *argv[])
     }
 
     // 4. 借出后不发布时须归还缓冲（否则池泄漏）
-    void *discardSample = nullptr;
-    YOMKDDS_LOAN("node0", "int_topic", discardSample);
+    void *discardSample = yomk::dds().node_name("node0").topic("int_topic").loan();
     if (discardSample != nullptr)
     {
         YOMKDDS_DISCARD_LOAN("node0", "int_topic", discardSample);
@@ -80,15 +78,15 @@ int main(int argc, char *argv[])
 
 标准流程拆解（借出→判空→填值→发布→归还）：
 
-1. **借出**：`YOMKDDS_LOAN("node0", "int_topic", sample)` 向该主题 writer 的样本池借出一块发送缓冲。
-2. **判空**：`sample != nullptr` 才是借出成功；失败（非 plain 或池耗尽）走 else 分支回退普通发布路径。
+1. **借出**：`void* sample = yomk::dds().node_name("node0").topic("int_topic").loan();` 向该主题 writer 的样本池借出一块发送缓冲。
+2. **判空**：返回值非 `nullptr` 才是借出成功；失败（非 plain 或池耗尽）走 else 分支回退普通发布路径。
 3. **填值**：`static_cast<YomkDdsStd::MInt32 *>(sample)->data(i)` 直接在池内填值，免序列化。
 4. **发布**：`yomk::dds().node_name("node0").topic("int_topic").data(sample).pub()` 发布（与普通发布同一 pub() 链）；write 后中间件收回指针，不可再访问，下一条消息须重新借出。
 5. **归还**：借出后决定不发布时，用 `YOMKDDS_DISCARD_LOAN("node0", "int_topic", sample)` 归还，避免池泄漏。
 
 ## 参数与约束
 
-- **outPtr 输出参数**：成功指向 `DDSLoanResult{sample}` 池内样本、失败置 nullptr；调用后必须判空再使用。
+- **返回值即样本指针**：成功指向 `DDSLoanResult{sample}` 池内样本、失败为 nullptr；调用后必须判空再使用。
 - **plain 类型判定**：仅 plain 类型可借出——纯基础类型成员 + FINAL 可扩展性（如 MInt32、MColorRGBA）；含 string/sequence 的类型 loan 失败返回 nullptr。
 - **池语义**：样本来自 writer 池；loan 失败（非 plain 或池耗尽）时自动回退普通发布路径，业务代码以判空分支承载两条路径。
 - **发布路径复用**：借出样本仍经 `...data(...).pub()` 链发布，data 借用、同步写入语义不变。
@@ -98,7 +96,7 @@ int main(int argc, char *argv[])
 
 ## 错误与边界行为
 
-- **loan 失败的两种情形**：非 plain 类型（含 string/sequence 的类型）/ 池耗尽——outPtr 置 nullptr，须以判空分支回退普通发布，不可假定借出必然成功。
+- **loan 失败的两种情形**：非 plain 类型（含 string/sequence 的类型）/ 池耗尽——返回 nullptr，须以判空分支回退普通发布，不可假定借出必然成功。
 - **未归还即池泄漏**：借出后不发布须 `YOMKDDS_DISCARD_LOAN` 归还。
 - **write 后访问指针非法**：发布后指针被中间件收回，不可再访问。
 - **宏返回值**：两宏均返回 `yomk::payload::Response`，须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败可读 `m_msg` 获取错误信息。

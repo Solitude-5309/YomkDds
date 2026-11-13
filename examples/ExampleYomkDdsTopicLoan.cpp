@@ -1,6 +1,6 @@
 /**
  * @file ExampleYomkDdsTopicLoan.cpp
- * @brief loan 零拷贝发布示例：loan_topic（MInt32，plain 类型）经 YOMKDDS_LOAN 借出池内
+ * @brief loan 零拷贝发布示例：loan_topic（MInt32，plain 类型）经链式 loan() 借出池内
  *       样本填值后发布 5 条并演示 discard 归还；fallback_topic（MString，非 plain）对照
  *       展示借出返回空指针的回退路径。详见 docs/manual/loan-tutorial.md。
  */
@@ -43,8 +43,7 @@ int main(int argc, char* argv[])
         YOMKDDS_DEL_NODE("node0");
         return 1;
     }
-    void* loanPtr = nullptr;
-    YOMKDDS_LOAN("node0", "fallback_topic", loanPtr);
+    void* loanPtr = yomk::dds().node_name("node0").topic("fallback_topic").loan();
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("非 plain MString 借出指针=", (loanPtr != nullptr ? "非空" : "空"), "（预期为空，回退普通发布）");
 
     // 3. plain 类型 loan 全链路演示：MInt32 为纯基础类型，FINAL 后 is_plain 为 true
@@ -84,7 +83,7 @@ int main(int argc, char* argv[])
     // 借出 → 池内直接填值 → 发布（每次 write 后中间件收回指针，须重新借出）
     for (int i = 0; i < 5; ++i)
     {
-        YOMKDDS_LOAN("node0", "loan_topic", loanPtr);
+        loanPtr = yomk::dds().node_name("node0").topic("loan_topic").loan();
         if (loanPtr == nullptr)
         {
             ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("[SEND] 借出失败: 第 ", i, " 次 loan 返回 nullptr");
@@ -112,7 +111,7 @@ int main(int argc, char* argv[])
 
     // 6. discard 演示：借出后不发布须归还缓冲（否则池泄漏）
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== discard loan ===");
-    YOMKDDS_LOAN("node0", "loan_topic", loanPtr);
+    loanPtr = yomk::dds().node_name("node0").topic("loan_topic").loan();
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("借出指针=", (loanPtr != nullptr ? "非空" : "空"));
     if (loanPtr != nullptr)
     {

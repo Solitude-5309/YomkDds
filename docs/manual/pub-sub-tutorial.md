@@ -142,8 +142,8 @@ int main(int argc, char *argv[])
     ::yomk::log().tag("MultiTopicExample").info("topic_b received=", recvB.load(), "/5");
 
     // 6. 退出前逐个删除节点
-    YOMKDDS_DEL_NODE("node_pub");
-    YOMKDDS_DEL_NODE("node_sub");
+    yomk::dds().node_name("node_pub").remove();
+    yomk::dds().node_name("node_sub").remove();
     return 0;
 }
 ```
@@ -151,7 +151,7 @@ int main(int argc, char *argv[])
 ### 第 4 步：发布节奏与资源清理
 
 - **发布节奏**：发布链 `pub()` 为同步写入（data 为借用指针，caller 保留所有权），两次发布之间的间隔由你控制（示例用 `sleep_for(milliseconds(100))`）；持续发布的参考形态见安装包内 `ExampleYomkDdsPub`（每 1s 发布一次，Ctrl+C 退出）；
-- **资源清理**：每次 `yomk::dds().node_name(...).create()` 对应一次 `YOMKDDS_DEL_NODE`，销毁节点及其全部 DDS 实体；删除不存在的节点返回错误。退出前不删节点可能造成程序退出阶段的资源清理问题，务必在 `return` 前逐个删除。
+- **资源清理**：每次 `yomk::dds().node_name(...).create()` 对应一次 `...node_name(...).remove()`，销毁节点及其全部 DDS 实体；删除不存在的节点返回错误。退出前不删节点可能造成程序退出阶段的资源清理问题，务必在 `return` 前逐个删除。
 
 ## 预期输出
 

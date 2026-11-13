@@ -62,7 +62,7 @@ resp = yomk::dds().node_name("interop_pub").topic("rt/chatter_interop").type_ptr
 if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 {
     ::yomk::log().tag("ExampleRos2InteropPub").error("register pub topic failed: ", resp.m_msg);
-    YOMKDDS_DEL_NODE("interop_pub");
+    yomk::dds().node_name("interop_pub").remove();
     return 1;
 }
 

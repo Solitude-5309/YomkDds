@@ -58,7 +58,7 @@ int main()
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("TestRos2InteropPub").error("register pub topic failed: ", resp.msg);
-        YOMKDDS_DEL_NODE("interop_pub");
+        yomk::dds().node_name("interop_pub").remove();
         return 1;
     }
 
@@ -82,7 +82,7 @@ int main()
     }
 
     // 退出前显式销毁节点
-    resp = YOMKDDS_DEL_NODE("interop_pub");
+    resp = yomk::dds().node_name("interop_pub").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("TestRos2InteropPub").error("delete node failed: ", resp.msg);

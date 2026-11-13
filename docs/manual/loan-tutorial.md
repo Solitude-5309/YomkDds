@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
     }
 
     // 5. 退出前删除节点（显式销毁 DDS 实体）
-    YOMKDDS_DEL_NODE("node0");
+    yomk::dds().node_name("node0").remove();
     return 0;
 }
 ```

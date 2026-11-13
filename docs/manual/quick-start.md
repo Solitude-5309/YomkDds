@@ -14,7 +14,7 @@
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成 YomkDds 编译安装（能直接运行 `ExampleYomkDdsTopic`）；
 - 一个可用的 C++17 + CMake（>= 3.14）工程环境；
-- YomkDds 示例统一使用 `YOMKDDS_*` 宏 API（定义于 `YomkDdsAPI.h`），均为完整可复制编译的程序，链接 `YomkDds::YomkDds YomkServer::YomkServer YomkDdsStdMsgs`。
+- YomkDds 示例统一使用 `yomk::dds()` 链式 API（定义于 `YomkDdsAPI.h`），均为完整可复制编译的程序，链接 `YomkDds::YomkDds YomkServer::YomkServer YomkDdsStdMsgs`。
 
 ## 分步操作
 
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
     ::yomk::log().tag("PubSubExample").info("received=", received.load(), "/5");
 
     // 7. 退出前删除节点（显式销毁 DDS 实体）
-    YOMKDDS_DEL_NODE("node0");
+    yomk::dds().node_name("node0").remove();
     return 0;
 }
 ```
@@ -112,16 +112,16 @@ int main(int argc, char *argv[])
 
 | 片段 | 作用 |
 |---|---|
-| `::yomk::server().init()` + `::yomk::server().srv<YomkDdsService>().create()` | 初始化 YomkServer 框架并启动 YomkDds 服务（`yomk/server/YomkServerApi.h` 提供）；每个使用 YomkDds 宏 API 的程序开头都需要 |
+| `::yomk::server().init()` + `::yomk::server().srv<YomkDdsService>().create()` | 初始化 YomkServer 框架并启动 YomkDds 服务（`yomk/server/YomkServerApi.h` 提供）；每个使用 YomkDds API 的程序开头都需要 |
 | `yomk::dds().version()` | 版本查询，返回 Response 携带 String 版本串，解包/打印由调用方处理 |
 | `yomk::dds().node_name("node0").create()` | 创建节点，每节点一个独立 DDS 参与者；domainId 缺省取环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0，合法范围 [0,232]） |
 | `yomk::dds().node_name(...).topic(...).type_ptr(...).create_pub() / ...create_sub()` | 在节点上注册发布/订阅主题；type_ptr() 实参为 `new XxxPubSubType()`，**所有权移交服务端，调用后 caller 不再持有/释放** |
 | 链式 `sub_cb(onMessage)` 回调 | 回调签名 `std::function<void(const void *data)>`，收到消息时被调用；`data` 是交付的消息实例指针，回调中转型使用（详见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)） |
 | `sleep_for(seconds(1))` 后再发布 | **discovery 时序**：DDS 参与者互相发现需要时间，发布前等待 discovery 完成；首条消息可能因 discovery 时序丢失 |
 | `yomk::dds().node_name("node0").topic("my_topic").data(&msg).pub()` | 发布数据；data 为数据实例指针（借用，同步写入，caller 保留所有权） |
-| `YOMKDDS_DEL_NODE("node0")` | 退出前删除节点，显式销毁 DDS 实体 |
+| `yomk::dds().node_name("node0").remove()` | 退出前删除节点，显式销毁 DDS 实体 |
 
-除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余核心通信宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。（上例为最小篇幅省略了判断，正式代码建议参照 `examples/ExampleYomkDdsTopic.cpp` 逐宏判错）。
+除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。（上例为最小篇幅省略了判断，正式代码建议参照 `examples/ExampleYomkDdsTopic.cpp` 逐端点判错）。
 
 ### 第 3 步：编译并运行
 
@@ -133,7 +133,7 @@ cmake --build build
 
 ### 第 4 步：双进程演示（跨进程发布/订阅）
 
-安装包自带两个独立进程的参考程序（纯宏 API，编译后可直接运行）：
+安装包自带两个独立进程的参考程序（纯链式 API，编译后可直接运行）：
 
 - `ExampleYomkDdsPub`：创建 `pub_node`，注册 `hello_world` 主题（MString），每隔 1s 发布一次，收到 Ctrl+C 退出信号后停止发布并干净退出；
 - `ExampleYomkDdsSub`：创建 `sub_node`，订阅 `hello_world`，收到每条消息打印 `[RECV]` 内容，Ctrl+C 退出并打印累计接收条数。
@@ -180,7 +180,7 @@ Ctrl+C 先停发布端，再停订阅端，订阅端会打印累计接收条数�
 | 编译报找不到 `yomk/dds/YomkDdsAPI.h` 等头文件 | CMake 未找到包：确认 `-DCMAKE_PREFIX_PATH="$YOMK_PREFIX_PATH"`，且 `find_package(YomkServer REQUIRED)` 与 `find_package(YomkDds REQUIRED)` 均在 target 之前 |
 | 链接报 `cannot find -lYomkDdsStdMsgs` | `YomkDdsStdMsgs` 无导出包、以裸库名链接：保留 `link_directories(${YomkDds_LIB_DIR})` 一行（见第 1 步 CMake 片段） |
 | 运行报 `error while loading shared libraries` | 动态库缓存未注册：按 [setup-and-build.md](./setup-and-build.md) 排障一节处理（检查 `/etc/ld.so.conf.d/yomk.conf` 并 `sudo ldconfig`） |
-| 程序退出前崩溃或资源告警 | 未删除节点即退出：退出前调用 `YOMKDDS_DEL_NODE("node0")` 显式销毁 DDS 实体 |
+| 程序退出前崩溃或资源告警 | 未删除节点即退出：退出前调用 `yomk::dds().node_name("node0").remove()` 显式销毁 DDS 实体 |
 
 ## 延伸阅读
 

@@ -76,7 +76,7 @@ int main()
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("TestRos2InteropSub").error("register sub topic failed: ", resp.msg);
-        YOMKDDS_DEL_NODE("interop_sub");
+        yomk::dds().node_name("interop_sub").remove();
         return 1;
     }
 
@@ -88,7 +88,7 @@ int main()
     }
 
     // 退出前显式销毁节点；收满 3 条返回 0，未收满返回 1
-    resp = YOMKDDS_DEL_NODE("interop_sub");
+    resp = yomk::dds().node_name("interop_sub").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("TestRos2InteropSub").error("delete node failed: ", resp.msg);

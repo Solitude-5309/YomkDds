@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
     // 6. 等待接收完成后删除节点
     std::this_thread::sleep_for(std::chrono::seconds(1));
     ::yomk::log().tag("QosExample").info("received=", received.load(), "/5");
-    YOMKDDS_DEL_NODE("qos_node");
+    yomk::dds().node_name("qos_node").remove();
     return 0;
 }
 ```

@@ -54,7 +54,7 @@ int main()
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleDiscoverServerPub").error("register pub topic failed: ", resp.msg);
-        YOMKDDS_DEL_NODE("ds_pub_node");
+        yomk::dds().node_name("ds_pub_node").remove();
         return 1;
     }
 
@@ -83,7 +83,7 @@ int main()
 
     // 4. 退出前显式销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
     ::yomk::log().tag("ExampleDiscoverServerPub").info("publish done: total=", total, " failed=", failCount);
-    resp = YOMKDDS_DEL_NODE("ds_pub_node");
+    resp = yomk::dds().node_name("ds_pub_node").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleDiscoverServerPub").error("delete node failed: ", resp.msg);

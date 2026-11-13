@@ -10,9 +10,9 @@
 #include <yomk/dds/YomkDdsUrl.h>
 
 // Maintainer notes: this header is migrating from the macro-form Api to the
-// chained Api (per-suite, see tmp/链式api改造.md). load_xml is chained
-// (yomk::dds()); all other endpoints are still macros. Each unit — chained
-// terminator or macro — wraps one unified request:
+// chained Api (per-suite, see tmp/链式api改造.md). The core communication
+// suite is fully chained (yomk::dds()); the debug/bag suites are still
+// macros. Each unit — chained terminator or macro — wraps one unified request:
 // yomk::server().url(<yomk::url constant>).msg(<yomk::msgs message>).request().
 // URLs come from YomkDdsUrl.h, payload structures from YomkDdsPayload.h,
 // message declarations from YomkDdsMsg.h.
@@ -351,6 +351,24 @@ public:
                 yomk::payload::DDSNode{std::move(m_nodeName), m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
             .request();
     }
+    /**
+     * @brief Delete the node and destroy all its DDS entities (request terminator)
+     * @return Response; fails when the node name is unknown
+     * @note Destroy counterpart of create() on the same facet
+     */
+    // @zh: 删除节点并销毁其全部 DDS 实体（请求终结）
+    // @zh: return Response；nodeName 不存在时返回错误
+    // @zh: note 与 create() 同分面的销毁对
+    yomk::payload::Response remove()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsDeleteNode)
+            .msg(yomk::msgs::String::shared(std::move(m_nodeName)))
+            .request();
+    }
 };
 
 /**
@@ -448,29 +466,6 @@ inline detail::DdsBuilder dds()
     return detail::DdsBuilder{};
 }
 }  // namespace yomk
-
-// ===== YomkDdsService — core communication =====
-// ===== YomkDdsService — core communication =====
-/**
- * @brief Core communication macros (YomkDdsService endpoints)
- *
- * Every macro returns yomk::payload::Response; success requires
- * status == yomk::payload::ResStatus::Succeeded, failure details in msg.
- * Full behavior and constraints: docs/features/core-communication.md
- */
-// @zh: 核心通信宏（YomkDdsService 端点）
-// @zh: 均返回 yomk::payload::Response，成功判定 status == Succeeded，失败原因读 msg
-// @zh: （链式 loan() 终结除外，其返回值即样本指针）；完整约束见 docs/features/core-communication.md
-
-/**
- * @brief Delete a node and destroy all its DDS entities
- * @note Fails when the node name is unknown
- */
-// @zh: 删除节点并销毁其全部 DDS 实体
-// @zh: note nodeName 不存在时返回错误
-
-#define YOMKDDS_DEL_NODE(nodeName) ::yomk::server().url(::yomk::url::ddsDeleteNode).msg(::yomk::msgs::String::shared(nodeName)).request()
-
 
 // ===== YomkDdsDebugService — type-agnostic debugging =====
 /**

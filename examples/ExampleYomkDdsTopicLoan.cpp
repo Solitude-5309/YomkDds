@@ -40,7 +40,7 @@ int main(int argc, char* argv[])
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("register pub topic failed: ", resp.msg);
-        YOMKDDS_DEL_NODE("node0");
+        yomk::dds().node_name("node0").remove();
         return 1;
     }
     void* loanPtr = yomk::dds().node_name("node0").topic("fallback_topic").loan();
@@ -52,7 +52,7 @@ int main(int argc, char* argv[])
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("register pub topic failed: ", resp.msg);
-        YOMKDDS_DEL_NODE("node0");
+        yomk::dds().node_name("node0").remove();
         return 1;
     }
 
@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("register sub topic failed: ", resp.msg);
-        YOMKDDS_DEL_NODE("node0");
+        yomk::dds().node_name("node0").remove();
         return 1;
     }
 
@@ -124,7 +124,7 @@ int main(int argc, char* argv[])
 
     // 7. 退出前销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== YomkDdsService::deleteNode ===");
-    resp = YOMKDDS_DEL_NODE("node0");
+    resp = yomk::dds().node_name("node0").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("delete node failed: ", resp.msg);

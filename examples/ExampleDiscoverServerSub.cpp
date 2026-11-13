@@ -62,7 +62,7 @@ int main()
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleDiscoverServerSub").error("register sub topic failed: ", resp.msg);
-        YOMKDDS_DEL_NODE("ds_sub_node");
+        yomk::dds().node_name("ds_sub_node").remove();
         return 1;
     }
 
@@ -76,7 +76,7 @@ int main()
 
     // 4. 退出前显式销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
     ::yomk::log().tag("ExampleDiscoverServerSub").info("received total=", received.load(), " messages");
-    resp = YOMKDDS_DEL_NODE("ds_sub_node");
+    resp = yomk::dds().node_name("ds_sub_node").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleDiscoverServerSub").error("delete node failed: ", resp.msg);

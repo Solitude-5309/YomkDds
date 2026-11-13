@@ -7,13 +7,13 @@
 
 ## 一、功能全景
 
-YomkDds 是 [YomkServer](https://github.com/Solitude-5309/YomkServer) 框架的 DDS 分布式通信扩展，集成 Fast DDS 提供分布式发布订阅能力。用户经 YomkDds 宏 API 操作三个服务域，另有 `yomkdds` 命令行工具以 CLI 形式覆盖调试与 Bag 大部分能力：
+YomkDds 是 [YomkServer](https://github.com/Solitude-5309/YomkServer) 框架的 DDS 分布式通信扩展，集成 Fast DDS 提供分布式发布订阅能力。用户经 YomkDds API 操作三个服务域（核心通信为 `yomk::dds()` 链式），另有 `yomkdds` 命令行工具以 CLI 形式覆盖调试与 Bag 大部分能力：
 
 ```mermaid
 flowchart LR
     U["用户程序 / 终端"]
 
-    subgraph YomkDds["YomkDds 宏 API（经 YomkServer 服务注册）"]
+    subgraph YomkDds["YomkDds API（经 YomkServer 服务注册）"]
         S1["YomkDdsService<br>核心通信"]
         S2["YomkDdsDebugService<br>调试服务"]
         S3["YomkDdsBagService<br>Bag 服务"]
@@ -31,21 +31,21 @@ flowchart LR
 
 三个服务域与 CLI 的职责划分：
 
-| 服务域 | 职责 | 宏 API 前缀 | CLI 覆盖 |
+| 服务域 | 职责 | API 入口 | CLI 覆盖 |
 |---|---|---|---|
-| YomkDdsService | 节点生命周期、主题注册、发布订阅、Loan、XML 加载 | `YOMKDDS_*` | 不覆盖（编程能力） |
+| YomkDdsService | 节点生命周期、主题注册、发布订阅、Loan、XML 加载 | `yomk::dds()` 链式 | 不覆盖（编程能力） |
 | YomkDdsDebugService | 类型无关的域内观察（主题/节点/类型/端点）与 JSON 载荷发布 | `YOMKDDS_DEBUG_*` | `yomkdds topic/node/interface` 全部覆盖 |
 | YomkDdsBagService | mcap 格式录制、元信息、重建索引、转换、回放 | `YOMKDDS_BAG_*` | `yomkdds bag` 全部覆盖（play 仅 CLI） |
 
-> 除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余核心通信宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
+> 除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 ## 二、功能速查矩阵
 
-| 功能域 | 能力 | 宏 API | yomkdds CLI | 详见 |
+| 功能域 | 能力 | 链式/宏 API | yomkdds CLI | 详见 |
 |---|---|---|---|---|
 | 核心通信 | 版本查询 | `yomk::dds().version()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg()` | — | [xml-profiles.md](./xml-profiles.md) |
-| 核心通信 | 创建/删除节点 | `yomk::dds().node_name(nodeName).create()` / `YOMKDDS_DEL_NODE()` | — | [core-communication.md](./core-communication.md) |
+| 核心通信 | 创建/删除节点 | `yomk::dds().node_name(nodeName).create()` / `...node_name(nodeName).remove()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | 注册发布/订阅主题 | `yomk::dds().node_name(...).topic(...).type_ptr(...).create_pub() / ...create_sub()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | 发布消息 | `yomk::dds().node_name(...).topic(...).data(...).pub()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | Loan 借出零拷贝发布 | `yomk::dds().node_name(...).topic(...).loan()` / `...sample(...).return_loan()` | — | [loan-zero-copy.md](./loan-zero-copy.md) |

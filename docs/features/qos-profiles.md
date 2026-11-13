@@ -4,7 +4,7 @@
 
 ## 功能定位
 
-QoS（Quality of Service）决定 DDS 端点的可靠性、持久化、历史深度等行为，直接影响发布端与订阅端能否匹配、消息是否丢失。YomkDds 在两侧提供同一套 8 项 QoS 配置能力：编程侧经 `DDSQosProfile` 尾参随主题注册下发；命令行侧经 `yomkdds` topic 命令的 QoS 参数族在不改代码的情况下调整 QoS。
+QoS（Quality of Service）决定 DDS 端点的可靠性、持久化、历史深度等行为，直接影响发布端与订阅端能否匹配、消息是否丢失。YomkDds 在两侧提供同一套 8 项 QoS 配置能力：编程侧经 qos() 累积器随主题注册下发；命令行侧经 `yomkdds` topic 命令的 QoS 参数族在不改代码的情况下调整 QoS。
 
 ## 能力清单
 
@@ -56,7 +56,7 @@ yomkdds topic pub --qos-file qos.json <主题名> <JSON数据>
 
 ### 三层语义
 
-1. **缺省全哨兵**：qos 尾参缺省（或 8 项均未设置）时保持 Fast DDS 端点默认底座（现状行为）。
+1. **缺省全哨兵**：qos 缺省（未累积，或 8 项均未设置）时保持 Fast DDS 端点默认底座（现状行为）。
 2. **ROS2 预置底座**（整包切换，8 项全非哨兵）：
    - `DDSQosProfile::ros2DefaultPublisher()`：ROS2 默认底座（KEEP_LAST(10)+RELIABLE+VOLATILE+AUTOMATIC+∞×3）。
    - `DDSQosProfile::ros2DefaultSubscriber()`：KEEP_LAST(10)+BEST_EFFORT+VOLATILE+AUTOMATIC+∞×3；订阅端推荐（BEST_EFFORT requested 对任意 offered 均可匹配）。
@@ -96,7 +96,7 @@ yomkdds topic pub --qos-file qos.json <主题名> <JSON数据>
 - **depth 取值**：须 >=1 整数；keep_all 时被忽略。
 - **lifespan 端点方向**：writer 侧策略，print/hz 订阅端忽略（设置了不生效）。
 - **匹配方向**：QoS 匹配遵循 requested≤offered——`ros2DefaultSubscriber()` 的 BEST_EFFORT requested 对任意 offered 均可匹配；反之 RELIABLE 订阅端收不到 BEST_EFFORT 发布端，不当配置可能静默断链。
-- **哨兵即「未设置」**：未设置项不会覆盖底座；全哨兵等价于不传 qos 尾参（Fast DDS 端点默认底座）。
+- **哨兵即「未设置」**：未设置项不会覆盖底座；全哨兵等价于不累积 qos()（Fast DDS 端点默认底座）。
 - **CLI 多来源取值**：同项被多处设置时按优先级链取值（命令行逐项 > 文件逐项 > `--qos-ros` 底座 > 默认）。
 
 ## 与其他功能的关系

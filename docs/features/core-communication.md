@@ -129,7 +129,7 @@ auto onMessage = [&](const void *data)
 
 ## 参数与约束
 
-### 节点创建（yomk::dds().node().create()）
+### 节点创建（yomk::dds().node(nodeName).create()）
 
 四种形态（形态 3/4 命名沿 README 5.7）：
 
@@ -177,7 +177,7 @@ auto onMessage = [&](const void *data)
 
 - **XML profiles**：`yomk::dds().load_cfg()` 是 participant 级发现/传输/QoS 配置入口，三级提取链与「必须先于建节点」时序约束见 [xml-profiles.md](./xml-profiles.md)。
 - **发现服务器直配**：`yomk::dds().node(nodeName)` 的 udp_ds()/tcp_ds() 累积器（及同名环境变量自动直配）承担发现服务器直配，UDP/TCP 格式、CLIENT 协议、跨域互通见 [discovery-server.md](./discovery-server.md)。
-- **QoS**：主题注册宏的 qos 尾参（`DDSQosProfile` 8 项与 ROS2 预置底座）见 [qos-profiles.md](./qos-profiles.md)。
+- **QoS**：主题注册链的 qos() 累积器（`DDSQosProfile` 8 项与 ROS2 预置底座）见 [qos-profiles.md](./qos-profiles.md)。
 - **Loan 借出零拷贝发布**：链式 `loan()`/`return_loan()` 在本篇的发布链路上提供 plain 类型免序列化路径，见 [loan-zero-copy.md](./loan-zero-copy.md)。
 
 ## 教程链接

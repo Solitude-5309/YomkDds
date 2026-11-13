@@ -119,7 +119,7 @@ int main()
         return 1;
     }
 
-    // 3. 退出前删除节点（判错此处从略，正式代码建议逐宏判断）
+    // 3. 退出前删除节点（判错此处从略，正式代码建议逐端点判断）
     yomk::dds().node("xml_node").remove();
     yomk::dds().node("other_node").remove();
     return 0;

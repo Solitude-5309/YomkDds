@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
 }
 ```
 
-只想要传感器档时，把两端 qos 尾参换成 `DDSQosProfile::ros2SensorData()` 即可（KEEP_LAST(5)+BEST_EFFORT，两端通用）。
+只想要传感器档时，把两端 qos() 累积的 `DDSQosProfile` 实参换成 `DDSQosProfile::ros2SensorData()` 即可（KEEP_LAST(5)+BEST_EFFORT，两端通用）。
 
 ### 第 3 步：8 项 QoS 参数逐项说明
 

@@ -55,7 +55,7 @@ participant 档 XML 片段示例（格式经 Fast DDS XML schema 校验）：
 | `YOMKDDS_USE_XML_PROFILE` | 总开关 | 默认 `false`，`true`/`1` 视为开启（大小写不敏感）；未设置/空/`false`/`0`/其余任意值关闭 |
 | `YOMKDDS_XML_PROFILE_PATH` | profiles 文件路径 | 默认空，相对/绝对均可 |
 
-- 开关开启时 `yomk::dds().load_cfg()` 无参形态经 `DDSXmlLoad` 类内缺省初始化器自动取该路径（显式传参覆盖 env 缺省，语义同 serverLocator 尾参）；
+- 开关开启时 `yomk::dds().load_cfg()` 无参形态经 `DDSXmlLoad` 类内缺省初始化器自动取该路径（显式传参覆盖 env 缺省，语义同 serverLocator 累积器）；
 - 路径空静默不加载（同发现服务器空串=不直配），路径不存在/文件为空/格式非法失败回显不静默降级；
 - 开关关闭时路径变量被忽略恒空（服务端报 `xml path is empty`）；
 - `yomkdds` CLI 与该双环境变量对齐：启动时无则创建默认值并幂等写入 `~/.bashrc`（仅可见性，行为同未设置），且各子命令创建调试/bag 节点前自动加载（开关关闭或路径空行为不变），适合容器/CI 批量注入：

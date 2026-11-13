@@ -80,7 +80,7 @@ yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLo
 ::yomk::server().init();
 ::yomk::server().srv<YomkDdsService>().create();
 
-// 1. 创建节点：域 id 显式 100（DS 模式下可与对端异域）；省略双通道尾参 →
+// 1. 创建节点：域 id 显式 100（DS 模式下可与对端异域）；省略双通道直配 →
 //    直配串自动取环境变量（总开关开启时生效，participant 以 CLIENT 发现协议运行）
 auto resp = yomk::dds().node("ds_pub_node").domain(100).create();
 if (resp.m_status != yomk::payload::ResStatus::Succeeded)
@@ -110,7 +110,7 @@ while (!g_stop.load())
 订阅端关键代码（节选自 `examples/ExampleDiscoverServerSub.cpp`，仅域 id 与主题注册方式不同）：
 
 ```cpp
-// 1. 创建节点：域 id 显式 200（DS 模式下可与对端异域）；省略双通道尾参 → 同上
+// 1. 创建节点：域 id 显式 200（DS 模式下可与对端异域）；省略双通道直配 → 同上
 auto resp = yomk::dds().node("ds_sub_node").domain(200).create();
 
 // 2. 注册订阅主题：type 所有权移交服务端；收到消息时回调 onMessage
@@ -126,9 +126,9 @@ resp = yomk::dds().node("ds_sub_node").topic("ds_hello_world").type(new YomkDdsS
 
 两端主题均为 `ds_hello_world`（MString 类型）；三个终端的运行命令见「预期输出」一节。
 
-### 第 3 步：TCP 直配（显式尾参写法）
+### 第 3 步：TCP 直配（显式直配写法）
 
-不依赖环境变量、在代码里写死直配串时用宏尾参（UDP/TCP 通道格式一致：`"ip[:port]"` 分号分隔多 server，UDP port 缺省 11811，非法串创建失败回显）：
+不依赖环境变量、在代码里写死直配串时用链式累积器或宏尾参（UDP/TCP 通道格式一致：`"ip[:port]"` 分号分隔多 server，UDP port 缺省 11811，非法串创建失败回显）：
 
 ```cpp
 // client 侧：三节点宏尾参直配
@@ -162,7 +162,7 @@ export YOMKDDS_TCP_DISCOVER_SERVERS="127.0.0.1:42100"
 
 ### 第 4 步：环境变量门控方式（进程级直配，无需改代码）
 
-三环境变量控制节点创建时发现服务器直配缺省值（与显式尾参的关系见下表）：
+三环境变量控制节点创建时发现服务器直配缺省值（与显式传值的关系见下表）：
 
 ```bash
 export YOMKDDS_USE_DISCOVER_SERVER=true
@@ -181,9 +181,9 @@ export YOMKDDS_UDP_DISCOVER_SERVERS="192.168.1.10:11811;192.168.1.11:11811"  # T
 
 | 场景 | 行为 |
 |---|---|
-| 尾参显式传值 + 开关开启 | 显式尾参覆盖对应通道 env 缺省（**按通道独立**——仅显式传 UDP 尾参时，TCP 通道缺省仍读 env；需关闭通道直配时显式传空串或保持开关关闭） |
-| 尾参缺省 + 开关开启 | 直配串自动取对应通道环境变量 |
-| 尾参缺省 + 开关关闭 | 两串变量被忽略恒空（=不直配，行为同未设置） |
+| 显式传值 + 开关开启 | 显式传值覆盖对应通道 env 缺省（**按通道独立**——仅显式累积/传入 UDP 通道时，TCP 通道缺省仍读 env；需关闭通道直配时显式传空串或保持开关关闭） |
+| 不显式传值 + 开关开启 | 直配串自动取对应通道环境变量 |
+| 不显式传值 + 开关关闭 | 两串变量被忽略恒空（=不直配，行为同未设置） |
 
 另有一个 ROS2 生态通用的等价环境变量形态：`ROS_DISCOVERY_SERVER=127.0.0.1:11811`（id 即 `-i` 指定的 server 位序）。全部环境变量的作用域与默认值见 [env-vars-reference.md](./env-vars-reference.md)。
 
@@ -192,7 +192,7 @@ export YOMKDDS_UDP_DISCOVER_SERVERS="192.168.1.10:11811;192.168.1.11:11811"  # T
 直配可与 `yomk::dds().load_cfg()` 组合：**XML 打底，直配 server 项覆盖 XML `discoveryServersList`**。操作步骤：
 
 1. 先准备一份 profiles XML 并在代码最前面加载（XML 的发现配置作为打底，编写与加载方法见 [xml-profiles-tutorial.md](./xml-profiles-tutorial.md)；注意 `yomk::dds().load_cfg()` 必须在任何节点创建之前调用）；
-2. 再创建节点并带直配（显式尾参或 env 门控均可），例如：
+2. 再创建节点并带直配（显式累积或 env 门控均可），例如：
 
 ```cpp
 yomk::dds().xml("/path/to/profiles.xml").load_cfg();   // XML 打底
@@ -245,7 +245,7 @@ TCP 场景输出差异：终端 1 横幅中「监听协议」为 `TCP（-t 监�
 | 启动脚本报 `错误: 未找到 fast-discovery-server 工具（YomkServer/Fast DDS 安装产物）` | 按脚本提示设置 `YOMK_PREFIX_PATH` 指向安装路径，或将工具所在 bin 目录加入 PATH |
 | 启动脚本报端口错误 | `--port` 须为 [1,65535] 内整数（脚本回显 `错误: --port 须为 [1,65535] 内整数，当前为 '...'`）；端口被其他进程占用时换一个 `--port` 重启，或结束占用进程 |
 | 启动脚本报 `错误: --type 仅支持 udp 或 tcp，当前为 '...'` | `--type` 只接受 udp 或 tcp，修正后重跑 |
-| 显式尾参与环境变量混用后某通道仍在直配 | 显式尾参覆盖对应通道 env 缺省是按通道独立的：仅显式传 UDP 尾参时，TCP 通道缺省仍读 env——需关闭该通道直配时显式传空串或保持总开关关闭 |
+| 显式直配与环境变量混用后某通道仍在直配 | 显式传值覆盖对应通道 env 缺省是按通道独立的：仅显式累积/传入 UDP 通道时，TCP 通道缺省仍读 env——需关闭该通道直配时显式传空串或保持总开关关闭 |
 | TCP 直配后 UDP/SHM 数据通道异常 | 属误解：TCP 直配项存在时仅自动补注入 TCPv4 传输描述符，与内置 UDPv4/SHM "alongside" 共存，数据通道不受影响 |
 
 ## 延伸阅读

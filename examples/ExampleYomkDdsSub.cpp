@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
         received++;
         ::yomk::log().tag("ExampleYomkDdsSub").info("[RECV] ", msg->data());
     };
-    resp = YOMKDDS_SUB_TOPIC("sub_node", "hello_world", new YomkDdsStd::MStringPubSubType(), onMessage);
+    resp = yomk::dds().node_name("sub_node").topic("hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsSub").error("register sub topic failed: ", resp.msg);

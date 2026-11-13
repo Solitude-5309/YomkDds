@@ -70,7 +70,7 @@ int main(int argc, char* argv[])
         loanReceived++;
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("[RECV] 收到借出消息: ", msg->data());
     };
-    resp = YOMKDDS_SUB_TOPIC("node0", "loan_topic", new YomkDdsStd::MInt32PubSubType(), onLoan);
+    resp = yomk::dds().node_name("node0").topic("loan_topic").type_ptr(new YomkDdsStd::MInt32PubSubType()).sub_cb(onLoan).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("register sub topic failed: ", resp.msg);

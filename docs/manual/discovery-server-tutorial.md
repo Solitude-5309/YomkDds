@@ -121,7 +121,7 @@ auto onMessage = [&](const void* data)
     received++;
     ::yomk::log().tag("ExampleDiscoverServerSub").info("[RECV] ", msg->data());
 };
-resp = YOMKDDS_SUB_TOPIC("ds_sub_node", "ds_hello_world", new YomkDdsStd::MStringPubSubType(), onMessage);
+resp = yomk::dds().node_name("ds_sub_node").topic("ds_hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
 ```
 
 两端主题均为 `ds_hello_world`（MString 类型）；三个终端的运行命令见「预期输出」一节。

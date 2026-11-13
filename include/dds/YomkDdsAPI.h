@@ -61,16 +61,17 @@ public:
 /**
  * @brief Topic registration facet: carries the nodeName/topicName accumulated by
  *        node_name().topic(), required type_ptr() and optional qos() accumulators,
- *        terminated by create_pub()
+ *        terminated by create_pub() (publisher) or sub_cb()...create_sub() (subscriber)
  */
 // @zh: 主题注册分面：承载 node_name().topic() 累积的节点名/主题名，type_ptr() 必填与
-// @zh: qos() 可选累积器，create_pub() 终结
+// @zh: qos() 可选累积器，create_pub()（发布）或 sub_cb()...create_sub()（订阅）终结
 class DdsTopicBuilder
 {
     std::string m_nodeName;
     std::string m_topicName;
     void* m_type = nullptr;
     yomk::payload::DDSQosProfile m_qos;
+    yomk::payload::DDSCallbackFunc m_callback;
 public:
     DdsTopicBuilder(std::string nodeName, std::string topicName)
         : m_nodeName(std::move(nodeName)), m_topicName(std::move(topicName))
@@ -122,6 +123,43 @@ public:
         return yomk::server().url(yomk::url::ddsRegisterPubTopic)
             .msg(yomk::msgs::DDSTopic::shared(
                 yomk::payload::DDSTopic{std::move(m_nodeName), std::move(m_topicName), m_type, std::move(m_qos)}))
+            .request();
+    }
+    /**
+     * @brief Accumulate the subscriber callback
+     * @param[in] callback Invoked once per received message; the sample pointer
+     *            is only valid during the callback
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积订阅回调
+    // @zh: callback 每收到一条消息调用一次；消息实例指针仅回调期间有效
+    // @zh: return 自身链式引用
+    DdsTopicBuilder& sub_cb(yomk::payload::DDSCallbackFunc callback)
+    {
+        m_callback = std::move(callback);
+        return *this;
+    }
+    /**
+     * @brief Register a subscriber topic on the node (request terminator)
+     * @return Response; success requires status == Succeeded, failure details in msg
+     * @note sub_cb() is required — registering without a callback fails
+     */
+    // @zh: 在节点上注册订阅主题（请求终结）
+    // @zh: return Response，成功判定 status == Succeeded，失败原因读 msg
+    // @zh: note sub_cb() 必填——未累积回调的注册返回错误
+    yomk::payload::Response create_sub()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        if (!m_callback)
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "sub_cb() callback is required");
+        }
+        return yomk::server().url(yomk::url::ddsRegisterSubTopic)
+            .msg(yomk::msgs::DDSSubRequest::shared(
+                yomk::payload::DDSSubRequest{std::move(m_nodeName), std::move(m_topicName), m_type, std::move(m_callback), std::move(m_qos)}))
             .request();
     }
 };
@@ -185,11 +223,11 @@ public:
     /**
      * @brief Switch into the topic registration facet with the topic name
      * @param[in] topicName Topic name to register on this node
-     * @return Topic registration facet, terminated by create_pub()
+     * @return Topic registration facet, terminated by create_pub() or create_sub()
      */
     // @zh: 切入主题注册分面并累积主题名
     // @zh: topicName 本节点待注册的主题名
-    // @zh: return 主题注册分面，经 create_pub() 终结
+    // @zh: return 主题注册分面，经 create_pub() 或 create_sub() 终结
     DdsTopicBuilder topic(std::string topicName)
     {
         return DdsTopicBuilder(m_nodeName, std::move(topicName));  // 拷贝节点名：node_name 分面其后仍可 create()
@@ -325,23 +363,6 @@ inline detail::DdsBuilder dds()
 // @zh: 核心通信宏（YomkDdsService 端点）
 // @zh: 除 YOMKDDS_LOAN（借出指针经出参）外均返回 yomk::payload::Response，成功判定
 // @zh: status == Succeeded，失败原因读 msg；完整约束见 docs/features/core-communication.md
-
-/**
- * @brief Register a subscriber topic on a node
- * @param[in] type Same ownership transfer as YOMKDDS_PUB_TOPIC
- * @param[in] callback Invoked once per received message; the sample pointer is
- *            only valid during the callback
- * @param[in] ... qos variadic tail: DDSQosProfile::ros2DefaultSubscriber() recommended for ROS2
- */
-// @zh: 在节点上注册订阅主题
-// @zh: type 所有权语义同 YOMKDDS_PUB_TOPIC
-// @zh: callback 每收到一条消息调用一次；消息实例指针仅回调期间有效
-// @zh: qos 可缺省尾参；ROS2 推荐 DDSQosProfile::ros2DefaultSubscriber()
-
-#define YOMKDDS_SUB_TOPIC(nodeName, topicName, type, callback, ...) \
-    ::yomk::server().url(\
-        ::yomk::url::ddsRegisterSubTopic).msg(\
-        ::yomk::msgs::DDSSubRequest::shared(yomk::payload::DDSSubRequest{nodeName, topicName, type, callback, ##__VA_ARGS__})).request()
 
 /**
  * @brief Publish one message on a registered publisher topic

@@ -20,7 +20,7 @@
 
 ### 第 1 步：订阅回调与数据消费
 
-`YOMKDDS_SUB_TOPIC` 注册的回调签名为 `std::function<void(const void *data)>`，每次收到消息时被调用：
+订阅链 `sub_cb(callback)` 注册的回调签名为 `std::function<void(const void *data)>`，每次收到消息时被调用：
 
 - **转型读取**：`data` 是交付的消息实例指针，`static_cast<const 你的消息类型 *>(data)` 后即可读取字段（如 `msg->data()`）；
 - **生命周期**：`data` 仅在回调执行期间有效，须在回调内同步消费（读取或拷贝到自有存储），**不要**跨回调持有该指针（回调返回后即失效）；
@@ -68,7 +68,7 @@ auto onMessage = [&](const void *data)
 
 ```cpp
 yomk::dds().node_name("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
-YOMKDDS_SUB_TOPIC("node0", "my_topic", new YomkDdsStd::MStringPubSubType(), onMessage);
+yomk::dds().node_name("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
 ```
 
 两端主题类型必须一致（同一 PubSubType 生成的类型）才能匹配收发。
@@ -118,8 +118,8 @@ int main(int argc, char *argv[])
         recvB++;
         ::yomk::log().tag("MultiTopicExample").info("[RECV B] ", msg->data());
     };
-    YOMKDDS_SUB_TOPIC("node_sub", "topic_a", new YomkDdsStd::MStringPubSubType(), onA);
-    YOMKDDS_SUB_TOPIC("node_sub", "topic_b", new YomkDdsStd::MInt32PubSubType(), onB);
+    yomk::dds().node_name("node_sub").topic("topic_a").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onA).create_sub();
+    yomk::dds().node_name("node_sub").topic("topic_b").type_ptr(new YomkDdsStd::MInt32PubSubType()).sub_cb(onB).create_sub();
 
     // 4. 等待 DDS discovery 完成后，两个主题各自循环发布
     std::this_thread::sleep_for(std::chrono::seconds(1));

@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
         received++;
         ::yomk::log().tag("PubSubExample").info("[RECV] ", msg->data());
     };
-    YOMKDDS_SUB_TOPIC("node0", "my_topic", new YomkDdsStd::MStringPubSubType(), onMessage);
+    yomk::dds().node_name("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
 
     // 5. 等待 DDS discovery 完成后发布数据
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -115,8 +115,8 @@ int main(int argc, char *argv[])
 | `::yomk::server().init()` + `::yomk::server().srv<YomkDdsService>().create()` | 初始化 YomkServer 框架并启动 YomkDds 服务（`yomk/server/YomkServerApi.h` 提供）；每个使用 YomkDds 宏 API 的程序开头都需要 |
 | `yomk::dds().version()` | 版本查询，返回 Response 携带 String 版本串，解包/打印由调用方处理 |
 | `yomk::dds().node_name("node0").create()` | 创建节点，每节点一个独立 DDS 参与者；domainId 缺省取环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0，合法范围 [0,232]） |
-| `yomk::dds().node_name(...).topic(...).type_ptr(...).create_pub()` / `YOMKDDS_SUB_TOPIC(...)` | 在节点上注册发布/订阅主题；type_ptr() 实参为 `new XxxPubSubType()`，**所有权移交服务端，调用后 caller 不再持有/释放** |
-| `YOMKDDS_SUB_TOPIC` 的 `onMessage` | 回调签名 `std::function<void(const void *data)>`，收到消息时被调用；`data` 是交付的消息实例指针，回调中转型使用（详见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)） |
+| `yomk::dds().node_name(...).topic(...).type_ptr(...).create_pub() / ...create_sub()` | 在节点上注册发布/订阅主题；type_ptr() 实参为 `new XxxPubSubType()`，**所有权移交服务端，调用后 caller 不再持有/释放** |
+| 链式 `sub_cb(onMessage)` 回调 | 回调签名 `std::function<void(const void *data)>`，收到消息时被调用；`data` 是交付的消息实例指针，回调中转型使用（详见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)） |
 | `sleep_for(seconds(1))` 后再发布 | **discovery 时序**：DDS 参与者互相发现需要时间，发布前等待 discovery 完成；首条消息可能因 discovery 时序丢失 |
 | `YOMKDDS_PUB_MSG("node0", "my_topic", &msg)` | 发布数据；data 为数据实例指针（借用，同步写入，caller 保留所有权） |
 | `YOMKDDS_DEL_NODE("node0")` | 退出前删除节点，显式销毁 DDS 实体 |

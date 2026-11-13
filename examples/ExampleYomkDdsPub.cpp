@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
     }
 
     // 2. 注册发布主题：type 所有权移交服务端，new 后无需自行 delete
-    resp = YOMKDDS_PUB_TOPIC("pub_node", "hello_world", new YomkDdsStd::MStringPubSubType());
+    resp = yomk::dds().node_name("pub_node").topic("hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsPub").error("register pub topic failed: ", resp.msg);

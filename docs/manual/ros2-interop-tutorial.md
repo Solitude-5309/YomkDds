@@ -58,8 +58,7 @@ if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 auto *type = new YomkDdsStd::MStringPubSubType();
 type->set_name("std_msgs::msg::dds_::String_");
 // QoS 用 ROS2 发布端默认底座：RELIABLE offered 对 ros2 topic echo 任意 requested 可匹配
-resp = YOMKDDS_PUB_TOPIC("interop_pub", "rt/chatter_interop", type,
-                         DDSQosProfile::ros2DefaultPublisher());
+resp = yomk::dds().node_name("interop_pub").topic("rt/chatter_interop").type_ptr(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
 if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 {
     ::yomk::log().tag("ExampleRos2InteropPub").error("register pub topic failed: ", resp.m_msg);

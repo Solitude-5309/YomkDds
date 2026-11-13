@@ -13,7 +13,7 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 | 版本查询 | `yomk::dds().version()` | `/YomkDdsService/version` | 返回 Response 携带 String 版本串（"YomkDds v<版本号>"），解包/打印由调用方处理 |
 | 创建节点 | `yomk::dds().node_name(nodeName)[.domain_id(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | `/YomkDdsService/create_node` | 每节点一个独立 DDS 参与者 |
 | 删除节点 | `YOMKDDS_DEL_NODE(nodeName)` | `/YomkDdsService/delete_node` | 销毁节点及其全部 DDS 实体，不存在的节点返回错误 |
-| 注册发布主题 | `YOMKDDS_PUB_TOPIC(nodeName, topicName, type[, qos])` | `/YomkDdsService/register_pub_topic` | type 为 `new XxxPubSubType()`，所有权移交服务端 |
+| 注册发布主题 | `yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()` | `/YomkDdsService/register_pub_topic` | type 为 `new XxxPubSubType()`，所有权移交服务端 |
 | 注册订阅主题 | `YOMKDDS_SUB_TOPIC(nodeName, topicName, type, callback[, qos])` | `/YomkDdsService/register_sub_topic` | callback 收到消息时回调，接收缓冲 data 由内部自动创建 |
 | 发布数据 | `YOMKDDS_PUB_MSG(nodeName, topicName, data)` | `/YomkDdsService/publish` | data 为数据实例指针（借用，同步写入，caller 保留所有权） |
 | 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | `/YomkDdsService/load_xml` | participant 级配置入口，详见 [xml-profiles.md](./xml-profiles.md) |
@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
     yomk::dds().node_name("node0").create();
 
     // 3. 注册发布主题（type 所有权移交 FastDDSNode）
-    YOMKDDS_PUB_TOPIC("node0", "my_topic", new YomkDdsStd::MStringPubSubType());
+    yomk::dds().node_name("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
 
     // 4. 注册订阅主题（data 由内部 create_data() 创建，回调中转型使用）
     std::atomic<int> received{0};
@@ -145,11 +145,11 @@ auto onMessage = [&](const void *data)
 - **每节点一个独立 DDS 参与者**。
 - **udpDiscoverServerLocator / tcpDiscoverServerLocator 可缺省尾参**：缺省时经类内缺省初始化器读环境变量自动直配——总开关 `YOMKDDS_USE_DISCOVER_SERVER` 为 true/1（大小写不敏感）时分别取 `YOMKDDS_UDP_DISCOVER_SERVERS`/`YOMKDDS_TCP_DISCOVER_SERVERS`，开关关闭时两串变量被忽略恒空（=不直配）。显式直配聚合串格式为分号分隔 `ip[:port]` 多 server（port 缺省 11811、合法范围 [1,65535]，非法串创建失败回显）；直配后 participant 以 CLIENT 发现协议运行（禁用多播 PDP，发现流量单播直送 server）；TCP 通道 port 为 server 的 TCP 监听口，非空时 participant 自动补注入 TCPv4 传输（与内置 UDPv4/SHM 共存，数据通道不受影响）。直配语义、跨域互通与环境变量门控详见 [discovery-server.md](./discovery-server.md)。
 
-### 主题注册（YOMKDDS_PUB_TOPIC / YOMKDDS_SUB_TOPIC）
+### 主题注册（create_pub 链式 / YOMKDDS_SUB_TOPIC 宏）
 
 - **type** 为 `new XxxPubSubType()`，所有权移交服务端（调用后 caller 不再持有/释放）。
 - **callback**（仅订阅）收到消息时回调，接收缓冲 data 由内部自动创建。
-- **qos 可缺省尾参**：端点 QoS 描述 `DDSQosProfile`（8 项 history/depth/reliability/durability/liveliness/deadline/lifespan/liveliness lease 可独立设置，未设置项为哨兵保持底座值）；缺省（全哨兵）=Fast DDS 端点默认底座（现状行为）；订阅端推荐 `DDSQosProfile::ros2DefaultSubscriber()`（BEST_EFFORT requested 对任意 offered 均可匹配）。完整语义与底座清单见 [qos-profiles.md](./qos-profiles.md)。
+- **qos**：端点 QoS 描述 `DDSQosProfile`（8 项 history/depth/reliability/durability/liveliness/deadline/lifespan/liveliness lease 可独立设置，未设置项为哨兵保持底座值）；发布端为链式 `qos()` 累积器（缺省全哨兵 =Fast DDS 端点默认底座），订阅端为 `YOMKDDS_SUB_TOPIC` 可缺省尾参；订阅端推荐 `DDSQosProfile::ros2DefaultSubscriber()`（BEST_EFFORT requested 对任意 offered 均可匹配）。完整语义与底座清单见 [qos-profiles.md](./qos-profiles.md)。
 
 ### 发布（YOMKDDS_PUB_MSG）
 

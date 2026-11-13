@@ -13,7 +13,7 @@
 ## 前提与准备
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成安装，并跑通 [quick-start.md](./quick-start.md)；
-- 知道注册宏的可缺省尾参：`YOMKDDS_PUB_TOPIC(nodeName, topicName, type[, qos])` 与 `YOMKDDS_SUB_TOPIC(nodeName, topicName, type, callback[, qos])` 的 `qos` 为端点 QoS 描述 `DDSQosProfile`（定义于 `include/dds/YomkDdsService.h`，头文件已随 `yomk/dds/YomkDdsAPI.h` 引入）。
+- 知道注册宏的可缺省尾参：`yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()` 与 `YOMKDDS_SUB_TOPIC(nodeName, topicName, type, callback[, qos])` 的 `qos` 为端点 QoS 描述 `DDSQosProfile`（定义于 `include/dds/YomkDdsService.h`，头文件已随 `yomk/dds/YomkDdsAPI.h` 引入）。
 
 ## 分步操作
 
@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
     // 4. 注册发布主题：ROS2 默认发布底座上逐项覆盖（如只设 depth=10）
     DDSQosProfile pubQos = DDSQosProfile::ros2DefaultPublisher();
     pubQos.depth = 10;
-    YOMKDDS_PUB_TOPIC("qos_node", "qos_topic", new YomkDdsStd::MStringPubSubType(), pubQos);
+    yomk::dds().node_name("qos_node").topic("qos_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).qos(pubQos).create_pub();
 
     // 5. 等待 DDS discovery 完成后发布
     std::this_thread::sleep_for(std::chrono::seconds(1));

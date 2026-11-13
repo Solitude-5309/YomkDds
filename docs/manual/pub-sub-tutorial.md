@@ -67,7 +67,7 @@ auto onMessage = [&](const void *data)
 注册主题时成对使用：
 
 ```cpp
-YOMKDDS_PUB_TOPIC("node0", "my_topic", new YomkDdsStd::MStringPubSubType());
+yomk::dds().node_name("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
 YOMKDDS_SUB_TOPIC("node0", "my_topic", new YomkDdsStd::MStringPubSubType(), onMessage);
 ```
 
@@ -101,8 +101,8 @@ int main(int argc, char *argv[])
     yomk::dds().node_name("node_sub").create();
 
     // 3. 在同一节点上注册多个主题；发布/订阅也可分属不同节点
-    YOMKDDS_PUB_TOPIC("node_pub", "topic_a", new YomkDdsStd::MStringPubSubType());
-    YOMKDDS_PUB_TOPIC("node_pub", "topic_b", new YomkDdsStd::MInt32PubSubType());
+    yomk::dds().node_name("node_pub").topic("topic_a").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
+    yomk::dds().node_name("node_pub").topic("topic_b").type_ptr(new YomkDdsStd::MInt32PubSubType()).create_pub();
 
     std::atomic<int> recvA{0};
     std::atomic<int> recvB{0};

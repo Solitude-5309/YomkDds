@@ -59,6 +59,74 @@ public:
 };
 
 /**
+ * @brief Topic registration facet: carries the nodeName/topicName accumulated by
+ *        node_name().topic(), required type_ptr() and optional qos() accumulators,
+ *        terminated by create_pub()
+ */
+// @zh: 主题注册分面：承载 node_name().topic() 累积的节点名/主题名，type_ptr() 必填与
+// @zh: qos() 可选累积器，create_pub() 终结
+class DdsTopicBuilder
+{
+    std::string m_nodeName;
+    std::string m_topicName;
+    void* m_type = nullptr;
+    yomk::payload::DDSQosProfile m_qos;
+public:
+    DdsTopicBuilder(std::string nodeName, std::string topicName)
+        : m_nodeName(std::move(nodeName)), m_topicName(std::move(topicName))
+    {
+    }
+    /**
+     * @brief Accumulate the message type instance
+     * @param[in] type Message type instance (new XxxPubSubType())
+     * @return Reference to self for chaining
+     * @warning Ownership of type is transferred to the service; do not hold or
+     *          free it afterwards regardless of the result
+     */
+    // @zh: 累积消息类型实例
+    // @zh: type 消息类型实例（new XxxPubSubType()）
+    // @zh: return 自身链式引用
+    // @zh: warning type 所有权移交服务端，无论成败调用后 caller 不再持有/释放
+    DdsTopicBuilder& type_ptr(void* type)
+    {
+        m_type = type;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the endpoint QoS description
+     * @param[in] qos Endpoint QoS description DDSQosProfile; all-sentinel default
+     *            keeps the Fast DDS base, DDSQosProfile::ros2DefaultPublisher() for ROS2
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积端点 QoS 描述
+    // @zh: qos 端点 QoS 描述 DDSQosProfile；全哨兵=Fast DDS 默认底座，ROS2 用
+    // @zh: DDSQosProfile::ros2DefaultPublisher()
+    // @zh: return 自身链式引用
+    DdsTopicBuilder& qos(yomk::payload::DDSQosProfile qos)
+    {
+        m_qos = std::move(qos);
+        return *this;
+    }
+    /**
+     * @brief Register a publisher topic on the node (request terminator)
+     * @return Response; success requires status == Succeeded, failure details in msg
+     */
+    // @zh: 在节点上注册发布主题（请求终结）
+    // @zh: return Response，成功判定 status == Succeeded，失败原因读 msg
+    yomk::payload::Response create_pub()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsRegisterPubTopic)
+            .msg(yomk::msgs::DDSTopic::shared(
+                yomk::payload::DDSTopic{std::move(m_nodeName), std::move(m_topicName), m_type, std::move(m_qos)}))
+            .request();
+    }
+};
+
+/**
  * @brief Node creation facet: carries the nodeName accumulated by dds().node_name(),
  *        optional domain_id()/udp_ds()/tcp_ds() accumulators (order-free), terminated by create()
  */
@@ -114,6 +182,19 @@ public:
         m_tcpDiscoverServerLocator = std::move(locator);
         return *this;
     }
+    /**
+     * @brief Switch into the topic registration facet with the topic name
+     * @param[in] topicName Topic name to register on this node
+     * @return Topic registration facet, terminated by create_pub()
+     */
+    // @zh: 切入主题注册分面并累积主题名
+    // @zh: topicName 本节点待注册的主题名
+    // @zh: return 主题注册分面，经 create_pub() 终结
+    DdsTopicBuilder topic(std::string topicName)
+    {
+        return DdsTopicBuilder(m_nodeName, std::move(topicName));  // 拷贝节点名：node_name 分面其后仍可 create()
+    }
+
     /**
      * @brief Create the DDS node, one dedicated DDS participant per node (request terminator)
      * @return Response; invalid locator input fails with the reason echoed back
@@ -244,23 +325,6 @@ inline detail::DdsBuilder dds()
 // @zh: 核心通信宏（YomkDdsService 端点）
 // @zh: 除 YOMKDDS_LOAN（借出指针经出参）外均返回 yomk::payload::Response，成功判定
 // @zh: status == Succeeded，失败原因读 msg；完整约束见 docs/features/core-communication.md
-
-/**
- * @brief Register a publisher topic on a node
- * @param[in] type Message type instance (new XxxPubSubType())
- * @param[in] ... qos variadic tail: DDSQosProfile; all-sentinel default keeps
- *            the Fast DDS base, DDSQosProfile::ros2DefaultPublisher() for ROS2
- * @warning Ownership of type is transferred to the service; do not hold or
- *          free it afterwards regardless of the result
- */
-// @zh: 在节点上注册发布主题
-// @zh: type 消息类型实例（new XxxPubSubType()）
-// @zh: qos 可缺省尾参：端点 QoS 描述 DDSQosProfile；全哨兵=Fast DDS 默认底座，ROS2 用
-// @zh: DDSQosProfile::ros2DefaultPublisher()
-// @zh: warning type 所有权移交服务端，无论成败调用后 caller 不再持有/释放
-
-#define YOMKDDS_PUB_TOPIC(nodeName, topicName, type, ...) \
-    ::yomk::server().url(::yomk::url::ddsRegisterPubTopic).msg(::yomk::msgs::DDSTopic::shared(yomk::payload::DDSTopic{nodeName, topicName, type, ##__VA_ARGS__})).request()
 
 /**
  * @brief Register a subscriber topic on a node

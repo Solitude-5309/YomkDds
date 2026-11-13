@@ -46,7 +46,7 @@ flowchart LR
 | 核心通信 | 版本查询 | `yomk::dds().version()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg()` | — | [xml-profiles.md](./xml-profiles.md) |
 | 核心通信 | 创建/删除节点 | `yomk::dds().node_name(nodeName).create()` / `YOMKDDS_DEL_NODE()` | — | [core-communication.md](./core-communication.md) |
-| 核心通信 | 注册发布/订阅主题 | `YOMKDDS_PUB_TOPIC()` / `YOMKDDS_SUB_TOPIC()` | — | [core-communication.md](./core-communication.md) |
+| 核心通信 | 注册发布/订阅主题 | `yomk::dds().node_name(...).topic(...).type_ptr(...).create_pub()` / `YOMKDDS_SUB_TOPIC()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | 发布消息 | `YOMKDDS_PUB_MSG()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | Loan 借出零拷贝发布 | `YOMKDDS_LOAN()` / `YOMKDDS_DISCARD_LOAN()` | — | [loan-zero-copy.md](./loan-zero-copy.md) |
 | QoS | 端点 QoS 描述（8 项 + ROS2 底座） | `DDSQosProfile`（qos 尾参） | `--qos-ros` / `--qos-*` / `--qos-file` | [qos-profiles.md](./qos-profiles.md) |

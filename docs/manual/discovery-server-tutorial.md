@@ -90,7 +90,7 @@ if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 }
 
 // 2. 注册发布主题：type 所有权移交服务端，new 后无需自行 delete
-resp = YOMKDDS_PUB_TOPIC("ds_pub_node", "ds_hello_world", new YomkDdsStd::MStringPubSubType());
+resp = yomk::dds().node_name("ds_pub_node").topic("ds_hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
 ```
 
 发布主循环（每 1s 发布一次直到 Ctrl+C；`YOMKDDS_PUB_MSG` 失败计数）：

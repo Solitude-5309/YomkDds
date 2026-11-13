@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
 
     // 2. 注册发布主题（type 所有权移交 FastDDSNode）
     ::yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsService::registerPubTopic ===");
-    resp = YOMKDDS_PUB_TOPIC("node0", "dds_demo_topic", new YomkDdsStd::MStringPubSubType());
+    resp = yomk::dds().node_name("node0").topic("dds_demo_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopic").error("register pub topic failed: ", resp.msg);

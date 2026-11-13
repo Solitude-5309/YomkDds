@@ -29,7 +29,7 @@
  * 固定 epoch 纳秒时间戳便于断言。用例目录避开 bag_ 前缀（防泄漏快照误报惯例），
  * 结束统一清理。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
@@ -144,44 +144,44 @@ int main()
     {
         const std::string dir = "reindex_r1";
         cleanupDir(dir);
-        CHECK(std::filesystem::create_directory(dir), "R1 前置：临时目录创建成功");
-        CHECK(makeMcapFile(dir + "/bag_0.mcap", "/rt/a", 3, kSecondNs, kSecondNs, false,
+        check(std::filesystem::create_directory(dir), "R1 前置：临时目录创建成功");
+        check(makeMcapFile(dir + "/bag_0.mcap", "/rt/a", 3, kSecondNs, kSecondNs, false,
                            "YomkDdsStd::MString", "RELIABLE,VOLATILE"),
               "R1 前置：单分片 3 条消息（Channel.metadata 带类型名+qos）");
         std::string error;
-        CHECK(FastDDSBagNode::bagReindex(dir, &error), "R1 bagReindex → true");
-        CHECK(error.empty(), "R1 成功路径 error 为空");
+        check(FastDDSBagNode::bagReindex(dir, &error), "R1 bagReindex → true");
+        check(error.empty(), "R1 成功路径 error 为空");
         nlohmann::json info;
-        CHECK(readMetadataJson(dir, info), "R1 产物 metadata.json 可解析");
-        CHECK(info.at("version").get<int>() == 1, "R1 version = 1");
-        CHECK(info.at("storage_identifier").get<std::string>() == "mcap", "R1 storage = mcap");
+        check(readMetadataJson(dir, info), "R1 产物 metadata.json 可解析");
+        check(info.at("version").get<int>() == 1, "R1 version = 1");
+        check(info.at("storage_identifier").get<std::string>() == "mcap", "R1 storage = mcap");
         const auto files = info.at("relative_file_paths").get<std::vector<std::string>>();
-        CHECK(files.size() == 1 && files[0] == "bag_0.mcap", "R1 relative_file_paths = [bag_0.mcap]");
-        CHECK(info.at("starting_time").at("nanoseconds_since_epoch").get<std::uint64_t>() ==
+        check(files.size() == 1 && files[0] == "bag_0.mcap", "R1 relative_file_paths = [bag_0.mcap]");
+        check(info.at("starting_time").at("nanoseconds_since_epoch").get<std::uint64_t>() ==
                   kSecondNs,
               "R1 starting_time ns = 1s");
-        CHECK(info.at("starting_time").at("nanoseconds_since_epoch_format").get<std::string>() ==
+        check(info.at("starting_time").at("nanoseconds_since_epoch_format").get<std::string>() ==
                   "1970-01-01_00-00-01_000-000-000",
               "R1 starting_time _format（UTC 可读伴生键）");
-        CHECK(info.at("duration").at("nanoseconds").get<std::uint64_t>() == 2 * kSecondNs,
+        check(info.at("duration").at("nanoseconds").get<std::uint64_t>() == 2 * kSecondNs,
               "R1 duration ns = 2s（全局跨度 3s-1s）");
-        CHECK(info.at("duration").at("nanoseconds_format").get<std::string>() ==
+        check(info.at("duration").at("nanoseconds_format").get<std::string>() ==
                   "00-00-02_000-000-000",
               "R1 duration _format（可读伴生键）");
-        CHECK(info.at("message_count").get<std::uint64_t>() == 3, "R1 message_count = 3");
+        check(info.at("message_count").get<std::uint64_t>() == 3, "R1 message_count = 3");
         const auto &topics = info.at("topics_with_message_count");
-        CHECK(topics.is_array() && topics.size() == 1, "R1 topics 数组单元素");
+        check(topics.is_array() && topics.size() == 1, "R1 topics 数组单元素");
         if (topics.size() == 1)
         {
-            CHECK(topics[0].at("topic_metadata").at("name").get<std::string>() == "/rt/a",
+            check(topics[0].at("topic_metadata").at("name").get<std::string>() == "/rt/a",
                   "R1 topic name = /rt/a");
-            CHECK(topics[0].at("topic_metadata").at("type").get<std::string>() ==
+            check(topics[0].at("topic_metadata").at("type").get<std::string>() ==
                       "YomkDdsStd::MString",
                   "R1 topic type 经 Channel.metadata 恢复");
-            CHECK(topics[0].at("topic_metadata").at("qos").get<std::string>() ==
+            check(topics[0].at("topic_metadata").at("qos").get<std::string>() ==
                       "RELIABLE,VOLATILE",
                   "R1 topic qos 经 Channel.metadata 恢复（mcap → metadata.json 恢复链）");
-            CHECK(topics[0].at("message_count").get<std::uint64_t>() == 3, "R1 topic count = 3");
+            check(topics[0].at("message_count").get<std::uint64_t>() == 3, "R1 topic count = 3");
         }
         cleanupDir(dir);
     }
@@ -190,49 +190,49 @@ int main()
     {
         const std::string dir = "reindex_r2";
         cleanupDir(dir);
-        CHECK(std::filesystem::create_directory(dir), "R2 前置：临时目录创建成功");
-        CHECK(makeMcapFile(dir + "/bag_0.mcap", "/rt/a", 2, kSecondNs, 2 * kSecondNs, false,
+        check(std::filesystem::create_directory(dir), "R2 前置：临时目录创建成功");
+        check(makeMcapFile(dir + "/bag_0.mcap", "/rt/a", 2, kSecondNs, 2 * kSecondNs, false,
                            "YomkDdsStd::MString"),
               "R2 前置：bag_0（/rt/a 2 条 @1s,3s）造文件成功");
-        CHECK(makeMcapFile(dir + "/bag_1.mcap", "/rt/b", 1, 2 * kSecondNs, kSecondNs, false,
+        check(makeMcapFile(dir + "/bag_1.mcap", "/rt/b", 1, 2 * kSecondNs, kSecondNs, false,
                            "YomkDdsStd::MString"),
               "R2 前置：bag_1（/rt/b 1 条 @2s）造文件成功");
-        CHECK(makeMcapFile(dir + "/bag_2.mcap", "/rt/c", 0, kSecondNs, kSecondNs, false,
+        check(makeMcapFile(dir + "/bag_2.mcap", "/rt/c", 0, kSecondNs, kSecondNs, false,
                            "YomkDdsStd::MString"),
               "R2 前置：bag_2（/rt/c 空 channel 无消息）造文件成功");
-        CHECK(makeMcapFile(dir + "/bag_10.mcap", "/rt/a", 1, 10 * kSecondNs, kSecondNs, false,
+        check(makeMcapFile(dir + "/bag_10.mcap", "/rt/a", 1, 10 * kSecondNs, kSecondNs, false,
                            "YomkDdsStd::MString"),
               "R2 前置：bag_10（/rt/a 1 条 @10s）造文件成功");
-        CHECK(FastDDSBagNode::bagReindex(dir, nullptr), "R2 bagReindex → true（error 出参可空）");
+        check(FastDDSBagNode::bagReindex(dir, nullptr), "R2 bagReindex → true（error 出参可空）");
         nlohmann::json info;
-        CHECK(readMetadataJson(dir, info), "R2 产物 metadata.json 可解析");
+        check(readMetadataJson(dir, info), "R2 产物 metadata.json 可解析");
         const auto files = info.at("relative_file_paths").get<std::vector<std::string>>();
-        CHECK(files.size() == 4 && files[0] == "bag_0.mcap" && files[1] == "bag_1.mcap" &&
+        check(files.size() == 4 && files[0] == "bag_0.mcap" && files[1] == "bag_1.mcap" &&
                   files[2] == "bag_2.mcap" && files[3] == "bag_10.mcap",
               "R2 编号序收集（bag_10 排 bag_2 之后，非字典序）");
-        CHECK(info.at("starting_time").at("nanoseconds_since_epoch").get<std::uint64_t>() ==
+        check(info.at("starting_time").at("nanoseconds_since_epoch").get<std::uint64_t>() ==
                   kSecondNs,
               "R2 starting = min（1s，跨分片取最小）");
-        CHECK(info.at("duration").at("nanoseconds").get<std::uint64_t>() == 9 * kSecondNs,
+        check(info.at("duration").at("nanoseconds").get<std::uint64_t>() == 9 * kSecondNs,
               "R2 duration = 全局跨度（10s-1s=9s）");
-        CHECK(info.at("duration").at("nanoseconds_format").get<std::string>() ==
+        check(info.at("duration").at("nanoseconds_format").get<std::string>() ==
                   "00-00-09_000-000-000",
               "R2 duration _format");
-        CHECK(info.at("message_count").get<std::uint64_t>() == 4, "R2 message_count = 4（合并）");
+        check(info.at("message_count").get<std::uint64_t>() == 4, "R2 message_count = 4（合并）");
         const auto &topics = info.at("topics_with_message_count");
-        CHECK(topics.is_array() && topics.size() == 2, "R2 topics 两项（主题名升序）");
+        check(topics.is_array() && topics.size() == 2, "R2 topics 两项（主题名升序）");
         if (topics.size() == 2)
         {
-            CHECK(topics[0].at("topic_metadata").at("name").get<std::string>() == "/rt/a" &&
+            check(topics[0].at("topic_metadata").at("name").get<std::string>() == "/rt/a" &&
                       topics[0].at("message_count").get<std::uint64_t>() == 3,
                   "R2 /rt/a count = 3（2+1 跨分片合并，升序首位）");
-            CHECK(topics[0].at("topic_metadata").at("type").get<std::string>() ==
+            check(topics[0].at("topic_metadata").at("type").get<std::string>() ==
                       "YomkDdsStd::MString",
                   "R2 /rt/a type 恢复（跨分片同 Channel.metadata）");
-            CHECK(topics[1].at("topic_metadata").at("name").get<std::string>() == "/rt/b" &&
+            check(topics[1].at("topic_metadata").at("name").get<std::string>() == "/rt/b" &&
                       topics[1].at("message_count").get<std::uint64_t>() == 1,
                   "R2 /rt/b count = 1");
-            CHECK(topics[1].at("topic_metadata").at("type").get<std::string>() ==
+            check(topics[1].at("topic_metadata").at("type").get<std::string>() ==
                       "YomkDdsStd::MString",
                   "R2 /rt/b type 恢复");
         }
@@ -243,20 +243,20 @@ int main()
     {
         const std::string dir = "reindex_r3";
         cleanupDir(dir);
-        CHECK(std::filesystem::create_directory(dir), "R3 前置：临时目录创建成功");
-        CHECK(makeMcapFile(dir + "/bag_0.mcap", "/rt/a", 2, 5 * kSecondNs, kSecondNs, false,
+        check(std::filesystem::create_directory(dir), "R3 前置：临时目录创建成功");
+        check(makeMcapFile(dir + "/bag_0.mcap", "/rt/a", 2, 5 * kSecondNs, kSecondNs, false,
                            "YomkDdsStd::MString"),
               "R3 前置：单分片 2 条消息（@5s,6s）造文件成功");
         {
             std::ofstream broken(dir + "/metadata.json");
             broken << "{ not valid json";
         }
-        CHECK(FastDDSBagNode::bagReindex(dir, nullptr), "R3 损坏 metadata 覆盖重建 → true");
+        check(FastDDSBagNode::bagReindex(dir, nullptr), "R3 损坏 metadata 覆盖重建 → true");
         nlohmann::json info;
-        CHECK(readMetadataJson(dir, info), "R3 重建产物为合法 JSON（覆盖成功）");
-        CHECK(info.at("message_count").get<std::uint64_t>() == 2, "R3 message_count = 2");
+        check(readMetadataJson(dir, info), "R3 重建产物为合法 JSON（覆盖成功）");
+        check(info.at("message_count").get<std::uint64_t>() == 2, "R3 message_count = 2");
         const auto &r3Topics = info.at("topics_with_message_count");
-        CHECK(r3Topics.is_array() && r3Topics.size() == 1 &&
+        check(r3Topics.is_array() && r3Topics.size() == 1 &&
                   r3Topics[0].at("topic_metadata").at("type").get<std::string>() ==
                       "YomkDdsStd::MString",
               "R3 覆盖重建后 type 经 Channel.metadata 恢复");
@@ -267,27 +267,27 @@ int main()
     {
         const std::string dir = "reindex_r4";
         cleanupDir(dir);
-        CHECK(std::filesystem::create_directory(dir), "R4 前置：临时目录创建成功");
-        CHECK(makeMcapFile(dir + "/bag_0.mcap", "/rt/a", 3, kSecondNs, kSecondNs, false,
+        check(std::filesystem::create_directory(dir), "R4 前置：临时目录创建成功");
+        check(makeMcapFile(dir + "/bag_0.mcap", "/rt/a", 3, kSecondNs, kSecondNs, false,
                            "YomkDdsStd::MString"),
               "R4 前置：单分片 3 条消息造文件成功（目录无 metadata.json）");
         std::string error;
-        CHECK(FastDDSBagNode::bagReindex(dir, &error), "R4 缺失 metadata 重建 → true");
-        CHECK(error.empty(), "R4 成功路径 error 为空");
+        check(FastDDSBagNode::bagReindex(dir, &error), "R4 缺失 metadata 重建 → true");
+        check(error.empty(), "R4 成功路径 error 为空");
         std::vector<std::string> lines;
-        CHECK(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "R4 重建后 bagInfoText 联动可读");
-        CHECK(lines.size() == 9, "R4 行数 = 9（空行 + 七段标签 + 单主题行）");
+        check(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "R4 重建后 bagInfoText 联动可读");
+        check(lines.size() == 9, "R4 行数 = 9（空行 + 七段标签 + 单主题行）");
         if (lines.size() == 9)
         {
-            CHECK(lines[0].empty(), "R4 首行为空行");
-            CHECK(lines[1] == labeled("Files:", "bag_0.mcap"), "R4 Files 行");
-            CHECK(lines[4] == labeled("Duration:", "2.000000000s"), "R4 Duration 行与重建值一致");
-            CHECK(lines[5] == labeled("Start:", "Jan  1 1970 00:00:01.000000000 (1.000000000)"),
+            check(lines[0].empty(), "R4 首行为空行");
+            check(lines[1] == labeled("Files:", "bag_0.mcap"), "R4 Files 行");
+            check(lines[4] == labeled("Duration:", "2.000000000s"), "R4 Duration 行与重建值一致");
+            check(lines[5] == labeled("Start:", "Jan  1 1970 00:00:01.000000000 (1.000000000)"),
                   "R4 Start 行（%e 空格填充日 + 9 位纳秒）");
-            CHECK(lines[6] == labeled("End:", "Jan  1 1970 00:00:03.000000000 (3.000000000)"),
+            check(lines[6] == labeled("End:", "Jan  1 1970 00:00:03.000000000 (3.000000000)"),
                   "R4 End 行（= Start + duration）");
-            CHECK(lines[7] == labeled("Messages:", "3"), "R4 Messages 行");
-            CHECK(lines[8] == labeled("Topic information:",
+            check(lines[7] == labeled("Messages:", "3"), "R4 Messages 行");
+            check(lines[8] == labeled("Topic information:",
                               "Topic: /rt/a | Type: YomkDdsStd::MString | Count: 3 | "
                               "Serialization Format: cdr"),
                   "R4 Topic 行（Type 为恢复值，与重建产物一致）");
@@ -299,18 +299,18 @@ int main()
     {
         const std::string dir = "reindex_r5";
         cleanupDir(dir);
-        CHECK(std::filesystem::create_directory(dir), "R5 前置：临时目录创建成功");
-        CHECK(makeMcapFile(dir + "/bag_0.mcap", "/rt/empty", 0, kSecondNs, kSecondNs),
+        check(std::filesystem::create_directory(dir), "R5 前置：临时目录创建成功");
+        check(makeMcapFile(dir + "/bag_0.mcap", "/rt/empty", 0, kSecondNs, kSecondNs),
               "R5 前置：空消息分片造文件成功");
-        CHECK(FastDDSBagNode::bagReindex(dir, nullptr), "R5 空消息分片重建 → true");
+        check(FastDDSBagNode::bagReindex(dir, nullptr), "R5 空消息分片重建 → true");
         nlohmann::json info;
-        CHECK(readMetadataJson(dir, info), "R5 产物 metadata.json 可解析");
-        CHECK(info.at("message_count").get<std::uint64_t>() == 0, "R5 message_count = 0");
-        CHECK(info.at("starting_time").at("nanoseconds_since_epoch").get<std::uint64_t>() == 0,
+        check(readMetadataJson(dir, info), "R5 产物 metadata.json 可解析");
+        check(info.at("message_count").get<std::uint64_t>() == 0, "R5 message_count = 0");
+        check(info.at("starting_time").at("nanoseconds_since_epoch").get<std::uint64_t>() == 0,
               "R5 starting_time ns = 0（无消息对齐录制侧全 0 语义）");
-        CHECK(info.at("duration").at("nanoseconds").get<std::uint64_t>() == 0, "R5 duration ns = 0");
+        check(info.at("duration").at("nanoseconds").get<std::uint64_t>() == 0, "R5 duration ns = 0");
         const auto &topics = info.at("topics_with_message_count");
-        CHECK(topics.is_array() && topics.empty(),
+        check(topics.is_array() && topics.empty(),
               "R5 topics 数组为空（无消息 channel 无统计条目）");
         cleanupDir(dir);
     }
@@ -319,16 +319,16 @@ int main()
     {
         const std::string dir = "reindex_r6";
         cleanupDir(dir);
-        CHECK(std::filesystem::create_directory(dir), "R6 前置：临时目录创建成功");
-        CHECK(makeMcapFile(dir + "/bag_0.mcap", "/rt/scan", 1, 5 * kSecondNs, kSecondNs, true),
+        check(std::filesystem::create_directory(dir), "R6 前置：临时目录创建成功");
+        check(makeMcapFile(dir + "/bag_0.mcap", "/rt/scan", 1, 5 * kSecondNs, kSecondNs, true),
               "R6 前置：noSummary 分片造文件成功（open+addChannel+write+close 无 summary 段）");
         std::string error;
-        CHECK(FastDDSBagNode::bagReindex(dir, &error), "R6 无 summary 回退扫描重建 → true");
-        CHECK(error.empty(), "R6 成功路径 error 为空");
+        check(FastDDSBagNode::bagReindex(dir, &error), "R6 无 summary 回退扫描重建 → true");
+        check(error.empty(), "R6 成功路径 error 为空");
         nlohmann::json info;
-        CHECK(readMetadataJson(dir, info), "R6 产物 metadata.json 可解析");
-        CHECK(info.at("message_count").get<std::uint64_t>() == 1, "R6 message_count = 1");
-        CHECK(info.at("starting_time").at("nanoseconds_since_epoch").get<std::uint64_t>() ==
+        check(readMetadataJson(dir, info), "R6 产物 metadata.json 可解析");
+        check(info.at("message_count").get<std::uint64_t>() == 1, "R6 message_count = 1");
+        check(info.at("starting_time").at("nanoseconds_since_epoch").get<std::uint64_t>() ==
                   5 * kSecondNs,
               "R6 starting_time ns = 5s（扫描重建统计）");
         cleanupDir(dir);
@@ -339,36 +339,36 @@ int main()
         std::string error;
         const std::string emptyDir = "reindex_r7_empty";
         cleanupDir(emptyDir);
-        CHECK(std::filesystem::create_directory(emptyDir), "R7 前置：空目录创建成功");
-        CHECK(!FastDDSBagNode::bagReindex(emptyDir, &error), "R7 空目录 → false");
-        CHECK(error == "empty directory", "R7 空目录 error 精确文案");
+        check(std::filesystem::create_directory(emptyDir), "R7 前置：空目录创建成功");
+        check(!FastDDSBagNode::bagReindex(emptyDir, &error), "R7 空目录 → false");
+        check(error == "empty directory", "R7 空目录 error 精确文案");
         cleanupDir(emptyDir);
 
         const std::string junkDir = "reindex_r7_junk";
         cleanupDir(junkDir);
-        CHECK(std::filesystem::create_directory(junkDir), "R7 前置：无匹配目录创建成功");
+        check(std::filesystem::create_directory(junkDir), "R7 前置：无匹配目录创建成功");
         {
             std::ofstream junk(junkDir + "/notes.txt");
             junk << "not a bag file";
         }
-        CHECK(!FastDDSBagNode::bagReindex(junkDir, &error), "R7 有文件无匹配 → false");
-        CHECK(error == "no bag files found for reindexing", "R7 无匹配 error 精确文案");
+        check(!FastDDSBagNode::bagReindex(junkDir, &error), "R7 有文件无匹配 → false");
+        check(error == "no bag files found for reindexing", "R7 无匹配 error 精确文案");
         cleanupDir(junkDir);
     }
 
     // ---- R8：路径不存在 / 传文件路径（false + error 精确文案） ----
     {
         std::string error;
-        CHECK(!FastDDSBagNode::bagReindex("reindex_no_such_dir", &error), "R8 路径不存在 → false");
-        CHECK(error == "bag path [reindex_no_such_dir] does not exist", "R8 error 精确文案");
+        check(!FastDDSBagNode::bagReindex("reindex_no_such_dir", &error), "R8 路径不存在 → false");
+        check(error == "bag path [reindex_no_such_dir] does not exist", "R8 error 精确文案");
 
         const std::string filePath = "reindex_r8_not_dir";
         {
             std::ofstream file(filePath);
             file << "plain file";
         }
-        CHECK(!FastDDSBagNode::bagReindex(filePath, &error), "R8 传文件路径 → false");
-        CHECK(error == "must specify a bag directory", "R8 error 精确文案");
+        check(!FastDDSBagNode::bagReindex(filePath, &error), "R8 传文件路径 → false");
+        check(error == "must specify a bag directory", "R8 error 精确文案");
         std::error_code ec;
         std::filesystem::remove(filePath, ec);
     }
@@ -377,19 +377,19 @@ int main()
     {
         const std::string dir = "reindex_r9";
         cleanupDir(dir);
-        CHECK(std::filesystem::create_directory(dir), "R9 前置：临时目录创建成功");
-        CHECK(makeMcapFile(dir + "/bag_0.mcap", "/rt/legacy", 2, kSecondNs, kSecondNs),
+        check(std::filesystem::create_directory(dir), "R9 前置：临时目录创建成功");
+        check(makeMcapFile(dir + "/bag_0.mcap", "/rt/legacy", 2, kSecondNs, kSecondNs),
               "R9 前置：无 metadata 类型名的旧格式分片造文件成功");
-        CHECK(FastDDSBagNode::bagReindex(dir, nullptr), "R9 旧格式 bag 重建 → true");
+        check(FastDDSBagNode::bagReindex(dir, nullptr), "R9 旧格式 bag 重建 → true");
         nlohmann::json info;
-        CHECK(readMetadataJson(dir, info), "R9 产物 metadata.json 可解析");
+        check(readMetadataJson(dir, info), "R9 产物 metadata.json 可解析");
         const auto &topics = info.at("topics_with_message_count");
-        CHECK(topics.is_array() && topics.size() == 1, "R9 topics 单元素");
+        check(topics.is_array() && topics.size() == 1, "R9 topics 单元素");
         if (topics.size() == 1)
         {
-            CHECK(topics[0].at("topic_metadata").at("type").get<std::string>().empty(),
+            check(topics[0].at("topic_metadata").at("type").get<std::string>().empty(),
                   "R9 topic type 空串（旧格式 bag 无 Channel.metadata，回退不虚构）");
-            CHECK(topics[0].at("topic_metadata").at("qos").get<std::string>().empty(),
+            check(topics[0].at("topic_metadata").at("qos").get<std::string>().empty(),
                   "R9 topic qos 空串（旧格式 bag 无 Channel.metadata，回退不虚构）");
         }
         cleanupDir(dir);

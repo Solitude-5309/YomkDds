@@ -34,7 +34,7 @@
  * （同译元）。固定 epoch 纳秒时间戳便于断言。用例目录避开 bag_ 前缀（防泄漏快照误报
  * 惯例），结束统一清理。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
@@ -201,33 +201,33 @@ int main()
         cleanupDir(inDir);
         cleanupDir(outDir);
         ensureDir(inDir);
-        CHECK(makeMcapFile(inDir + "/bag_0.mcap", "/rt/c1", 3, kSecondNs, kSecondNs,
+        check(makeMcapFile(inDir + "/bag_0.mcap", "/rt/c1", 3, kSecondNs, kSecondNs,
                   "YomkDdsStd::MString", 5, "RELIABLE,VOLATILE"),
               "C1 前置：输入分片造文件成功（Channel.metadata 带类型名+qos）");
-        CHECK(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
+        check(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
               "C1 前置：cfg 写入成功");
 
         lines.clear();
-        CHECK(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C1 全缺省转换成功");
-        CHECK(lines.size() == 1 && lines[0].rfind("converted " + outDir + ":", 0) == 0 &&
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C1 全缺省转换成功");
+        check(lines.size() == 1 && lines[0].rfind("converted " + outDir + ":", 0) == 0 &&
                   lines[0].find("3 messages") != std::string::npos,
               "C1 统计行（converted <uri>: 3 messages / ...）");
 
         nlohmann::json info;
-        CHECK(readMetadataJson(outDir, info), "C1 产物 metadata.json 可解析");
-        CHECK(info.at("version") == 1 && info.at("storage_identifier") == "mcap" &&
+        check(readMetadataJson(outDir, info), "C1 产物 metadata.json 可解析");
+        check(info.at("version") == 1 && info.at("storage_identifier") == "mcap" &&
                   info.at("relative_file_paths") == nlohmann::json::array({"bag_0.mcap"}),
               "C1 version/storage/relative_file_paths 对账");
-        CHECK(info.at("starting_time").at("nanoseconds_since_epoch") == kSecondNs &&
+        check(info.at("starting_time").at("nanoseconds_since_epoch") == kSecondNs &&
                   !info.at("starting_time").at("nanoseconds_since_epoch_format")
                        .get<std::string>()
                        .empty(),
               "C1 starting_time ns+_format 对账（取写入消息 logTime）");
-        CHECK(info.at("duration").at("nanoseconds") == 2 * kSecondNs &&
+        check(info.at("duration").at("nanoseconds") == 2 * kSecondNs &&
                   !info.at("duration").at("nanoseconds_format").get<std::string>().empty(),
               "C1 duration ns+_format 对账（3s..1s 全局跨度 2s）");
-        CHECK(info.at("message_count") == 3, "C1 message_count 对账");
-        CHECK(info.at("topics_with_message_count").size() == 1 &&
+        check(info.at("message_count") == 3, "C1 message_count 对账");
+        check(info.at("topics_with_message_count").size() == 1 &&
                   info.at("topics_with_message_count")[0].at("topic_metadata").at("name") ==
                       "/rt/c1" &&
                   info.at("topics_with_message_count")[0].at("topic_metadata").at("type") ==
@@ -238,7 +238,7 @@ int main()
               "C1 topics name/type/qos（Channel.metadata 透传）/count 对账");
 
         std::vector<std::uint64_t> logTimes;
-        CHECK(collectLogTimes(outDir + "/bag_0.mcap", logTimes) && logTimes.size() == 3 &&
+        check(collectLogTimes(outDir + "/bag_0.mcap", logTimes) && logTimes.size() == 3 &&
                   logTimes[0] == kSecondNs && logTimes[1] == 2 * kSecondNs &&
                   logTimes[2] == 3 * kSecondNs,
               "C1 消息读回 3 条且 logTime 保真升序");
@@ -246,7 +246,7 @@ int main()
         // 输出分片 Channel.metadata 读回：type+qos 两键透传（bag play 恢复源不断链）。
         // 经线性视图迭代取 channel（channels() 映射在 readMessages 填充，open 后即取为空）
         mcap::McapReader outReader;
-        CHECK(outReader.open(outDir + "/bag_0.mcap").ok(), "C1 前置：输出分片打开成功");
+        check(outReader.open(outDir + "/bag_0.mcap").ok(), "C1 前置：输出分片打开成功");
         mcap::LinearMessageView outView = outReader.readMessages(
             [](const mcap::Status &) {}, mcap::ReadMessageOptions{});
         bool channelQosOk = false;
@@ -259,17 +259,17 @@ int main()
                            outMd.at("qos") == "RELIABLE,VOLATILE";
         }
         outReader.close();
-        CHECK(channelQosOk, "C1 输出 Channel.metadata type+qos 两键透传");
+        check(channelQosOk, "C1 输出 Channel.metadata type+qos 两键透传");
 
         std::vector<std::string> infoLines;
-        CHECK(FastDDSBagNode::bagInfoText(outDir, infoLines, &err), "C1 bagInfoText 联动可读");
-        CHECK(infoLines.size() == 9 && infoLines[0].empty() &&
+        check(FastDDSBagNode::bagInfoText(outDir, infoLines, &err), "C1 bagInfoText 联动可读");
+        check(infoLines.size() == 9 && infoLines[0].empty() &&
                   infoLines[3] == "Storage id:        mcap",
               "C1 info 文本 9 行对齐（首行空行 + Storage id）");
 
         lines.clear();
         err.clear();
-        CHECK(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
                   err.find("output dir [" + outDir + "] already exists") != std::string::npos,
               "C1 重复转换 → 输出目录已存在 fail");
 
@@ -286,22 +286,22 @@ int main()
         cleanupDir(inDir);
         cleanupDir(outDir);
         ensureDir(inDir);
-        CHECK(makeMcapFile(inDir + "/bag_0.mcap", "/rt/a", 1, kSecondNs, kSecondNs, "T_A") &&
+        check(makeMcapFile(inDir + "/bag_0.mcap", "/rt/a", 1, kSecondNs, kSecondNs, "T_A") &&
                   makeMcapFile(inDir + "/bag_1.mcap", "/rt/b", 1, 2 * kSecondNs, kSecondNs,
                       "T_B") &&
                   makeMcapFile(inDir + "/bag_2.mcap", "/rt/c", 1, 3 * kSecondNs, kSecondNs,
                       "T_C"),
               "C2 前置：三主题输入分片造文件成功");
 
-        CHECK(writeCfg(cfg,
+        check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir + R"(", "topics": ["/rt/a", "/rt/b*"]}]})"),
               "C2 前置：cfg（精确 /rt/a + 通配 /rt/b*）写入成功");
         lines.clear();
-        CHECK(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C2 抽取转换成功");
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C2 抽取转换成功");
         nlohmann::json info;
-        CHECK(readMetadataJson(outDir, info), "C2 产物 metadata.json 可解析");
+        check(readMetadataJson(outDir, info), "C2 产物 metadata.json 可解析");
         const nlohmann::json topics = info.at("topics_with_message_count");
-        CHECK(topics.size() == 2 && topics[0].at("topic_metadata").at("name") == "/rt/a" &&
+        check(topics.size() == 2 && topics[0].at("topic_metadata").at("name") == "/rt/a" &&
                   topics[0].at("topic_metadata").at("type") == "T_A" &&
                   topics[0].at("topic_metadata").at("qos") == "" &&
                   topics[1].at("topic_metadata").at("name") == "/rt/b" &&
@@ -311,31 +311,31 @@ int main()
               "旧格式输入 qos 空串）");
 
         cleanupDir(outDir);
-        CHECK(writeCfg(cfg,
+        check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir + R"(", "topics": ["/rt/nope*"]}]})"),
               "C2 前置：cfg（模式未命中）写入成功");
         lines.clear();
         err.clear();
-        CHECK(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
                   err.find("topic pattern [/rt/nope*] matched no input topic") !=
                       std::string::npos,
               "C2 模式未命中 fail 精确文案");
 
-        CHECK(writeCfg(cfg,
+        check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir + R"(", "topics": ["/rt/none"]}]})"),
               "C2 前置：cfg（精确项不存在）写入成功");
         lines.clear();
         err.clear();
-        CHECK(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
                   err.find("topic [/rt/none] not found in input bags") != std::string::npos,
               "C2 精确项不存在 fail 精确文案");
 
-        CHECK(writeCfg(cfg,
+        check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir + R"(", "topics": ["a*b*c"]}]})"),
               "C2 前置：cfg（两个 '*'）写入成功");
         lines.clear();
         err.clear();
-        CHECK(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
                   err.find("topic pattern [a*b*c] must contain at most one '*'") !=
                       std::string::npos,
               "C2 两个 '*' fail 精确文案");
@@ -353,34 +353,34 @@ int main()
         cleanupDir(inDir);
         cleanupDir(outDir);
         ensureDir(inDir);
-        CHECK(makeMcapFile(inDir + "/bag_0.mcap", "/rt/t", 5, kSecondNs, kSecondNs, "T_T"),
+        check(makeMcapFile(inDir + "/bag_0.mcap", "/rt/t", 5, kSecondNs, kSecondNs, "T_T"),
               "C3 前置：5 条 1s..5s 输入造文件成功");
-        CHECK(writeCfg(cfg,
+        check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir +
                       R"(", "start_time": 2000000000, "end_time": 4000000000}]})"),
               "C3 前置：cfg（2s..4s 收窄）写入成功");
 
         lines.clear();
-        CHECK(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C3 时段裁剪转换成功");
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C3 时段裁剪转换成功");
         nlohmann::json info;
-        CHECK(readMetadataJson(outDir, info), "C3 产物 metadata.json 可解析");
-        CHECK(info.at("message_count") == 3 &&
+        check(readMetadataJson(outDir, info), "C3 产物 metadata.json 可解析");
+        check(info.at("message_count") == 3 &&
                   info.at("starting_time").at("nanoseconds_since_epoch") == 2 * kSecondNs &&
                   info.at("duration").at("nanoseconds") == 2 * kSecondNs,
               "C3 裁剪后 3 条且起始/时长按写入消息重算（2s..4s 跨度 2s）");
         std::vector<std::uint64_t> logTimes;
-        CHECK(collectLogTimes(outDir + "/bag_0.mcap", logTimes) && logTimes.size() == 3 &&
+        check(collectLogTimes(outDir + "/bag_0.mcap", logTimes) && logTimes.size() == 3 &&
                   logTimes[0] == 2 * kSecondNs && logTimes[1] == 3 * kSecondNs &&
                   logTimes[2] == 4 * kSecondNs,
               "C3 边界含头含尾（2s/3s/4s）");
 
-        CHECK(writeCfg(cfg,
+        check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir +
                       R"(", "start_time": 4000000000, "end_time": 2000000000}]})"),
               "C3 前置：cfg（start > end）写入成功");
         lines.clear();
         err.clear();
-        CHECK(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
                   err.find("start_time must not exceed end_time") != std::string::npos,
               "C3 start > end fail 精确文案");
 
@@ -397,34 +397,34 @@ int main()
         cleanupDir(inDir);
         cleanupDir(outDir);
         ensureDir(inDir);
-        CHECK(makeMcapFile(inDir + "/bag_0.mcap", "/rt/s", 3, kSecondNs, kSecondNs, "T_S",
+        check(makeMcapFile(inDir + "/bag_0.mcap", "/rt/s", 3, kSecondNs, kSecondNs, "T_S",
                   kBigPayloadBytes),
               "C4 前置：大载荷 3 条输入造文件成功");
-        CHECK(writeCfg(cfg,
+        check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir +
                       R"(", "max_bagfile_size": 1024}]})"),
               "C4 前置：cfg（size 下限 1024）写入成功");
 
         lines.clear();
-        CHECK(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C4 size 分片转换成功");
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C4 size 分片转换成功");
         nlohmann::json info;
-        CHECK(readMetadataJson(outDir, info), "C4 产物 metadata.json 可解析");
+        check(readMetadataJson(outDir, info), "C4 产物 metadata.json 可解析");
         const nlohmann::json files = info.at("relative_file_paths");
-        CHECK(files.size() >= 2 && files[0] == "bag_0.mcap" && files[1] == "bag_1.mcap",
+        check(files.size() >= 2 && files[0] == "bag_0.mcap" && files[1] == "bag_1.mcap",
               "C4 size 滚动多分片且序列从 bag_0 起（chunk 落盘触发写前检查）");
-        CHECK(info.at("message_count") == 3, "C4 分片不丢消息（总数对账）");
+        check(info.at("message_count") == 3, "C4 分片不丢消息（总数对账）");
         std::vector<std::uint64_t> logTimes;
-        CHECK(collectLogTimes(outDir + "/bag_0.mcap", logTimes),
+        check(collectLogTimes(outDir + "/bag_0.mcap", logTimes),
               "C4 首分片可读（summary 自动补写）");
         logTimes.clear();
         for (const auto &f : files)
         {
             std::vector<std::uint64_t> part;
-            CHECK(collectLogTimes(outDir + "/" + f.get<std::string>(), part),
+            check(collectLogTimes(outDir + "/" + f.get<std::string>(), part),
                   "C4 分片逐个可读");
             logTimes.insert(logTimes.end(), part.begin(), part.end());
         }
-        CHECK(logTimes.size() == 3 && logTimes[0] == kSecondNs &&
+        check(logTimes.size() == 3 && logTimes[0] == kSecondNs &&
                   logTimes[1] == 2 * kSecondNs && logTimes[2] == 3 * kSecondNs,
               "C4 跨分片读回 3 条且 logTime 保真");
 
@@ -432,27 +432,27 @@ int main()
         cleanupDir(inDir);
         cleanupDir(outDir);
         ensureDir(inDir);
-        CHECK(makeMcapFile(inDir + "/bag_0.mcap", "/rt/d", 3, kSecondNs, 2 * kSecondNs, "T_D"),
+        check(makeMcapFile(inDir + "/bag_0.mcap", "/rt/d", 3, kSecondNs, 2 * kSecondNs, "T_D"),
               "C4 前置：步长 2s 输入造文件成功");
-        CHECK(writeCfg(cfg,
+        check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir +
                       R"(", "max_bagfile_duration": 1}]})"),
               "C4 前置：cfg（duration 1s）写入成功");
         lines.clear();
-        CHECK(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C4 duration 分片转换成功");
-        CHECK(readMetadataJson(outDir, info) &&
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C4 duration 分片转换成功");
+        check(readMetadataJson(outDir, info) &&
                   info.at("relative_file_paths") ==
                       nlohmann::json::array({"bag_0.mcap", "bag_1.mcap", "bag_2.mcap"}),
               "C4 duration 滚动 3 分片确定序列（严格大于：2s 差 > 1s 上限）");
 
         // size < 1024 fail（解析期校验，对齐 record 下限）
-        CHECK(writeCfg(cfg,
+        check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir +
                       R"(", "max_bagfile_size": 999}]})"),
               "C4 前置：cfg（size 999）写入成功");
         lines.clear();
         err.clear();
-        CHECK(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
                   err.find("max_bagfile_size must be at least 1024 bytes (got 999)") !=
                       std::string::npos,
               "C4 size < 1024 fail 精确文案");
@@ -473,39 +473,39 @@ int main()
         cleanupDir(outDir);
         ensureDir(inA);
         ensureDir(inB);
-        CHECK(makeMcapFile(inA + "/bag_0.mcap", "/rt/a", 3, kSecondNs, 2 * kSecondNs, "T_A"),
+        check(makeMcapFile(inA + "/bag_0.mcap", "/rt/a", 3, kSecondNs, 2 * kSecondNs, "T_A"),
               "C5 前置：输入 A（1s/3s/5s）造文件成功");
-        CHECK(makeMcapFile(inB + "/bag_0.mcap", "/rt/b", 1, 2 * kSecondNs, kSecondNs, "T_B") &&
+        check(makeMcapFile(inB + "/bag_0.mcap", "/rt/b", 1, 2 * kSecondNs, kSecondNs, "T_B") &&
                   makeMcapFile(inB + "/bag_1.mcap", "/rt/b", 2, 4 * kSecondNs, 2 * kSecondNs,
                       "T_B"),
               "C5 前置：输入 B（2s + 4s/6s 两分片）造文件成功");
-        CHECK(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
+        check(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
               "C5 前置：cfg 写入成功");
 
         lines.clear();
-        CHECK(FastDDSBagNode::bagConvert({inA, inB}, cfg, lines, &err),
+        check(FastDDSBagNode::bagConvert({inA, inB}, cfg, lines, &err),
               "C5 两输入归并转换成功");
         nlohmann::json info;
-        CHECK(readMetadataJson(outDir, info), "C5 产物 metadata.json 可解析");
-        CHECK(info.at("message_count") == 6 &&
+        check(readMetadataJson(outDir, info), "C5 产物 metadata.json 可解析");
+        check(info.at("message_count") == 6 &&
                   info.at("starting_time").at("nanoseconds_since_epoch") == kSecondNs &&
                   info.at("duration").at("nanoseconds") == 5 * kSecondNs,
               "C5 metadata 统计合并（6 条；1s..6s 全局跨度 5s）");
         const nlohmann::json topics = info.at("topics_with_message_count");
-        CHECK(topics.size() == 2 && topics[0].at("topic_metadata").at("name") == "/rt/a" &&
+        check(topics.size() == 2 && topics[0].at("topic_metadata").at("name") == "/rt/a" &&
                   topics[0].at("message_count") == 3 &&
                   topics[1].at("topic_metadata").at("name") == "/rt/b" &&
                   topics[1].at("message_count") == 3,
               "C5 两主题各 3 条（跨输入按主题合并计数）");
         std::vector<std::uint64_t> logTimes;
-        CHECK(collectLogTimes(outDir + "/bag_0.mcap", logTimes) && logTimes.size() == 6,
+        check(collectLogTimes(outDir + "/bag_0.mcap", logTimes) && logTimes.size() == 6,
               "C5 归并读回 6 条");
         bool ascending = true;
         for (std::size_t i = 1; i < logTimes.size(); ++i)
         {
             ascending = ascending && logTimes[i - 1] < logTimes[i];
         }
-        CHECK(ascending && logTimes.front() == kSecondNs && logTimes.back() == 6 * kSecondNs,
+        check(ascending && logTimes.front() == kSecondNs && logTimes.back() == 6 * kSecondNs,
               "C5 全局 logTime 升序（含交错输入与跨分片续流）");
 
         cleanupDir(inA);
@@ -528,27 +528,27 @@ int main()
 
         // 旧格式（Channel 无 metadata 类型名）：入选主题类型名为空 → 拒转
         ensureDir(inDir);
-        CHECK(makeMcapFile(inDir + "/bag_0.mcap", "/rt/old", 2, kSecondNs, kSecondNs),
+        check(makeMcapFile(inDir + "/bag_0.mcap", "/rt/old", 2, kSecondNs, kSecondNs),
               "C6 前置：旧格式输入（无类型名）造文件成功");
-        CHECK(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
+        check(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
               "C6 前置：cfg 写入成功");
         lines.clear();
         err.clear();
-        CHECK(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
                   err.find("topic [/rt/old] has no type name") != std::string::npos,
               "C6 旧格式入选主题拒转 fail 精确文案");
         std::error_code ec;
-        CHECK(!std::filesystem::exists(outDir, ec), "C6 拒转发生在输出目录创建之前（不落盘）");
+        check(!std::filesystem::exists(outDir, ec), "C6 拒转发生在输出目录创建之前（不落盘）");
 
         // 同主题跨输入类型冲突（预扫期整体报错）
         ensureDir(inA);
         ensureDir(inB);
-        CHECK(makeMcapFile(inA + "/bag_0.mcap", "/rt/x", 1, kSecondNs, kSecondNs, "T1") &&
+        check(makeMcapFile(inA + "/bag_0.mcap", "/rt/x", 1, kSecondNs, kSecondNs, "T1") &&
                   makeMcapFile(inB + "/bag_0.mcap", "/rt/x", 1, 2 * kSecondNs, kSecondNs, "T2"),
               "C6 前置：同主题不同类型两输入造文件成功");
         lines.clear();
         err.clear();
-        CHECK(!FastDDSBagNode::bagConvert({inA, inB}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inA, inB}, cfg, lines, &err) &&
                   err.find("topic [/rt/x] has conflicting types [T1] vs [T2]") !=
                       std::string::npos,
               "C6 跨输入类型冲突 fail 精确文案");
@@ -569,41 +569,41 @@ int main()
         cleanupDir(outDir);
         cleanupDir(outDir2);
         ensureDir(inDir);
-        CHECK(makeMcapFile(inDir + "/bag_0.mcap", "/rt/c7", 3, 2 * kSecondNs, kSecondNs,
+        check(makeMcapFile(inDir + "/bag_0.mcap", "/rt/c7", 3, 2 * kSecondNs, kSecondNs,
                   "YomkDdsStd::MString"),
               "C7 前置：输入分片造文件成功（2s/3s/4s 三条）");
 
         // C7a 字符串形式与整数形式裁剪等价（2s..4s → 3 条含头含尾，对齐 C3 断言）
-        CHECK(writeCfg(cfg,
+        check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir + R"(", "start_time": ")" +
                       nsToEpochFormat(2 * kSecondNs) + R"(", "end_time": ")" +
                       nsToEpochFormat(4 * kSecondNs) + R"("}]})"),
               "C7 前置：cfg（可读时间字符串 start/end）写入成功");
         lines.clear();
-        CHECK(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err),
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err),
               "C7 字符串时段裁剪转换成功");
         nlohmann::json info;
-        CHECK(readMetadataJson(outDir, info), "C7 产物 metadata.json 可解析");
-        CHECK(info.at("message_count") == 3 &&
+        check(readMetadataJson(outDir, info), "C7 产物 metadata.json 可解析");
+        check(info.at("message_count") == 3 &&
                   info.at("starting_time").at("nanoseconds_since_epoch") == 2 * kSecondNs,
               "C7 字符串形式与整数形式等价（2s..4s → 3 条，起始按写入消息重算 2s）");
         std::vector<std::uint64_t> logTimes;
-        CHECK(collectLogTimes(outDir + "/bag_0.mcap", logTimes) && logTimes.size() == 3 &&
+        check(collectLogTimes(outDir + "/bag_0.mcap", logTimes) && logTimes.size() == 3 &&
                   logTimes[0] == 2 * kSecondNs && logTimes[2] == 4 * kSecondNs,
               "C7 字符串形式边界含头含尾（2s/4s）");
 
         // C7b 拷贝即用往返：产物 metadata `_format` 值直接作 start_time → 往返无损
         const std::string copiedStart =
             info.at("starting_time").at("nanoseconds_since_epoch_format").get<std::string>();
-        CHECK(writeCfg(cfg,
+        check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir2 + R"(", "start_time": ")" +
                       copiedStart + R"("}]})"),
               "C7 前置：cfg（拷贝产物 _format 作 start_time）写入成功");
         lines.clear();
-        CHECK(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err),
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err),
               "C7 拷贝 _format 作 start_time 转换成功");
         nlohmann::json info2;
-        CHECK(readMetadataJson(outDir2, info2) && info2.at("message_count") == 3 &&
+        check(readMetadataJson(outDir2, info2) && info2.at("message_count") == 3 &&
                   info2.at("starting_time").at("nanoseconds_since_epoch") == 2 * kSecondNs,
               "C7 产物 _format 拷贝即用 → 往返无损（全量 3 条起始 2s）");
 
@@ -613,7 +613,7 @@ int main()
                                            const std::string &label) {
             lines.clear();
             err.clear();
-            CHECK(writeCfg(cfg, content) &&
+            check(writeCfg(cfg, content) &&
                       !FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
                       err.find(fragment) != std::string::npos,
                   label);
@@ -670,21 +670,21 @@ int main()
         cleanupDir(outDir);
         ensureDir(inA);
         ensureDir(inB);
-        CHECK(makeMcapFile(inA + "/bag_0.mcap", "/rt/q", 1, kSecondNs, kSecondNs, "T_Q", 5,
+        check(makeMcapFile(inA + "/bag_0.mcap", "/rt/q", 1, kSecondNs, kSecondNs, "T_Q", 5,
                   "RELIABLE,VOLATILE") &&
                   makeMcapFile(inB + "/bag_0.mcap", "/rt/q", 1, 2 * kSecondNs, kSecondNs,
                       "T_Q", 5, "RELIABLE,TRANSIENT_LOCAL"),
               "C8 前置：同主题 type 一致而 qos 不同的两输入造文件成功");
-        CHECK(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
+        check(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
               "C8 前置：cfg 写入成功");
         lines.clear();
         err.clear();
-        CHECK(!FastDDSBagNode::bagConvert({inA, inB}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inA, inB}, cfg, lines, &err) &&
                   err.find("topic [/rt/q] has conflicting qos [RELIABLE,VOLATILE] vs "
                            "[RELIABLE,TRANSIENT_LOCAL] across inputs") != std::string::npos,
               "C8 跨输入 qos 冲突 fail 精确文案（预扫期整体报错）");
         std::error_code ec;
-        CHECK(!std::filesystem::exists(outDir, ec),
+        check(!std::filesystem::exists(outDir, ec),
               "C8 冲突发生在输出目录创建之前（不落盘）");
 
         cleanupDir(inA);

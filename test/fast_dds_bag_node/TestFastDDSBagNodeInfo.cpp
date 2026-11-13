@@ -23,7 +23,7 @@
  *
  * 用例目录避开 bag_ 前缀（防泄漏快照误报惯例），结束统一清理。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
@@ -137,30 +137,30 @@ int main()
     // ---- I1：单主题全行断言（含首行空行、19 列标签） ----
     {
         const std::string dir = "info_i1";
-        CHECK(makeBagDir(dir, metaSingle, 0), "I1 前置：临时 bag 目录创建成功");
+        check(makeBagDir(dir, metaSingle, 0), "I1 前置：临时 bag 目录创建成功");
         std::vector<std::string> lines;
         std::string error;
-        CHECK(FastDDSBagNode::bagInfoText(dir, lines, &error), "I1 bagInfoText → true");
-        CHECK(error.empty(), "I1 成功路径 error 为空");
-        CHECK(lines.size() == 9, "I1 行数 = 9（空行 + 七段标签 + 单主题行）");
+        check(FastDDSBagNode::bagInfoText(dir, lines, &error), "I1 bagInfoText → true");
+        check(error.empty(), "I1 成功路径 error 为空");
+        check(lines.size() == 9, "I1 行数 = 9（空行 + 七段标签 + 单主题行）");
         if (lines.size() == 9)
         {
-            CHECK(lines[0].empty(), "I1 首行为空行");
-            CHECK(lines[1] == labeled("Files:", "bag_0.mcap"), "I1 Files 行");
+            check(lines[0].empty(), "I1 首行为空行");
+            check(lines[1] == labeled("Files:", "bag_0.mcap"), "I1 Files 行");
             // Bag size = 目录递归总大小（仅 metadata.json 一个文件，< 1 KiB 计 B 零小数）
             const auto metaBytes = static_cast<std::uintmax_t>(metaSingle.size());
-            CHECK(lines[2] == labeled("Bag size:", std::to_string(metaBytes) + " B"),
+            check(lines[2] == labeled("Bag size:", std::to_string(metaBytes) + " B"),
                   "I1 Bag size 行（metadata.json 自身字节计内）");
-            CHECK(lines[3] == labeled("Storage id:", "mcap"), "I1 Storage id 行");
-            CHECK(lines[4] == labeled("Duration:", "12.000000000s"), "I1 Duration 行");
-            CHECK(lines[5] == labeled("Start:",
+            check(lines[3] == labeled("Storage id:", "mcap"), "I1 Storage id 行");
+            check(lines[4] == labeled("Duration:", "12.000000000s"), "I1 Duration 行");
+            check(lines[5] == labeled("Start:",
                       "Oct 11 2019 13:09:09.123456789 (1570799349.123456789)"),
                   "I1 Start 行（UTC 人类可读 + epoch 秒.9 位纳秒）");
-            CHECK(lines[6] == labeled("End:",
+            check(lines[6] == labeled("End:",
                       "Oct 11 2019 13:09:21.123456789 (1570799361.123456789)"),
                   "I1 End 行（= Start + duration）");
-            CHECK(lines[7] == labeled("Messages:", "13"), "I1 Messages 行");
-            CHECK(lines[8] == labeled("Topic information:",
+            check(lines[7] == labeled("Messages:", "13"), "I1 Messages 行");
+            check(lines[8] == labeled("Topic information:",
                       "Topic: /rt/a | Type: YomkDdsStd::MString | Count: 5 | Serialization Format: cdr"),
                   "I1 Topic information 行");
         }
@@ -183,18 +183,18 @@ int main()
 }
 )";
         const std::string dir = "info_i2";
-        CHECK(makeBagDir(dir, meta, 0), "I2 前置：两主题 bag 目录创建成功");
+        check(makeBagDir(dir, meta, 0), "I2 前置：两主题 bag 目录创建成功");
         std::vector<std::string> lines;
-        CHECK(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I2 bagInfoText → true");
-        CHECK(lines.size() == 10, "I2 行数 = 10（九段 + 第二主题续行）");
+        check(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I2 bagInfoText → true");
+        check(lines.size() == 10, "I2 行数 = 10（九段 + 第二主题续行）");
         if (lines.size() == 10)
         {
             const std::string rowA =
                 "Topic: /rt/a | Type: YomkDdsStd::MString | Count: 5 | Serialization Format: cdr";
             const std::string rowB =
                 "Topic: /rt/b | Type: YomkDdsStd::MString | Count: 8 | Serialization Format: cdr";
-            CHECK(lines[8] == labeled("Topic information:", rowA), "I2 首主题行跟标签");
-            CHECK(lines[9] == std::string(kLabelWidth, ' ') + rowB, "I2 续行 19 空格缩进对齐");
+            check(lines[8] == labeled("Topic information:", rowA), "I2 首主题行跟标签");
+            check(lines[9] == std::string(kLabelWidth, ' ') + rowB, "I2 续行 19 空格缩进对齐");
         }
         cleanupDir(dir);
     }
@@ -214,15 +214,15 @@ int main()
 }
 )";
         const std::string dir = "info_i3";
-        CHECK(makeBagDir(dir, meta, 0), "I3 前置：三分片 bag 目录创建成功");
+        check(makeBagDir(dir, meta, 0), "I3 前置：三分片 bag 目录创建成功");
         std::vector<std::string> lines;
-        CHECK(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I3 bagInfoText → true");
-        CHECK(lines.size() == 11, "I3 行数 = 11（九段 + 两个分片续行）");
+        check(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I3 bagInfoText → true");
+        check(lines.size() == 11, "I3 行数 = 11（九段 + 两个分片续行）");
         if (lines.size() == 11)
         {
-            CHECK(lines[1] == labeled("Files:", "bag_0.mcap"), "I3 首分片行跟标签");
-            CHECK(lines[2] == std::string(kLabelWidth, ' ') + "bag_1.mcap", "I3 分片续行 1 缩进");
-            CHECK(lines[3] == std::string(kLabelWidth, ' ') + "bag_2.mcap", "I3 分片续行 2 缩进");
+            check(lines[1] == labeled("Files:", "bag_0.mcap"), "I3 首分片行跟标签");
+            check(lines[2] == std::string(kLabelWidth, ' ') + "bag_1.mcap", "I3 分片续行 1 缩进");
+            check(lines[3] == std::string(kLabelWidth, ' ') + "bag_2.mcap", "I3 分片续行 2 缩进");
         }
         cleanupDir(dir);
     }
@@ -234,25 +234,25 @@ int main()
 "relative_file_paths":["bag_0.mcap"],"starting_time":{"nanoseconds_since_epoch":0},
 "duration":{"nanoseconds":0},"message_count":0,"topics_with_message_count":[]})";
         const auto metaBytes = static_cast<std::uintmax_t>(meta.size());
-        CHECK(metaBytes < 1023, "I4 前置：metadata.json 小于 1023 字节（差值数据可凑边界）");
+        check(metaBytes < 1023, "I4 前置：metadata.json 小于 1023 字节（差值数据可凑边界）");
         const std::string dir = "info_i4";
         std::vector<std::string> lines;
 
-        CHECK(makeBagDir(dir, meta, 1023 - metaBytes), "I4 前置：1023 边界目录创建成功");
-        CHECK(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I4 总 1023 字节 → true");
-        CHECK(lines.size() == 9 && lines[2] == labeled("Bag size:", "1023 B"),
+        check(makeBagDir(dir, meta, 1023 - metaBytes), "I4 前置：1023 边界目录创建成功");
+        check(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I4 总 1023 字节 → true");
+        check(lines.size() == 9 && lines[2] == labeled("Bag size:", "1023 B"),
               "I4 总 1023 字节 → \"1023 B\"");
         cleanupDir(dir);
 
-        CHECK(makeBagDir(dir, meta, 1024 - metaBytes), "I4 前置：1024 边界目录创建成功");
-        CHECK(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I4 总 1024 字节 → true");
-        CHECK(lines.size() == 9 && lines[2] == labeled("Bag size:", "1.0 KiB"),
+        check(makeBagDir(dir, meta, 1024 - metaBytes), "I4 前置：1024 边界目录创建成功");
+        check(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I4 总 1024 字节 → true");
+        check(lines.size() == 9 && lines[2] == labeled("Bag size:", "1.0 KiB"),
               "I4 总 1024 字节 → \"1.0 KiB\"");
         cleanupDir(dir);
 
-        CHECK(makeBagDir(dir, meta, 2048 - metaBytes), "I4 前置：2048 目录创建成功");
-        CHECK(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I4 总 2048 字节 → true");
-        CHECK(lines.size() == 9 && lines[2] == labeled("Bag size:", "2.0 KiB"),
+        check(makeBagDir(dir, meta, 2048 - metaBytes), "I4 前置：2048 目录创建成功");
+        check(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I4 总 2048 字节 → true");
+        check(lines.size() == 9 && lines[2] == labeled("Bag size:", "2.0 KiB"),
               "I4 总 2048 字节 → \"2.0 KiB\"");
         cleanupDir(dir);
     }
@@ -270,16 +270,16 @@ int main()
 }
 )";
         const std::string dir = "info_i5";
-        CHECK(makeBagDir(dir, meta, 0), "I5 前置：epoch 0 bag 目录创建成功");
+        check(makeBagDir(dir, meta, 0), "I5 前置：epoch 0 bag 目录创建成功");
         std::vector<std::string> lines;
-        CHECK(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I5 bagInfoText → true");
-        CHECK(lines.size() == 9, "I5 行数 = 9");
+        check(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I5 bagInfoText → true");
+        check(lines.size() == 9, "I5 行数 = 9");
         if (lines.size() == 9)
         {
-            CHECK(lines[5] == labeled("Start:",
+            check(lines[5] == labeled("Start:",
                       "Jan  1 1970 00:00:00.000000000 (0.000000000)"),
                   "I5 epoch 0 → %e 空格填充日（\"Jan  1\"双空格）+ 9 位纳秒全零");
-            CHECK(lines[6] == labeled("End:",
+            check(lines[6] == labeled("End:",
                       "Jan  1 1970 00:00:00.000000000 (0.000000000)"),
                   "I5 End = Start + 0");
         }
@@ -291,26 +291,26 @@ int main()
         std::vector<std::string> lines;
         std::string error;
 
-        CHECK(!FastDDSBagNode::bagInfoText("info_no_such_dir", lines, &error),
+        check(!FastDDSBagNode::bagInfoText("info_no_such_dir", lines, &error),
               "I6 路径不存在 → false");
-        CHECK(error == "bag path [info_no_such_dir] does not exist", "I6 error 精确文案");
-        CHECK(lines.empty(), "I6 失败后 outLines 为空");
+        check(error == "bag path [info_no_such_dir] does not exist", "I6 error 精确文案");
+        check(lines.empty(), "I6 失败后 outLines 为空");
 
         const std::string dir = "info_i7";
         std::error_code ec;
         std::filesystem::remove_all(dir, ec);
-        CHECK(std::filesystem::create_directory(dir, ec), "I7 前置：无 metadata 的空目录创建成功");
-        CHECK(!FastDDSBagNode::bagInfoText(dir, lines, &error), "I7 无 metadata.json → false");
-        CHECK(error == "could not find metadata.json in bag directory [" + dir + "]",
+        check(std::filesystem::create_directory(dir, ec), "I7 前置：无 metadata 的空目录创建成功");
+        check(!FastDDSBagNode::bagInfoText(dir, lines, &error), "I7 无 metadata.json → false");
+        check(error == "could not find metadata.json in bag directory [" + dir + "]",
               "I7 error 精确文案");
         cleanupDir(dir);
 
         const std::string dir8 = "info_i8";
-        CHECK(makeBagDir(dir8, "{ not valid json", 0), "I8 前置：损坏 metadata 目录创建成功");
-        CHECK(!FastDDSBagNode::bagInfoText(dir8, lines, &error), "I8 JSON 损坏 → false");
-        CHECK(error.rfind("parse metadata.json failed: ", 0) == 0,
+        check(makeBagDir(dir8, "{ not valid json", 0), "I8 前置：损坏 metadata 目录创建成功");
+        check(!FastDDSBagNode::bagInfoText(dir8, lines, &error), "I8 JSON 损坏 → false");
+        check(error.rfind("parse metadata.json failed: ", 0) == 0,
               "I8 error 前缀 parse metadata.json failed:");
-        CHECK(lines.empty(), "I8 失败后 outLines 清空");
+        check(lines.empty(), "I8 失败后 outLines 清空");
         cleanupDir(dir8);
     }
 
@@ -327,13 +327,13 @@ int main()
 }
 )";
         const std::string dir = "info_i9";
-        CHECK(makeBagDir(dir, meta, 0), "I9 前置：空主题清单 bag 目录创建成功");
+        check(makeBagDir(dir, meta, 0), "I9 前置：空主题清单 bag 目录创建成功");
         std::vector<std::string> lines;
-        CHECK(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I9 bagInfoText → true");
-        CHECK(lines.size() == 9, "I9 行数 = 9（Topic information 空内容行仍输出）");
+        check(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I9 bagInfoText → true");
+        check(lines.size() == 9, "I9 行数 = 9（Topic information 空内容行仍输出）");
         if (lines.size() == 9)
         {
-            CHECK(lines[8] == labeled("Topic information:", ""), "I9 空主题 → 标签行空内容");
+            check(lines[8] == labeled("Topic information:", ""), "I9 空主题 → 标签行空内容");
         }
         cleanupDir(dir);
     }
@@ -354,13 +354,13 @@ int main()
 }
 )";
         const std::string dir = "info_i10";
-        CHECK(makeBagDir(dir, meta, 0), "I10 前置：带 qos 的 bag 目录创建成功");
+        check(makeBagDir(dir, meta, 0), "I10 前置：带 qos 的 bag 目录创建成功");
         std::vector<std::string> lines;
-        CHECK(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I10 bagInfoText → true");
-        CHECK(lines.size() == 9, "I10 行数 = 9（QoS 段并入主题行，不加行）");
+        check(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I10 bagInfoText → true");
+        check(lines.size() == 9, "I10 行数 = 9（QoS 段并入主题行，不加行）");
         if (lines.size() == 9)
         {
-            CHECK(lines[8] == labeled("Topic information:",
+            check(lines[8] == labeled("Topic information:",
                               "Topic: /rt/a | Type: YomkDdsStd::MString | "
                               "QoS: RELIABLE,TRANSIENT_LOCAL | Count: 5 | "
                               "Serialization Format: cdr"),
@@ -385,13 +385,13 @@ int main()
 }
 )";
         const std::string dir = "info_i10";
-        CHECK(makeBagDir(dir, meta, 0), "I10 前置：带 qos 的 bag 目录创建成功");
+        check(makeBagDir(dir, meta, 0), "I10 前置：带 qos 的 bag 目录创建成功");
         std::vector<std::string> lines;
-        CHECK(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I10 bagInfoText → true");
-        CHECK(lines.size() == 9, "I10 行数 = 9（QoS 段并入主题行，不加行）");
+        check(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "I10 bagInfoText → true");
+        check(lines.size() == 9, "I10 行数 = 9（QoS 段并入主题行，不加行）");
         if (lines.size() == 9)
         {
-            CHECK(lines[8] == labeled("Topic information:",
+            check(lines[8] == labeled("Topic information:",
                               "Topic: /rt/a | Type: YomkDdsStd::MString | "
                               "QoS: RELIABLE,TRANSIENT_LOCAL | Count: 5 | "
                               "Serialization Format: cdr"),

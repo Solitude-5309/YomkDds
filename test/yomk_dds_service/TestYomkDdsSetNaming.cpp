@@ -20,7 +20,7 @@
  * 关键不变式（沿用 TestYomkDdsTopic）：每个 eOk 创建的节点必须在 main 返回前经 /delete_node
  *   显式删除（析构 reader 停止回调，测试局部捕获状态全程存活，无悬垂）。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
@@ -198,17 +198,17 @@ namespace
     // S1：对称改名正验证（pub/sub 同 set_name 新名 → 收流 ≥1 + topicInfo 读回新名）
     void testSymmetricRename(YomkDdsService *svc)
     {
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "setname_pub")).status ==
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "setname_pub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S1 创建 setname_pub(domain 205) → eOk");
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "setname_sub")).status ==
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "setname_sub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S1 创建 setname_sub(domain 205) → eOk");
 
         // pub 端：类型对象 new 后、移交前 set_name（宏实参位内联 new 无法先改名）
         auto *pubType = new YomkDdsStd::MStringPubSubType();
         pubType->set_name(kRosTypeName);
-        CHECK(testInvoke(svc, "/register_pub_topic", mkPub("setname_pub", SN_TOPIC, pubType))
+        check(testInvoke(svc, "/register_pub_topic", mkPub("setname_pub", SN_TOPIC, pubType))
                       .status == yomk::payload::ResStatus::Succeeded,
               "S1 pub 端 set_name(新名) + register_pub_topic → eOk");
 
@@ -217,7 +217,7 @@ namespace
         std::mutex mtx;
         auto *subType = new YomkDdsStd::MStringPubSubType();
         subType->set_name(kRosTypeName);
-        CHECK(testInvoke(svc, "/register_sub_topic",
+        check(testInvoke(svc, "/register_sub_topic",
                           mkSub("setname_sub", SN_TOPIC, subType, [&](const void *data) {
                               auto *m = static_cast<const YomkDdsStd::MString *>(data);
                               std::lock_guard<std::mutex> lk(mtx);
@@ -233,7 +233,7 @@ namespace
         {
             YomkDdsStd::MString msg;
             msg.data("setname-" + std::to_string(i));
-            CHECK(testInvoke(svc, "/publish", mkPubMsg("setname_pub", SN_TOPIC, &msg)).status ==
+            check(testInvoke(svc, "/publish", mkPubMsg("setname_pub", SN_TOPIC, &msg)).status ==
                       yomk::payload::ResStatus::Succeeded,
                   "S1 publish 一条 → eOk");
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -241,7 +241,7 @@ namespace
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 等待投递
 
         int r = received.load();
-        CHECK(r > 0 && r <= kPubCount, "S1 对称改名端到端收流 (0,5]（set_name 改名即通）");
+        check(r > 0 && r <= kPubCount, "S1 对称改名端到端收流 (0,5]（set_name 改名即通）");
         std::cout << "[OBSERVE] S1 symmetric received=" << r << "/" << kPubCount;
         {
             std::lock_guard<std::mutex> lk(mtx);
@@ -252,20 +252,20 @@ namespace
         // debug 节点 topicInfo 读回：新名随发现数据传播（直测节点层，独立 dbg 实例同域）
         {
             FastDDSDebugNode dbg;
-            CHECK(dbg.setDomainId(TEST_DOMAIN), "S1 debug 节点 setDomainId(205) → true");
+            check(dbg.setDomainId(TEST_DOMAIN), "S1 debug 节点 setDomainId(205) → true");
             std::string typeName;
             size_t pubCount = 0;
             size_t subCount = 0;
-            CHECK(dbg.topicInfo(SN_TOPIC, typeName, pubCount, subCount, 5, 200),
+            check(dbg.topicInfo(SN_TOPIC, typeName, pubCount, subCount, 5, 200),
                   "S1 topicInfo(chatter_naming) 收敛命中 → true");
-            CHECK(typeName == kRosTypeName,
+            check(typeName == kRosTypeName,
                   "S1 topicInfo 读回 Type == std_msgs::msg::dds_::String_（发现名即新名）");
         }
 
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("setname_pub")).status ==
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("setname_pub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S1 删除 setname_pub → eOk（退出前清理不变式）");
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("setname_sub")).status ==
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("setname_sub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S1 删除 setname_sub → eOk（退出前清理不变式）");
     }
@@ -273,16 +273,16 @@ namespace
     // S2：不对称隔离负验证（pub 新名 / sub 原名 → EDP 类型名不匹配 → 收 0）
     void testAsymmetricIsolation(YomkDdsService *svc)
     {
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "mismatch_pub")).status ==
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "mismatch_pub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S2 创建 mismatch_pub(domain 205) → eOk");
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "mismatch_sub")).status ==
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "mismatch_sub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S2 创建 mismatch_sub(domain 205) → eOk");
 
         auto *pubType = new YomkDdsStd::MStringPubSubType();
         pubType->set_name(kRosTypeName); // 仅 pub 端改名
-        CHECK(testInvoke(svc, "/register_pub_topic", mkPub("mismatch_pub", SN_TOPIC_MISMATCH, pubType))
+        check(testInvoke(svc, "/register_pub_topic", mkPub("mismatch_pub", SN_TOPIC_MISMATCH, pubType))
                       .status == yomk::payload::ResStatus::Succeeded,
               "S2 pub 端 set_name(新名) + register_pub_topic → eOk");
 
@@ -290,7 +290,7 @@ namespace
         std::string lastRecv;
         std::mutex mtx;
         auto *subType = new YomkDdsStd::MStringPubSubType(); // sub 端保持原名
-        CHECK(testInvoke(svc, "/register_sub_topic",
+        check(testInvoke(svc, "/register_sub_topic",
                           mkSub("mismatch_sub", SN_TOPIC_MISMATCH, subType,
                                 [&](const void *data) {
                                     auto *m = static_cast<const YomkDdsStd::MString *>(data);
@@ -306,7 +306,7 @@ namespace
         {
             YomkDdsStd::MString msg;
             msg.data("mismatch-" + std::to_string(i));
-            CHECK(testInvoke(svc, "/publish", mkPubMsg("mismatch_pub", SN_TOPIC_MISMATCH, &msg))
+            check(testInvoke(svc, "/publish", mkPubMsg("mismatch_pub", SN_TOPIC_MISMATCH, &msg))
                           .status == yomk::payload::ResStatus::Succeeded,
                   "S2 publish 一条 → eOk");
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -319,7 +319,7 @@ namespace
         // 匹配（ROS2 端不参与 XTypes 类型发现，退化为 type_name 字符串比较，见 README 5.6
         // 与 run_ros2_interop.sh 真机实测）
         int r = received.load();
-        CHECK(r > 0,
+        check(r > 0,
               "S2 不对称改名同主题收 >0（Fast DDS 3.x EDP 按 tid/TypeObject 兼容匹配，名字无关实测固化）");
         std::cout << "[OBSERVE] S2 asymmetric received=" << r << "/5";
         {
@@ -328,10 +328,10 @@ namespace
         }
         std::cout << std::endl;
 
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("mismatch_pub")).status ==
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("mismatch_pub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S2 删除 mismatch_pub → eOk（退出前清理不变式）");
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("mismatch_sub")).status ==
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("mismatch_sub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S2 删除 mismatch_sub → eOk（退出前清理不变式）");
     }
@@ -348,23 +348,23 @@ namespace
         capture.start();
 
         // 对跑窗口：对称改名 pair 全链路（注册/建订/发布/收流期间的库日志全部入捕获）
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "probe_pub")).status ==
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "probe_pub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S3 创建 probe_pub(domain 205) → eOk");
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "probe_sub")).status ==
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "probe_sub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S3 创建 probe_sub(domain 205) → eOk");
 
         auto *pubType = new YomkDdsStd::MStringPubSubType();
         pubType->set_name(kRosTypeName);
-        CHECK(testInvoke(svc, "/register_pub_topic", mkPub("probe_pub", "/chatter_probe", pubType))
+        check(testInvoke(svc, "/register_pub_topic", mkPub("probe_pub", "/chatter_probe", pubType))
                       .status == yomk::payload::ResStatus::Succeeded,
               "S3 probe pub 注册 → eOk");
 
         std::atomic<int> received{0};
         auto *subType = new YomkDdsStd::MStringPubSubType();
         subType->set_name(kRosTypeName);
-        CHECK(testInvoke(svc, "/register_sub_topic",
+        check(testInvoke(svc, "/register_sub_topic",
                           mkSub("probe_sub", "/chatter_probe", subType,
                                 [&](const void *) { received++; }))
                       .status == yomk::payload::ResStatus::Succeeded,
@@ -382,7 +382,7 @@ namespace
         capture.stop();
 
         // 设施自检断言（从宽）：对跑窗口收流 ≥1 即探针设施工作正常
-        CHECK(received.load() > 0, "S3 探针对跑窗口收流 ≥1（设施自检）");
+        check(received.load() > 0, "S3 探针对跑窗口收流 ≥1（设施自检）");
 
         // [OBSERVE] 固化：捕获规模 + 含 type 关键词的日志行（前 15 行、每行截 160 字符）
         const std::string &outText = capture.out();
@@ -418,10 +418,10 @@ namespace
         eprosima::fastdds::dds::Log::UnsetCategoryFilter();
         eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Kind::Warning);
 
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("probe_pub")).status ==
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("probe_pub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S3 删除 probe_pub → eOk（退出前清理不变式）");
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("probe_sub")).status ==
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("probe_sub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S3 删除 probe_sub → eOk（退出前清理不变式）");
     }
@@ -433,7 +433,7 @@ int main()
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
     auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    CHECK(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
 
     testSymmetricRename(svc);
     testAsymmetricIsolation(svc);

@@ -36,7 +36,7 @@
  * 关键不变式：每个 eOk 创建的节点必须在 main 返回前经 /delete_node 显式删除（析构 reader 停止回调，
  *   测试局部捕获状态全程存活，无悬垂）；不遗留未归还的 loan（A3 借出即 discard）。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
@@ -107,15 +107,15 @@ namespace
                 ++delOk;
             }
         }
-        CHECK(oneWinnerRounds == R,
+        check(oneWinnerRounds == R,
               "A1 并发 create_node 同名：20 轮每轮恰 1 eOk、7 eNo（service mtx_ 序列化 find-then-insert）");
-        CHECK(delOk == R, "A1 每轮竞胜节点均可删除 → 20/20 eOk（终态一致，无重复插入残留）");
+        check(delOk == R, "A1 每轮竞胜节点均可删除 → 20/20 eOk（终态一致，无重复插入残留）");
     }
 
     // ---- Part A2：并发 register_pub_topic 同名 → 每轮唯一赢家（node mtx_ + dup 守卫 count()>0）----
     void partA2_concurrentRegister(YomkDdsService *svc)
     {
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "a2_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "a2_node")).status == yomk::payload::ResStatus::Succeeded,
               "A2 创建 a2_node（供 20 轮并发注册竞争，避免每轮重建 participant）→ eOk");
         constexpr int M = 8;
         constexpr int R = 20;
@@ -150,16 +150,16 @@ namespace
                 ++oneWinnerRounds;
             }
         }
-        CHECK(oneWinnerRounds == R,
+        check(oneWinnerRounds == R,
               "A2 并发 register_pub_topic 同名：20 轮每轮恰 1 eOk、7 eNo（node mtx_ + dup 守卫 count()>0）");
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("a2_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("a2_node")).status == yomk::payload::ResStatus::Succeeded,
               "A2 删除 a2_node → eOk（清理 20 个竞胜 topic 的 writer；asan 验证 140 个 loser type 零泄漏）");
     }
 
     // ---- Part A3：混合并发（唯一 topic 注册 / publish / loan / discard / version）→ 计数全 eOk ----
     void partA3_mixedConcurrent(YomkDdsService *svc)
     {
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "a3_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "a3_node")).status == yomk::payload::ResStatus::Succeeded,
               "A3 创建 a3_node → eOk");
         constexpr int T = 8;
         constexpr int K = 200;
@@ -216,21 +216,21 @@ namespace
         {
             th.join();
         }
-        CHECK(regOk.load() == T, "A3 并发注册 8 个唯一 pub 主题全部 eOk（node mtx_ 序列化 map 插入）");
-        CHECK(pubOk.load() == T * K, "A3 并发 publish 8*200=1600 全部 eOk（同一 node mtx_ 序列化 write）");
-        CHECK(loanOk.load() == T * K, "A3 并发 loan 1600 全部 eOk（plain MInt32 池借出，8 线程并发不耗尽）");
-        CHECK(discOk.load() == T * K, "A3 并发 discard_loan 1600 全部 eOk（归还池样本，无残留借出）");
-        CHECK(verOk.load() == T * K, "A3 并发 version 1600 全部 eOk（只读无锁端点与写并发安全）");
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("a3_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(regOk.load() == T, "A3 并发注册 8 个唯一 pub 主题全部 eOk（node mtx_ 序列化 map 插入）");
+        check(pubOk.load() == T * K, "A3 并发 publish 8*200=1600 全部 eOk（同一 node mtx_ 序列化 write）");
+        check(loanOk.load() == T * K, "A3 并发 loan 1600 全部 eOk（plain MInt32 池借出，8 线程并发不耗尽）");
+        check(discOk.load() == T * K, "A3 并发 discard_loan 1600 全部 eOk（归还池样本，无残留借出）");
+        check(verOk.load() == T * K, "A3 并发 version 1600 全部 eOk（只读无锁端点与写并发安全）");
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("a3_node")).status == yomk::payload::ResStatus::Succeeded,
               "A3 删除 a3_node → eOk（终态一致）");
     }
 
     // ---- Part B：并发发布 + 订阅端到端（通用 take() reader 路径 + 回调契约在并发下）----
     void partB_concurrentPubSub(YomkDdsService *svc)
     {
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "b_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "b_node")).status == yomk::payload::ResStatus::Succeeded,
               "B 创建 b_node → eOk");
-        CHECK(testInvoke(svc, "/register_pub_topic",
+        check(testInvoke(svc, "/register_pub_topic",
                           ::yomk::msgs::DDSTopic::shared(DDSTopic{"b_node", "b_topic", new YomkDdsStd::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "B register_pub_topic b_topic(MInt32) → eOk");
@@ -246,7 +246,7 @@ namespace
             std::lock_guard<std::mutex> lk(mtx);
             got.push_back(v);
         };
-        CHECK(testInvoke(svc, "/register_sub_topic",
+        check(testInvoke(svc, "/register_sub_topic",
                           ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"b_node", "b_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "B register_sub_topic b_topic(callback) → eOk");
@@ -280,7 +280,7 @@ namespace
         {
             th.join();
         }
-        CHECK(pubOk.load() == P * K, "B 4 线程并发 publish 同一 writer 4*250=1000 全部 eOk（node mtx_ 序列化 write）");
+        check(pubOk.load() == P * K, "B 4 线程并发 publish 同一 writer 4*250=1000 全部 eOk（node mtx_ 序列化 write）");
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1500)); // 等待投递 drain
 
@@ -300,11 +300,11 @@ namespace
                 }
             }
         }
-        CHECK(r > 0 && r <= P * K, "B 回调收到数 ∈ (0,1000]（BEST_EFFORT 高量并发可能丢样，抗抖动不假设全达）");
-        CHECK(allValid, "B 所有收到值可解码(tid∈[0,4),seq∈[0,250))→ 单 reader 线程顺序 drain data_ 无并发撕裂/串值");
+        check(r > 0 && r <= P * K, "B 回调收到数 ∈ (0,1000]（BEST_EFFORT 高量并发可能丢样，抗抖动不假设全达）");
+        check(allValid, "B 所有收到值可解码(tid∈[0,4),seq∈[0,250))→ 单 reader 线程顺序 drain data_ 无并发撕裂/串值");
         std::cout << "[OBSERVE] B received=" << r << "/" << (P * K) << std::endl;
 
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("b_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("b_node")).status == yomk::payload::ResStatus::Succeeded,
               "B 删除 b_node → eOk（析构 reader 停止回调，捕获状态仍存活）");
     }
 
@@ -370,16 +370,16 @@ namespace
             pub.join(); // delete 后 publisher 若再 invoke 命中 nodes_.find 失败 → eNo（无害）
         }
 
-        CHECK(createOk == R && regSubOk == R && regPubOk == R,
+        check(createOk == R && regSubOk == R && regPubOk == R,
               "C 10 轮 create/register_sub/register_pub 全部 eOk（每轮重建竞态现场）");
-        CHECK(delOk == R, "C delete_node 与活跃回调并发：10 轮全部 eOk（teardown 无崩溃/无死锁）");
+        check(delOk == R, "C delete_node 与活跃回调并发：10 轮全部 eOk（teardown 无崩溃/无死锁）");
 
         long receivedSnapshot = 0;
         {
             std::lock_guard<std::mutex> lk(mtx); // 锁内快照，tsan 干净
             receivedSnapshot = totalReceived;
         }
-        CHECK(receivedSnapshot > 0, "C 回调在 teardown 前确有触发（竞态窗口被实际命中，非空跑）");
+        check(receivedSnapshot > 0, "C 回调在 teardown 前确有触发（竞态窗口被实际命中，非空跑）");
         std::cout << "[OBSERVE] C totalReceived=" << receivedSnapshot << " over " << R << " rounds" << std::endl;
         // asan：无 UAF（reader 未在 delete_data 后触碰 data_）；tsan：无 race
         //（delete_datareader drain 建立 happens-before）
@@ -392,7 +392,7 @@ int main()
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
     auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    CHECK(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
 
     partA1_concurrentCreateNode(svc);
     partA2_concurrentRegister(svc);

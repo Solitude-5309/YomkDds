@@ -39,7 +39,7 @@
  * 关键不变式：每个 eOk 创建的节点必须在函数返回前经 /delete_node 显式删除；不遗留未归还的 loan
  *   （借出即 publish 或 discard）。域 211 专用，隔离 MC2-5(200)/MC6(210)/MC7-concurrent(212)。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
@@ -269,15 +269,15 @@ namespace
         ResSnapshot after = sampleRes();
         printRes("S1 after churn", after);
 
-        CHECK(createOk == CYCLES && regPubOk == CYCLES && regSubOk == CYCLES && delOk == CYCLES,
+        check(createOk == CYCLES && regPubOk == CYCLES && regSubOk == CYCLES && delOk == CYCLES,
               "S1 node churn：每轮 create/register_pub/register_sub/delete 全部 eOk（无累积失败/残留）");
-        CHECK(loanOk == CYCLES * 5, "S1 每轮 loan 5 次全部成功（churn 下 plain MInt32 池不耗尽）");
-        CHECK(pubOk + discOk == loanOk, "S1 每借出样本均经 publish 或 discard 归还（无残留借出）");
-        CHECK(after.threads <= base.threads + 2,
+        check(loanOk == CYCLES * 5, "S1 每轮 loan 5 次全部成功（churn 下 plain MInt32 池不耗尽）");
+        check(pubOk + discOk == loanOk, "S1 每借出样本均经 publish 或 discard 归还（无残留借出）");
+        check(after.threads <= base.threads + 2,
               "S1 线程数回落基线（participant 销毁回收 discovery 线程；<=base+2）");
-        CHECK(after.fds <= base.fds + 8,
+        check(after.fds <= base.fds + 8,
               "S1 fd 回落基线（每轮实体全删，无 fd 泄漏；<=base+8）");
-        CHECK(after.rssKB <= base.rssKB + rssToleranceKB(base.rssKB),
+        check(after.rssKB <= base.rssKB + rssToleranceKB(base.rssKB),
               "S1 RSS 回落基线容差内（create/teardown 无单调增长；精确泄漏由 asan 兜底）");
         std::cout << "[OBSERVE] S1 cycles=" << CYCLES << " cbCount=" << cbCount.load()
                   << " | threads " << base.threads << "->" << after.threads
@@ -290,9 +290,9 @@ namespace
     {
         const std::string node = "s2_node";
         const std::string topic = "s2_topic";
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, node)).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, node)).status == yomk::payload::ResStatus::Succeeded,
               "S2 创建持久 s2_node → eOk");
-        CHECK(testInvoke(svc, "/register_pub_topic",
+        check(testInvoke(svc, "/register_pub_topic",
                           ::yomk::msgs::DDSTopic::shared(DDSTopic{node, topic, new YomkDdsStd::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "S2 register_pub_topic s2_topic(MInt32,writer-only) → eOk");
@@ -363,9 +363,9 @@ namespace
         const double earlyOps = (earlyMs > 0) ? (W / (earlyMs / 1000.0)) : 0;
         const double lateOps = (lateMs > 0) ? (W / (lateMs / 1000.0)) : 0;
 
-        CHECK(i == N, "S2 主环执行 STRESS_ITERS 次 op 无崩溃（loan+publish/discard 交替）");
-        CHECK(loanOk == loanAttempts, "S2 loan 成功数==尝试数（每样本 write/discard 即归还，池永不耗尽）");
-        CHECK(pubOk + discOk == loanOk, "S2 每借出样本均被 publish 或 discard 归还（无残留借出/池泄漏）");
+        check(i == N, "S2 主环执行 STRESS_ITERS 次 op 无崩溃（loan+publish/discard 交替）");
+        check(loanOk == loanAttempts, "S2 loan 成功数==尝试数（每样本 write/discard 即归还，池永不耗尽）");
+        check(pubOk + discOk == loanOk, "S2 每借出样本均被 publish 或 discard 归还（无残留借出/池泄漏）");
         // 吞吐退化断言的统计意义依赖窗口时长：默认规模（STRESS_ITERS=5000，W=N/10=500）下
         // 窗口仅毫秒级，单次 DDS 后台事件/调度延迟即可让 late 翻倍（2026-10-15 asan 轮实测
         // early=214k/late=89k ops/s 环境噪声误报，同二进制复跑即过）；插桩构建（asan/tsan）
@@ -379,7 +379,7 @@ namespace
 #endif
         if (kThroughputCheckEnabled && earlyMs >= kMinWindowMs && lateMs >= kMinWindowMs)
         {
-            CHECK(lateMs <= earlyMs * 2.0,
+            check(lateMs <= earlyMs * 2.0,
                   "S2 吞吐无严重退化（late 窗口耗时 <= early×2，即 late ops/s >= early×0.5）");
         }
         else
@@ -395,7 +395,7 @@ namespace
                   << static_cast<long>(lateOps) << " ops/s"
                   << " | rssKB " << pre.rssKB << "->" << post.rssKB << " (informational)" << std::endl;
 
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(node)).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(node)).status == yomk::payload::ResStatus::Succeeded,
               "S2 删除 s2_node → eOk（writer 池随节点析构释放）");
     }
 
@@ -409,7 +409,7 @@ namespace
         ResSnapshot base = sampleRes();                       // 注册前基线
         printRes("S3 pre-register baseline", base);
 
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, node)).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, node)).status == yomk::payload::ResStatus::Succeeded,
               "S3 创建 s3_node → eOk");
 
         std::atomic<long> cbCount{0};
@@ -437,7 +437,7 @@ namespace
                 ++regSubOk;
             }
         }
-        CHECK(regPubOk == K && regSubOk == K,
+        check(regPubOk == K && regSubOk == K,
               "S3 注册 K=200 pub + 200 sub 唯一主题全部 eOk（共 400 实体）");
 
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 等实体资源（fd/缓冲）落地
@@ -445,20 +445,20 @@ namespace
         printRes("S3 after register (grown)", grown);
 
         // sanity：注册 400 实体后资源确有增长（否则"回落基线"断言无意义——空跑也能过）
-        CHECK(grown.fds > base.fds || grown.rssKB > base.rssKB,
+        check(grown.fds > base.fds || grown.rssKB > base.rssKB,
               "S3 实体增长可观测（fd 或 RSS 较基线上升，证明注册确分配了资源）");
 
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(node)).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(node)).status == yomk::payload::ResStatus::Succeeded,
               "S3 删除 s3_node → eOk（~FastDDSNode 整体回收 400 实体）");
 
         std::this_thread::sleep_for(std::chrono::seconds(2)); // 等异步 teardown 释放 fd/线程/内存
         ResSnapshot after = sampleRes();
         printRes("S3 after delete (reclaimed)", after);
 
-        CHECK(after.threads <= base.threads + 2, "S3 线程数回落注册前基线（<=base+2）");
-        CHECK(after.fds <= base.fds + 8,
+        check(after.threads <= base.threads + 2, "S3 线程数回落注册前基线（<=base+2）");
+        check(after.fds <= base.fds + 8,
               "S3 fd 回落注册前基线（400 实体 fd 全释放，无每实体 fd 泄漏；<=base+8）");
-        CHECK(after.rssKB <= base.rssKB + rssToleranceKB(base.rssKB),
+        check(after.rssKB <= base.rssKB + rssToleranceKB(base.rssKB),
               "S3 RSS 回落注册前基线容差内（~FastDDSNode 完整回收 topics/writers/readers/data，无每实体内存泄漏）");
         std::cout << "[OBSERVE] S3 K=" << K
                   << " | fds " << base.fds << "->" << grown.fds << "->" << after.fds
@@ -474,7 +474,7 @@ int main()
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
     auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    CHECK(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
 
     std::cout << "[CFG] STRESS_ITERS=" << STRESS_ITERS << " STRESS_CYCLES=" << STRESS_CYCLES
               << " domain=" << TEST_DOMAIN << std::endl;

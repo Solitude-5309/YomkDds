@@ -24,7 +24,7 @@
  * 关键不变式：每个 eOk 创建的节点必须在 main 返回前经 /delete_node 显式删除；不遗留未归还的 loan
  *   （Part A 借出即 discard、Part B 每次 publish 由中间件收回、Part C 不实际借出有效样本）。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
@@ -58,47 +58,47 @@ namespace
     // Part A：loan 类型差异（plain MInt32 借出成功 / 非 plain MString 回退）+ discard 归还
     void testLoanTypeAndDiscard(YomkDdsService *svc)
     {
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "loan_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "loan_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 loan_node(domain 200) → eOk");
 
-        CHECK(testInvoke(svc, "/register_pub_topic",
+        check(testInvoke(svc, "/register_pub_topic",
                           ::yomk::msgs::DDSTopic::shared(DDSTopic{"loan_node", "loan_plain", new YomkDdsStd::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic loan_plain(MInt32,plain) → eOk");
 
         // plain 类型借出：eOk + 解包 DDSLoanResult 取 sample（writer 池指针，中间件所有权）
         auto r = testInvoke(svc, "/loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"loan_node", "loan_plain", nullptr}));
-        CHECK(r.status == yomk::payload::ResStatus::Succeeded, "loan plain MInt32 → eOk");
+        check(r.status == yomk::payload::ResStatus::Succeeded, "loan plain MInt32 → eOk");
         auto lr = ::yomk::msgs::unpack<::yomk::msgs::DDSLoanResult>(r.data);;
         void *s = (lr != nullptr) ? lr->msg.sample : nullptr;
-        CHECK(s != nullptr, "loan 返回 sample 非空（writer 池借出，中间件所有权）");
+        check(s != nullptr, "loan 返回 sample 非空（writer 池借出，中间件所有权）");
         if (s != nullptr)
         {
             static_cast<YomkDdsStd::MInt32 *>(s)->data(42); // 池内直接填值（免序列化）
-            CHECK(testInvoke(svc, "/discard_loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"loan_node", "loan_plain", s}))
+            check(testInvoke(svc, "/discard_loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"loan_node", "loan_plain", s}))
                           .status == yomk::payload::ResStatus::Succeeded,
                   "discard_loan 归还未发布样本 → eOk");
         }
 
         // 非 plain 类型借出：loan_sample RETCODE_ILLEGAL_OPERATION → sample 保持 null → 服务层 eNo
-        CHECK(testInvoke(svc, "/register_pub_topic",
+        check(testInvoke(svc, "/register_pub_topic",
                           ::yomk::msgs::DDSTopic::shared(DDSTopic{"loan_node", "loan_nonplain", new YomkDdsStd::MStringPubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic loan_nonplain(MString,非plain) → eOk");
-        CHECK(testInvoke(svc, "/loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"loan_node", "loan_nonplain", nullptr}))
+        check(testInvoke(svc, "/loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"loan_node", "loan_nonplain", nullptr}))
                       .status == yomk::payload::ResStatus::Failed,
               "loan 非 plain MString → eNo（loan_sample 不支持，回退普通发布）");
 
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("loan_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("loan_node")).status == yomk::payload::ResStatus::Succeeded,
               "删除 loan_node → eOk");
     }
 
     // Part B：loan 端到端（plain MInt32：loan→池内填值→publish→sub callback 本地回环）
     void testLoanEndToEnd(YomkDdsService *svc)
     {
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "e2e_loan_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "e2e_loan_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 e2e_loan_node → eOk");
-        CHECK(testInvoke(svc, "/register_pub_topic",
+        check(testInvoke(svc, "/register_pub_topic",
                           ::yomk::msgs::DDSTopic::shared(DDSTopic{"e2e_loan_node", "loan_e2e", new YomkDdsStd::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic loan_e2e(MInt32) → eOk");
@@ -113,7 +113,7 @@ namespace
             lastValue = m->data();
             received++;
         };
-        CHECK(testInvoke(svc, "/register_sub_topic",
+        check(testInvoke(svc, "/register_sub_topic",
                           ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"e2e_loan_node", "loan_e2e", new YomkDdsStd::MInt32PubSubType(), cb}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "register_sub_topic loan_e2e(callback) → eOk");
@@ -141,13 +141,13 @@ namespace
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
-        CHECK(loanOk == N, "loan 5 次全部成功（plain 池借出，每次 write 后重新借出）");
-        CHECK(pubOk == N, "loan→publish 5 条全部 eOk（免序列化路径）");
+        check(loanOk == N, "loan 5 次全部成功（plain 池借出，每次 write 后重新借出）");
+        check(pubOk == N, "loan→publish 5 条全部 eOk（免序列化路径）");
 
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 等待投递
 
         int r = received.load();
-        CHECK(r > 0 && r <= N, "回调收到消息数在 (0,5]（首条或因 discovery 时序丢失）");
+        check(r > 0 && r <= N, "回调收到消息数在 (0,5]（首条或因 discovery 时序丢失）");
         int32_t lv = 0;
         {
             std::lock_guard<std::mutex> lk(mtx);
@@ -155,37 +155,37 @@ namespace
         }
         std::cout << "[OBSERVE] loan e2e received=" << r << "/" << N << " lastValue=" << lv << std::endl;
 
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("e2e_loan_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("e2e_loan_node")).status == yomk::payload::ResStatus::Succeeded,
               "删除 e2e_loan_node → eOk（析构 reader 停止回调，捕获状态仍存活）");
     }
 
     // Part C：loan/discard 守卫（未注册主题 / sample==null）
     void testLoanGuards(YomkDdsService *svc)
     {
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "lg_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "lg_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 lg_node → eOk");
 
-        CHECK(testInvoke(svc, "/loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"lg_node", "no_topic", nullptr}))
+        check(testInvoke(svc, "/loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"lg_node", "no_topic", nullptr}))
                       .status == yomk::payload::ResStatus::Failed,
               "loan 未注册主题 → eNo（pubTopics_.find 失败）");
 
-        CHECK(testInvoke(svc, "/register_pub_topic",
+        check(testInvoke(svc, "/register_pub_topic",
                           ::yomk::msgs::DDSTopic::shared(DDSTopic{"lg_node", "lg_topic", new YomkDdsStd::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic lg_topic(MInt32) → eOk");
 
-        CHECK(testInvoke(svc, "/discard_loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"lg_node", "lg_topic", nullptr}))
+        check(testInvoke(svc, "/discard_loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"lg_node", "lg_topic", nullptr}))
                       .status == yomk::payload::ResStatus::Failed,
               "discard_loan sample=nullptr → eNo（FastDDSNode::discardLoan 守卫）");
 
         // 未注册主题：FastDDSNode::discardLoan 在 pubTopics_.find 失败处短路返回，绝不解引用 sample，
         // 故传任意非空指针安全（即便触达 writer，discard_loan 对非法指针返回 BAD_PARAMETER 亦不崩溃）
         int dummy = 0;
-        CHECK(testInvoke(svc, "/discard_loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"lg_node", "no_topic", static_cast<void *>(&dummy)}))
+        check(testInvoke(svc, "/discard_loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"lg_node", "no_topic", static_cast<void *>(&dummy)}))
                       .status == yomk::payload::ResStatus::Failed,
               "discard_loan 未注册主题 → eNo（pubTopics_.find 失败短路，不触达 writer）");
 
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("lg_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("lg_node")).status == yomk::payload::ResStatus::Succeeded,
               "删除 lg_node → eOk");
     }
 } // namespace
@@ -196,7 +196,7 @@ int main()
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
     auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    CHECK(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
 
     testLoanTypeAndDiscard(svc);
     testLoanEndToEnd(svc);

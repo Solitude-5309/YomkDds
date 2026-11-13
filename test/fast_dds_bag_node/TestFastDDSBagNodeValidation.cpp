@@ -25,7 +25,7 @@
  * 域号 201：与 TestYomkDdsBagServiceLifecycle(200)/TestFastDDSBagNodeRecord(202) 错开，
  * ctest 串行执行互不残留。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
@@ -84,56 +84,56 @@ int main()
         std::vector<FastDDSBagNode::BagTopicStat> stats;
         std::string error;
         const bool ok = node.record({"rt/bag_val_any"}, stats, &error);
-        CHECK(!ok, "V1 未入域 record → false");
-        CHECK(error.find("bag node not created") != std::string::npos,
+        check(!ok, "V1 未入域 record → false");
+        check(error.find("bag node not created") != std::string::npos,
               "V1 error 含 bag node not created");
-        CHECK(node.bagDir().empty(), "V1 失败后 bagDir() 为空（未建 bag）");
+        check(node.bagDir().empty(), "V1 失败后 bagDir() 为空（未建 bag）");
     }
 
     // ---- V2：入域成功 + 重复入域拒绝 ----
     FastDDSBagNode node;
-    CHECK(node.setDomainId(TEST_DOMAIN), "V2 setDomainId(201) 首次成功（真实创建 participant）");
-    CHECK(!node.setDomainId(TEST_DOMAIN), "V2 重复 setDomainId → false（仅成功一次）");
-    CHECK(!node.setDomainId(0), "V2 换域重复 setDomainId → false");
+    check(node.setDomainId(TEST_DOMAIN), "V2 setDomainId(201) 首次成功（真实创建 participant）");
+    check(!node.setDomainId(TEST_DOMAIN), "V2 重复 setDomainId → false（仅成功一次）");
+    check(!node.setDomainId(0), "V2 换域重复 setDomainId → false");
 
     // ---- V3：清单快速校验（先于发现收敛等待，瞬间返回） ----
     {
         std::vector<FastDDSBagNode::BagTopicStat> stats;
         std::string error;
-        CHECK(!node.record({}, stats, &error), "V3 空清单 → false");
-        CHECK(error.find("no topics given") != std::string::npos, "V3 空清单 → no topics given");
+        check(!node.record({}, stats, &error), "V3 空清单 → false");
+        check(error.find("no topics given") != std::string::npos, "V3 空清单 → no topics given");
 
-        CHECK(!node.record({"t_ok", ""}, stats, &error), "V3 含空名 → false");
-        CHECK(error.find("empty topic name in topic list") != std::string::npos,
+        check(!node.record({"t_ok", ""}, stats, &error), "V3 含空名 → false");
+        check(error.find("empty topic name in topic list") != std::string::npos,
               "V3 含空名 → empty topic name in topic list");
 
-        CHECK(!node.record({"t_dup", "t_dup"}, stats, &error), "V3 重复主题 → false");
-        CHECK(error.find("duplicate topic [t_dup] in topic list") != std::string::npos,
+        check(!node.record({"t_dup", "t_dup"}, stats, &error), "V3 重复主题 → false");
+        check(error.find("duplicate topic [t_dup] in topic list") != std::string::npos,
               "V3 重复主题 → duplicate topic [t_dup] in topic list");
 
-        CHECK(!node.record({"a*b*c"}, stats, &error), "V3 多通配（≥2 个 '*'）→ false");
-        CHECK(error.find("仅支持单个通配") != std::string::npos,
+        check(!node.record({"a*b*c"}, stats, &error), "V3 多通配（≥2 个 '*'）→ false");
+        check(error.find("仅支持单个通配") != std::string::npos,
               "V3 多通配 → 仅支持单个通配");
 
         // outputDir 已存在：fail-fast 于发现校验前（纯输入错误，不等待不落盘）
         // 用例目录名避开 bag_ 前缀，防泄漏快照断言（bagDirCreated）误报
         std::error_code mkEc;
         std::filesystem::create_directory("taken_dir", mkEc);
-        CHECK(!mkEc, "V3 前置：taken_dir 创建成功");
-        CHECK(!node.record({"rt/bag_val_noend"}, stats, &error, 0, 0, "taken_dir"),
+        check(!mkEc, "V3 前置：taken_dir 创建成功");
+        check(!node.record({"rt/bag_val_noend"}, stats, &error, 0, 0, "taken_dir"),
               "V3 outputDir 已存在 → false");
-        CHECK(error.find("bag directory [taken_dir] already exists") != std::string::npos,
+        check(error.find("bag directory [taken_dir] already exists") != std::string::npos,
               "V3 outputDir 已存在 → already exists 文案");
         std::error_code emptyEc;
-        CHECK(std::filesystem::is_empty("taken_dir", emptyEc),
+        check(std::filesystem::is_empty("taken_dir", emptyEc),
               "V3 outputDir 已存在拒绝后目录内无新文件（不落盘）");
         std::filesystem::remove("taken_dir", mkEc);
 
         // -b 分片上限过小：fail-fast 于发现校验前（纯输入错误，不等待不落盘；下限 1024）
-        CHECK(!node.record({"rt/bag_val_small"}, stats, &error, 0, 0, "", kTooSmallSplit) &&
+        check(!node.record({"rt/bag_val_small"}, stats, &error, 0, 0, "", kTooSmallSplit) &&
                   error.find("too small") != std::string::npos,
               "V3 maxBagSize=999 → false + too small 文案");
-        CHECK(!node.record({"rt/bag_val_small"}, stats, &error, 0, 0, "", kBoundarySplit) &&
+        check(!node.record({"rt/bag_val_small"}, stats, &error, 0, 0, "", kBoundarySplit) &&
                   error.find("minimum split file size is 1024") != std::string::npos,
               "V3 maxBagSize=1023 边界 → false + 下限 1024 文案");
     }
@@ -143,16 +143,16 @@ int main()
         std::vector<FastDDSBagNode::BagTopicStat> stats;
         std::string error;
         const bool ok = node.record({"rt/bag_val_miss"}, stats, &error);
-        CHECK(!ok, "V4 无端点主题 record → false");
-        CHECK(error.find("主题 [rt/bag_val_miss] 既无发布者也无订阅者") != std::string::npos,
+        check(!ok, "V4 无端点主题 record → false");
+        check(error.find("主题 [rt/bag_val_miss] 既无发布者也无订阅者") != std::string::npos,
               "V4 error 含「主题 [...] 既无发布者也无订阅者」逐主题文本");
-        CHECK(error.find("域 " + std::to_string(TEST_DOMAIN)) != std::string::npos,
+        check(error.find("域 " + std::to_string(TEST_DOMAIN)) != std::string::npos,
               "V4 error 含域号（域 201）");
-        CHECK(error.find("已等待") != std::string::npos && error.find("ms") != std::string::npos,
+        check(error.find("已等待") != std::string::npos && error.find("ms") != std::string::npos,
               "V4 error 含等待时长（已等待 M ms）");
-        CHECK(stats.empty(), "V4 校验失败 stats 不回填（保持空）");
-        CHECK(node.bagDir().empty(), "V4 校验失败 bagDir() 为空（未建 bag）");
-        CHECK(!bagDirCreated(bagDirsBefore), "V4 校验失败无 bag_ 目录产生");
+        check(stats.empty(), "V4 校验失败 stats 不回填（保持空）");
+        check(node.bagDir().empty(), "V4 校验失败 bagDir() 为空（未建 bag）");
+        check(!bagDirCreated(bagDirsBefore), "V4 校验失败无 bag_ 目录产生");
     }
 
     // ---- V5：混合清单 → 整体报错（hit 有远端发布者、miss 无端点） ----
@@ -162,7 +162,7 @@ int main()
         // 远端发布端：域 201 建 MString 发布者（仅端点在线制造"有发布者"主题，不发数据）
         auto *peerParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-        CHECK(peerParticipant != nullptr, "V5 远端发布端 participant 创建成功");
+        check(peerParticipant != nullptr, "V5 远端发布端 participant 创建成功");
         dds::TypeSupport ts(new YomkDdsStd::MStringPubSubType());
         ts.register_type(peerParticipant);
         auto *pub = peerParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
@@ -171,38 +171,38 @@ int main()
         auto *writer =
             (pub != nullptr && topic != nullptr) ? pub->create_datawriter(topic, dds::DATAWRITER_QOS_DEFAULT)
                                                  : nullptr;
-        CHECK(writer != nullptr, "V5 远端 DataWriter 创建成功（rt/bag_val_hit，仅建端点不发布数据）");
+        check(writer != nullptr, "V5 远端 DataWriter 创建成功（rt/bag_val_hit，仅建端点不发布数据）");
 
         // 混合清单整体报错：miss 无端点即整体拒绝（error 只列 miss，hit 不因有端点而通过）
         std::vector<FastDDSBagNode::BagTopicStat> stats;
         std::string error;
         const bool ok = node.record({"rt/bag_val_hit", "rt/bag_val_miss2"}, stats, &error);
-        CHECK(!ok, "V5 混合清单 → false（一个无端点即整体报错）");
-        CHECK(error.find("rt/bag_val_miss2") != std::string::npos,
+        check(!ok, "V5 混合清单 → false（一个无端点即整体报错）");
+        check(error.find("rt/bag_val_miss2") != std::string::npos,
               "V5 error 含 miss 主题（rt/bag_val_miss2）");
-        CHECK(error.find("主题 [rt/bag_val_hit]") == std::string::npos,
+        check(error.find("主题 [rt/bag_val_hit]") == std::string::npos,
               "V5 error 不误报有端点的 hit 主题");
-        CHECK(node.bagDir().empty(), "V5 混合清单拒绝不建 bag（bagDir() 为空）");
-        CHECK(!bagDirCreated(bagDirsBefore), "V5 混合清单拒绝无 bag_ 目录产生");
+        check(node.bagDir().empty(), "V5 混合清单拒绝不建 bag（bagDir() 为空）");
+        check(!bagDirCreated(bagDirsBefore), "V5 混合清单拒绝无 bag_ 目录产生");
 
         // 失败后节点未定格可重试：同节点再次 record 仍能走到校验（非 record already finished）
         std::string error2;
         const bool ok2 = node.record({"rt/bag_val_miss3"}, stats, &error2);
-        CHECK(!ok2, "V5 失败后重试仍走校验 → false");
-        CHECK(error2.find("record already finished") == std::string::npos,
+        check(!ok2, "V5 失败后重试仍走校验 → false");
+        check(error2.find("record already finished") == std::string::npos,
               "V5 校验失败不定格（重试报错非 record already finished）");
-        CHECK(error2.find("rt/bag_val_miss3") != std::string::npos, "V5 重试 error 含新清单主题");
+        check(error2.find("rt/bag_val_miss3") != std::string::npos, "V5 重试 error 含新清单主题");
 
         // 精确命中 + 模式空命中 → 整体报错：error 含模式空命中文案、不误报有端点的 hit
         std::string error3;
         const bool ok3 = node.record({"rt/bag_val_hit", "rt/bag_val_nope_*"}, stats, &error3);
-        CHECK(!ok3, "V5 精确命中 + 模式空命中 → false（整体报错）");
-        CHECK(error3.find("模式 [rt/bag_val_nope_*] 未匹配到任何主题") != std::string::npos,
+        check(!ok3, "V5 精确命中 + 模式空命中 → false（整体报错）");
+        check(error3.find("模式 [rt/bag_val_nope_*] 未匹配到任何主题") != std::string::npos,
               "V5 error 含「模式 [...] 未匹配到任何主题」逐项文本");
-        CHECK(error3.find("主题 [rt/bag_val_hit]") == std::string::npos,
+        check(error3.find("主题 [rt/bag_val_hit]") == std::string::npos,
               "V5 error 不误报有端点的 hit 主题");
-        CHECK(node.bagDir().empty(), "V5 模式空命中拒绝不建 bag（bagDir() 为空）");
-        CHECK(!bagDirCreated(bagDirsBefore), "V5 模式空命中拒绝无 bag_ 目录产生");
+        check(node.bagDir().empty(), "V5 模式空命中拒绝不建 bag（bagDir() 为空）");
+        check(!bagDirCreated(bagDirsBefore), "V5 模式空命中拒绝无 bag_ 目录产生");
 
         // 远端发布端清理（先于 bag 节点析构亦可，二者独立参与者）
         if (peerParticipant != nullptr)
@@ -211,7 +211,7 @@ int main()
         }
     }
 
-    CHECK(!bagDirCreated(bagDirsBefore), "全程无 bag_ 目录产生（校验失败不落盘）");
+    check(!bagDirCreated(bagDirsBefore), "全程无 bag_ 目录产生（校验失败不落盘）");
 
     return testReport("TestFastDDSBagNodeValidation");
 }

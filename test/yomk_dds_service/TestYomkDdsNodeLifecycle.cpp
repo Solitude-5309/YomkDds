@@ -39,7 +39,7 @@
  *   晚于 FastDDS DomainParticipantFactory 单例销毁导致的静态析构顺序问题
  *   （参见 examples/ExampleYomkDdsPub.cpp：退出前显式销毁节点）。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
@@ -81,46 +81,46 @@ namespace
       // Part A-1：生命周期——创建/重名/同域共存/删除/重复删除
       void testLifecycle(YomkDdsService *svc)
       {
-            CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "node_a")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "node_a")).status == yomk::payload::ResStatus::Succeeded,
                   "创建 node_a(domain 200) → eOk（真实创建 participant）");
 
             auto dup = testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "node_a"));
-            CHECK(dup.status == yomk::payload::ResStatus::Failed && dup.msg.find("already exists") != std::string::npos,
+            check(dup.status == yomk::payload::ResStatus::Failed && dup.msg.find("already exists") != std::string::npos,
                   "重名 node_a → eNo already exists（服务层前置校验，不新建 participant）");
 
-            CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "node_b")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "node_b")).status == yomk::payload::ResStatus::Succeeded,
                   "创建 node_b → eOk（与 node_a 同域共存，各自独立 participant）");
 
-            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_a")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_a")).status == yomk::payload::ResStatus::Succeeded,
                   "删除 node_a → eOk（析构清理 participant）");
 
             auto del2 = testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_a"));
-            CHECK(del2.status == yomk::payload::ResStatus::Failed && del2.msg.find("not exists") != std::string::npos,
+            check(del2.status == yomk::payload::ResStatus::Failed && del2.msg.find("not exists") != std::string::npos,
                   "重复删除 node_a → eNo not exists");
 
-            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_b")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_b")).status == yomk::payload::ResStatus::Succeeded,
                   "删除 node_b → eOk");
       }
 
       // Part A-2：domainId 边界——有效域 [0,232]（O1 前置校验）；越界 233/UINT32_MAX 直接 eNo
       void testDomainIdBoundary(YomkDdsService *svc)
       {
-            CHECK(testInvoke(svc, "/create_node", mkNode(0, "node_d0")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/create_node", mkNode(0, "node_d0")).status == yomk::payload::ResStatus::Succeeded,
                   "domainId=0 → eOk（有效域下界）");
-            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_d0")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_d0")).status == yomk::payload::ResStatus::Succeeded,
                   "删除 node_d0 → eOk");
 
-            CHECK(testInvoke(svc, "/create_node", mkNode(232, "node_d232")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/create_node", mkNode(232, "node_d232")).status == yomk::payload::ResStatus::Succeeded,
                   "domainId=232 → eOk（有效域上界，FastDDS 端口算术上限）");
-            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_d232")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_d232")).status == yomk::payload::ResStatus::Succeeded,
                   "删除 node_d232 → eOk");
 
             auto r233 = testInvoke(svc, "/create_node", mkNode(233, "node_d233"));
-            CHECK(r233.status == yomk::payload::ResStatus::Failed && r233.msg.find("out of valid range") != std::string::npos,
+            check(r233.status == yomk::payload::ResStatus::Failed && r233.msg.find("out of valid range") != std::string::npos,
                   "domainId=233 → eNo out of valid range（O1 越界拒绝，不建 participant）");
 
             auto rmax = testInvoke(svc, "/create_node", mkNode(UINT32_MAX, "node_dmax"));
-            CHECK(rmax.status == yomk::payload::ResStatus::Failed && rmax.msg.find("out of valid range") != std::string::npos,
+            check(rmax.status == yomk::payload::ResStatus::Failed && rmax.msg.find("out of valid range") != std::string::npos,
                   "domainId=UINT32_MAX → eNo out of valid range（O1 前置拦截，不再回绕深入 setDomainId）");
             std::cout << "[OBSERVE] domainId=UINT32_MAX status=" << static_cast<int>(rmax.status)
                       << " msg=\"" << rmax.msg << "\"" << std::endl;
@@ -130,18 +130,18 @@ namespace
       void testNodeNameBoundary(YomkDdsService *svc)
       {
             auto rempty = testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, ""));
-            CHECK(rempty.status == yomk::payload::ResStatus::Failed && rempty.msg.find("node name is empty") != std::string::npos,
+            check(rempty.status == yomk::payload::ResStatus::Failed && rempty.msg.find("node name is empty") != std::string::npos,
                   "nodeName 空串 → eNo node name is empty（O2 拒绝，不建节点/不建 participant）");
 
-            CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "x")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "x")).status == yomk::payload::ResStatus::Succeeded,
                   "nodeName 单字符 x → eOk");
-            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("x")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("x")).status == yomk::payload::ResStatus::Succeeded,
                   "删除单字符节点 → eOk");
 
             const std::string longName(1024, 'N');
-            CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, longName)).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, longName)).status == yomk::payload::ResStatus::Succeeded,
                   "nodeName 1024B 超长 → eOk（无长度校验）");
-            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(longName)).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(longName)).status == yomk::payload::ResStatus::Succeeded,
                   "删除超长名节点 → eOk");
       }
 
@@ -149,9 +149,9 @@ namespace
       void testSetDomainIdGuard()
       {
             FastDDSNode node;
-            CHECK(node.setDomainId(TEST_DOMAIN, "test-lifecycle-node"),
+            check(node.setDomainId(TEST_DOMAIN, "test-lifecycle-node"),
                   "Part B: 首次 setDomainId(200, \"test-lifecycle-node\") → true（创建 participant，test 前缀命名）");
-            CHECK(!node.setDomainId(TEST_DOMAIN, "test-lifecycle-node"),
+            check(!node.setDomainId(TEST_DOMAIN, "test-lifecycle-node"),
                   "Part B: 重复 setDomainId → false（participant_!=nullptr 守卫，服务层每次新建 FastDDSNode 故不可达）");
             // node 栈对象在此离开作用域析构，清理 participant（DomainParticipantFactory 仍存活）
 
@@ -159,7 +159,7 @@ namespace
             // UINT32_MAX→(int32_t)-1 非法域，create_participant 返回 null，
             // participant_ 保持 null、析构早退，不建 participant
             FastDDSNode badNode;
-            CHECK(!badNode.setDomainId(UINT32_MAX, "test-lifecycle-bad"),
+            check(!badNode.setDomainId(UINT32_MAX, "test-lifecycle-bad"),
                   "Part B: setDomainId(UINT32_MAX) → false（非法域 create_participant 返回 null，覆盖 participant==null 分支）");
       }
 
@@ -266,38 +266,38 @@ namespace
             // C-1 parseServerLocator 容错矩阵
             std::vector<DDSServerInfo> servers;
             std::string err;
-            CHECK(yomkdds_xml::parseServerLocator("127.0.0.1", servers, err) &&
+            check(yomkdds_xml::parseServerLocator("127.0.0.1", servers, err) &&
                       servers.size() == 1 && servers[0].address == "127.0.0.1" && servers[0].port == 11811,
                   "Part C: 单项无 port → address 原样 + port 缺省 11811");
-            CHECK(yomkdds_xml::parseServerLocator("10.0.0.1:7400;192.168.1.1:65535", servers, err) &&
+            check(yomkdds_xml::parseServerLocator("10.0.0.1:7400;192.168.1.1:65535", servers, err) &&
                       servers.size() == 2 && servers[0].port == 7400 && servers[1].port == 65535,
                   "Part C: 多项带 port → 逐项解析（分号分隔）");
-            CHECK(!yomkdds_xml::parseServerLocator("10.0.0.1;;10.0.0.2", servers, err) && !err.empty(),
+            check(!yomkdds_xml::parseServerLocator("10.0.0.1;;10.0.0.2", servers, err) && !err.empty(),
                   "Part C: 空项 → false + err 非空");
-            CHECK(!yomkdds_xml::parseServerLocator(":7400", servers, err) && !err.empty(),
+            check(!yomkdds_xml::parseServerLocator(":7400", servers, err) && !err.empty(),
                   "Part C: 空 ip → false + err 非空");
-            CHECK(!yomkdds_xml::parseServerLocator("10.0.0.1:abc", servers, err) && !err.empty(),
+            check(!yomkdds_xml::parseServerLocator("10.0.0.1:abc", servers, err) && !err.empty(),
                   "Part C: 非数字 port → false + err 非空");
-            CHECK(!yomkdds_xml::parseServerLocator("10.0.0.1:0", servers, err) && !err.empty(),
+            check(!yomkdds_xml::parseServerLocator("10.0.0.1:0", servers, err) && !err.empty(),
                   "Part C: port=0 下界外 → false + err 非空");
-            CHECK(!yomkdds_xml::parseServerLocator("10.0.0.1:65536", servers, err) && !err.empty(),
+            check(!yomkdds_xml::parseServerLocator("10.0.0.1:65536", servers, err) && !err.empty(),
                   "Part C: port=65536 上界外 → false + err 非空");
 
             // C-2 applyDiscoveryServers 读回（合法 → CLIENT+locator 逐项；非法 → false 且不改动 qos）
             dds::DomainParticipantQos qos = dds::PARTICIPANT_QOS_DEFAULT;
-            CHECK(yomkdds_xml::applyDiscoveryServers(qos, "127.0.0.1:11811", "", err) && err.empty(),
+            check(yomkdds_xml::applyDiscoveryServers(qos, "127.0.0.1:11811", "", err) && err.empty(),
                   "Part C: 合法 UDP spec → true");
-            CHECK(qos.wire_protocol().builtin.discovery_config.discoveryProtocol ==
+            check(qos.wire_protocol().builtin.discovery_config.discoveryProtocol ==
                       rtps::DiscoveryProtocol::CLIENT,
                   "Part C: 读回 discoveryProtocol == CLIENT（直配强制 client 角色）");
-            CHECK(qos.wire_protocol().builtin.discovery_config.m_DiscoveryServers.size() == 1,
+            check(qos.wire_protocol().builtin.discovery_config.m_DiscoveryServers.size() == 1,
                   "Part C: 读回 m_DiscoveryServers size==1");
             const rtps::Locator &loc = *qos.wire_protocol().builtin.discovery_config.m_DiscoveryServers.begin();
-            CHECK(rtps::IPLocator::toIPv4string(loc) == "127.0.0.1" && loc.port == 11811,
+            check(rtps::IPLocator::toIPv4string(loc) == "127.0.0.1" && loc.port == 11811,
                   "Part C: 读回 locator 逐项 → ip 127.0.0.1 / port 11811");
-            CHECK(!yomkdds_xml::applyDiscoveryServers(qos, "10.0.0.1:xyz", "", err) && !err.empty(),
+            check(!yomkdds_xml::applyDiscoveryServers(qos, "10.0.0.1:xyz", "", err) && !err.empty(),
                   "Part C: 非法 spec → false + err 非空");
-            CHECK(qos.wire_protocol().builtin.discovery_config.m_DiscoveryServers.size() == 1 &&
+            check(qos.wire_protocol().builtin.discovery_config.m_DiscoveryServers.size() == 1 &&
                       rtps::IPLocator::toIPv4string(
                           *qos.wire_protocol().builtin.discovery_config.m_DiscoveryServers.begin()) == "127.0.0.1",
                   "Part C: 非法 spec 不改动 qos（原 locator 保留）");
@@ -305,9 +305,9 @@ namespace
             // C-2b TCP 通道：TCPv4 locator 读回 + participant 侧自动补注入 TCPv4 传输
             //（builtin 默认集不含 TCP，不可达；注入与 builtin UDPv4/SHM alongside 共存）
             dds::DomainParticipantQos qosTcp = dds::PARTICIPANT_QOS_DEFAULT;
-            CHECK(yomkdds_xml::applyDiscoveryServers(qosTcp, "", "10.0.0.2:42100", err) && err.empty(),
+            check(yomkdds_xml::applyDiscoveryServers(qosTcp, "", "10.0.0.2:42100", err) && err.empty(),
                   "Part C: 合法 TCP spec → true");
-            CHECK(qosTcp.wire_protocol().builtin.discovery_config.m_DiscoveryServers.size() == 1 &&
+            check(qosTcp.wire_protocol().builtin.discovery_config.m_DiscoveryServers.size() == 1 &&
                       qosTcp.wire_protocol().builtin.discovery_config.m_DiscoveryServers.begin()->kind ==
                           LOCATOR_KIND_TCPv4 &&
                       rtps::IPLocator::toIPv4string(
@@ -315,24 +315,24 @@ namespace
                           "10.0.0.2" &&
                       qosTcp.wire_protocol().builtin.discovery_config.m_DiscoveryServers.begin()->port == 42100,
                   "Part C: TCP 通道读回 → TCPv4 locator 10.0.0.2:42100");
-            CHECK(qosTcp.transport().user_transports.size() == 1 &&
+            check(qosTcp.transport().user_transports.size() == 1 &&
                       std::dynamic_pointer_cast<rtps::TCPv4TransportDescriptor>(
                           qosTcp.transport().user_transports[0]) != nullptr,
                   "Part C: TCP 通道自动补注入 TCPv4TransportDescriptor");
-            CHECK(yomkdds_xml::applyDiscoveryServers(qosTcp, "10.0.0.3:11811", "10.0.0.4:42100", err) &&
+            check(yomkdds_xml::applyDiscoveryServers(qosTcp, "10.0.0.3:11811", "10.0.0.4:42100", err) &&
                       qosTcp.transport().user_transports.size() == 1 &&
                       qosTcp.wire_protocol().builtin.discovery_config.m_DiscoveryServers.size() == 2,
                   "Part C: 二次叠加（UDP+TCP）→ 已有 TCPv4 描述符不重复注入，locator 双通道并存");
 
             // C-2c 多 server：双通道各多项 spec → locator 逐项按序入表，TCPv4 描述符仍只注入一次
             dds::DomainParticipantQos qosMulti = dds::PARTICIPANT_QOS_DEFAULT;
-            CHECK(yomkdds_xml::applyDiscoveryServers(qosMulti, "10.0.0.1:7400;192.168.1.1:7401",
+            check(yomkdds_xml::applyDiscoveryServers(qosMulti, "10.0.0.1:7400;192.168.1.1:7401",
                       "10.0.0.2:42100;10.0.0.5:42101", err) && err.empty(),
                   "Part C: 多 UDP+多 TCP spec → true");
             {
                 const auto &multiServers =
                     qosMulti.wire_protocol().builtin.discovery_config.m_DiscoveryServers;
-                CHECK(multiServers.size() == 4,
+                check(multiServers.size() == 4,
                       "Part C: 多 server 读回 m_DiscoveryServers size==4（UDP 先于 TCP 按序）");
                 const char *expectIp[4] = {"10.0.0.1", "192.168.1.1", "10.0.0.2", "10.0.0.5"};
                 uint32_t expectPort[4] = {7400, 7401, 42100, 42101};
@@ -348,9 +348,9 @@ namespace
                     ++idx;
                 }
                 multiOk = multiOk && idx == 4;
-                CHECK(multiOk, "Part C: 多 server 逐项读回 ip/port/kind 按序匹配");
+                check(multiOk, "Part C: 多 server 逐项读回 ip/port/kind 按序匹配");
             }
-            CHECK(qosMulti.transport().user_transports.size() == 1 &&
+            check(qosMulti.transport().user_transports.size() == 1 &&
                       std::dynamic_pointer_cast<rtps::TCPv4TransportDescriptor>(
                           qosMulti.transport().user_transports[0]) != nullptr,
                   "Part C: 多 TCP server → TCPv4 描述符仍只注入一个");
@@ -364,23 +364,23 @@ namespace
                 unsetenv("YOMKDDS_UDP_DISCOVER_SERVERS");
                 unsetenv("YOMKDDS_TCP_DISCOVER_SERVERS");
                 unsetenv("YOMKDDS_DDS_DOMAIN_ID");  // 域号一并隔离（收尾同清）
-                CHECK(!YomkDdsUseDiscoverServer() && YomkDdsDefaultUdpDiscoverServers().empty() &&
+                check(!YomkDdsUseDiscoverServer() && YomkDdsDefaultUdpDiscoverServers().empty() &&
                           YomkDdsDefaultTcpDiscoverServers().empty(),
                       "Part C: 三 env 全未设置 → 开关 false + 双 server 串空（不直配=现状行为）");
 
                 // 开关 true + UDP 串：原样返回（含多项分号串）；TCP 未设 → 空串
                 setenv("YOMKDDS_USE_DISCOVER_SERVER", "true", 1);
                 setenv("YOMKDDS_UDP_DISCOVER_SERVERS", "10.0.0.9:11811;10.0.0.8", 1);
-                CHECK(YomkDdsDefaultUdpDiscoverServers() == "10.0.0.9:11811;10.0.0.8" &&
+                check(YomkDdsDefaultUdpDiscoverServers() == "10.0.0.9:11811;10.0.0.8" &&
                           YomkDdsDefaultTcpDiscoverServers().empty(),
                       "Part C: 开关 true → UDP 串原样返回 + TCP 未设为空");
                 setenv("YOMKDDS_TCP_DISCOVER_SERVERS", "10.0.0.7", 1);
-                CHECK(YomkDdsDefaultTcpDiscoverServers() == "10.0.0.7",
+                check(YomkDdsDefaultTcpDiscoverServers() == "10.0.0.7",
                       "Part C: 开关 true → TCP 串原样返回（port 缺省由节点层解析）");
 
                 // DDSNode 缺省尾参聚合初始化：双通道字段经默认成员初始化器读 env
                 DDSNode envProbe{"env_probe"};
-                CHECK(envProbe.udpDiscoverServerLocator == "10.0.0.9:11811;10.0.0.8" &&
+                check(envProbe.udpDiscoverServerLocator == "10.0.0.9:11811;10.0.0.8" &&
                           envProbe.tcpDiscoverServerLocator == "10.0.0.7",
                       "Part C: DDSNode 缺省尾参聚合初始化 → 双通道字段经 env 初始化器读回");
 
@@ -389,7 +389,7 @@ namespace
                 setenv("YOMKDDS_DDS_DOMAIN_ID", "5", 1);
                 DDSDebugNode dbgProbe{};
                 DDSBagNode bagProbe{};
-                CHECK(dbgProbe.domainId == 5 &&
+                check(dbgProbe.domainId == 5 &&
                           dbgProbe.udpDiscoverServerLocator == "10.0.0.9:11811;10.0.0.8" &&
                           dbgProbe.tcpDiscoverServerLocator == "10.0.0.7" &&
                           bagProbe.domainId == 5 &&
@@ -403,7 +403,7 @@ namespace
                 DDSNode offProbe{"off_probe"};
                 DDSDebugNode dbgOff{};
                 DDSBagNode bagOff{};
-                CHECK(YomkDdsDefaultUdpDiscoverServers().empty() &&
+                check(YomkDdsDefaultUdpDiscoverServers().empty() &&
                           YomkDdsDefaultTcpDiscoverServers().empty() &&
                           offProbe.udpDiscoverServerLocator.empty() &&
                           offProbe.tcpDiscoverServerLocator.empty() &&
@@ -416,43 +416,43 @@ namespace
 
                 // 开关取值兼容矩阵：TRUE/1 → 开；yes/空串 → 关
                 setenv("YOMKDDS_USE_DISCOVER_SERVER", "TRUE", 1);
-                CHECK(YomkDdsUseDiscoverServer(), "Part C: 开关 TRUE（大写）→ 开（大小写不敏感）");
+                check(YomkDdsUseDiscoverServer(), "Part C: 开关 TRUE（大写）→ 开（大小写不敏感）");
                 setenv("YOMKDDS_USE_DISCOVER_SERVER", "1", 1);
-                CHECK(YomkDdsUseDiscoverServer(), "Part C: 开关 1 → 开");
+                check(YomkDdsUseDiscoverServer(), "Part C: 开关 1 → 开");
                 setenv("YOMKDDS_USE_DISCOVER_SERVER", "yes", 1);
-                CHECK(!YomkDdsUseDiscoverServer(), "Part C: 开关 yes → 关（仅 true/1 视为开）");
+                check(!YomkDdsUseDiscoverServer(), "Part C: 开关 yes → 关（仅 true/1 视为开）");
                 setenv("YOMKDDS_USE_DISCOVER_SERVER", "", 1);
-                CHECK(!YomkDdsUseDiscoverServer(), "Part C: 开关空串 → 关");
+                check(!YomkDdsUseDiscoverServer(), "Part C: 开关空串 → 关");
 
                 // 收尾全清：不留 env 残留影响后续 Part
                 unsetenv("YOMKDDS_USE_DISCOVER_SERVER");
                 unsetenv("YOMKDDS_UDP_DISCOVER_SERVERS");
                 unsetenv("YOMKDDS_TCP_DISCOVER_SERVERS");
                 unsetenv("YOMKDDS_DDS_DOMAIN_ID");
-                CHECK(!YomkDdsUseDiscoverServer(), "Part C: 收尾 unsetenv 四变量 → 开关回落 false");
+                check(!YomkDdsUseDiscoverServer(), "Part C: 收尾 unsetenv 四变量 → 开关回落 false");
             }
 
             // C-3 participantQosFromXml 三态（leaseDuration 为最简可观察字段）
             dds::DomainParticipantQos byName = dds::PARTICIPANT_QOS_DEFAULT;
             yomkdds_xml::participantQosFromXml(byName, "xml_by_name", kWhiteboxXml);
-            CHECK(byName.wire_protocol().builtin.discovery_config.leaseDuration.seconds == 123,
+            check(byName.wire_protocol().builtin.discovery_config.leaseDuration.seconds == 123,
                   "Part C: ①按名 profile 命中 → leaseDuration=123");
 
             dds::DomainParticipantQos byDefault = dds::PARTICIPANT_QOS_DEFAULT;
             yomkdds_xml::participantQosFromXml(byDefault, "no_such_node", kWhiteboxXml);
-            CHECK(byDefault.wire_protocol().builtin.discovery_config.leaseDuration.seconds == 456,
+            check(byDefault.wire_protocol().builtin.discovery_config.leaseDuration.seconds == 456,
                   "Part C: ②按名落空 → is_default_profile 默认档兑底 leaseDuration=456");
 
             dds::DomainParticipantQos fallback = dds::PARTICIPANT_QOS_DEFAULT;
             const auto defLease = fallback.wire_protocol().builtin.discovery_config.leaseDuration.seconds;
             yomkdds_xml::participantQosFromXml(fallback, "no_such_node", kWhiteboxXmlNoDefault);
-            CHECK(fallback.wire_protocol().builtin.discovery_config.leaseDuration.seconds == defLease,
+            check(fallback.wire_protocol().builtin.discovery_config.leaseDuration.seconds == defLease,
                   "Part C: ③两级全落空 → 保持 DEFAULT 底座（回退现状非错误）");
 
             dds::DomainParticipantQos emptyXml = dds::PARTICIPANT_QOS_DEFAULT;
             const auto defLease2 = emptyXml.wire_protocol().builtin.discovery_config.leaseDuration.seconds;
             yomkdds_xml::participantQosFromXml(emptyXml, "xml_by_name", "");
-            CHECK(emptyXml.wire_protocol().builtin.discovery_config.leaseDuration.seconds == defLease2,
+            check(emptyXml.wire_protocol().builtin.discovery_config.leaseDuration.seconds == defLease2,
                   "Part C: xml 空串 → 直接返回现状（未加载跳过提取）");
 
             // C-5 多默认档探针（计划闭环 4 验证项，实测固化）：同一 XML 串两个
@@ -464,7 +464,7 @@ namespace
             std::cout << "[OBSERVE] dual-default lease="
                       << dualDefault.wire_protocol().builtin.discovery_config.leaseDuration.seconds
                       << std::endl;
-            CHECK(dualDefault.wire_protocol().builtin.discovery_config.leaseDuration.seconds == 456,
+            check(dualDefault.wire_protocol().builtin.discovery_config.leaseDuration.seconds == 456,
                   "Part C: 双默认档 → 先档生效（leaseDuration=456，raw 串直提取首个默认档，实测固化）");
       }
 
@@ -474,20 +474,20 @@ namespace
       {
             std::string err;
             FastDDSNode node;
-            CHECK(node.setDomainId(TEST_DOMAIN, "ds_direct_node",
+            check(node.setDomainId(TEST_DOMAIN, "ds_direct_node",
                       yomkdds_xml::ParticipantQosSpec{"", "127.0.0.1:11811", ""}, &err),
                   "Part D: 直配 setDomainId(200, CLIENT+UDP 127.0.0.1:11811, server 不在场) → true");
-            CHECK(!node.setDomainId(TEST_DOMAIN, "ds_direct_node",
+            check(!node.setDomainId(TEST_DOMAIN, "ds_direct_node",
                       yomkdds_xml::ParticipantQosSpec{"", "127.0.0.1:11811", ""}),
                   "Part D: 重复 setDomainId → false（既有 participant_!=nullptr 守卫）");
 
             FastDDSNode badNode;
-            CHECK(!badNode.setDomainId(TEST_DOMAIN, "ds_bad_node",
+            check(!badNode.setDomainId(TEST_DOMAIN, "ds_bad_node",
                       yomkdds_xml::ParticipantQosSpec{"", "127.0.0.1:99999", ""}, &err) &&
                       err.find("port out of range") != std::string::npos,
                   "Part D: 非法 UDP serverLocator(port 越界) → false + err 回显（不建 participant）");
             FastDDSNode badTcpNode;
-            CHECK(!badTcpNode.setDomainId(TEST_DOMAIN, "ds_bad_tcp_node",
+            check(!badTcpNode.setDomainId(TEST_DOMAIN, "ds_bad_tcp_node",
                       yomkdds_xml::ParticipantQosSpec{"", "", "10.0.0.1:99999"}, &err) &&
                       err.find("port out of range") != std::string::npos,
                   "Part D: 非法 TCP serverLocator(port 越界) → false + err 回显（不建 participant）");
@@ -499,14 +499,14 @@ namespace
             dds::DomainParticipantQos qos = dds::PARTICIPANT_QOS_DEFAULT;
             yomkdds_xml::participantQosFromXml(qos, "xml_with_servers", kWhiteboxXml);
             const auto &servers = qos.wire_protocol().builtin.discovery_config.m_DiscoveryServers;
-            CHECK(servers.size() == 1 && rtps::IPLocator::toIPv4string(*servers.begin()) == "192.168.1.1" &&
+            check(servers.size() == 1 && rtps::IPLocator::toIPv4string(*servers.begin()) == "192.168.1.1" &&
                       servers.begin()->port == 7411,
                   "Part E: XML discoveryServersList 提取打底 → 192.168.1.1:7411");
 
             std::string err;
-            CHECK(yomkdds_xml::applyDiscoveryServers(qos, "10.0.0.1:1234", "", err),
+            check(yomkdds_xml::applyDiscoveryServers(qos, "10.0.0.1:1234", "", err),
                   "Part E: 直配叠加 → true");
-            CHECK(qos.wire_protocol().builtin.discovery_config.discoveryProtocol ==
+            check(qos.wire_protocol().builtin.discovery_config.discoveryProtocol ==
                           rtps::DiscoveryProtocol::CLIENT &&
                       servers.size() == 1 && rtps::IPLocator::toIPv4string(*servers.begin()) == "10.0.0.1" &&
                       servers.begin()->port == 1234,
@@ -524,7 +524,7 @@ namespace
       void testDiscoveryServerConnectivity()
       {
             pid_t serverPid = fork();
-            CHECK(serverPid >= 0, "Part F: fork discovery server 子进程");
+            check(serverPid >= 0, "Part F: fork discovery server 子进程");
             if (serverPid < 0)
             {
                   return;
@@ -549,7 +549,7 @@ namespace
                   std::this_thread::sleep_for(std::chrono::milliseconds(200));
             }
             const bool serverAlive = kill(serverPid, 0) == 0;
-            CHECK(serverAlive, "Part F: server 启动后存活（提前退出=exec 失败/端口被占，失败回显不静默）");
+            check(serverAlive, "Part F: server 启动后存活（提前退出=exec 失败/端口被占，失败回显不静默）");
             if (!serverAlive)
             {
                   waitpid(serverPid, nullptr, 0);
@@ -559,14 +559,14 @@ namespace
             // A/B 双节点直配（白盒直调节点层；故意异域——域号不参与 DS 校验，见函数头注释）
             FastDDSNode nodeA, nodeB;
             const yomkdds_xml::ParticipantQosSpec dsSpec{"", "127.0.0.1:11811", ""};
-            CHECK(nodeA.setDomainId(201, "ds_conn_a", dsSpec), "Part F: 节点 A 直配 CLIENT（域 201）→ true");
-            CHECK(nodeB.setDomainId(202, "ds_conn_b", dsSpec), "Part F: 节点 B 直配 CLIENT（域 202）→ true");
+            check(nodeA.setDomainId(201, "ds_conn_a", dsSpec), "Part F: 节点 A 直配 CLIENT（域 201）→ true");
+            check(nodeB.setDomainId(202, "ds_conn_b", dsSpec), "Part F: 节点 B 直配 CLIENT（域 202）→ true");
 
             std::atomic<int> recvCount{0};
-            CHECK(nodeB.registerSubTopic("ds_conn_topic", new YomkDdsStd::MStringPubSubType(),
+            check(nodeB.registerSubTopic("ds_conn_topic", new YomkDdsStd::MStringPubSubType(),
                       [&recvCount](const void *) { recvCount.fetch_add(1, std::memory_order_relaxed); }),
                   "Part F: B 登记 ds_conn_topic 订阅（收到即计数）");
-            CHECK(nodeA.registerPubTopic("ds_conn_topic", new YomkDdsStd::MStringPubSubType()),
+            check(nodeA.registerPubTopic("ds_conn_topic", new YomkDdsStd::MStringPubSubType()),
                   "Part F: A 登记 ds_conn_topic 发布");
 
             // 发布线程持续发（200ms 周期，覆盖 server 发现收敛窗）
@@ -589,7 +589,7 @@ namespace
                   std::this_thread::sleep_for(std::chrono::milliseconds(100));
                   received = recvCount.load(std::memory_order_relaxed) > 0;
             }
-            CHECK(received,
+            check(received,
                   "Part F: B 在 6s 超时窗内收到 ≥1 条 A 消息（A/B 异域经 server 中继发现互通——域号与 server 无关的实证）");
             if (!received)
             {
@@ -613,7 +613,7 @@ namespace
       void testEnvDrivenConnectivity(YomkDdsService *svc)
       {
             pid_t serverPid = fork();
-            CHECK(serverPid >= 0, "Part G: fork discovery server 子进程");
+            check(serverPid >= 0, "Part G: fork discovery server 子进程");
             if (serverPid < 0)
             {
                   return;
@@ -636,7 +636,7 @@ namespace
                   std::this_thread::sleep_for(std::chrono::milliseconds(200));
             }
             const bool serverAlive = kill(serverPid, 0) == 0;
-            CHECK(serverAlive, "Part G: server 启动后存活（UDP 11812 监听，提前退出=exec 失败/端口被占）");
+            check(serverAlive, "Part G: server 启动后存活（UDP 11812 监听，提前退出=exec 失败/端口被占）");
             if (!serverAlive)
             {
                   waitpid(serverPid, nullptr, 0);
@@ -653,23 +653,23 @@ namespace
 
             // 聚合读回探针：创建请求即此形态（缺省尾参字段经 env 初始化器取值）
             DDSNode envProbe{"env_probe"};
-            CHECK(envProbe.udpDiscoverServerLocator == "127.0.0.1:11812" &&
+            check(envProbe.udpDiscoverServerLocator == "127.0.0.1:11812" &&
                       envProbe.tcpDiscoverServerLocator.empty(),
                   "Part G: DDSNode 缺省尾参聚合初始化 → udp 串 127.0.0.1:11812 / tcp 空");
 
             // 服务级创建（无 locator）：聚合初始化器读 env → 双节点直配 CLIENT 连 11812 server
-            CHECK(testInvoke(svc, "/create_node", mkNode(203, "env_pub_node")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/create_node", mkNode(203, "env_pub_node")).status == yomk::payload::ResStatus::Succeeded,
                   "Part G: 创建 env_pub_node（域 203，请求无 locator）→ eOk（env 直配 CLIENT）");
-            CHECK(testInvoke(svc, "/create_node", mkNode(204, "env_sub_node")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/create_node", mkNode(204, "env_sub_node")).status == yomk::payload::ResStatus::Succeeded,
                   "Part G: 创建 env_sub_node（域 204，请求无 locator）→ eOk（env 直配 CLIENT）");
 
             std::atomic<int> recvCount{0};
-            CHECK(testInvoke(svc, "/register_sub_topic",
+            check(testInvoke(svc, "/register_sub_topic",
                       ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"env_sub_node", "env_conn_topic", new YomkDdsStd::MStringPubSubType(),
                               [&recvCount](const void *) { recvCount.fetch_add(1, std::memory_order_relaxed); }}))
                       .status == yomk::payload::ResStatus::Succeeded,
                   "Part G: env_sub_node 登记 env_conn_topic 订阅（收到即计数）");
-            CHECK(testInvoke(svc, "/register_pub_topic",
+            check(testInvoke(svc, "/register_pub_topic",
                       ::yomk::msgs::DDSTopic::shared(DDSTopic{"env_pub_node", "env_conn_topic", new YomkDdsStd::MStringPubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
                   "Part G: env_pub_node 登记 env_conn_topic 发布");
@@ -686,7 +686,7 @@ namespace
                   std::this_thread::sleep_for(std::chrono::milliseconds(100));
                   received = recvCount.load(std::memory_order_relaxed) > 0;
             }
-            CHECK(received,
+            check(received,
                   "Part G: env_sub_node 在 6s 超时窗内收到 ≥1 条（无 locator 请求经 env 直配互通的实证）");
             if (!received)
             {
@@ -694,9 +694,9 @@ namespace
             }
 
             // 收尾：删节点（关键不变式）→ 清 env → 组杀 server 整组（模式同 Part F）
-            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("env_pub_node")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("env_pub_node")).status == yomk::payload::ResStatus::Succeeded,
                   "Part G: 删除 env_pub_node → eOk");
-            CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("env_sub_node")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("env_sub_node")).status == yomk::payload::ResStatus::Succeeded,
                   "Part G: 删除 env_sub_node → eOk");
             unsetenv("YOMKDDS_USE_DISCOVER_SERVER");
             unsetenv("YOMKDDS_UDP_DISCOVER_SERVERS");
@@ -711,7 +711,7 @@ int main()
       ::yomk::server().init();
 
       auto *svc = new YomkDdsService(::yomk::server().instance().get());
-      CHECK(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+      check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
 
       testLifecycle(svc);
       testDomainIdBoundary(svc);

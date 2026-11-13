@@ -36,7 +36,7 @@
  * 旋钮：STRESS_ITERS（闭环 100000）、STRESS_CYCLES（闭环 50）经 CMake compile definitions 注入；未定义兜底 5000/30。
  * 域 212 专用，隔离 MC2-5(200)/MC6(210)/MC7-serial(211)。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
@@ -178,7 +178,7 @@ namespace
     {
         const std::string node = "c1_node";
         constexpr int NTOPICS = 8; // 预注册少量 topic：实体有界，非 10 万 unique 注册
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, node)).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, node)).status == yomk::payload::ResStatus::Succeeded,
               "C1 创建持久 c1_node → eOk");
         int regOk = 0;
         for (int i = 0; i < NTOPICS; ++i)
@@ -190,7 +190,7 @@ namespace
                 ++regOk;
             }
         }
-        CHECK(regOk == NTOPICS, "C1 预注册 8 个 pub topic(MInt32,writer-only) 全部 eOk");
+        check(regOk == NTOPICS, "C1 预注册 8 个 pub topic(MInt32,writer-only) 全部 eOk");
 
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 等实体资源落地
         ResSnapshot base = sampleRes();
@@ -253,12 +253,12 @@ namespace
         printRes("C1 after concurrent ops", after);
 
         const long la = loanAttempts.load(), lo = loanOk.load(), po = pubOk.load(), do_ = discOk.load();
-        CHECK(la == total, "C1 聚合 loan 尝试数==STRESS_ITERS（N 线程并发无丢失/崩溃）");
-        CHECK(lo == la, "C1 并发 loan 成功数==尝试数（每样本 write/discard 即归还，并发下池永不耗尽）");
-        CHECK(po + do_ == lo, "C1 每借出样本均被 publish 或 discard 归还（并发下无残留借出/池泄漏）");
-        CHECK(after.threads <= base.threads + 2, "C1 线程数有界（<=base+2，并发 op 不累积线程）");
-        CHECK(after.fds <= base.fds + 8, "C1 fd 有界（<=base+8，10 万并发 op 不泄漏 fd）");
-        CHECK(after.rssKB <= base.rssKB + rssToleranceKB(base.rssKB),
+        check(la == total, "C1 聚合 loan 尝试数==STRESS_ITERS（N 线程并发无丢失/崩溃）");
+        check(lo == la, "C1 并发 loan 成功数==尝试数（每样本 write/discard 即归还，并发下池永不耗尽）");
+        check(po + do_ == lo, "C1 每借出样本均被 publish 或 discard 归还（并发下无残留借出/池泄漏）");
+        check(after.threads <= base.threads + 2, "C1 线程数有界（<=base+2，并发 op 不累积线程）");
+        check(after.fds <= base.fds + 8, "C1 fd 有界（<=base+8，10 万并发 op 不泄漏 fd）");
+        check(after.rssKB <= base.rssKB + rssToleranceKB(base.rssKB),
               "C1 RSS 有界（<=base+容差，10 万并发 op 无内存无界增长；精确泄漏由 asan 兜底）");
         std::cout << "[OBSERVE] C1 total=" << total << " loanOk=" << lo << "/" << la
                   << " pubOk=" << po << " discOk=" << do_
@@ -266,7 +266,7 @@ namespace
                   << " fds " << base.fds << "->" << after.fds
                   << " rssKB " << base.rssKB << "->" << after.rssKB << std::endl;
 
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(node)).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(node)).status == yomk::payload::ResStatus::Succeeded,
               "C1 删除 c1_node → eOk（8 writer 池随节点析构释放）");
     }
 
@@ -378,13 +378,13 @@ namespace
         ResSnapshot after = sampleRes();
         printRes("C2 after concurrent churn", after);
 
-        CHECK(createOk.load() == totalCycles && regPubOk.load() == totalCycles &&
+        check(createOk.load() == totalCycles && regPubOk.load() == totalCycles &&
                   regSubOk.load() == totalCycles && delOk.load() == totalCycles,
               "C2 并发 churn：每轮 create/register_pub/register_sub/delete 全部 eOk（无累积失败/残留）");
-        CHECK(loanOk.load() == totalCycles * 3, "C2 并发 churn 每轮 loan 3 次全部成功（并发下池不耗尽）");
-        CHECK(after.threads <= base.threads + 2, "C2 线程数回落基线（并发 teardown 回收 discovery 线程；<=base+2）");
-        CHECK(after.fds <= base.fds + 8, "C2 fd 回落基线（并发每轮实体全删，无 fd 泄漏；<=base+8）");
-        CHECK(after.rssKB <= base.rssKB + rssToleranceKB(base.rssKB),
+        check(loanOk.load() == totalCycles * 3, "C2 并发 churn 每轮 loan 3 次全部成功（并发下池不耗尽）");
+        check(after.threads <= base.threads + 2, "C2 线程数回落基线（并发 teardown 回收 discovery 线程；<=base+2）");
+        check(after.fds <= base.fds + 8, "C2 fd 回落基线（并发每轮实体全删，无 fd 泄漏；<=base+8）");
+        check(after.rssKB <= base.rssKB + rssToleranceKB(base.rssKB),
               "C2 RSS 回落基线容差内（并发 create/teardown 无单调增长；精确泄漏由 asan 兜底）");
         std::cout << "[OBSERVE] C2 totalCycles=" << totalCycles << " cbCount=" << cbCount.load()
                   << " | threads " << base.threads << "->" << after.threads
@@ -397,9 +397,9 @@ namespace
     {
         const std::string node = "c3_node";
         const std::string topic = "c3_topic";
-        CHECK(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, node)).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, node)).status == yomk::payload::ResStatus::Succeeded,
               "C3 创建 c3_node → eOk");
-        CHECK(testInvoke(svc, "/register_pub_topic",
+        check(testInvoke(svc, "/register_pub_topic",
                           ::yomk::msgs::DDSTopic::shared(DDSTopic{node, topic, new YomkDdsStd::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "C3 register_pub_topic c3_topic(MInt32) → eOk");
@@ -423,7 +423,7 @@ namespace
                 invalid.fetch_add(1, std::memory_order_relaxed);
             }
         };
-        CHECK(testInvoke(svc, "/register_sub_topic",
+        check(testInvoke(svc, "/register_sub_topic",
                           ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{node, topic, new YomkDdsStd::MInt32PubSubType(), cb}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "C3 register_sub_topic c3_topic(callback) → eOk");
@@ -463,12 +463,12 @@ namespace
         printRes("C3 after concurrent pub/sub", after);
 
         const long rec = received.load(), inv = invalid.load(), po = pubOk.load();
-        CHECK(po > 0, "C3 发布线程确有成功 publish（并发写同一 writer，node mtx_ 序列化）");
-        CHECK(rec > 0, "C3 回调在活跃负载下确有触发（通用 take() reader 路径命中，非空跑）");
-        CHECK(inv == 0, "C3 所有收到值可解码(tid∈[0,P),seq∈[0,perThread))→ 高量下借出缓冲无撕裂/串值");
-        CHECK(after.threads <= base.threads + 2, "C3 线程数有界（<=base+2）");
-        CHECK(after.fds <= base.fds + 8, "C3 fd 有界（<=base+8，高量收发不泄漏 fd）");
-        CHECK(after.rssKB <= base.rssKB + rssToleranceKB(base.rssKB),
+        check(po > 0, "C3 发布线程确有成功 publish（并发写同一 writer，node mtx_ 序列化）");
+        check(rec > 0, "C3 回调在活跃负载下确有触发（通用 take() reader 路径命中，非空跑）");
+        check(inv == 0, "C3 所有收到值可解码(tid∈[0,P),seq∈[0,perThread))→ 高量下借出缓冲无撕裂/串值");
+        check(after.threads <= base.threads + 2, "C3 线程数有界（<=base+2）");
+        check(after.fds <= base.fds + 8, "C3 fd 有界（<=base+8，高量收发不泄漏 fd）");
+        check(after.rssKB <= base.rssKB + rssToleranceKB(base.rssKB),
               "C3 RSS 有界（<=base+容差，高量收发 writer/reader 历史有界，无内存无界增长）");
         std::cout << "[OBSERVE] C3 published=" << po << "/" << (P * perThread)
                   << " received=" << rec << " invalid=" << inv
@@ -476,7 +476,7 @@ namespace
                   << " fds " << base.fds << "->" << after.fds
                   << " rssKB " << base.rssKB << "->" << after.rssKB << std::endl;
 
-        CHECK(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(node)).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(node)).status == yomk::payload::ResStatus::Succeeded,
               "C3 删除 c3_node → eOk（析构 reader 停止回调，捕获 atomic 仍存活）");
     }
 } // namespace
@@ -486,7 +486,7 @@ int main()
     ::yomk::server().init();
 
     auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    CHECK(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
 
     std::cout << "[CFG] STRESS_ITERS=" << STRESS_ITERS << " STRESS_CYCLES=" << STRESS_CYCLES
               << " threads=" << NTHREADS << " domain=" << TEST_DOMAIN << std::endl;

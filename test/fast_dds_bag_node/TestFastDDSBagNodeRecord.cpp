@@ -47,7 +47,7 @@
  * 域号 202：与 TestYomkDdsBagServiceLifecycle(200)/TestFastDDSBagNodeValidation(201) 错开，
  * ctest 串行执行互不残留。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
@@ -134,12 +134,12 @@ int main()
     yomk::bagRecordReset();
 
     FastDDSBagNode node;
-    CHECK(node.setDomainId(TEST_DOMAIN), "R1 setDomainId(202) 成功（真实创建 participant）");
+    check(node.setDomainId(TEST_DOMAIN), "R1 setDomainId(202) 成功（真实创建 participant）");
 
     // ---- R2：远端发布端 + 发布线程 ----
     auto *peerParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
         TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-    CHECK(peerParticipant != nullptr, "R2 远端发布端 participant 创建成功");
+    check(peerParticipant != nullptr, "R2 远端发布端 participant 创建成功");
     dds::TypeSupport ts(new YomkDdsStd::MStringPubSubType());
     ts.register_type(peerParticipant);
     auto *pub = peerParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
@@ -147,7 +147,7 @@ int main()
     auto *writer =
         (pub != nullptr && topic != nullptr) ? pub->create_datawriter(topic, dds::DATAWRITER_QOS_DEFAULT)
                                              : nullptr;
-    CHECK(writer != nullptr, "R2 远端 DataWriter 创建成功（rt/bag_rec_hit）");
+    check(writer != nullptr, "R2 远端 DataWriter 创建成功（rt/bag_rec_hit）");
 
     std::atomic<bool> pubStop{false};
     std::thread pubThread([&]()
@@ -184,7 +184,7 @@ int main()
     pubStop.store(true);
     pubThread.join();
 
-    CHECK(ok, "R3 bagRecordStop 后 record → true（校验通过 + 录制 + 收尾完成）");
+    check(ok, "R3 bagRecordStop 后 record → true（校验通过 + 录制 + 收尾完成）");
     if (!ok)
     {
         std::cerr << "record error: " << error << std::endl;
@@ -193,25 +193,25 @@ int main()
     }
 
     // ---- R4：stats 契约 ----
-    CHECK(stats.size() == 1, "R4 stats 单主题一项");
+    check(stats.size() == 1, "R4 stats 单主题一项");
     if (stats.size() == 1)
     {
-        CHECK(stats[0].topic == REC_TOPIC, "R4 stats.topic == rt/bag_rec_hit（用户输入原样）");
-        CHECK(stats[0].type == "YomkDdsStd::MString", "R4 stats.type == YomkDdsStd::MString（远端类型名原样）");
-        CHECK(stats[0].count >= 5, "R4 录制条数 >= 5（3s 校验窗 + 2s 录制期 @150ms/条）");
-        CHECK(stats[0].bytes >= stats[0].count * 4, "R4 bytes >= count×4（每条至少含 encapsulation header）");
+        check(stats[0].topic == REC_TOPIC, "R4 stats.topic == rt/bag_rec_hit（用户输入原样）");
+        check(stats[0].type == "YomkDdsStd::MString", "R4 stats.type == YomkDdsStd::MString（远端类型名原样）");
+        check(stats[0].count >= 5, "R4 录制条数 >= 5（3s 校验窗 + 2s 录制期 @150ms/条）");
+        check(stats[0].bytes >= stats[0].count * 4, "R4 bytes >= count×4（每条至少含 encapsulation header）");
     }
     const uint64_t recCount = stats.empty() ? 0 : stats[0].count;
     const uint64_t recBytes = stats.empty() ? 0 : stats[0].bytes;
 
     // ---- R5：落盘文件断言 ----
     const std::string &bagDir = node.bagDir();
-    CHECK(bagDir.rfind("bag_", 0) == 0, "R5 bagDir() 以 bag_ 开头");
-    CHECK(bagDir.size() == std::string("bag_YYYY-MM-DD_HH-MM-SS_mmm").size(),
+    check(bagDir.rfind("bag_", 0) == 0, "R5 bagDir() 以 bag_ 开头");
+    check(bagDir.size() == std::string("bag_YYYY-MM-DD_HH-MM-SS_mmm").size(),
           "R5 bagDir() 形如 bag_<YYYY-MM-DD_HH-MM-SS_mmm>（27 字符）");
-    CHECK(std::filesystem::exists(bagDir + "/bag_0.mcap"), "R5 bag_0.mcap 存在");
-    CHECK(std::filesystem::exists(bagDir + "/metadata.json"), "R5 metadata.json 存在");
-    CHECK(std::filesystem::file_size(bagDir + "/bag_0.mcap") > 0, "R5 bag_0.mcap 非空");
+    check(std::filesystem::exists(bagDir + "/bag_0.mcap"), "R5 bag_0.mcap 存在");
+    check(std::filesystem::exists(bagDir + "/metadata.json"), "R5 metadata.json 存在");
+    check(std::filesystem::file_size(bagDir + "/bag_0.mcap") > 0, "R5 bag_0.mcap 非空");
 
     // ---- R6：mcap 读回断言（条数/通道契约/字节守恒/序号单调） ----
     {
@@ -219,7 +219,7 @@ int main()
         mcap::FileStreamReader dataSource{in};
         mcap::McapReader reader;
         const auto openStatus = reader.open(dataSource);
-        CHECK(openStatus.ok(), "R6 mcap reader.open 成功（summary 索引完整）");
+        check(openStatus.ok(), "R6 mcap reader.open 成功（summary 索引完整）");
         if (openStatus.ok())
         {
             const auto onProblem = [](const mcap::Status &problem)
@@ -246,7 +246,7 @@ int main()
                 totalBytes += msgView.message.dataSize;
                 if (msgView.message.dataSize == 0)
                 {
-                    CHECK(false, "R6 消息字节为空（透传 CDR 全量不应为空）");
+                    check(false, "R6 消息字节为空（透传 CDR 全量不应为空）");
                 }
                 if (firstMsg)
                 {
@@ -259,15 +259,15 @@ int main()
                 lastSeq = msgView.message.sequence;
                 ++count;
             }
-            CHECK(count == recCount, "R6 mcap 读回条数 == stats.count");
-            CHECK(channelTopic == REC_TOPIC, "R6 Channel topic == rt/bag_rec_hit");
-            CHECK(channelEncoding == "cdr", "R6 Channel messageEncoding == cdr");
-            CHECK(channelSchemaId == 0, "R6 Channel schemaId == 0（无 schema 通道）");
-            CHECK(channelQos == "RELIABLE,TRANSIENT_LOCAL",
+            check(count == recCount, "R6 mcap 读回条数 == stats.count");
+            check(channelTopic == REC_TOPIC, "R6 Channel topic == rt/bag_rec_hit");
+            check(channelEncoding == "cdr", "R6 Channel messageEncoding == cdr");
+            check(channelSchemaId == 0, "R6 Channel schemaId == 0（无 schema 通道）");
+            check(channelQos == "RELIABLE,TRANSIENT_LOCAL",
                   "R6 Channel.metadata qos == RELIABLE,TRANSIENT_LOCAL（远端 writer 默认 offered，"
                   "FastDDS 3.x DataWriter 默认 durability 即 TRANSIENT_LOCAL）");
-            CHECK(totalBytes == recBytes, "R6 读回字节总和 == stats.bytes（CDR 全量守恒）");
-            CHECK(seqMonotonic, "R6 sequence 从 0 单调递增");
+            check(totalBytes == recBytes, "R6 读回字节总和 == stats.bytes（CDR 全量守恒）");
+            check(seqMonotonic, "R6 sequence 从 0 单调递增");
             reader.close();
         }
     }
@@ -278,24 +278,24 @@ int main()
         std::stringstream buf;
         buf << meta.rdbuf();
         const std::string text = buf.str();
-        CHECK(text.find("\"nanoseconds_since_epoch_format\"") != std::string::npos,
+        check(text.find("\"nanoseconds_since_epoch_format\"") != std::string::npos,
               "R7 metadata starting_time 含可读格式键");
-        CHECK(text.find("\"nanoseconds_format\"") != std::string::npos,
+        check(text.find("\"nanoseconds_format\"") != std::string::npos,
               "R7 metadata duration 含可读格式键");
-        CHECK(text.find("\"version\": 1") != std::string::npos,
+        check(text.find("\"version\": 1") != std::string::npos,
               "R7 metadata version: 1（yomkdds 自有元信息格式版本）");
-        CHECK(text.find("\"storage_identifier\": \"mcap\"") != std::string::npos,
+        check(text.find("\"storage_identifier\": \"mcap\"") != std::string::npos,
               "R7 metadata storage_identifier: mcap");
-        CHECK(text.find("bag_0.mcap") != std::string::npos, "R7 metadata relative_file_paths 列出 bag_0.mcap");
-        CHECK(text.find("\"name\": \"" + std::string(REC_TOPIC) + "\"") != std::string::npos,
+        check(text.find("bag_0.mcap") != std::string::npos, "R7 metadata relative_file_paths 列出 bag_0.mcap");
+        check(text.find("\"name\": \"" + std::string(REC_TOPIC) + "\"") != std::string::npos,
               "R7 metadata topics_with_message_count 列出录制主题名");
-        CHECK(text.find("\"type\": \"YomkDdsStd::MString\"") != std::string::npos,
+        check(text.find("\"type\": \"YomkDdsStd::MString\"") != std::string::npos,
               "R7 metadata 主题类型 == YomkDdsStd::MString");
-        CHECK(text.find("\"qos\": \"RELIABLE,TRANSIENT_LOCAL\"") != std::string::npos,
+        check(text.find("\"qos\": \"RELIABLE,TRANSIENT_LOCAL\"") != std::string::npos,
               "R7 metadata topic_metadata qos == RELIABLE,TRANSIENT_LOCAL（与 Channel.metadata 同源）");
-        CHECK(text.find("\"message_count\": " + std::to_string(recCount)) != std::string::npos,
+        check(text.find("\"message_count\": " + std::to_string(recCount)) != std::string::npos,
               "R7 metadata message_count 与 stats 一致");
-        CHECK(text.find("\"nanoseconds_since_epoch\"") != std::string::npos,
+        check(text.find("\"nanoseconds_since_epoch\"") != std::string::npos,
               "R7 metadata starting_time 存在");
     }
 
@@ -304,10 +304,10 @@ int main()
         std::vector<FastDDSBagNode::BagTopicStat> statsAgain;
         std::string errorAgain;
         const bool okAgain = node.record({REC_TOPIC}, statsAgain, &errorAgain);
-        CHECK(!okAgain, "R8 定格后再次 record → false");
-        CHECK(errorAgain.find("record already finished") != std::string::npos,
+        check(!okAgain, "R8 定格后再次 record → false");
+        check(errorAgain.find("record already finished") != std::string::npos,
               "R8 error 含 record already finished");
-        CHECK(errorAgain.find("recreate node") != std::string::npos,
+        check(errorAgain.find("recreate node") != std::string::npos,
               "R8 error 提示须重建节点");
     }
 
@@ -316,7 +316,7 @@ int main()
         // 复位停止标志（R3 已置位）；同域新建 bag 节点（node 已定格不可复用）
         yomk::bagRecordReset();
         FastDDSBagNode node2;
-        CHECK(node2.setDomainId(TEST_DOMAIN), "R9 新节点 setDomainId(202) 成功");
+        check(node2.setDomainId(TEST_DOMAIN), "R9 新节点 setDomainId(202) 成功");
 
         // 远端新增两个同前缀发布者（复用 peer participant 与 MString 类型）
         auto *topicA = peerParticipant->create_topic(
@@ -329,7 +329,7 @@ int main()
         auto *writerB = (pub != nullptr && topicB != nullptr)
                             ? pub->create_datawriter(topicB, dds::DATAWRITER_QOS_DEFAULT)
                             : nullptr;
-        CHECK(writerA != nullptr && writerB != nullptr, "R9 远端同前缀双 DataWriter 创建成功");
+        check(writerA != nullptr && writerB != nullptr, "R9 远端同前缀双 DataWriter 创建成功");
 
         std::atomic<bool> pubStop2{false};
         std::thread pubThread2([&]()
@@ -365,28 +365,28 @@ int main()
         pubStop2.store(true);
         pubThread2.join();
 
-        CHECK(okPattern, "R9 模式录制 record → true（精确 + 模式展开去重后录制）");
+        check(okPattern, "R9 模式录制 record → true（精确 + 模式展开去重后录制）");
         if (okPattern)
         {
-            CHECK(statsPattern.size() == 2, "R9 stats 两项（精确 a 与模式命中的 a/b 去重合并）");
+            check(statsPattern.size() == 2, "R9 stats 两项（精确 a 与模式命中的 a/b 去重合并）");
             if (statsPattern.size() == 2)
             {
-                CHECK(statsPattern[0].topic == "rt/bag_rec_pre_a" &&
+                check(statsPattern[0].topic == "rt/bag_rec_pre_a" &&
                           statsPattern[1].topic == "rt/bag_rec_pre_b",
                       "R9 展开清单去重且升序（a、b 各一项）");
-                CHECK(statsPattern[0].count >= 1 && statsPattern[1].count >= 1,
+                check(statsPattern[0].count >= 1 && statsPattern[1].count >= 1,
                       "R9 两主题均有录制条数");
-                CHECK(statsPattern[0].type == "YomkDdsStd::MString",
+                check(statsPattern[0].type == "YomkDdsStd::MString",
                       "R9 展开主题类型 == YomkDdsStd::MString");
             }
             const std::string &bagDir2 = node2.bagDir();
-            CHECK(bagDir2.size() == std::string("bag_YYYY-MM-DD_HH-MM-SS_mmm").size(),
+            check(bagDir2.size() == std::string("bag_YYYY-MM-DD_HH-MM-SS_mmm").size(),
                   "R9 新 bag 目录形如 bag_<YYYY-MM-DD_HH-MM-SS_mmm>（27 字符）");
             std::ifstream meta2(bagDir2 + "/metadata.json");
             std::stringstream buf2;
             buf2 << meta2.rdbuf();
             const std::string text2 = buf2.str();
-            CHECK(text2.find("\"name\": \"rt/bag_rec_pre_a\"") != std::string::npos &&
+            check(text2.find("\"name\": \"rt/bag_rec_pre_a\"") != std::string::npos &&
                       text2.find("\"name\": \"rt/bag_rec_pre_b\"") != std::string::npos,
                   "R9 metadata topics_with_message_count 列出展开后的两主题");
         }
@@ -398,9 +398,9 @@ int main()
         // 定格语义对展开录制同样成立
         std::vector<FastDDSBagNode::BagTopicStat> statsAgain2;
         std::string errorAgain2;
-        CHECK(!node2.record({"rt/bag_rec_pre_*"}, statsAgain2, &errorAgain2),
+        check(!node2.record({"rt/bag_rec_pre_*"}, statsAgain2, &errorAgain2),
               "R9 模式录制后节点定格：再次 record → false");
-        CHECK(errorAgain2.find("record already finished") != std::string::npos,
+        check(errorAgain2.find("record already finished") != std::string::npos,
               "R9 定格 error 含 record already finished");
     }
 
@@ -413,7 +413,7 @@ int main()
         // 复位停止标志（R9 已置位）；同域新建 bag 节点（node2 已定格不可复用）
         yomk::bagRecordReset();
         FastDDSBagNode node3;
-        CHECK(node3.setDomainId(TEST_DOMAIN), "R10 新节点 setDomainId(202) 成功");
+        check(node3.setDomainId(TEST_DOMAIN), "R10 新节点 setDomainId(202) 成功");
 
         // 远端新增发布者（复用 peer participant 与 MString 类型；新主题避免与 R9 残留混淆）
         auto *topicOut = peerParticipant->create_topic(
@@ -421,7 +421,7 @@ int main()
         auto *writerOut = (pub != nullptr && topicOut != nullptr)
                               ? pub->create_datawriter(topicOut, dds::DATAWRITER_QOS_DEFAULT)
                               : nullptr;
-        CHECK(writerOut != nullptr, "R10 远端 DataWriter 创建成功（rt/bag_rec_out）");
+        check(writerOut != nullptr, "R10 远端 DataWriter 创建成功（rt/bag_rec_out）");
 
         std::atomic<bool> pubStop3{false};
         std::thread pubThread3([&]()
@@ -455,20 +455,20 @@ int main()
         pubStop3.store(true);
         pubThread3.join();
 
-        CHECK(okCustom, "R10 指定目录名 record → true");
+        check(okCustom, "R10 指定目录名 record → true");
         if (okCustom)
         {
-            CHECK(node3.bagDir() == "bag_custom",
+            check(node3.bagDir() == "bag_custom",
                   "R10 bagDir() == 指定名 bag_custom（非时间戳名）");
-            CHECK(std::filesystem::is_regular_file("bag_custom/bag_0.mcap"),
+            check(std::filesystem::is_regular_file("bag_custom/bag_0.mcap"),
                   "R10 指定目录下 bag_0.mcap 落盘");
             std::ifstream meta3("bag_custom/metadata.json");
             std::stringstream buf3;
             buf3 << meta3.rdbuf();
             const std::string text3 = buf3.str();
-            CHECK(text3.find("\"name\": \"rt/bag_rec_out\"") != std::string::npos,
+            check(text3.find("\"name\": \"rt/bag_rec_out\"") != std::string::npos,
                   "R10 metadata 列出录制主题");
-            CHECK(!statsCustom.empty() && statsCustom[0].count >= 1, "R10 stats 有录制条数");
+            check(!statsCustom.empty() && statsCustom[0].count >= 1, "R10 stats 有录制条数");
         }
         else
         {
@@ -481,7 +481,7 @@ int main()
         // 复位双标志（R10 已置 stop；bagRecordReset 现同时复位 paused）
         yomk::bagRecordReset();
         FastDDSBagNode node4;
-        CHECK(node4.setDomainId(TEST_DOMAIN), "R11a 新节点 setDomainId(202) 成功");
+        check(node4.setDomainId(TEST_DOMAIN), "R11a 新节点 setDomainId(202) 成功");
 
         // 远端新增发布者（复用 peer participant 与 MString 类型）
         auto *topicPauseA = peerParticipant->create_topic(
@@ -489,7 +489,7 @@ int main()
         auto *writerPauseA = (pub != nullptr && topicPauseA != nullptr)
                                  ? pub->create_datawriter(topicPauseA, dds::DATAWRITER_QOS_DEFAULT)
                                  : nullptr;
-        CHECK(writerPauseA != nullptr, "R11a 远端 DataWriter 创建成功（rt/bag_rec_pause_a）");
+        check(writerPauseA != nullptr, "R11a 远端 DataWriter 创建成功（rt/bag_rec_pause_a）");
 
         std::atomic<bool> pubStop4{false};
         std::thread pubThread4([&]()
@@ -525,11 +525,11 @@ int main()
         pubStop4.store(true);
         pubThread4.join();
 
-        CHECK(okPaused, "R11a 全程暂停 record → true（暂停不影响录制会话本身）");
-        CHECK(!statsPaused.empty() && statsPaused[0].count == 0,
+        check(okPaused, "R11a 全程暂停 record → true（暂停不影响录制会话本身）");
+        check(!statsPaused.empty() && statsPaused[0].count == 0,
               "R11a 全程暂停零写入（暂停期消息全部丢弃）");
-        CHECK(!statsPaused.empty() && statsPaused[0].bytes == 0, "R11a 全程暂停零字节");
-        CHECK(node4.bagDir().size() == std::string("bag_YYYY-MM-DD_HH-MM-SS_mmm").size(),
+        check(!statsPaused.empty() && statsPaused[0].bytes == 0, "R11a 全程暂停零字节");
+        check(node4.bagDir().size() == std::string("bag_YYYY-MM-DD_HH-MM-SS_mmm").size(),
               "R11a 暂停态目录照建（订阅与落盘路径不受影响）");
     }
 
@@ -537,14 +537,14 @@ int main()
     {
         yomk::bagRecordReset();
         FastDDSBagNode node5;
-        CHECK(node5.setDomainId(TEST_DOMAIN), "R11b 新节点 setDomainId(202) 成功");
+        check(node5.setDomainId(TEST_DOMAIN), "R11b 新节点 setDomainId(202) 成功");
 
         auto *topicPauseB = peerParticipant->create_topic(
             "rt/bag_rec_pause_b", ts.get_type_name(), dds::TOPIC_QOS_DEFAULT);
         auto *writerPauseB = (pub != nullptr && topicPauseB != nullptr)
                                  ? pub->create_datawriter(topicPauseB, dds::DATAWRITER_QOS_DEFAULT)
                                  : nullptr;
-        CHECK(writerPauseB != nullptr, "R11b 远端 DataWriter 创建成功（rt/bag_rec_pause_b）");
+        check(writerPauseB != nullptr, "R11b 远端 DataWriter 创建成功（rt/bag_rec_pause_b）");
 
         std::atomic<bool> pubStop5{false};
         std::thread pubThread5([&]()
@@ -582,15 +582,15 @@ int main()
         pubStop5.store(true);
         pubThread5.join();
 
-        CHECK(okResume, "R11b 暂停后恢复 record → true");
-        CHECK(!statsResume.empty() && statsResume[0].count >= 1,
+        check(okResume, "R11b 暂停后恢复 record → true");
+        check(!statsResume.empty() && statsResume[0].count >= 1,
               "R11b 恢复后开始写入（count >= 1）");
         // metadata starting_time 非零：firstNs 被恢复后首条写入消息置位（暂停期丢弃不置位）
         std::ifstream meta5(node5.bagDir() + "/metadata.json");
         std::stringstream buf5;
         buf5 << meta5.rdbuf();
         const std::string text5 = buf5.str();
-        CHECK(text5.find("\"nanoseconds_since_epoch\": 0") == std::string::npos,
+        check(text5.find("\"nanoseconds_since_epoch\": 0") == std::string::npos,
               "R11b metadata starting_time 非零（暂停期不计入）");
     }
 
@@ -598,7 +598,7 @@ int main()
     {
         yomk::bagRecordReset();
         FastDDSBagNode node6;
-        CHECK(node6.setDomainId(TEST_DOMAIN), "R12 新节点 setDomainId(202) 成功");
+        check(node6.setDomainId(TEST_DOMAIN), "R12 新节点 setDomainId(202) 成功");
 
         // 远端新增发布者（复用 peer participant 与 MString 类型）
         auto *topicSplit = peerParticipant->create_topic(
@@ -606,7 +606,7 @@ int main()
         auto *writerSplit = (pub != nullptr && topicSplit != nullptr)
                                 ? pub->create_datawriter(topicSplit, dds::DATAWRITER_QOS_DEFAULT)
                                 : nullptr;
-        CHECK(writerSplit != nullptr, "R12 远端 DataWriter 创建成功（rt/bag_rec_split_a）");
+        check(writerSplit != nullptr, "R12 远端 DataWriter 创建成功（rt/bag_rec_split_a）");
 
         // 发布端：先等订阅匹配（record 校验收敛后才建订，VOLATILE QoS 下匹配前的消息必丢）
         // 再发固定 20 条大 payload（128KB/条）；mcap chunk 默认 768KB 约每 6 条 flush 一次，
@@ -653,16 +653,16 @@ int main()
         pubStop6.store(true);
         pubThread6.join();
 
-        CHECK(okSplit, "R12 分片录制 record → true");
+        check(okSplit, "R12 分片录制 record → true");
         if (okSplit)
         {
-            CHECK(!statsSplit.empty() && statsSplit[0].count == kSplitMessages,
+            check(!statsSplit.empty() && statsSplit[0].count == kSplitMessages,
                   "R12 分片不丢消息（stats.count == 发布条数 20）");
             const std::string &bagDir6 = node6.bagDir();
-            CHECK(std::filesystem::exists(bagDir6 + "/bag_0.mcap"), "R12 bag_0.mcap 存在");
-            CHECK(std::filesystem::exists(bagDir6 + "/bag_1.mcap"),
+            check(std::filesystem::exists(bagDir6 + "/bag_0.mcap"), "R12 bag_0.mcap 存在");
+            check(std::filesystem::exists(bagDir6 + "/bag_1.mcap"),
                   "R12 bag_1.mcap 存在（达到上限已滚动分片）");
-            CHECK(std::filesystem::file_size(bagDir6 + "/bag_0.mcap") > 0 &&
+            check(std::filesystem::file_size(bagDir6 + "/bag_0.mcap") > 0 &&
                       std::filesystem::file_size(bagDir6 + "/bag_1.mcap") > 0,
                   "R12 分片文件非空");
 
@@ -671,10 +671,10 @@ int main()
             std::stringstream buf6;
             buf6 << meta6.rdbuf();
             const std::string text6 = buf6.str();
-            CHECK(text6.find("\"bag_0.mcap\"") != std::string::npos &&
+            check(text6.find("\"bag_0.mcap\"") != std::string::npos &&
                       text6.find("\"bag_1.mcap\"") != std::string::npos,
                   "R12 metadata relative_file_paths 列出 bag_0/bag_1 分片");
-            CHECK(text6.find("\"message_count\": " + std::to_string(kSplitMessages)) != std::string::npos,
+            check(text6.find("\"message_count\": " + std::to_string(kSplitMessages)) != std::string::npos,
                   "R12 metadata message_count 全局累计 == 20");
 
             // 跨分片读回：各分片条数总和 == 发布条数（分片连续拼接不重复不空洞），
@@ -694,7 +694,7 @@ int main()
                 mcap::McapReader reader;
                 if (!reader.open(dataSource).ok())
                 {
-                    CHECK(false, "R12 分片 mcap open 成功（每片 summary 完整可读回）");
+                    check(false, "R12 分片 mcap open 成功（每片 summary 完整可读回）");
                     continue;
                 }
                 for (const auto &msgView :
@@ -708,9 +708,9 @@ int main()
                 }
                 reader.close();
             }
-            CHECK(splitTotal == kSplitMessages,
+            check(splitTotal == kSplitMessages,
                   "R12 跨分片读回总条数 == 20（各分片连续拼接不丢消息）");
-            CHECK(shardChannelOk,
+            check(shardChannelOk,
                   "R12 各分片 Channel topic 一致（每片自含通道声明）");
         }
         else
@@ -723,7 +723,7 @@ int main()
     {
         yomk::bagRecordReset();
         FastDDSBagNode node7;
-        CHECK(node7.setDomainId(TEST_DOMAIN), "R13 新节点 setDomainId(202) 成功");
+        check(node7.setDomainId(TEST_DOMAIN), "R13 新节点 setDomainId(202) 成功");
 
         // 远端新增发布者（复用 peer participant 与 MString 类型）
         auto *topicTime = peerParticipant->create_topic(
@@ -731,7 +731,7 @@ int main()
         auto *writerTime = (pub != nullptr && topicTime != nullptr)
                                ? pub->create_datawriter(topicTime, dds::DATAWRITER_QOS_DEFAULT)
                                : nullptr;
-        CHECK(writerTime != nullptr, "R13 远端 DataWriter 创建成功（rt/bag_rec_time_a）");
+        check(writerTime != nullptr, "R13 远端 DataWriter 创建成功（rt/bag_rec_time_a）");
 
         // 发布端：先等订阅匹配（同 R12，VOLATILE QoS 下匹配前的消息必丢），再发
         // 固定 25 条小 payload @200ms（4.8s 跨度）；-d 2 下距分片首条严格大于 2s 即滚动
@@ -778,18 +778,18 @@ int main()
         pubStop7.store(true);
         pubThread7.join();
 
-        CHECK(okTime, "R13 时长分片 record → true");
+        check(okTime, "R13 时长分片 record → true");
         if (okTime)
         {
-            CHECK(!statsTime.empty() && statsTime[0].count == kTimeMessages,
+            check(!statsTime.empty() && statsTime[0].count == kTimeMessages,
                   "R13 分片不丢消息（stats.count == 发布条数 25）");
             const std::string &bagDir7 = node7.bagDir();
-            CHECK(std::filesystem::exists(bagDir7 + "/bag_0.mcap"), "R13 bag_0.mcap 存在");
-            CHECK(std::filesystem::exists(bagDir7 + "/bag_1.mcap"),
+            check(std::filesystem::exists(bagDir7 + "/bag_0.mcap"), "R13 bag_0.mcap 存在");
+            check(std::filesystem::exists(bagDir7 + "/bag_1.mcap"),
                   "R13 bag_1.mcap 存在（时长达限已滚动分片）");
-            CHECK(std::filesystem::exists(bagDir7 + "/bag_2.mcap"),
+            check(std::filesystem::exists(bagDir7 + "/bag_2.mcap"),
                   "R13 bag_2.mcap 存在（4.8s 跨度超出两片 2s 上限）");
-            CHECK(std::filesystem::file_size(bagDir7 + "/bag_0.mcap") > 0 &&
+            check(std::filesystem::file_size(bagDir7 + "/bag_0.mcap") > 0 &&
                       std::filesystem::file_size(bagDir7 + "/bag_1.mcap") > 0 &&
                       std::filesystem::file_size(bagDir7 + "/bag_2.mcap") > 0,
                   "R13 分片文件非空");
@@ -799,11 +799,11 @@ int main()
             std::stringstream buf7;
             buf7 << meta7.rdbuf();
             const std::string text7 = buf7.str();
-            CHECK(text7.find("\"bag_0.mcap\"") != std::string::npos &&
+            check(text7.find("\"bag_0.mcap\"") != std::string::npos &&
                       text7.find("\"bag_1.mcap\"") != std::string::npos &&
                       text7.find("\"bag_2.mcap\"") != std::string::npos,
                   "R13 metadata relative_file_paths 列出 bag_0/bag_1/bag_2 分片");
-            CHECK(text7.find("\"message_count\": " + std::to_string(kTimeMessages)) != std::string::npos,
+            check(text7.find("\"message_count\": " + std::to_string(kTimeMessages)) != std::string::npos,
                   "R13 metadata message_count 全局累计 == 25");
 
             // 跨分片读回：各分片条数总和 == 发布条数（分片连续拼接不重复不空洞），
@@ -823,7 +823,7 @@ int main()
                 mcap::McapReader reader;
                 if (!reader.open(dataSource).ok())
                 {
-                    CHECK(false, "R13 分片 mcap open 成功（每片 summary 完整可读回）");
+                    check(false, "R13 分片 mcap open 成功（每片 summary 完整可读回）");
                     continue;
                 }
                 for (const auto &msgView :
@@ -837,9 +837,9 @@ int main()
                 }
                 reader.close();
             }
-            CHECK(timeTotal == kTimeMessages,
+            check(timeTotal == kTimeMessages,
                   "R13 跨分片读回总条数 == 25（各分片连续拼接不丢消息）");
-            CHECK(timeChannelOk,
+            check(timeChannelOk,
                   "R13 各分片 Channel topic 一致（每片自含通道声明）");
         }
         else
@@ -852,7 +852,7 @@ int main()
     {
         yomk::bagRecordReset();
         FastDDSBagNode node8;
-        CHECK(node8.setDomainId(TEST_DOMAIN), "R14a 新节点 setDomainId(202) 成功");
+        check(node8.setDomainId(TEST_DOMAIN), "R14a 新节点 setDomainId(202) 成功");
 
         // 远端新增发布者（复用 peer participant 与 MString 类型）
         auto *topicCache = peerParticipant->create_topic(
@@ -860,7 +860,7 @@ int main()
         auto *writerCache = (pub != nullptr && topicCache != nullptr)
                                 ? pub->create_datawriter(topicCache, dds::DATAWRITER_QOS_DEFAULT)
                                 : nullptr;
-        CHECK(writerCache != nullptr, "R14a 远端 DataWriter 创建成功（rt/bag_rec_cache_a）");
+        check(writerCache != nullptr, "R14a 远端 DataWriter 创建成功（rt/bag_rec_cache_a）");
 
         // 发布端：先等订阅匹配（同 R12/R13），再发固定 25 条小 payload @200ms；4096 字节
         // 缓存周期内远不会满——验证 cache 路径不丢消息且停止时 drain 完整（残余全部落盘）
@@ -906,20 +906,20 @@ int main()
         pubStop8.store(true);
         pubThread8.join();
 
-        CHECK(okCache, "R14a 缓存录制 record → true");
+        check(okCache, "R14a 缓存录制 record → true");
         if (okCache)
         {
-            CHECK(!statsCache.empty() && statsCache[0].count == kCacheMessages,
+            check(!statsCache.empty() && statsCache[0].count == kCacheMessages,
                   "R14a drain 完整（stats.count == 发布条数 25）");
             const std::string &bagDir8 = node8.bagDir();
-            CHECK(std::filesystem::exists(bagDir8 + "/bag_0.mcap"), "R14a bag_0.mcap 存在");
+            check(std::filesystem::exists(bagDir8 + "/bag_0.mcap"), "R14a bag_0.mcap 存在");
 
             // metadata：message_count 全局累计 == 发布条数
             std::ifstream meta8(bagDir8 + "/metadata.json");
             std::stringstream buf8;
             buf8 << meta8.rdbuf();
             const std::string text8 = buf8.str();
-            CHECK(text8.find("\"message_count\": " + std::to_string(kCacheMessages)) != std::string::npos,
+            check(text8.find("\"message_count\": " + std::to_string(kCacheMessages)) != std::string::npos,
                   "R14a metadata message_count 全局累计 == 25");
 
             // 读回：条数 == 发布条数（无分片参数仅 bag_0，循环复刻 R12/R13 防御多片）
@@ -938,7 +938,7 @@ int main()
                 mcap::McapReader reader;
                 if (!reader.open(dataSource).ok())
                 {
-                    CHECK(false, "R14a 分片 mcap open 成功（每片 summary 完整可读回）");
+                    check(false, "R14a 分片 mcap open 成功（每片 summary 完整可读回）");
                     continue;
                 }
                 for (const auto &msgView :
@@ -952,9 +952,9 @@ int main()
                 }
                 reader.close();
             }
-            CHECK(cacheTotal == kCacheMessages,
+            check(cacheTotal == kCacheMessages,
                   "R14a 读回总条数 == 25（消费线程写盘不丢消息）");
-            CHECK(cacheChannelOk, "R14a 读回 Channel topic 一致");
+            check(cacheChannelOk, "R14a 读回 Channel topic 一致");
         }
         else
         {
@@ -966,7 +966,7 @@ int main()
     {
         yomk::bagRecordReset();
         FastDDSBagNode node9;
-        CHECK(node9.setDomainId(TEST_DOMAIN), "R14b 新节点 setDomainId(202) 成功");
+        check(node9.setDomainId(TEST_DOMAIN), "R14b 新节点 setDomainId(202) 成功");
 
         // 远端新增发布者（复用 peer participant 与 MString 类型）
         auto *topicCacheSplit = peerParticipant->create_topic(
@@ -974,7 +974,7 @@ int main()
         auto *writerCacheSplit = (pub != nullptr && topicCacheSplit != nullptr)
                                      ? pub->create_datawriter(topicCacheSplit, dds::DATAWRITER_QOS_DEFAULT)
                                      : nullptr;
-        CHECK(writerCacheSplit != nullptr, "R14b 远端 DataWriter 创建成功（rt/bag_rec_cache_b）");
+        check(writerCacheSplit != nullptr, "R14b 远端 DataWriter 创建成功（rt/bag_rec_cache_b）");
 
         // 发布端同 R14a（等匹配后 25 条 @200ms）；-d 2 + 4096 缓存：写入走消费线程，
         // 分片检查/滚动在消费线程执行——预期三分片同 R13（~0-2s / ~2-4s / ~4s+ 尾片）
@@ -1020,18 +1020,18 @@ int main()
         pubStop9.store(true);
         pubThread9.join();
 
-        CHECK(okCacheSplit, "R14b 缓存 + 时长分片组合 record → true");
+        check(okCacheSplit, "R14b 缓存 + 时长分片组合 record → true");
         if (okCacheSplit)
         {
-            CHECK(!statsCacheSplit.empty() && statsCacheSplit[0].count == kCacheMessages,
+            check(!statsCacheSplit.empty() && statsCacheSplit[0].count == kCacheMessages,
                   "R14b 分片不丢消息（stats.count == 发布条数 25）");
             const std::string &bagDir9 = node9.bagDir();
-            CHECK(std::filesystem::exists(bagDir9 + "/bag_0.mcap"), "R14b bag_0.mcap 存在");
-            CHECK(std::filesystem::exists(bagDir9 + "/bag_1.mcap"),
+            check(std::filesystem::exists(bagDir9 + "/bag_0.mcap"), "R14b bag_0.mcap 存在");
+            check(std::filesystem::exists(bagDir9 + "/bag_1.mcap"),
                   "R14b bag_1.mcap 存在（消费线程内时长达限已滚动分片）");
-            CHECK(std::filesystem::exists(bagDir9 + "/bag_2.mcap"),
+            check(std::filesystem::exists(bagDir9 + "/bag_2.mcap"),
                   "R14b bag_2.mcap 存在（4.8s 跨度超出两片 2s 上限）");
-            CHECK(std::filesystem::file_size(bagDir9 + "/bag_0.mcap") > 0 &&
+            check(std::filesystem::file_size(bagDir9 + "/bag_0.mcap") > 0 &&
                       std::filesystem::file_size(bagDir9 + "/bag_1.mcap") > 0 &&
                       std::filesystem::file_size(bagDir9 + "/bag_2.mcap") > 0,
                   "R14b 分片文件非空");
@@ -1041,11 +1041,11 @@ int main()
             std::stringstream buf9;
             buf9 << meta9.rdbuf();
             const std::string text9 = buf9.str();
-            CHECK(text9.find("\"bag_0.mcap\"") != std::string::npos &&
+            check(text9.find("\"bag_0.mcap\"") != std::string::npos &&
                       text9.find("\"bag_1.mcap\"") != std::string::npos &&
                       text9.find("\"bag_2.mcap\"") != std::string::npos,
                   "R14b metadata relative_file_paths 列出 bag_0/bag_1/bag_2 分片");
-            CHECK(text9.find("\"message_count\": " + std::to_string(kCacheMessages)) != std::string::npos,
+            check(text9.find("\"message_count\": " + std::to_string(kCacheMessages)) != std::string::npos,
                   "R14b metadata message_count 全局累计 == 25");
 
             // 跨分片读回：各分片条数总和 == 发布条数，且每片自含 Channel 声明
@@ -1064,7 +1064,7 @@ int main()
                 mcap::McapReader reader;
                 if (!reader.open(dataSource).ok())
                 {
-                    CHECK(false, "R14b 分片 mcap open 成功（每片 summary 完整可读回）");
+                    check(false, "R14b 分片 mcap open 成功（每片 summary 完整可读回）");
                     continue;
                 }
                 for (const auto &msgView :
@@ -1078,9 +1078,9 @@ int main()
                 }
                 reader.close();
             }
-            CHECK(cacheSplitTotal == kCacheMessages,
+            check(cacheSplitTotal == kCacheMessages,
                   "R14b 跨分片读回总条数 == 25（各分片连续拼接不丢消息）");
-            CHECK(cacheSplitChannelOk,
+            check(cacheSplitChannelOk,
                   "R14b 各分片 Channel topic 一致（每片自含通道声明）");
         }
         else
@@ -1093,7 +1093,7 @@ int main()
     {
         yomk::bagRecordReset();
         FastDDSBagNode node10;
-        CHECK(node10.setDomainId(TEST_DOMAIN), "R14c 新节点 setDomainId(202) 成功");
+        check(node10.setDomainId(TEST_DOMAIN), "R14c 新节点 setDomainId(202) 成功");
 
         // 远端新增发布者（复用 peer participant 与 MString 类型）
         auto *topicDrop = peerParticipant->create_topic(
@@ -1101,7 +1101,7 @@ int main()
         auto *writerDrop = (pub != nullptr && topicDrop != nullptr)
                                ? pub->create_datawriter(topicDrop, dds::DATAWRITER_QOS_DEFAULT)
                                : nullptr;
-        CHECK(writerDrop != nullptr, "R14c 远端 DataWriter 创建成功（rt/bag_rec_cache_c）");
+        check(writerDrop != nullptr, "R14c 远端 DataWriter 创建成功（rt/bag_rec_cache_c）");
 
         // 发布端：等订阅匹配后 50 条连发（无间隔突发）；1 字节缓存下每条消息都超限，首条
         // push 置位 dropNew_（本条仍入队），置位期间后续 push 全部丢弃直至消费线程 swap 复位
@@ -1127,7 +1127,7 @@ int main()
         });
 
         // 重定向 std::cout 捕获收尾丢条统计（logCacheDropped 输出走 stdout；重定向窗口内
-        // 主线程不执行 CHECK——CHECK 宏同样写 cout）
+        // 主线程不执行 check——check 函数同样写 cout）
         std::stringstream captured;
         auto *oldBuf = std::cout.rdbuf(captured.rdbuf());
 
@@ -1152,27 +1152,27 @@ int main()
         pubThread10.join();
         std::cout.rdbuf(oldBuf); // 恢复（record 已 join，此后无并发写 captured）
 
-        CHECK(okDrop, "R14c 满载录制 record → true");
+        check(okDrop, "R14c 满载录制 record → true");
         const uint64_t dropCount = statsDrop.empty() ? 0 : statsDrop[0].count;
-        CHECK(dropCount >= 1, "R14c 首条写入（超限本条仍入队语义）");
-        CHECK(dropCount < kCacheDropMessages, "R14c 写入条数 < 发布数（置位期间丢新）");
+        check(dropCount >= 1, "R14c 首条写入（超限本条仍入队语义）");
+        check(dropCount < kCacheDropMessages, "R14c 写入条数 < 发布数（置位期间丢新）");
 
         // 收尾丢条统计断言：按主题计数 + Total dropped 总计；计数守恒（写入 + 丢弃 == 发布）
         const std::string warned = captured.str();
-        CHECK(warned.find("bag cache dropped messages per topic:") != std::string::npos,
+        check(warned.find("bag cache dropped messages per topic:") != std::string::npos,
               "R14c 收尾丢条告警行出现");
-        CHECK(warned.find("\n\t" + std::string(REC_CACHE_TOPIC_C) + ": ") != std::string::npos,
+        check(warned.find("\n\t" + std::string(REC_CACHE_TOPIC_C) + ": ") != std::string::npos,
               "R14c 告警按主题列出丢条数");
         uint64_t droppedTotal = 0;
         const std::string totalPrefix = "Total dropped: ";
         const auto totalPos = warned.find(totalPrefix);
-        CHECK(totalPos != std::string::npos, "R14c 告警含 Total dropped 总计行");
+        check(totalPos != std::string::npos, "R14c 告警含 Total dropped 总计行");
         if (totalPos != std::string::npos)
         {
             droppedTotal = std::stoull(warned.substr(totalPos + totalPrefix.size()));
         }
-        CHECK(droppedTotal > 0, "R14c 满载确实丢弃（Total dropped > 0）");
-        CHECK(droppedTotal + dropCount == kCacheDropMessages,
+        check(droppedTotal > 0, "R14c 满载确实丢弃（Total dropped > 0）");
+        check(droppedTotal + dropCount == kCacheDropMessages,
               "R14c 丢条计数守恒（写入 + 丢弃 == 发布 50）");
 
         // 落盘读回：丢弃的消息不落盘，bag_0 条数 == stats.count
@@ -1188,7 +1188,7 @@ int main()
             }
             reader.close();
         }
-        CHECK(dropFileCount == dropCount,
+        check(dropFileCount == dropCount,
               "R14c 落盘条数 == stats.count（丢弃消息不入队不落盘）");
     }
 
@@ -1198,7 +1198,7 @@ int main()
     {
         yomk::bagRecordReset();
         FastDDSBagNode node11;
-        CHECK(node11.setDomainId(TEST_DOMAIN), "R15 新节点 setDomainId(202) 成功");
+        check(node11.setDomainId(TEST_DOMAIN), "R15 新节点 setDomainId(202) 成功");
 
         // 远端发布者：DataWriter QoS 显式置 VOLATILE（区别于其他用例的默认 TRANSIENT_LOCAL）
         constexpr auto *kQosTopic = "rt/bag_rec_qos";
@@ -1209,7 +1209,7 @@ int main()
         auto *writerQos = (pub != nullptr && topicQosT != nullptr)
                               ? pub->create_datawriter(topicQosT, wqos)
                               : nullptr;
-        CHECK(writerQos != nullptr, "R15 远端 VOLATILE DataWriter 创建成功");
+        check(writerQos != nullptr, "R15 远端 VOLATILE DataWriter 创建成功");
 
         std::atomic<bool> pubStop11{false};
         std::thread pubThread11([&]()
@@ -1253,7 +1253,7 @@ int main()
         pubStop11.store(true);
         pubThread11.join();
 
-        CHECK(okQos, "R15 VOLATILE 录制 record → true");
+        check(okQos, "R15 VOLATILE 录制 record → true");
         if (okQos)
         {
             const std::string qosBagDir = node11.bagDir();
@@ -1262,7 +1262,7 @@ int main()
             mcap::FileStreamReader dataSource{in};
             mcap::McapReader reader;
             const auto openStatus = reader.open(dataSource);
-            CHECK(openStatus.ok(), "R15 mcap reader.open 成功");
+            check(openStatus.ok(), "R15 mcap reader.open 成功");
             if (openStatus.ok())
             {
                 std::string channelQos;
@@ -1273,7 +1273,7 @@ int main()
                     channelQos =
                         qosIt != msgView.channel->metadata.end() ? qosIt->second : "";
                 }
-                CHECK(channelQos == "RELIABLE,VOLATILE",
+                check(channelQos == "RELIABLE,VOLATILE",
                       "R15 Channel.metadata qos == RELIABLE,VOLATILE（真实 offered，区别于默认）");
                 reader.close();
             }
@@ -1282,7 +1282,7 @@ int main()
             std::stringstream buf;
             buf << meta.rdbuf();
             const std::string text = buf.str();
-            CHECK(text.find("\"qos\": \"RELIABLE,VOLATILE\"") != std::string::npos,
+            check(text.find("\"qos\": \"RELIABLE,VOLATILE\"") != std::string::npos,
                   "R15 metadata.json topic_metadata qos == RELIABLE,VOLATILE");
         }
     }
@@ -1295,11 +1295,11 @@ int main()
     {
         yomk::bagRecordReset();
         FastDDSBagNode node12;
-        CHECK(node12.setDomainId(TEST_DOMAIN), "R16 新节点 setDomainId(202) 成功");
+        check(node12.setDomainId(TEST_DOMAIN), "R16 新节点 setDomainId(202) 成功");
 
         auto *peerSn = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-        CHECK(peerSn != nullptr, "R16 独立远端发布端 participant 创建成功");
+        check(peerSn != nullptr, "R16 独立远端发布端 participant 创建成功");
 
         // 类型对象 new 后、register_type 前 set_name（注册名随新名落发现数据）
         constexpr auto *kSetnameTopic = "rt/bag_rec_setname";
@@ -1324,7 +1324,7 @@ int main()
         auto *writerSetname = (pubSn != nullptr && topicSetname != nullptr)
                                   ? pubSn->create_datawriter(topicSetname, dds::DATAWRITER_QOS_DEFAULT)
                                   : nullptr;
-        CHECK(writerSetname != nullptr, "R16 远端 DataWriter 创建成功（rt/bag_rec_setname）");
+        check(writerSetname != nullptr, "R16 远端 DataWriter 创建成功（rt/bag_rec_setname）");
 
         // 发布端：等订阅匹配后 20 条 @150ms（同 R2 口径）
         std::atomic<bool> pubStop12{false};
@@ -1371,8 +1371,8 @@ int main()
         pubStop12.store(true);
         pubThread12.join();
 
-        CHECK(okSetname, "R16 set_name 类型录制 record → true");
-        CHECK(statsSetname.size() == 1 && statsSetname[0].type == kRosTypeName,
+        check(okSetname, "R16 set_name 类型录制 record → true");
+        check(statsSetname.size() == 1 && statsSetname[0].type == kRosTypeName,
               "R16 stats.type == std_msgs::msg::dds_::String_（元信息类型名 = 发现名 = 新名）");
 
         // R16 独立远端清理：writer → publisher → topic → participant

@@ -12,7 +12,7 @@
  * DDS-free 保证：解包守卫在触达节点查找/DDS 前返回；节点不存在在 map 查找处返回；
  *   /version 不碰 DDS；本测试绝不向 /create_node 传合法 DDSNode（那会创建真实 participant，归 MC2）。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
@@ -26,19 +26,19 @@ namespace
     void testVersion(YomkDdsService *svc)
     {
         auto resp = testInvoke(svc, "/version");
-        CHECK(resp.status == yomk::payload::ResStatus::Succeeded, "/version 返回 eOk");
-        CHECK(resp.msg == "ok", "/version msg == ok");
+        check(resp.status == yomk::payload::ResStatus::Succeeded, "/version 返回 eOk");
+        check(resp.msg == "ok", "/version msg == ok");
 
         auto ver = ::yomk::msgs::unpack<::yomk::msgs::String>(resp.data);;
-        CHECK(ver != nullptr, "/version data 可解包为 String");
+        check(ver != nullptr, "/version data 可解包为 String");
         if (ver != nullptr)
         {
-            CHECK(ver->d.rfind("YomkDds v", 0) == 0, "/version 版本串前缀为 YomkDds v");
-            CHECK(ver->d.find("(WIP)") == std::string::npos, "/version 版本串不含 (WIP)（发布态整洁版本串）");
+            check(ver->d.rfind("YomkDds v", 0) == 0, "/version 版本串前缀为 YomkDds v");
+            check(ver->d.find("(WIP)") == std::string::npos, "/version 版本串不含 (WIP)（发布态整洁版本串）");
         }
 
         auto respNull = testInvoke(svc, "/version", nullptr);
-        CHECK(respNull.status == yomk::payload::ResStatus::Succeeded, "/version 传 nullptr 仍 eOk（忽略 pkg）");
+        check(respNull.status == yomk::payload::ResStatus::Succeeded, "/version 传 nullptr 仍 eOk（忽略 pkg）");
     }
 
     // T2：7 个解包端点的双守卫（nullptr / 异类包 / 改名伪造）
@@ -49,20 +49,20 @@ namespace
         {
             // (a) nullptr → 第一守卫 !pkg
             auto ra = testInvoke(svc, ep, nullptr);
-            CHECK(ra.status == yomk::payload::ResStatus::Failed &&
+            check(ra.status == yomk::payload::ResStatus::Failed &&
                       ra.msg.find("pkg is null or pkg is not") != std::string::npos,
                   std::string(ep) + " : nullptr 包命中第一守卫 eNo");
 
             // (b) 异类包（保留自身名）→ 第一守卫 name()!=expectName
             auto rb = testInvoke(svc, ep, wrongPkg);
-            CHECK(rb.status == yomk::payload::ResStatus::Failed &&
+            check(rb.status == yomk::payload::ResStatus::Failed &&
                       rb.msg.find("pkg is null or pkg is not") != std::string::npos,
                   std::string(ep) + " : 异类包命中第一守卫 eNo");
 
             // (c) 改名伪造：异类包改名为期望名 → 第一守卫通过、dynamic_pointer_cast 失败命中第二守卫
             wrongPkg->name(expectName);
             auto rc = testInvoke(svc, ep, wrongPkg);
-            CHECK(rc.status == yomk::payload::ResStatus::Failed &&
+            check(rc.status == yomk::payload::ResStatus::Failed &&
                       rc.msg.find("dynamic_pointer_cast failed") != std::string::npos,
                   std::string(ep) + " : 改名伪造命中第二守卫(dynamic_pointer_cast 失败) eNo");
         };
@@ -80,20 +80,20 @@ namespace
     void testNodeNotFound(YomkDdsService *svc)
     {
         const std::string ghost = "ghost_node_mc1";
-        auto check = [&](const char *ep, YomkMsgPtr pkg)
+        auto checkNodeGone = [&](const char *ep, YomkMsgPtr pkg)
         {
             auto r = testInvoke(svc, ep, pkg);
-            CHECK(r.status == yomk::payload::ResStatus::Failed &&
+            check(r.status == yomk::payload::ResStatus::Failed &&
                       r.msg.find("not exists") != std::string::npos,
                   std::string(ep) + " : 节点不存在早退 eNo（不触达 DDS）");
         };
 
-        check("/delete_node", ::yomk::msgs::String::shared(ghost));
-        check("/register_pub_topic", ::yomk::msgs::DDSTopic::shared(DDSTopic{ghost, "t", nullptr}));
-        check("/register_sub_topic", ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{ghost, "t", nullptr, nullptr}));
-        check("/publish", ::yomk::msgs::DDSPublish::shared(DDSPublish{ghost, "t", nullptr}));
-        check("/loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{ghost, "t", nullptr}));
-        check("/discard_loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{ghost, "t", nullptr}));
+        checkNodeGone("/delete_node", ::yomk::msgs::String::shared(ghost));
+        checkNodeGone("/register_pub_topic", ::yomk::msgs::DDSTopic::shared(DDSTopic{ghost, "t", nullptr}));
+        checkNodeGone("/register_sub_topic", ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{ghost, "t", nullptr, nullptr}));
+        checkNodeGone("/publish", ::yomk::msgs::DDSPublish::shared(DDSPublish{ghost, "t", nullptr}));
+        checkNodeGone("/loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{ghost, "t", nullptr}));
+        checkNodeGone("/discard_loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{ghost, "t", nullptr}));
     }
 } // namespace
 
@@ -103,18 +103,18 @@ int main()
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
     auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    CHECK(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
 
     // 内省：9 个 dds 端点均已注册（闭环 4 增 /load_xml）
     auto infos = testFuncInfos(svc);
-    CHECK(infos.size() == 9 && infos.count("/version") && infos.count("/load_xml") && infos.count("/create_node") && infos.count("/delete_node") && infos.count("/register_pub_topic") && infos.count("/register_sub_topic") && infos.count("/publish") && infos.count("/loan") && infos.count("/discard_loan"),
+    check(infos.size() == 9 && infos.count("/version") && infos.count("/load_xml") && infos.count("/create_node") && infos.count("/delete_node") && infos.count("/register_pub_topic") && infos.count("/register_sub_topic") && infos.count("/publish") && infos.count("/loan") && infos.count("/discard_loan"),
           "funcInfos 内省 9 端点齐全");
 
     testVersion(svc);
     testUnpackGuards(svc);
     testNodeNotFound(svc);
 
-    CHECK(testInvoke(svc, "/no_such_endpoint").status == yomk::payload::ResStatus::Failed, "未知端点返回 eNo");
+    check(testInvoke(svc, "/no_such_endpoint").status == yomk::payload::ResStatus::Failed, "未知端点返回 eNo");
 
     return testReport("TestYomkDdsServiceContract");
 }

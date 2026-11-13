@@ -57,7 +57,7 @@
  *         RELIABLE（翻译落端点直证）。writer/reader 均不外露，断言经二号调试节点
  *         topicInfo verbose 的发现 QoS 行读回（发现数据是唯一观察面）。
  *
- * 风格：纯 main() + CHECK 宏 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
+ * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  *       不经 YomkDdsService/YOMK_INIT，直接 RAII 使用 FastDDSNode 与 FastDDSDebugNode
  *       （规避 YOMK atexit 静态析构问题，模式同 TestYomkDdsNodeLifecycle Part B）。
  */
@@ -314,25 +314,25 @@ int main()
         // 未入域（participant_ 为空）时 7 个查询/登记入口全部 false，且 error 统一归类为
         // "debug node not created"（原为静默 return false，服务层只能报笼统文本）
         guardErr.clear();
-        CHECK(!dbg.listTopics(listed, 5, 200, &guardErr),
+        check(!dbg.listTopics(listed, 5, 200, &guardErr),
               "未 setDomainId 时 listTopics → false（participant 未创建）");
-        CHECK(guardErr.find("debug node not created") != std::string::npos,
+        check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 listTopics 的 error 含 debug node not created");
         guardErr.clear();
-        CHECK(!dbg.nodeList(nodes, 5, 200, &guardErr),
+        check(!dbg.nodeList(nodes, 5, 200, &guardErr),
               "未 setDomainId 时 nodeList → false（participant 未创建）");
-        CHECK(guardErr.find("debug node not created") != std::string::npos,
+        check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 nodeList 的 error 含 debug node not created");
         std::vector<std::string> ifaceGuard;
         guardErr.clear();
-        CHECK(!dbg.interfaceShow("Any::Type", ifaceGuard, 5, 200, &guardErr),
+        check(!dbg.interfaceShow("Any::Type", ifaceGuard, 5, 200, &guardErr),
               "未 setDomainId 时 interfaceShow → false（participant 未创建）");
-        CHECK(guardErr.find("debug node not created") != std::string::npos,
+        check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 interfaceShow 的 error 含 debug node not created");
         guardErr.clear();
-        CHECK(!dbg.subscribeTopic(TEST_TOPIC, &guardErr),
+        check(!dbg.subscribeTopic(TEST_TOPIC, &guardErr),
               "未 setDomainId 时 subscribeTopic → false（participant 未创建）");
-        CHECK(guardErr.find("debug node not created") != std::string::npos,
+        check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 subscribeTopic 的 error 含 debug node not created");
         // 补齐剩余 4 个入口的未入域守卫（topicInfo / nodeInfo / topicExample / topicMsgJson），
         // 使节点层 7 处 participant_ == nullptr 分支全覆盖
@@ -340,58 +340,58 @@ int main()
         size_t guardPub = 0;
         size_t guardSub = 0;
         guardErr.clear();
-        CHECK(!dbg.topicInfo(TEST_TOPIC, guardTypeName, guardPub, guardSub, 5, 200,
+        check(!dbg.topicInfo(TEST_TOPIC, guardTypeName, guardPub, guardSub, 5, 200,
                   nullptr, nullptr, &guardErr),
               "未 setDomainId 时 topicInfo → false（participant 未创建）");
-        CHECK(guardErr.find("debug node not created") != std::string::npos,
+        check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 topicInfo 的 error 含 debug node not created");
         std::vector<std::pair<std::string, std::string>> guardNodePubs;
         std::vector<std::pair<std::string, std::string>> guardNodeSubs;
         guardErr.clear();
-        CHECK(!dbg.nodeInfo("any-node", guardNodePubs, guardNodeSubs, 5, 200, &guardErr),
+        check(!dbg.nodeInfo("any-node", guardNodePubs, guardNodeSubs, 5, 200, &guardErr),
               "未 setDomainId 时 nodeInfo → false（participant 未创建）");
-        CHECK(guardErr.find("debug node not created") != std::string::npos,
+        check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 nodeInfo 的 error 含 debug node not created");
         std::vector<std::string> exampleGuard;
         guardErr.clear();
-        CHECK(!dbg.topicExample(TEST_TOPIC, exampleGuard, 5, 200, &guardErr),
+        check(!dbg.topicExample(TEST_TOPIC, exampleGuard, 5, 200, &guardErr),
               "未 setDomainId 时 topicExample → false（participant 未创建）");
-        CHECK(guardErr.find("debug node not created") != std::string::npos,
+        check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 topicExample 的 error 含 debug node not created");
         std::string guardMsgType;
         std::string guardMsgJson;
         guardErr.clear();
-        CHECK(!dbg.topicMsgJson(TEST_TOPIC, guardMsgType, guardMsgJson, 5, 200, &guardErr),
+        check(!dbg.topicMsgJson(TEST_TOPIC, guardMsgType, guardMsgJson, 5, 200, &guardErr),
               "未 setDomainId 时 topicMsgJson → false（participant 未创建）");
-        CHECK(guardErr.find("debug node not created") != std::string::npos,
+        check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 topicMsgJson 的 error 含 debug node not created");
         // subscribeTopic 其余三类拒绝原因之主题名空（subscriber 未建在本测试树不可达：
         // 入域即建 subscriber，未入域时先命中 participant 分支）
         guardErr.clear();
-        CHECK(!dbg.subscribeTopic("", &guardErr), "空主题名 subscribeTopic → false（未入域守卫优先）");
-        CHECK(dbg.setDomainId(TEST_DOMAIN), "setDomainId(200) → true");
-        CHECK(!dbg.setDomainId(TEST_DOMAIN), "重复 setDomainId(200) → false（仅可成功一次）");
+        check(!dbg.subscribeTopic("", &guardErr), "空主题名 subscribeTopic → false（未入域守卫优先）");
+        check(dbg.setDomainId(TEST_DOMAIN), "setDomainId(200) → true");
+        check(!dbg.setDomainId(TEST_DOMAIN), "重复 setDomainId(200) → false（仅可成功一次）");
         // 入域后主题名空 → 归类为 empty topic name（participant/subscriber 均已就位）
         guardErr.clear();
-        CHECK(!dbg.subscribeTopic("", &guardErr), "入域后空主题名 subscribeTopic → false");
-        CHECK(guardErr.find("empty topic name") != std::string::npos,
+        check(!dbg.subscribeTopic("", &guardErr), "入域后空主题名 subscribeTopic → false");
+        check(guardErr.find("empty topic name") != std::string::npos,
               "入域后空主题名的 error 含 empty topic name");
-        CHECK(dbg.subscribeTopic(TEST_TOPIC), "首次 subscribeTopic(t_debug) → true（登记待发现）");
+        check(dbg.subscribeTopic(TEST_TOPIC), "首次 subscribeTopic(t_debug) → true（登记待发现）");
         guardErr.clear();
-        CHECK(!dbg.subscribeTopic(TEST_TOPIC, &guardErr),
+        check(!dbg.subscribeTopic(TEST_TOPIC, &guardErr),
               "重复 subscribeTopic(t_debug) → false（pending_ 去重）");
-        CHECK(guardErr.find("already registered") != std::string::npos,
+        check(guardErr.find("already registered") != std::string::npos,
               "重复登记的 error 含 already registered");
         std::cout << "[OBSERVE] guard errors |" << guardErr << "|" << std::endl;
         // 本时刻域内无其他 participant（ctest 串行，e2e 的 pub 尚未创建），发现缓存必空；
         // 断言 stableRounds=1 单次快照路径正常（免等待的快速查询语义）
         listed.clear();
-        CHECK(dbg.listTopics(listed, 1, 50) && listed.empty(),
+        check(dbg.listTopics(listed, 1, 50) && listed.empty(),
               "入域后 listTopics(listed,1,50) → true 且空（单次快照，无 writer 空列表正常）");
         // 自适应收敛：入域无 writer 时快照立即稳定，收敛耗时为一次轮询间隔（百毫秒级）
         auto waitStart = std::chrono::steady_clock::now();
         std::vector<std::pair<std::string, std::string>> waited;
-        CHECK(dbg.listTopics(waited, 2, 100) && waited.empty(),
+        check(dbg.listTopics(waited, 2, 100) && waited.empty(),
               "入域无 writer listTopics(2,100ms) → true 且空（快照立即稳定）");
         auto waitMs = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - waitStart).count();
@@ -405,9 +405,9 @@ int main()
     {
         // 发布端：真实 YomkDdsStdMsgs 类型制造被观察流量（RELIABLE 默认 QoS）
         FastDDSNode pub;
-        CHECK(pub.setDomainId(TEST_DOMAIN, "test-pub"),
+        check(pub.setDomainId(TEST_DOMAIN, "test-pub"),
               "发布端 setDomainId(200, \"test-pub\") → true（test 前缀命名）");
-        CHECK(pub.registerPubTopic(TEST_TOPIC, new YomkDdsStd::MStringPubSubType()),
+        check(pub.registerPubTopic(TEST_TOPIC, new YomkDdsStd::MStringPubSubType()),
               "发布端 registerPubTopic(t_debug, MString) → true");
 
         // 被测端：sink 注入（须在 subscribeTopic 之前调用，建订阅时按值捕获）
@@ -417,8 +417,8 @@ int main()
                 std::lock_guard<std::mutex> lk(mtx);
                 captured += text;
             });
-        CHECK(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true");
-        CHECK(dbg.subscribeTopic(TEST_TOPIC), "被测端 subscribeTopic(t_debug) → true");
+        check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true");
+        check(dbg.subscribeTopic(TEST_TOPIC), "被测端 subscribeTopic(t_debug) → true");
 
         // 发布循环：每 100ms 一条（匹配建立前的样本会丢失），直至捕获到目标串或超时（约 5s）
         YomkDdsStd::MString msg;
@@ -440,24 +440,24 @@ int main()
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         }
-        CHECK(pubOk > 0, "发布循环至少一次 publish 成功");
-        CHECK(found, "捕获输出包含 hello_debug（发现→动态类型→订阅→反序列化→JSON 输出闭环）");
+        check(pubOk > 0, "发布循环至少一次 publish 成功");
+        check(found, "捕获输出包含 hello_debug（发现→动态类型→订阅→反序列化→JSON 输出闭环）");
 
-        // 输出头部结构化字段校验（快照后释放锁断言，避免在 CHECK 展开中持锁）
+        // 输出头部结构化字段校验（快照后释放锁断言，避免在 check 展开中持锁）
         std::string snap;
         {
             std::lock_guard<std::mutex> lk(mtx);
             snap = captured;
         }
-        CHECK(snap.find("topic=t_debug") != std::string::npos, "输出头部含 topic=t_debug");
-        CHECK(snap.find("type=YomkDdsStd::MString") != std::string::npos,
+        check(snap.find("topic=t_debug") != std::string::npos, "输出头部含 topic=t_debug");
+        check(snap.find("type=YomkDdsStd::MString") != std::string::npos,
               "输出头部含 type=YomkDdsStd::MString（远端 TypeObject→DynamicType 解析成功）");
         std::cout << "[OBSERVE] captured " << snap.size() << " bytes" << std::endl;
 
         // listTopics：订阅建立的前提是发现事件已入 seen_ 缓存（EDP 重放覆盖 late joiner），
         // 此时同步查询必含 t_debug 与其类型名，且查询不影响既有订阅链路
         std::vector<std::pair<std::string, std::string>> listed;
-        CHECK(dbg.listTopics(listed), "listTopics → true（入域状态）");
+        check(dbg.listTopics(listed), "listTopics → true（入域状态）");
         bool listedTopic = false;
         for (const auto& entry : listed)
         {
@@ -466,12 +466,12 @@ int main()
                 listedTopic = true;
             }
         }
-        CHECK(listedTopic, "listTopics 含 (t_debug, YomkDdsStd::MString)（发现缓存同步查询）");
+        check(listedTopic, "listTopics 含 (t_debug, YomkDdsStd::MString)（发现缓存同步查询）");
         std::cout << "[OBSERVE] listed topics=" << listed.size() << std::endl;
 
         // 自适应收敛：订阅已建立说明发现已稳定，收敛查询应快速返回且与单次快照结果一致
         std::vector<std::pair<std::string, std::string>> waited;
-        CHECK(dbg.listTopics(waited, 2, 100), "listTopics(2,100ms) → true（入域状态收敛查询）");
+        check(dbg.listTopics(waited, 2, 100), "listTopics(2,100ms) → true（入域状态收敛查询）");
         bool waitedTopic = false;
         for (const auto& entry : waited)
         {
@@ -480,7 +480,7 @@ int main()
                 waitedTopic = true;
             }
         }
-        CHECK(waitedTopic, "listTopics(2,100ms) 含 (t_debug, YomkDdsStd::MString)（收敛快照一致）");
+        check(waitedTopic, "listTopics(2,100ms) 含 (t_debug, YomkDdsStd::MString)（收敛快照一致）");
         std::cout << "[OBSERVE] waited topics=" << waited.size() << std::endl;
     }
 
@@ -491,7 +491,7 @@ int main()
         // 被测端 dbg 只建 participant + subscriber（无本地 reader/writer），自身端点不进发现缓存
         auto* subParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-        CHECK(subParticipant != nullptr, "纯订阅端 participant 创建成功（仅有订阅者场景）");
+        check(subParticipant != nullptr, "纯订阅端 participant 创建成功（仅有订阅者场景）");
         if (subParticipant != nullptr)
         {
             constexpr const char* READER_ONLY_TOPIC = "t_reader_only";
@@ -504,15 +504,15 @@ int main()
                 READER_ONLY_TOPIC, ts.get_type_name(), dds::TOPIC_QOS_DEFAULT);
             auto* reader = (sub != nullptr && topic != nullptr)
                 ? sub->create_datareader(topic, dds::DATAREADER_QOS_DEFAULT) : nullptr;
-            CHECK(reader != nullptr, "纯订阅端 DataReader 创建成功（t_reader_only，域内无 writer）");
+            check(reader != nullptr, "纯订阅端 DataReader 创建成功（t_reader_only，域内无 writer）");
 
             if (reader != nullptr)
             {
                 FastDDSDebugNode dbg;
-                CHECK(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（仅订阅者场景）");
+                check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（仅订阅者场景）");
                 // dbg 为 late joiner：入域时 EDP 全量重放纯订阅端 reader 发现信息
                 std::vector<std::pair<std::string, std::string>> listed;
-                CHECK(dbg.listTopics(listed, 5, 100), "listTopics(5,100ms) → true（仅订阅者场景收敛查询）");
+                check(dbg.listTopics(listed, 5, 100), "listTopics(5,100ms) → true（仅订阅者场景收敛查询）");
                 bool listedReaderOnly = false;
                 std::string readerTypeName;
                 for (const auto& entry : listed)
@@ -523,8 +523,8 @@ int main()
                         readerTypeName = entry.second;
                     }
                 }
-                CHECK(listedReaderOnly, "listTopics 含仅有订阅者的主题 t_reader_only（reader 缓存并入快照）");
-                CHECK(readerTypeName == "YomkDdsStd::MString", "仅有订阅者主题的类型名正确列出（YomkDdsStd::MString）");
+                check(listedReaderOnly, "listTopics 含仅有订阅者的主题 t_reader_only（reader 缓存并入快照）");
+                check(readerTypeName == "YomkDdsStd::MString", "仅有订阅者主题的类型名正确列出（YomkDdsStd::MString）");
                 std::cout << "[OBSERVE] reader-only topic listed, type=" << readerTypeName << std::endl;
             } // dbg 析构：reader/topic/subscriber/participant 逆序清理，随后 ts 析构
 
@@ -551,7 +551,7 @@ int main()
         constexpr const char* COUNT_TOPIC = "t_info_counts";
         auto* countParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-        CHECK(countParticipant != nullptr, "多端点场景 participant 创建成功（计数用例）");
+        check(countParticipant != nullptr, "多端点场景 participant 创建成功（计数用例）");
         if (countParticipant != nullptr)
         {
             // TypeSupport 须活过 topic/writer/reader 使用期（声明顺序同"仅有订阅者"块）
@@ -567,26 +567,26 @@ int main()
                 ? pub->create_datawriter(topic, dds::DATAWRITER_QOS_DEFAULT) : nullptr;
             auto* r1 = (sub != nullptr && topic != nullptr)
                 ? sub->create_datareader(topic, dds::DATAREADER_QOS_DEFAULT) : nullptr;
-            CHECK(w1 != nullptr && w2 != nullptr && r1 != nullptr,
+            check(w1 != nullptr && w2 != nullptr && r1 != nullptr,
                   "2 个 DataWriter + 1 个 DataReader 创建成功（同主题 t_info_counts）");
 
             if (w1 != nullptr && w2 != nullptr && r1 != nullptr)
             {
                 FastDDSDebugNode dbg;
-                CHECK(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（计数场景）");
+                check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（计数场景）");
                 // 先经 listTopics 收敛确认发现完成（late joiner 经 EDP 重放），再独立收敛查询：
                 // topicInfo 不依赖 listTopics，此调用仅为本用例的时序前置
                 std::vector<std::pair<std::string, std::string>> listed;
-                CHECK(dbg.listTopics(listed, 5, 100), "listTopics(5,100ms) → true（计数场景收敛）");
+                check(dbg.listTopics(listed, 5, 100), "listTopics(5,100ms) → true（计数场景收敛）");
                 std::string typeName;
                 size_t pubCount = 0;
                 size_t subCount = 0;
-                CHECK(dbg.topicInfo(COUNT_TOPIC, typeName, pubCount, subCount, 5, 100),
+                check(dbg.topicInfo(COUNT_TOPIC, typeName, pubCount, subCount, 5, 100),
                       "topicInfo(t_info_counts,5,100ms) → true（独立收敛查询命中）");
-                CHECK(typeName == "YomkDdsStd::MString",
+                check(typeName == "YomkDdsStd::MString",
                       "topicInfo 类型名为原始 DDS 类型名（YomkDdsStd::MString，无转换）");
-                CHECK(pubCount == 2, "topicInfo publisherCount == 2（同主题两个远端 DataWriter）");
-                CHECK(subCount == 1, "topicInfo subscriptionCount == 1（同主题一个远端 DataReader）");
+                check(pubCount == 2, "topicInfo publisherCount == 2（同主题两个远端 DataWriter）");
+                check(subCount == 1, "topicInfo subscriptionCount == 1（同主题一个远端 DataReader）");
                 std::cout << "[OBSERVE] topicInfo pub=" << pubCount << " sub=" << subCount
                           << " type=" << typeName << std::endl;
 
@@ -594,7 +594,7 @@ int main()
                 std::string missType;
                 size_t missPub = 0;
                 size_t missSub = 0;
-                CHECK(!dbg.topicInfo("t_not_exist", missType, missPub, missSub, 1, 50),
+                check(!dbg.topicInfo("t_not_exist", missType, missPub, missSub, 1, 50),
                       "topicInfo(t_not_exist,1,50) → false（未发现主题，单次快照快速路径）");
             } // dbg 析构：reader/topic/subscriber/participant 逆序清理，随后 ts 析构
 
@@ -632,7 +632,7 @@ int main()
         // peer 先于被测端入域（late joiner 经 PDP 全量重放既有 participant 发现信息）：
         // 命名 peer 复用改造后 setDomainId 带名路径，恰好端到端验证名称经 SPDP 传播
         FastDDSNode peer;
-        CHECK(peer.setDomainId(TEST_DOMAIN, "test-peer-node"),
+        check(peer.setDomainId(TEST_DOMAIN, "test-peer-node"),
               "命名 peer setDomainId(200, \"test-peer-node\") → true（test 前缀命名）");
         namespace dds = eprosima::fastdds::dds;  // 块内别名：直连 FastDDS API 造匿名参与者
         // 匿名 peer：Fast DDS 默认参与者名为 "RTPSParticipant"（DomainParticipantQos 默认值
@@ -641,19 +641,19 @@ int main()
         anonQos.name(std::string());
         auto* anonParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, anonQos);
-        CHECK(anonParticipant != nullptr, "匿名 peer participant 创建成功（显式 qos.name(\"\")）");
+        check(anonParticipant != nullptr, "匿名 peer participant 创建成功（显式 qos.name(\"\")）");
         // "/" 名 peer：ROS2 rmw_fastrtps 把参与者名统一置为根 enclave "/"（rcl_init 兜底，
         // 节点名走另一通道），显式 qos.name("/") 复现该形态，验证 nodeList 的 "/" 过滤语义
         dds::DomainParticipantQos slashQos = dds::PARTICIPANT_QOS_DEFAULT;
         slashQos.name(std::string("/"));
         auto* slashParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, slashQos);
-        CHECK(slashParticipant != nullptr, "slash peer participant 创建成功（显式 qos.name(\"/\")）");
+        check(slashParticipant != nullptr, "slash peer participant 创建成功（显式 qos.name(\"/\")）");
 
         FastDDSDebugNode dbg;
-        CHECK(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（参与者发现场景）");
+        check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（参与者发现场景）");
         std::vector<std::string> nodes;
-        CHECK(dbg.nodeList(nodes, 5, 100), "nodeList(5,100ms) → true（参与者发现收敛查询）");
+        check(dbg.nodeList(nodes, 5, 100), "nodeList(5,100ms) → true（参与者发现收敛查询）");
         bool hasNamed = false;
         bool noBadLine = true;  // 每行均非空、非 "/" 且不含 GUID 串特征 '|'（无效名参与者跳过的证据）
         bool noSelf = true;     // 无调试节点唯一名前缀行（自身不在发现回调中）
@@ -672,9 +672,9 @@ int main()
                 noSelf = false;
             }
         }
-        CHECK(hasNamed, "nodeList 含 test-peer-node（SPDP participant_name 端到端传播）");
-        CHECK(noBadLine, "nodeList 无空名/\"/\"名/GUID 串行（无效名参与者跳过，每行均为有效命名节点）");
-        CHECK(noSelf, "nodeList 不含调试节点自身（自身不在发现回调中）");
+        check(hasNamed, "nodeList 含 test-peer-node（SPDP participant_name 端到端传播）");
+        check(noBadLine, "nodeList 无空名/\"/\"名/GUID 串行（无效名参与者跳过，每行均为有效命名节点）");
+        check(noSelf, "nodeList 不含调试节点自身（自身不在发现回调中）");
         std::cout << "[OBSERVE] nodeList " << nodes.size() << " nodes:" << std::endl;
         for (const auto& name : nodes)
         {
@@ -696,11 +696,11 @@ int main()
         // 命名 peer（FastDDSNode）同时持一个发布端点与一个订阅端点：验证 nodeInfo 两份端点清单。
         // peer 先于被测端入域（late joiner 经 EDP/PDP 全量重放其参与者与端点发现信息）
         FastDDSNode peer;
-        CHECK(peer.setDomainId(TEST_DOMAIN, NODEINFO_PEER_NAME),
+        check(peer.setDomainId(TEST_DOMAIN, NODEINFO_PEER_NAME),
               "命名 peer setDomainId(200, test-nodeinfo-peer) → true（test 前缀命名）");
-        CHECK(peer.registerPubTopic(NODEINFO_PUB_TOPIC, new YomkDdsStd::MStringPubSubType()),
+        check(peer.registerPubTopic(NODEINFO_PUB_TOPIC, new YomkDdsStd::MStringPubSubType()),
               "命名 peer registerPubTopic(t_nodeinfo_pub, MString) → true");
-        CHECK(peer.registerSubTopic(NODEINFO_SUB_TOPIC, new YomkDdsStd::MStringPubSubType(),
+        check(peer.registerSubTopic(NODEINFO_SUB_TOPIC, new YomkDdsStd::MStringPubSubType(),
                   [](const void *) {}),
               "命名 peer registerSubTopic(t_nodeinfo_sub, MString) → true（空回调，本用例无流量）");
         // 匿名 peer（显式 qos.name("")）带一个发布端点：验证其他参与者的端点不串入命名 peer 清单
@@ -708,7 +708,7 @@ int main()
         anonQos.name(std::string());
         auto* anonParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, anonQos);
-        CHECK(anonParticipant != nullptr, "匿名 peer participant 创建成功（带端点，归属隔离用例）");
+        check(anonParticipant != nullptr, "匿名 peer participant 创建成功（带端点，归属隔离用例）");
         // TypeSupport 须活过 writer 使用期（participant 类型表不接管所有权），块内声明于 dbg 之前
         dds::TypeSupport anonTs(new YomkDdsStd::MStringPubSubType());
         if (anonParticipant != nullptr)
@@ -722,21 +722,21 @@ int main()
             ? anonParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT) : nullptr;
         auto* anonWriter = (anonPub != nullptr && anonTopic != nullptr)
             ? anonPub->create_datawriter(anonTopic, dds::DATAWRITER_QOS_DEFAULT) : nullptr;
-        CHECK(anonWriter != nullptr, "匿名 peer DataWriter 创建成功（t_nodeinfo_anon）");
+        check(anonWriter != nullptr, "匿名 peer DataWriter 创建成功（t_nodeinfo_anon）");
         // "/" 名 peer（ROS2 占位名形态，无端点）：验证 nodeInfo 的名称过滤不在节点层（"/" 可查）
         dds::DomainParticipantQos slashQos = dds::PARTICIPANT_QOS_DEFAULT;
         slashQos.name(std::string("/"));
         auto* slashParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, slashQos);
-        CHECK(slashParticipant != nullptr, "slash peer participant 创建成功（显式 qos.name(\"/\")）");
+        check(slashParticipant != nullptr, "slash peer participant 创建成功（显式 qos.name(\"/\")）");
 
         FastDDSDebugNode dbg;
         std::vector<std::pair<std::string, std::string>> pubs;
         std::vector<std::pair<std::string, std::string>> subs;
-        CHECK(!dbg.nodeInfo(NODEINFO_PEER_NAME, pubs, subs),
+        check(!dbg.nodeInfo(NODEINFO_PEER_NAME, pubs, subs),
               "未 setDomainId 时 nodeInfo → false（participant 未创建）");
-        CHECK(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（节点信息场景）");
-        CHECK(dbg.nodeInfo(NODEINFO_PEER_NAME, pubs, subs, 5, 100),
+        check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（节点信息场景）");
+        check(dbg.nodeInfo(NODEINFO_PEER_NAME, pubs, subs, 5, 100),
               "nodeInfo(test-nodeinfo-peer,5,100ms) → true（peer 参与者与端点发现命中）");
         bool hasPub = false;
         bool hasSub = false;
@@ -763,32 +763,32 @@ int main()
                 noAnon = false;
             }
         }
-        CHECK(hasPub, "nodeInfo publishers 含 (t_nodeinfo_pub, YomkDdsStd::MString)（writer GUID 前缀归属）");
-        CHECK(hasSub, "nodeInfo subscribers 含 (t_nodeinfo_sub, YomkDdsStd::MString)（reader GUID 前缀归属）");
-        CHECK(noAnon, "nodeInfo 不含匿名 peer 的 t_nodeinfo_anon（GUID 前缀归属隔离）");
+        check(hasPub, "nodeInfo publishers 含 (t_nodeinfo_pub, YomkDdsStd::MString)（writer GUID 前缀归属）");
+        check(hasSub, "nodeInfo subscribers 含 (t_nodeinfo_sub, YomkDdsStd::MString)（reader GUID 前缀归属）");
+        check(noAnon, "nodeInfo 不含匿名 peer 的 t_nodeinfo_anon（GUID 前缀归属隔离）");
         std::cout << "[OBSERVE] nodeInfo pubs=" << pubs.size()
                   << " subs=" << subs.size() << std::endl;
 
         // not-found：单次快照快速路径（stableRounds=1 免等待）→ false
         std::vector<std::pair<std::string, std::string>> missPubs;
         std::vector<std::pair<std::string, std::string>> missSubs;
-        CHECK(!dbg.nodeInfo("t_no_such_node", missPubs, missSubs, 1, 50),
+        check(!dbg.nodeInfo("t_no_such_node", missPubs, missSubs, 1, 50),
               "nodeInfo(t_no_such_node,1,50) → false（未发现该名参与者，单次快照快速路径）");
 
         // "/" 名可查：slash peer 已入域且无端点 → true 且两清单为空（名称过滤不在节点层）
         std::vector<std::pair<std::string, std::string>> slashPubs;
         std::vector<std::pair<std::string, std::string>> slashSubs;
-        CHECK(dbg.nodeInfo("/", slashPubs, slashSubs, 5, 100),
+        check(dbg.nodeInfo("/", slashPubs, slashSubs, 5, 100),
               "nodeInfo(\"/\",5,100ms) → true（\"/\" 名参与者存在，可查）");
-        CHECK(slashPubs.empty() && slashSubs.empty(),
+        check(slashPubs.empty() && slashSubs.empty(),
               "nodeInfo(\"/\") 两端点清单为空（slash peer 无端点）");
 
         // 收敛一致性：重复调用与首调结果一致
         std::vector<std::pair<std::string, std::string>> pubs2;
         std::vector<std::pair<std::string, std::string>> subs2;
-        CHECK(dbg.nodeInfo(NODEINFO_PEER_NAME, pubs2, subs2, 5, 100),
+        check(dbg.nodeInfo(NODEINFO_PEER_NAME, pubs2, subs2, 5, 100),
               "nodeInfo 重复调用 → true（收敛后查询）");
-        CHECK(pubs2 == pubs && subs2 == subs, "nodeInfo 重复调用结果与首调一致（收敛快照一致性）");
+        check(pubs2 == pubs && subs2 == subs, "nodeInfo 重复调用结果与首调一致（收敛快照一致性）");
 
         // topic info verbose：同 peer 端点详情（归属节点名 + FastDDS 原生 GUID + QoS 行集）
         std::string vTypeName;
@@ -796,14 +796,14 @@ int main()
         size_t vSubCount = 0;
         std::vector<FastDDSDebugNode::EndpointDetail> vPubs;
         std::vector<FastDDSDebugNode::EndpointDetail> vSubs;
-        CHECK(dbg.topicInfo(NODEINFO_PUB_TOPIC, vTypeName, vPubCount, vSubCount, 5, 100,
+        check(dbg.topicInfo(NODEINFO_PUB_TOPIC, vTypeName, vPubCount, vSubCount, 5, 100,
                   &vPubs, nullptr),
             "topicInfo(t_nodeinfo_pub, verbose) → true（writer 端点详情命中）");
-        CHECK(vTypeName == "YomkDdsStd::MString" && vPubCount == 1,
+        check(vTypeName == "YomkDdsStd::MString" && vPubCount == 1,
             "topicInfo(t_nodeinfo_pub, verbose) 类型名与发布者计数正确");
-        CHECK(vPubs.size() == 1 && vPubs[0].nodeName == NODEINFO_PEER_NAME,
+        check(vPubs.size() == 1 && vPubs[0].nodeName == NODEINFO_PEER_NAME,
             "writer 端点详情归属节点名 == test-nodeinfo-peer（GUID 前缀归属）");
-        CHECK(vPubs[0].guid.find('|') != std::string::npos,
+        check(vPubs[0].guid.find('|') != std::string::npos,
             "writer GUID 为 FastDDS 原生 prefix|entity 形态");
         bool hasReliability = false;
         bool hasDurability = false;
@@ -813,33 +813,33 @@ int main()
             hasDurability = hasDurability || line.rfind("  Durability: ", 0) == 0;
             std::cout << "[OBSERVE] writer qos |" << line << "|" << std::endl;
         }
-        CHECK(hasReliability && hasDurability,
+        check(hasReliability && hasDurability,
             "writer QoS 行集含 Reliability 与 Durability 键行");
-        CHECK(dbg.topicInfo(NODEINFO_SUB_TOPIC, vTypeName, vPubCount, vSubCount, 5, 100,
+        check(dbg.topicInfo(NODEINFO_SUB_TOPIC, vTypeName, vPubCount, vSubCount, 5, 100,
                   nullptr, &vSubs),
             "topicInfo(t_nodeinfo_sub, verbose) → true（reader 端点详情命中）");
-        CHECK(vSubCount == 1 && vSubs.size() == 1 && vSubs[0].nodeName == NODEINFO_PEER_NAME,
+        check(vSubCount == 1 && vSubs.size() == 1 && vSubs[0].nodeName == NODEINFO_PEER_NAME,
             "reader 端点详情归属节点名 == test-nodeinfo-peer（GUID 前缀归属）");
         std::cout << "[OBSERVE] writer guid=" << vPubs[0].guid
                   << " reader guid=" << vSubs[0].guid << std::endl;
         // 未发现主题：verbose 指针传入 → false 且输出保持为空（单次快照快速路径）
         std::vector<FastDDSDebugNode::EndpointDetail> missDetails;
-        CHECK(!dbg.topicInfo("t_not_exist_verbose", vTypeName, vPubCount, vSubCount, 1, 50,
+        check(!dbg.topicInfo("t_not_exist_verbose", vTypeName, vPubCount, vSubCount, 1, 50,
                   &missDetails, nullptr),
             "topicInfo(t_not_exist_verbose, verbose) → false（未发现主题）");
-        CHECK(missDetails.empty(), "未发现主题时 verbose 输出保持为空");
+        check(missDetails.empty(), "未发现主题时 verbose 输出保持为空");
 
         // interface show：按类型名输出 IDL 结构（TypeObject→DynamicType 纯类型内省，
         // 不建订阅；peer 的 MString writer 在场，TypeInformation 经 TypeLookup 已就绪）
         std::vector<std::string> iface;
-        CHECK(dbg.interfaceShow("YomkDdsStd::MString", iface, 5, 100),
+        check(dbg.interfaceShow("YomkDdsStd::MString", iface, 5, 100),
               "interfaceShow(YomkDdsStd::MString,5,100ms) → true（writer 在场类型命中）");
-        CHECK(iface.size() == 3, "IDL 行集恰好 3 行（struct 头/字段行/结尾）");
+        check(iface.size() == 3, "IDL 行集恰好 3 行（struct 头/字段行/结尾）");
         bool ifaceOk = iface.size() == 3 &&
             iface[0] == "struct YomkDdsStd::MString {" &&
             iface[1] == "    string data;" &&
             iface[2] == "};";
-        CHECK(ifaceOk, "IDL 行集形态正确（struct 头/四空格缩进字段行/结尾 };）");
+        check(ifaceOk, "IDL 行集形态正确（struct 头/四空格缩进字段行/结尾 };）");
         for (const auto& line : iface)
         {
             std::cout << "[OBSERVE] iface |" << line << "|" << std::endl;
@@ -848,10 +848,10 @@ int main()
         // 归类文本（不是 TypeObject 不可得，后者需裸类型端点才能触发）
         std::vector<std::string> ifaceMiss;
         std::string ifaceMissErr;
-        CHECK(!dbg.interfaceShow("Not::Exist", ifaceMiss, 1, 50, &ifaceMissErr),
+        check(!dbg.interfaceShow("Not::Exist", ifaceMiss, 1, 50, &ifaceMissErr),
               "interfaceShow(Not::Exist,1,50ms) → false（未发现类型）");
-        CHECK(ifaceMiss.empty(), "未发现类型时输出保持为空");
-        CHECK(ifaceMissErr.find("type [Not::Exist] not found") != std::string::npos,
+        check(ifaceMiss.empty(), "未发现类型时输出保持为空");
+        check(ifaceMissErr.find("type [Not::Exist] not found") != std::string::npos,
               "未发现类型的 error 为 type [...] not found（第一层语义不变）");
         std::cout << "[OBSERVE] iface miss error |" << ifaceMissErr << "|" << std::endl;
 
@@ -859,19 +859,19 @@ int main()
         // （第一层文本逐字不变，与 topicPub 既有措辞一致）
         std::vector<std::string> exampleMiss;
         std::string exampleMissErr;
-        CHECK(!dbg.topicExample("t_not_exist_example", exampleMiss, 1, 50, &exampleMissErr),
+        check(!dbg.topicExample("t_not_exist_example", exampleMiss, 1, 50, &exampleMissErr),
               "topicExample(t_not_exist_example,1,50ms) → false（未发现主题）");
-        CHECK(exampleMiss.empty(), "未发现主题时 topicExample 输出保持为空");
-        CHECK(exampleMissErr.find("topic [t_not_exist_example] not found") != std::string::npos,
+        check(exampleMiss.empty(), "未发现主题时 topicExample 输出保持为空");
+        check(exampleMissErr.find("topic [t_not_exist_example] not found") != std::string::npos,
               "topicExample 未发现主题的 error 为 topic [...] not found");
         std::string msgMissType;
         std::string msgMissJson;
         std::string msgMissErr;
-        CHECK(!dbg.topicMsgJson("t_not_exist_msg", msgMissType, msgMissJson, 1, 50, &msgMissErr),
+        check(!dbg.topicMsgJson("t_not_exist_msg", msgMissType, msgMissJson, 1, 50, &msgMissErr),
               "topicMsgJson(t_not_exist_msg,1,50ms) → false（未发现主题）");
-        CHECK(msgMissType.empty() && msgMissJson.empty(),
+        check(msgMissType.empty() && msgMissJson.empty(),
               "未发现主题时 topicMsgJson 两要素保持为空");
-        CHECK(msgMissErr.find("topic [t_not_exist_msg] not found") != std::string::npos,
+        check(msgMissErr.find("topic [t_not_exist_msg] not found") != std::string::npos,
               "topicMsgJson 未发现主题的 error 为 topic [...] not found");
         std::cout << "[OBSERVE] example miss |" << exampleMissErr
                   << "| msg miss |" << msgMissErr << "|" << std::endl;
@@ -906,7 +906,7 @@ int main()
         // durability 默认 VOLATILE（请求 ≤ 提供 TRANSIENT_LOCAL，匹配成立）
         auto *pubParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-        CHECK(pubParticipant != nullptr, "topicPub 场景订阅端 participant 创建成功");
+        check(pubParticipant != nullptr, "topicPub 场景订阅端 participant 创建成功");
         if (pubParticipant != nullptr)
         {
             constexpr const char *PUB_TOPIC = "t_pub_once";
@@ -920,33 +920,33 @@ int main()
             PubTestListener listener;
             auto *reader = (sub != nullptr && topic != nullptr) ?
                 sub->create_datareader(topic, rqos, &listener) : nullptr;
-            CHECK(reader != nullptr, "RELIABLE 订阅端 DataReader 创建成功（t_pub_once）");
+            check(reader != nullptr, "RELIABLE 订阅端 DataReader 创建成功（t_pub_once）");
 
             if (reader != nullptr)
             {
                 FastDDSDebugNode dbg;
-                CHECK(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（topicPub 场景）");
+                check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（topicPub 场景）");
                 // 等 reader 发现信息进调试节点缓存（topicPub 内部再做发现/匹配收敛）
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
                 // 命中：RELIABLE 订阅者在场 → ack 确认路径（wait_for_acknowledgments）
                 std::string pubErr;
-                CHECK(dbg.topicPub(PUB_TOPIC, R"({"data":"t_pub_once_payload"})", pubErr),
+                check(dbg.topicPub(PUB_TOPIC, R"({"data":"t_pub_once_payload"})", pubErr),
                       "topicPub(t_pub_once, RELIABLE reader 在场) → true（ack 确认送达）");
-                CHECK(pubErr.empty(), "topicPub 命中路径 error 为空");
-                CHECK(listener.received_.load(), "订阅端 listener 收到发布消息（送达实证）");
+                check(pubErr.empty(), "topicPub 命中路径 error 为空");
+                check(listener.received_.load(), "订阅端 listener 收到发布消息（送达实证）");
 
                 // 非法 JSON：解析失败不建 writer，不发布
                 std::string jsonErr;
-                CHECK(!dbg.topicPub(PUB_TOPIC, "{bad", jsonErr), "topicPub 非法 JSON → false");
-                CHECK(jsonErr.find("invalid json") != std::string::npos,
+                check(!dbg.topicPub(PUB_TOPIC, "{bad", jsonErr), "topicPub 非法 JSON → false");
+                check(jsonErr.find("invalid json") != std::string::npos,
                       "非法 JSON error 含 invalid json");
 
                 // 未发现主题：发现收敛后仍无此主题
                 std::string missErr;
-                CHECK(!dbg.topicPub("t_pub_no_such", "{}", missErr),
+                check(!dbg.topicPub("t_pub_no_such", "{}", missErr),
                       "topicPub 未发现主题 → false");
-                CHECK(missErr.find("not found") != std::string::npos,
+                check(missErr.find("not found") != std::string::npos,
                       "未发现主题 error 含 not found");
             }
 
@@ -969,7 +969,7 @@ int main()
         // 退化路径：全 BEST_EFFORT 订阅者（无 RELIABLE → 不走 ack，保底窗后尽力而为成功）
         auto *beParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-        CHECK(beParticipant != nullptr, "topicPub 退化场景 participant 创建成功");
+        check(beParticipant != nullptr, "topicPub 退化场景 participant 创建成功");
         if (beParticipant != nullptr)
         {
             constexpr const char *BE_TOPIC = "t_pub_besteff";
@@ -983,17 +983,17 @@ int main()
             PubTestListener listener;
             auto *reader = (sub != nullptr && topic != nullptr) ?
                 sub->create_datareader(topic, rqos, &listener) : nullptr;
-            CHECK(reader != nullptr, "BEST_EFFORT 订阅端 DataReader 创建成功（t_pub_besteff）");
+            check(reader != nullptr, "BEST_EFFORT 订阅端 DataReader 创建成功（t_pub_besteff）");
 
             if (reader != nullptr)
             {
                 FastDDSDebugNode dbg;
-                CHECK(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（退化场景）");
+                check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（退化场景）");
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 std::string beErr;
-                CHECK(dbg.topicPub(BE_TOPIC, R"({"data":"be_payload"})", beErr),
+                check(dbg.topicPub(BE_TOPIC, R"({"data":"be_payload"})", beErr),
                       "topicPub(t_pub_besteff, 全 BEST_EFFORT) → true（退化尽力而为路径）");
-                CHECK(listener.received_.load(), "BEST_EFFORT 订阅端也收到消息（尽力而为送达）");
+                check(listener.received_.load(), "BEST_EFFORT 订阅端也收到消息（尽力而为送达）");
             }
 
             if (sub != nullptr && reader != nullptr)
@@ -1020,7 +1020,7 @@ int main()
         namespace dds = eprosima::fastdds::dds;
         auto *gxParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-        CHECK(gxParticipant != nullptr, "matched 校验场景订阅端 participant 创建成功");
+        check(gxParticipant != nullptr, "matched 校验场景订阅端 participant 创建成功");
         if (gxParticipant != nullptr)
         {
             constexpr const char *GX_TOPIC = "t_pub_ghost";
@@ -1038,19 +1038,19 @@ int main()
             rqos.durability().kind = dds::PERSISTENT_DURABILITY_QOS;  // 请求 > 提供，EDP 拒配
             auto *reader = (sub != nullptr && topic != nullptr) ?
                 sub->create_datareader(topic, rqos, nullptr) : nullptr;
-            CHECK(writer != nullptr && reader != nullptr,
+            check(writer != nullptr && reader != nullptr,
                   "matched 校验场景 writer/reader 创建成功");
 
             if (writer != nullptr && reader != nullptr)
             {
                 FastDDSDebugNode dbg;
-                CHECK(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（matched 校验场景）");
+                check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（matched 校验场景）");
                 // 等幽灵 reader 进调试节点缓存（topicPub 内部再做发现/匹配收敛）
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 std::string gxErr;
-                CHECK(!dbg.topicPub(GX_TOPIC, R"({"data":"gx"})", gxErr),
+                check(!dbg.topicPub(GX_TOPIC, R"({"data":"gx"})", gxErr),
                       "topicPub(t_pub_ghost, RELIABLE 订阅者在场却无一匹配) → false");
-                CHECK(gxErr.find("not all matched") != std::string::npos,
+                check(gxErr.find("not all matched") != std::string::npos,
                       "matched 校验 error 含 not all matched");
             }
 
@@ -1085,7 +1085,7 @@ int main()
         namespace dds = eprosima::fastdds::dds;
         auto *offParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-        CHECK(offParticipant != nullptr, "离线清理场景 participant 创建成功");
+        check(offParticipant != nullptr, "离线清理场景 participant 创建成功");
         if (offParticipant != nullptr)
         {
             constexpr const char *OFF_TOPIC = "t_pub_offline";
@@ -1102,16 +1102,16 @@ int main()
             rqos.reliability().kind = dds::RELIABLE_RELIABILITY_QOS;
             auto *reader = (sub != nullptr && topic != nullptr) ?
                 sub->create_datareader(topic, rqos, nullptr) : nullptr;
-            CHECK(writer != nullptr && reader != nullptr,
+            check(writer != nullptr && reader != nullptr,
                   "离线清理场景 writer/reader 创建成功");
 
             if (writer != nullptr && reader != nullptr)
             {
                 FastDDSDebugNode dbg;
-                CHECK(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（离线清理场景）");
+                check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（离线清理场景）");
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 std::string err1;
-                CHECK(dbg.topicPub(OFF_TOPIC, R"({"data":"off1"})", err1),
+                check(dbg.topicPub(OFF_TOPIC, R"({"data":"off1"})", err1),
                       "topicPub(t_pub_offline) 第一次 → true（RELIABLE reader 在场 ack 确认）");
 
                 // graceful 退出：dispose 传播 → 调试节点 REMOVED_READER 回调同步清缓存
@@ -1119,9 +1119,9 @@ int main()
                 reader = nullptr;
                 std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                 std::string err2;
-                CHECK(dbg.topicPub(OFF_TOPIC, R"({"data":"off2"})", err2),
+                check(dbg.topicPub(OFF_TOPIC, R"({"data":"off2"})", err2),
                       "reader 退出后再发布 → true（离线清理生效不误报）");
-                CHECK(err2.empty(), "清理后再发布 error 为空");
+                check(err2.empty(), "清理后再发布 error 为空");
             }
 
             // 清理：writer → topic → publisher → subscriber → participant（reader 已删）
@@ -1153,7 +1153,7 @@ int main()
         // A. 达标即发：RELIABLE reader 已在场（matched=1），requiredSubscribers=1 首轮即达标
         auto *wsParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-        CHECK(wsParticipant != nullptr, "期望建匹配场景 participant 创建成功");
+        check(wsParticipant != nullptr, "期望建匹配场景 participant 创建成功");
         if (wsParticipant != nullptr)
         {
             constexpr const char *WS_TOPIC = "t_pub_wait_sub";
@@ -1169,20 +1169,20 @@ int main()
             rqos.reliability().kind = dds::RELIABLE_RELIABILITY_QOS;
             auto *reader = (sub != nullptr && topic != nullptr) ?
                 sub->create_datareader(topic, rqos, nullptr) : nullptr;
-            CHECK(writer != nullptr && reader != nullptr,
+            check(writer != nullptr && reader != nullptr,
                   "期望建匹配场景 writer/reader 创建成功");
 
             if (writer != nullptr && reader != nullptr)
             {
                 FastDDSDebugNode dbg;
-                CHECK(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（期望建匹配场景）");
+                check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（期望建匹配场景）");
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 // 按位置传参：stableRounds=5, intervalMs=200, repeatIntervalMs=0,
                 // requiredSubscribers=1（reader 已在场，等待首轮即达标进入稳定收敛与发布）
                 std::string wsErr;
-                CHECK(dbg.topicPub(WS_TOPIC, R"({"data":"ws1"})", wsErr, 5, 200, 0, 1),
+                check(dbg.topicPub(WS_TOPIC, R"({"data":"ws1"})", wsErr, 5, 200, 0, 1),
                       "topicPub(requiredSubscribers=1, RELIABLE reader 在场) → true（达标即发）");
-                CHECK(wsErr.empty(), "达标即发 error 为空");
+                check(wsErr.empty(), "达标即发 error 为空");
             }
 
             // 清理：writer → reader → topic → publisher → subscriber → participant
@@ -1213,7 +1213,7 @@ int main()
         // 1s 后工作线程置停止标志 → topicPub 中断返回 false（error 含 interrupted），不发布
         auto *wiParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-        CHECK(wiParticipant != nullptr, "等待中断场景 participant 创建成功");
+        check(wiParticipant != nullptr, "等待中断场景 participant 创建成功");
         if (wiParticipant != nullptr)
         {
             constexpr const char *WI_TOPIC = "t_pub_wait_intr";
@@ -1225,12 +1225,12 @@ int main()
             // writer 使主题被发现（无 reader：matched 恒 0，等待永不自然达标）
             auto *writer = (pub != nullptr && topic != nullptr) ?
                 pub->create_datawriter(topic, dds::DATAWRITER_QOS_DEFAULT) : nullptr;
-            CHECK(writer != nullptr, "等待中断场景 writer 创建成功（无 reader）");
+            check(writer != nullptr, "等待中断场景 writer 创建成功（无 reader）");
 
             if (writer != nullptr)
             {
                 FastDDSDebugNode dbg;
-                CHECK(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（等待中断场景）");
+                check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（等待中断场景）");
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 // 工作线程 1s 后置停止标志（topicPub 入口 debugPubReset 复位残留后才读它，
                 // 故必须异步置位而非预置）
@@ -1241,12 +1241,12 @@ int main()
                     stopperDone.store(true);
                 });
                 std::string wiErr;
-                CHECK(!dbg.topicPub(WI_TOPIC, R"({"data":"wi"})", wiErr, 5, 200, 0, 1),
+                check(!dbg.topicPub(WI_TOPIC, R"({"data":"wi"})", wiErr, 5, 200, 0, 1),
                       "topicPub(requiredSubscribers=1, 无订阅端) 阻塞等待中停止标志置位 → false");
-                CHECK(wiErr.find("interrupted") != std::string::npos,
+                check(wiErr.find("interrupted") != std::string::npos,
                       "等待中断 error 含 interrupted");
                 stopper.join();
-                CHECK(stopperDone.load(), "置位线程已执行（时序健全性）");
+                check(stopperDone.load(), "置位线程已执行（时序健全性）");
                 yomk::debugPubReset();  // 复位停止标志，防残留影响后续调用
             }
 
@@ -1271,7 +1271,7 @@ int main()
     // "先发布后订阅"场景）阻塞等待中停止标志置位 → false（error 含 interrupted），不发布
     {
         FastDDSDebugNode dbg;
-        CHECK(dbg.setDomainId(TEST_DOMAIN),
+        check(dbg.setDomainId(TEST_DOMAIN),
               "被测端 setDomainId(200) → true（主题未发现等待场景）");
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         // 工作线程 1s 后置停止标志（入口 debugPubReset 复位残留后才读它，必须异步置位）
@@ -1282,12 +1282,12 @@ int main()
             ntStopperDone.store(true);
         });
         std::string ntErr;
-        CHECK(!dbg.topicPub("t_pub_wait_notopic", R"({"data":"nt"})", ntErr, 5, 200, 0, 1),
+        check(!dbg.topicPub("t_pub_wait_notopic", R"({"data":"nt"})", ntErr, 5, 200, 0, 1),
               "topicPub(requiredSubscribers=1, 主题未发现) 等待主题出现中置位 → false");
-        CHECK(ntErr.find("interrupted") != std::string::npos,
+        check(ntErr.find("interrupted") != std::string::npos,
               "主题未发现等待中断 error 含 interrupted");
         ntStopper.join();
-        CHECK(ntStopperDone.load(), "置位线程已执行（时序健全性）");
+        check(ntStopperDone.load(), "置位线程已执行（时序健全性）");
         yomk::debugPubReset();  // 复位停止标志，防残留影响后续调用
     }
 
@@ -1297,7 +1297,7 @@ int main()
         namespace dds = eprosima::fastdds::dds;
         auto *mtParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-        CHECK(mtParticipant != nullptr, "条数上限场景 participant 创建成功");
+        check(mtParticipant != nullptr, "条数上限场景 participant 创建成功");
         if (mtParticipant != nullptr)
         {
             auto *sub = mtParticipant->create_subscriber(dds::SUBSCRIBER_QOS_DEFAULT);
@@ -1312,7 +1312,7 @@ int main()
             PubTestListener mtListener;
             auto *mtReader = (sub != nullptr && mtTopic != nullptr) ?
                 sub->create_datareader(mtTopic, rqos, &mtListener) : nullptr;
-            CHECK(mtReader != nullptr, "条数上限场景 RELIABLE 订阅端 DataReader 创建成功");
+            check(mtReader != nullptr, "条数上限场景 RELIABLE 订阅端 DataReader 创建成功");
             // E. 条数上限与期望建匹配叠加：reader 在场（t_pub_maxtimes_wait），
             // requiredSubscribers=1 + maxTimes=2 → 匹配达标后恰发 2 条退出
             constexpr const char *MW_TOPIC = "t_pub_maxtimes_wait";
@@ -1321,12 +1321,12 @@ int main()
             PubTestListener mwListener;
             auto *mwReader = (sub != nullptr && mwTopic != nullptr) ?
                 sub->create_datareader(mwTopic, rqos, &mwListener) : nullptr;
-            CHECK(mwReader != nullptr, "条数上限叠加场景 RELIABLE 订阅端 DataReader 创建成功");
+            check(mwReader != nullptr, "条数上限叠加场景 RELIABLE 订阅端 DataReader 创建成功");
 
             if (mtReader != nullptr && mwReader != nullptr)
             {
                 FastDDSDebugNode dbg;
-                CHECK(dbg.setDomainId(TEST_DOMAIN),
+                check(dbg.setDomainId(TEST_DOMAIN),
                       "被测端 setDomainId(200) → true（条数上限场景）");
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
@@ -1335,26 +1335,26 @@ int main()
                 std::string mtErr;
                 uint32_t mtTotal = 0;
                 uint32_t mtFailed = 0;
-                CHECK(dbg.topicPub(MT_TOPIC, R"({"data":"mt"})", mtErr, 5, 50, 50, 0, 3,
+                check(dbg.topicPub(MT_TOPIC, R"({"data":"mt"})", mtErr, 5, 50, 50, 0, 3,
                             &mtTotal, &mtFailed),
                       "topicPub(maxTimes=3) → true（发满即停，排空 200ms 后返回）");
-                CHECK(mtErr.empty(), "发满即停 error 为空");
-                CHECK(mtTotal == 3, "maxTimes=3 统计 total==3（含首轮）");
-                CHECK(mtFailed == 0, "maxTimes=3 统计 failed==0");
-                CHECK(mtListener.received_.load(), "订阅端收到发满即停消息（送达实证）");
+                check(mtErr.empty(), "发满即停 error 为空");
+                check(mtTotal == 3, "maxTimes=3 统计 total==3（含首轮）");
+                check(mtFailed == 0, "maxTimes=3 统计 failed==0");
+                check(mtListener.received_.load(), "订阅端收到发满即停消息（送达实证）");
 
                 // E：requiredSubscribers=1（reader 在场等待首轮即达标）+ maxTimes=2 →
                 // 等匹配达标后恰发 2 条退出（-w 与 -t 正交叠加）
                 std::string mwErr;
                 uint32_t mwTotal = 0;
                 uint32_t mwFailed = 0;
-                CHECK(dbg.topicPub(MW_TOPIC, R"({"data":"mw"})", mwErr, 5, 50, 50, 1, 2,
+                check(dbg.topicPub(MW_TOPIC, R"({"data":"mw"})", mwErr, 5, 50, 50, 1, 2,
                             &mwTotal, &mwFailed),
                       "topicPub(requiredSubscribers=1, maxTimes=2) → true（匹配达标后发满即停）");
-                CHECK(mwErr.empty(), "叠加场景 error 为空");
-                CHECK(mwTotal == 2, "requiredSubscribers=1 + maxTimes=2 统计 total==2");
-                CHECK(mwFailed == 0, "叠加场景统计 failed==0");
-                CHECK(mwListener.received_.load(), "订阅端收到叠加场景消息（送达实证）");
+                check(mwErr.empty(), "叠加场景 error 为空");
+                check(mwTotal == 2, "requiredSubscribers=1 + maxTimes=2 统计 total==2");
+                check(mwFailed == 0, "叠加场景统计 failed==0");
+                check(mwListener.received_.load(), "订阅端收到叠加场景消息（送达实证）");
             }
 
             // 清理：reader ×2 → topic ×2 → subscriber → participant
@@ -1391,7 +1391,7 @@ int main()
         constexpr const char *PLAIN_TOPIC = "t_plain_notypeobject";
         auto *plainParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
-        CHECK(plainParticipant != nullptr, "裸类型场景 participant 创建成功");
+        check(plainParticipant != nullptr, "裸类型场景 participant 创建成功");
         if (plainParticipant != nullptr)
         {
             dds::TypeSupport plainTs(new PlainNoTypeObjectPubSubType());
@@ -1404,12 +1404,12 @@ int main()
             auto *plainWriter = (plainTopic != nullptr)
                                     ? plainPub->create_datawriter(plainTopic, dds::DATAWRITER_QOS_DEFAULT)
                                     : nullptr;
-            CHECK(plainWriter != nullptr, "裸类型 DataWriter 创建成功（不注册 TypeObject 表示）");
+            check(plainWriter != nullptr, "裸类型 DataWriter 创建成功（不注册 TypeObject 表示）");
 
             if (plainWriter != nullptr)
             {
                 FastDDSDebugNode dbg;
-                CHECK(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（裸类型场景）");
+                check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（裸类型场景）");
 
                 // ① 发现层：writer 端点信息进缓存，类型名原样可见（与真类型端点无差别）
                 std::string plainType;
@@ -1424,73 +1424,73 @@ int main()
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     }
                 }
-                CHECK(plainSeen, "裸类型主题发现层可见（topicInfo → true）");
-                CHECK(plainType == "Plain::NoTypeObject", "裸类型主题类型名原样回传");
-                CHECK(plainPubCount == 1, "裸类型主题 publisherCount==1");
+                check(plainSeen, "裸类型主题发现层可见（topicInfo → true）");
+                check(plainType == "Plain::NoTypeObject", "裸类型主题类型名原样回传");
+                check(plainPubCount == 1, "裸类型主题 publisherCount==1");
 
                 // ② 类型重建层：TypeObject 不可得 → interfaceShow / topicExample / topicMsgJson
                 // 均归类为 not available，且不得包含 not found（区分第一层"未发现"）
                 std::vector<std::string> plainIface;
                 std::string plainErr;
-                CHECK(!dbg.interfaceShow("Plain::NoTypeObject", plainIface, 5, 100, &plainErr),
+                check(!dbg.interfaceShow("Plain::NoTypeObject", plainIface, 5, 100, &plainErr),
                       "interfaceShow(裸类型) → false（TypeObject 不可得）");
-                CHECK(plainErr.find("not available") != std::string::npos,
+                check(plainErr.find("not available") != std::string::npos,
                       "interfaceShow error 含 not available");
-                CHECK(plainErr.find("not found") == std::string::npos,
+                check(plainErr.find("not found") == std::string::npos,
                       "interfaceShow error 不含笼统 not found（第二层与第一层已区分）");
                 std::cout << "[OBSERVE] plain interfaceShow error |" << plainErr << "|" << std::endl;
 
                 std::vector<std::string> plainExample;
                 plainErr.clear();
-                CHECK(!dbg.topicExample(PLAIN_TOPIC, plainExample, 5, 100, &plainErr),
+                check(!dbg.topicExample(PLAIN_TOPIC, plainExample, 5, 100, &plainErr),
                       "topicExample(裸类型) → false（步骤 2 TypeObject 不可得）");
-                CHECK(plainErr.find("not available") != std::string::npos &&
+                check(plainErr.find("not available") != std::string::npos &&
                           plainErr.find("not found") == std::string::npos,
                       "topicExample error 为 not available（不再报 topic not found）");
                 std::string plainMsgType;
                 std::string plainMsgJson;
                 std::string plainMsgErr;
-                CHECK(!dbg.topicMsgJson(PLAIN_TOPIC, plainMsgType, plainMsgJson, 5, 100, &plainMsgErr),
+                check(!dbg.topicMsgJson(PLAIN_TOPIC, plainMsgType, plainMsgJson, 5, 100, &plainMsgErr),
                       "topicMsgJson(裸类型) → false（步骤 2 TypeObject 不可得）");
-                CHECK(plainMsgErr.find("not available") != std::string::npos &&
+                check(plainMsgErr.find("not available") != std::string::npos &&
                           plainMsgErr.find("not found") == std::string::npos,
                       "topicMsgJson error 为 not available");
                 std::string plainPubErr;
-                CHECK(!dbg.topicPub(PLAIN_TOPIC, "{}", plainPubErr, 5, 100),
+                check(!dbg.topicPub(PLAIN_TOPIC, "{}", plainPubErr, 5, 100),
                       "topicPub(裸类型) → false（类型重建失败）");
-                CHECK(plainPubErr.find("not available") != std::string::npos,
+                check(plainPubErr.find("not available") != std::string::npos,
                       "topicPub error 含 not available（措辞基准一致）");
 
                 // ③ 告警节流：登记后工作线程每 100ms 重试，TypeObject 永不可得 →
                 // 窗口 1（1.2s 约 12 次重试）恰 1 次告警（不再静默也不刷屏）
                 constexpr const char *kWarnMark = "TypeObject not ready";
                 StdoutCapture cap;
-                CHECK(cap.start(), "stdout 捕获启动成功");
+                check(cap.start(), "stdout 捕获启动成功");
                 std::string subErr;
-                CHECK(dbg.subscribeTopic(PLAIN_TOPIC, &subErr),
+                check(dbg.subscribeTopic(PLAIN_TOPIC, &subErr),
                       "裸类型主题 subscribeTopic → true（登记待发现，主题已入缓存无等待提示）");
                 std::this_thread::sleep_for(std::chrono::milliseconds(1200));
                 const std::string firstWindow = cap.stop();
                 const size_t firstCount = countOccurrences(firstWindow, kWarnMark);
                 std::cout << "[OBSERVE] warn window1 count=" << firstCount << std::endl;
-                CHECK(1 == firstCount, "节流窗口 1（1.2s / 约 12 次重试）内告警恰出现 1 次");
-                CHECK(firstWindow.find("rmw_fastrtps") != std::string::npos,
+                check(1 == firstCount, "节流窗口 1（1.2s / 约 12 次重试）内告警恰出现 1 次");
+                check(firstWindow.find("rmw_fastrtps") != std::string::npos,
                       "告警文本含原因提示（rmw_fastrtps 端点不提供 TypeObject）");
 
                 // 窗口 2：再等 5.3s（> kSubWarnIntervalMs=5000，头文件公开常量）→ 恰第 2 次
                 StdoutCapture cap2;
-                CHECK(cap2.start(), "stdout 捕获（节流窗口 2）启动成功");
+                check(cap2.start(), "stdout 捕获（节流窗口 2）启动成功");
                 std::this_thread::sleep_for(std::chrono::milliseconds(5300));
                 const std::string secondWindow = cap2.stop();
                 const size_t secondCount = countOccurrences(secondWindow, kWarnMark);
                 std::cout << "[OBSERVE] warn window2 count=" << secondCount << std::endl;
-                CHECK(1 == secondCount, "节流窗口 2（5.3s）内告警恰再出现 1 次（5s 节流生效）");
+                check(1 == secondCount, "节流窗口 2（5.3s）内告警恰再出现 1 次（5s 节流生效）");
 
                 // 订阅仍未建立（告警仅提升可见性，不改变行为）：重复登记仍报 already registered
                 subErr.clear();
-                CHECK(!dbg.subscribeTopic(PLAIN_TOPIC, &subErr),
+                check(!dbg.subscribeTopic(PLAIN_TOPIC, &subErr),
                       "裸类型主题重复登记 → false（仍留 pending）");
-                CHECK(subErr.find("already registered") != std::string::npos,
+                check(subErr.find("already registered") != std::string::npos,
                       "裸类型重复登记 error 含 already registered");
             }
 
@@ -1517,33 +1517,33 @@ int main()
     // 主题名拼错 / 发布者未上线时 topic print 与 topic hz 的永久静默
     {
         FastDDSDebugNode dbg;
-        CHECK(dbg.setDomainId(TEST_DOMAIN), "等待提示用例 setDomainId → true");
+        check(dbg.setDomainId(TEST_DOMAIN), "等待提示用例 setDomainId → true");
         constexpr const char *kHintMark = "not discovered yet";
         StdoutCapture hintCap;
-        CHECK(hintCap.start(), "stdout 捕获（等待提示宽限窗）启动成功");
+        check(hintCap.start(), "stdout 捕获（等待提示宽限窗）启动成功");
         std::string hintErr;
-        CHECK(dbg.subscribeTopic("t_hint_no_publisher", &hintErr),
+        check(dbg.subscribeTopic("t_hint_no_publisher", &hintErr),
               "无发布者主题 subscribeTopic → true（登记为延迟行为，不因未发现而失败）");
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         const std::string graceWindow = hintCap.stop();
-        CHECK(graceWindow.find(kHintMark) == std::string::npos,
+        check(graceWindow.find(kHintMark) == std::string::npos,
               "宽限窗内（2s < kPendingHintDelayMs=3000）不打等待提示");
 
         StdoutCapture hintCap2;
-        CHECK(hintCap2.start(), "stdout 捕获（等待提示满窗）启动成功");
+        check(hintCap2.start(), "stdout 捕获（等待提示满窗）启动成功");
         std::this_thread::sleep_for(std::chrono::milliseconds(2000));
         const std::string hintWindow = hintCap2.stop();
         const size_t hintCount = countOccurrences(hintWindow, kHintMark);
         std::cout << "[OBSERVE] hint count=" << hintCount << std::endl;
-        CHECK(1 == hintCount, "宽限窗满后等待提示恰出现 1 次");
-        CHECK(hintWindow.find("t_hint_no_publisher") != std::string::npos,
+        check(1 == hintCount, "宽限窗满后等待提示恰出现 1 次");
+        check(hintWindow.find("t_hint_no_publisher") != std::string::npos,
               "等待提示含登记的主题名");
 
         StdoutCapture hintCap3;
-        CHECK(hintCap3.start(), "stdout 捕获（等待提示一次性）启动成功");
+        check(hintCap3.start(), "stdout 捕获（等待提示一次性）启动成功");
         std::this_thread::sleep_for(std::chrono::milliseconds(1500));
         const std::string tailWindow = hintCap3.stop();
-        CHECK(tailWindow.find(kHintMark) == std::string::npos,
+        check(tailWindow.find(kHintMark) == std::string::npos,
               "提示已打过 → 后续轮询不再重复（一次性）");
     }
 
@@ -1553,7 +1553,7 @@ int main()
     // QoS，是唯一观察面，先例同 nodeInfo verbose 用例）；收发实证经 setOutputSink ----
     {
         FastDDSDebugNode observer;
-        CHECK(observer.setDomainId(TEST_DOMAIN), "QoS 用例观察节点 setDomainId(200) → true");
+        check(observer.setDomainId(TEST_DOMAIN), "QoS 用例观察节点 setDomainId(200) → true");
 
         // 辅助：轮询读回 verbose 端点详情（等发现/建订就绪，最多约 4s×快照窗）；minCount
         // 为命中所需端点数下限（pub 用例读回含 peer+topicPub 两个 writer，peer 先被发现时
@@ -1622,13 +1622,13 @@ int main()
         {
             constexpr const char *BE_TOPIC = "t_qos_pub_be";
             FastDDSNode peer;
-            CHECK(peer.setDomainId(TEST_DOMAIN),
+            check(peer.setDomainId(TEST_DOMAIN),
                   "topicPub QoS 用例发布端 peer setDomainId → true（制造发现数据）");
-            CHECK(peer.registerPubTopic(BE_TOPIC, new YomkDdsStd::MStringPubSubType()),
+            check(peer.registerPubTopic(BE_TOPIC, new YomkDdsStd::MStringPubSubType()),
                   "topicPub QoS 用例发布端 registerPubTopic（默认底座）→ true");
             std::this_thread::sleep_for(std::chrono::milliseconds(300));
             FastDDSDebugNode dbg;
-            CHECK(dbg.setDomainId(TEST_DOMAIN), "topicPub QoS 用例被测端 setDomainId → true");
+            check(dbg.setDomainId(TEST_DOMAIN), "topicPub QoS 用例被测端 setDomainId → true");
             std::this_thread::sleep_for(std::chrono::milliseconds(300));
             DDSQosProfile beVo;
             beVo.reliability = DDSReliability::BEST_EFFORT;
@@ -1646,7 +1646,7 @@ int main()
             const bool seen = waitVerbose(BE_TOPIC, true, pubDetail, 2);
             yomk::debugPubStop();  // 停止持续发布（发布线程 join 后 dbg 析构）
             pubThread.join();
-            CHECK(seen, "topicPub 持续发布期间观察节点读回 writer 端点详情");
+            check(seen, "topicPub 持续发布期间观察节点读回 writer 端点详情");
             for (const auto &ep : pubDetail)
             {
                 for (const auto &line : ep.qosLines)
@@ -1654,21 +1654,21 @@ int main()
                     std::cout << "[OBSERVE] be writer qos |" << line << "|" << std::endl;
                 }
             }
-            CHECK(hasQosLine(pubDetail, "Reliability", "BEST_EFFORT"),
+            check(hasQosLine(pubDetail, "Reliability", "BEST_EFFORT"),
                   "显式 BEST_EFFORT → writer 发现读回 Reliability: BEST_EFFORT（profile 落端点）");
-            CHECK(hasQosLine(pubDetail, "Durability", "VOLATILE"),
+            check(hasQosLine(pubDetail, "Durability", "VOLATILE"),
                   "显式 VOLATILE → writer 发现读回 Durability: VOLATILE（profile 落端点）");
             // 对齐组恒齐：两 writer 端点 qosLines 前 8 行键序固定（闭环 3 口径，对齐
             // rmw_qos_profile_t 八字段序）
             for (const auto &ep : pubDetail)
             {
-                CHECK(alignKeysOk(ep), "writer 端点 qosLines 前 8 行 ROS2 对齐组键序恒齐");
+                check(alignKeysOk(ep), "writer 端点 qosLines 前 8 行 ROS2 对齐组键序恒齐");
             }
             // not advertised 兜底：Fast DDS 本地 writer 发现数据不携带 history → 两行显式
             // not advertised（替代旧口径 has_value 为空静默跳过）
-            CHECK(hasQosLine(pubDetail, "History", "not advertised"),
+            check(hasQosLine(pubDetail, "History", "not advertised"),
                   "writer 发现数据不携带 history → History: not advertised 显式兜底");
-            CHECK(hasQosLine(pubDetail, "Depth", "not advertised"),
+            check(hasQosLine(pubDetail, "Depth", "not advertised"),
                   "writer 发现数据不携带 history → Depth: not advertised 显式兜底");
         }
 
@@ -1679,16 +1679,16 @@ int main()
         {
             constexpr const char *DEF_TOPIC = "t_qos_pub_def";
             FastDDSNode peer;
-            CHECK(peer.setDomainId(TEST_DOMAIN),
+            check(peer.setDomainId(TEST_DOMAIN),
                   "无参 topicPub 用例发布端 peer setDomainId → true（制造发现数据）");
             DDSQosProfile peerBeVo;  // 显式 BE+VOL：与被测 writer 的 RELIABLE+TRANSIENT_LOCAL 双差异
             peerBeVo.reliability = DDSReliability::BEST_EFFORT;
             peerBeVo.durability = DDSDurability::VOLATILE;
-            CHECK(peer.registerPubTopic(DEF_TOPIC, new YomkDdsStd::MStringPubSubType(), peerBeVo),
+            check(peer.registerPubTopic(DEF_TOPIC, new YomkDdsStd::MStringPubSubType(), peerBeVo),
                   "无参 topicPub 用例发布端 registerPubTopic 显式 BEST_EFFORT+VOLATILE → true");
             std::this_thread::sleep_for(std::chrono::milliseconds(300));
             FastDDSDebugNode dbg;
-            CHECK(dbg.setDomainId(TEST_DOMAIN), "topicPub 无参 QoS 用例被测端 setDomainId → true");
+            check(dbg.setDomainId(TEST_DOMAIN), "topicPub 无参 QoS 用例被测端 setDomainId → true");
             std::this_thread::sleep_for(std::chrono::milliseconds(300));
             std::thread pubThread([&]() {
                 std::string pErr;
@@ -1700,7 +1700,7 @@ int main()
             const bool seenDef = waitVerbose(DEF_TOPIC, true, defDetail, 2);
             yomk::debugPubStop();
             pubThread.join();
-            CHECK(seenDef, "无参 topicPub 持续发布期间观察节点读回 writer 端点详情");
+            check(seenDef, "无参 topicPub 持续发布期间观察节点读回 writer 端点详情");
             for (const auto &ep : defDetail)
             {
                 for (const auto &line : ep.qosLines)
@@ -1708,9 +1708,9 @@ int main()
                     std::cout << "[OBSERVE] def writer qos |" << line << "|" << std::endl;
                 }
             }
-            CHECK(hasQosLine(defDetail, "Reliability", "RELIABLE"),
+            check(hasQosLine(defDetail, "Reliability", "RELIABLE"),
                   "无参 → writer 发现读回 Reliability: RELIABLE（保现值）");
-            CHECK(hasQosLine(defDetail, "Durability", "TRANSIENT_LOCAL"),
+            check(hasQosLine(defDetail, "Durability", "TRANSIENT_LOCAL"),
                   "无参 → writer 发现读回 Durability: TRANSIENT_LOCAL（保现值）");
         }
 
@@ -1721,13 +1721,13 @@ int main()
         {
             constexpr const char *SUB_TOPIC = "t_qos_sub_reliable";
             FastDDSNode peer;
-            CHECK(peer.setDomainId(TEST_DOMAIN, "test-qos-pub"),
+            check(peer.setDomainId(TEST_DOMAIN, "test-qos-pub"),
                   "reader QoS 用例发布端 setDomainId → true");
-            CHECK(peer.registerPubTopic(SUB_TOPIC, new YomkDdsStd::MStringPubSubType()),
+            check(peer.registerPubTopic(SUB_TOPIC, new YomkDdsStd::MStringPubSubType()),
                   "reader QoS 用例发布端 registerPubTopic（默认底座 RELIABLE offered）→ true");
 
             FastDDSDebugNode dbg;
-            CHECK(dbg.setDomainId(TEST_DOMAIN), "reader QoS 用例被测端 setDomainId → true");
+            check(dbg.setDomainId(TEST_DOMAIN), "reader QoS 用例被测端 setDomainId → true");
             std::mutex subMtx;
             std::string subCaptured;
             dbg.setOutputSink([&subMtx, &subCaptured](const std::string &text) {
@@ -1738,7 +1738,7 @@ int main()
             subQos.reliability = DDSReliability::RELIABLE;
             subQos.depth = 10;
             std::string subErr;
-            CHECK(dbg.subscribeTopic(SUB_TOPIC, &subErr, subQos),
+            check(dbg.subscribeTopic(SUB_TOPIC, &subErr, subQos),
                   "subscribeTopic 显式 RELIABLE+depth=10 → true（登记成功 qos 暂存）");
 
             // 发布循环直至收到 payload 或超时（匹配建立前的样本丢失，同端到端先例）
@@ -1757,22 +1757,22 @@ int main()
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
             }
-            CHECK(got, "显式 RELIABLE reader（requested==offered）收到消息（异步建订链路终端实证）");
+            check(got, "显式 RELIABLE reader（requested==offered）收到消息（异步建订链路终端实证）");
 
             // observer 读回被测端 reader 端点（verbose Subscribers 段）
             std::vector<FastDDSDebugNode::EndpointDetail> subDetail;
             const bool seenSub = waitVerbose(SUB_TOPIC, false, subDetail);
-            CHECK(seenSub, "观察节点读回被测端 reader 端点详情（建订完成实证）");
+            check(seenSub, "观察节点读回被测端 reader 端点详情（建订完成实证）");
             for (const auto &line : (subDetail.empty() ? std::vector<std::string>()
                                                        : subDetail[0].qosLines))
             {
                 std::cout << "[OBSERVE] reliable reader qos |" << line << "|" << std::endl;
             }
-            CHECK(hasQosLine(subDetail, "Reliability", "RELIABLE"),
+            check(hasQosLine(subDetail, "Reliability", "RELIABLE"),
                   "显式 RELIABLE → reader 发现读回 Reliability: RELIABLE（与底座 BEST_EFFORT 差异）");
-            CHECK(hasQosLine(subDetail, "History", "KEEP_LAST"),
+            check(hasQosLine(subDetail, "History", "KEEP_LAST"),
                   "显式 depth=10 → reader 发现读回 History: KEEP_LAST（Depth 独立行）");
-            CHECK(hasQosLine(subDetail, "Depth", "10"),
+            check(hasQosLine(subDetail, "Depth", "10"),
                   "显式 depth=10 → reader 发现读回独立 Depth: 10 行");
         }
 
@@ -1782,15 +1782,15 @@ int main()
         {
             constexpr const char *MS_TOPIC = "t_qos_mismatch";
             FastDDSNode peer;
-            CHECK(peer.setDomainId(TEST_DOMAIN, "test-qos-mismatch"),
+            check(peer.setDomainId(TEST_DOMAIN, "test-qos-mismatch"),
                   "反证用例发布端 setDomainId → true");
             DDSQosProfile beOffered;
             beOffered.reliability = DDSReliability::BEST_EFFORT;
-            CHECK(peer.registerPubTopic(MS_TOPIC, new YomkDdsStd::MStringPubSubType(), beOffered),
+            check(peer.registerPubTopic(MS_TOPIC, new YomkDdsStd::MStringPubSubType(), beOffered),
                   "反证用例发布端 registerPubTopic 显式 BEST_EFFORT offered → true");
 
             FastDDSDebugNode dbg;
-            CHECK(dbg.setDomainId(TEST_DOMAIN), "反证用例被测端 setDomainId → true");
+            check(dbg.setDomainId(TEST_DOMAIN), "反证用例被测端 setDomainId → true");
             std::mutex msMtx;
             std::string msCaptured;
             dbg.setOutputSink([&msMtx, &msCaptured](const std::string &text) {
@@ -1800,7 +1800,7 @@ int main()
             DDSQosProfile relRequested;
             relRequested.reliability = DDSReliability::RELIABLE;
             std::string msErr;
-            CHECK(dbg.subscribeTopic(MS_TOPIC, &msErr, relRequested),
+            check(dbg.subscribeTopic(MS_TOPIC, &msErr, relRequested),
                   "反证用例 subscribeTopic 显式 RELIABLE requested → true");
 
             // 观察窗：发布 30 条×100ms，requested>offered 不匹配 → 全部丢失
@@ -1813,14 +1813,14 @@ int main()
             }
             {
                 std::lock_guard<std::mutex> lk(msMtx);
-                CHECK(msCaptured.find("mismatch_payload") == std::string::npos,
+                check(msCaptured.find("mismatch_payload") == std::string::npos,
                       "requested RELIABLE > offered BEST_EFFORT 不匹配 → 收 0 条（翻译生效反证）");
             }
             // reader 建立实证：observer 读回 Subscribers 段 Reliability: RELIABLE
             std::vector<FastDDSDebugNode::EndpointDetail> msDetail;
             const bool seenMs = waitVerbose(MS_TOPIC, false, msDetail);
-            CHECK(seenMs, "反证用例 reader 建立 成功（读回端点详情）");
-            CHECK(hasQosLine(msDetail, "Reliability", "RELIABLE"),
+            check(seenMs, "反证用例 reader 建立 成功（读回端点详情）");
+            check(hasQosLine(msDetail, "Reliability", "RELIABLE"),
                   "反证用例 reader 读回 Reliability: RELIABLE（requested 翻译落端点直证）");
         }
     }
@@ -1832,18 +1832,18 @@ int main()
     
         // 1. peer 节点：类型对象 new 后、移交前 set_name 新名，节点层注册发布
         FastDDSNode peer;
-        CHECK(peer.setDomainId(TEST_DOMAIN, "setname-peer"),
+        check(peer.setDomainId(TEST_DOMAIN, "setname-peer"),
               "set_name 用例发布端 setDomainId → true");
         auto *pubType = new YomkDdsStd::MStringPubSubType();
         pubType->set_name(kRosTypeName);
-        CHECK(peer.registerPubTopic(SN_TOPIC, pubType),
+        check(peer.registerPubTopic(SN_TOPIC, pubType),
               "set_name 用例发布端 registerPubTopic(新名类型) → true（新名随发现传播）");
     
         // 2. debug 节点 listTopics 收敛 → 该主题类型名为新名（发现缓存按新名匹配）
         FastDDSDebugNode dbg;
-        CHECK(dbg.setDomainId(TEST_DOMAIN), "set_name 用例被测端 setDomainId → true");
+        check(dbg.setDomainId(TEST_DOMAIN), "set_name 用例被测端 setDomainId → true");
         std::vector<std::pair<std::string, std::string>> topics;
-        CHECK(dbg.listTopics(topics), "set_name 用例 listTopics 收敛 → true");
+        check(dbg.listTopics(topics), "set_name 用例 listTopics 收敛 → true");
         bool snSeen = false;
         for (const auto &t : topics)
         {
@@ -1852,24 +1852,24 @@ int main()
                 snSeen = (t.second == kRosTypeName);
             }
         }
-        CHECK(snSeen,
+        check(snSeen,
               "set_name 用例 listTopics 主题类型名 == std_msgs::msg::dds_::String_（发现名即新名）");
     
         // 3. interfaceShow(新名) 收敛成功——"tid 恒定"机制实证：TypeObjectRegistry 按 tid
         //    查型与名字无关，TypeObject 结构元数据完整 → IDL 行集拼装
         std::vector<std::string> idlLines;
-        CHECK(dbg.interfaceShow(kRosTypeName, idlLines),
+        check(dbg.interfaceShow(kRosTypeName, idlLines),
               "set_name 用例 interfaceShow(新名) → true（TypeObject 按 tid 可查，名字无关）");
         bool structLine = false;
         for (const auto &line : idlLines)
         {
             if (line.find("struct") != std::string::npos) { structLine = true; }
         }
-        CHECK(structLine, "set_name 用例 interfaceShow 行集含 struct 头（TypeObject 元数据完整）");
+        check(structLine, "set_name 用例 interfaceShow 行集含 struct 头（TypeObject 元数据完整）");
     
         // 4. topicPub：按发现名重建动态类型 + 临时 writer 发布成功（复用阶段②③设施）
         std::string snPubErr;
-        CHECK(dbg.topicPub(SN_TOPIC, R"({"data":"setname-pub-payload"})", snPubErr),
+        check(dbg.topicPub(SN_TOPIC, R"({"data":"setname-pub-payload"})", snPubErr),
               "set_name 用例 topicPub 按发现名重建动态类型发布 → true");
     }
     

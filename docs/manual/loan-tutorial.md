@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     // 2. 创建节点与发布主题（loan 仅支持 plain 类型：纯基础类型成员 + FINAL 可扩展性；
     //    domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
     yomk::dds().node("node0").create();
-    yomk::dds().node("node0").topic("int_topic").type_ptr(new YomkDdsStd::MInt32PubSubType()).create_pub();
+    yomk::dds().node("node0").topic("int_topic").type(new YomkDdsStd::MInt32PubSubType()).create_pub();
 
     // 3. 等待 DDS discovery 完成后借出发布
     std::this_thread::sleep_for(std::chrono::seconds(1));

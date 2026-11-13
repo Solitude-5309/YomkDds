@@ -72,7 +72,7 @@ int main()
     };
     // QoS 用 ROS2 订阅端默认底座：BEST_EFFORT requested 对任意 offered（含 ros2 topic
     // pub 的 RELIABLE）均可匹配（create_sub() 头文件注释同口径）
-    resp = yomk::dds().node("interop_sub").topic("rt/chatter_interop_rev").type_ptr(type).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
+    resp = yomk::dds().node("interop_sub").topic("rt/chatter_interop_rev").type(type).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("TestRos2InteropSub").error("register sub topic failed: ", resp.msg);

@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
 
     // 2. 非 plain 类型 loan 回退演示：MString 含 string 成员不可 loan，借出返回 nullptr
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== loan fallback (non-plain MString) ===");
-    resp = yomk::dds().node("node0").topic("fallback_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
+    resp = yomk::dds().node("node0").topic("fallback_topic").type(new YomkDdsStd::MStringPubSubType()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("register pub topic failed: ", resp.msg);
@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
 
     // 3. plain 类型 loan 全链路演示：MInt32 为纯基础类型，FINAL 后 is_plain 为 true
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== loan publish (plain MInt32) ===");
-    resp = yomk::dds().node("node0").topic("loan_topic").type_ptr(new YomkDdsStd::MInt32PubSubType()).create_pub();
+    resp = yomk::dds().node("node0").topic("loan_topic").type(new YomkDdsStd::MInt32PubSubType()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("register pub topic failed: ", resp.msg);
@@ -69,7 +69,7 @@ int main(int argc, char* argv[])
         loanReceived++;
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("[RECV] 收到借出消息: ", msg->data());
     };
-    resp = yomk::dds().node("node0").topic("loan_topic").type_ptr(new YomkDdsStd::MInt32PubSubType()).sub_cb(onLoan).create_sub();
+    resp = yomk::dds().node("node0").topic("loan_topic").type(new YomkDdsStd::MInt32PubSubType()).sub_cb(onLoan).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("register sub topic failed: ", resp.msg);

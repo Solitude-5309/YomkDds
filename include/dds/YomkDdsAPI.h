@@ -60,11 +60,11 @@ public:
 
 /**
  * @brief Topic registration facet: carries the nodeName/topicName accumulated by
- *        node().topic(), required type_ptr() and optional qos() accumulators,
+ *        node().topic(), required type() and optional qos() accumulators,
  *        terminated by create_pub() (publisher) or sub_cb()...create_sub() (subscriber);
  *        data()...pub() publishes one message on an already-registered publisher topic
  */
-// @zh: 主题注册分面：承载 node().topic() 累积的节点名/主题名，type_ptr() 必填与
+// @zh: 主题注册分面：承载 node().topic() 累积的节点名/主题名，type() 必填与
 // @zh: qos() 可选累积器，create_pub()（发布）或 sub_cb()...create_sub()（订阅）终结；
 // @zh: data()...pub() 向已注册发布主题发送一条消息
 class DdsTopicBuilder
@@ -92,7 +92,7 @@ public:
     // @zh: type 消息类型实例（new XxxPubSubType()）
     // @zh: return 自身链式引用
     // @zh: warning type 所有权移交服务端，无论成败调用后 caller 不再持有/释放
-    DdsTopicBuilder& type_ptr(void* type)
+    DdsTopicBuilder& type(void* type)
     {
         m_type = type;
         return *this;

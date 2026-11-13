@@ -67,8 +67,8 @@ auto onMessage = [&](const void *data)
 注册主题时成对使用：
 
 ```cpp
-yomk::dds().node("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
-yomk::dds().node("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
+yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).create_pub();
+yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
 ```
 
 两端主题类型必须一致（同一 PubSubType 生成的类型）才能匹配收发。
@@ -101,8 +101,8 @@ int main(int argc, char *argv[])
     yomk::dds().node("node_sub").create();
 
     // 3. 在同一节点上注册多个主题；发布/订阅也可分属不同节点
-    yomk::dds().node("node_pub").topic("topic_a").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
-    yomk::dds().node("node_pub").topic("topic_b").type_ptr(new YomkDdsStd::MInt32PubSubType()).create_pub();
+    yomk::dds().node("node_pub").topic("topic_a").type(new YomkDdsStd::MStringPubSubType()).create_pub();
+    yomk::dds().node("node_pub").topic("topic_b").type(new YomkDdsStd::MInt32PubSubType()).create_pub();
 
     std::atomic<int> recvA{0};
     std::atomic<int> recvB{0};
@@ -118,8 +118,8 @@ int main(int argc, char *argv[])
         recvB++;
         ::yomk::log().tag("MultiTopicExample").info("[RECV B] ", msg->data());
     };
-    yomk::dds().node("node_sub").topic("topic_a").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onA).create_sub();
-    yomk::dds().node("node_sub").topic("topic_b").type_ptr(new YomkDdsStd::MInt32PubSubType()).sub_cb(onB).create_sub();
+    yomk::dds().node("node_sub").topic("topic_a").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onA).create_sub();
+    yomk::dds().node("node_sub").topic("topic_b").type(new YomkDdsStd::MInt32PubSubType()).sub_cb(onB).create_sub();
 
     // 4. 等待 DDS discovery 完成后，两个主题各自循环发布
     std::this_thread::sleep_for(std::chrono::seconds(1));

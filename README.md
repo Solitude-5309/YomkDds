@@ -55,8 +55,8 @@
 | `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | 加载 Fast DDS XML profiles 文件（详见 [xml-profiles](docs/features/xml-profiles.md)） |
 | `yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` | 创建节点（详见 [discovery-server](docs/features/discovery-server.md)） |
 | `yomk::dds().node(nodeName).remove()` | 删除节点 |
-| `yomk::dds().node(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()` | 注册发布主题（qos 详见 [qos-profiles](docs/features/qos-profiles.md)） |
-| `yomk::dds().node(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()` | 注册订阅主题 |
+| `yomk::dds().node(nodeName).topic(topicName).type(type)[.qos(qos)].create_pub()` | 注册发布主题（qos 详见 [qos-profiles](docs/features/qos-profiles.md)） |
+| `yomk::dds().node(nodeName).topic(topicName).type(type).sub_cb(callback)[.qos(qos)].create_sub()` | 注册订阅主题 |
 | `yomk::dds().node(nodeName).topic(topicName).data(data).pub()` | 发布数据 |
 | `yomk::dds().node(nodeName).topic(topicName).loan()` | 借出发送缓冲，返回值判空即失败判定（详见 [loan-zero-copy](docs/features/loan-zero-copy.md)） |
 | `yomk::dds().node(nodeName).topic(topicName).sample(sample).return_loan()` | 归还未发布的借出缓冲 |

@@ -58,7 +58,7 @@ if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 auto *type = new YomkDdsStd::MStringPubSubType();
 type->set_name("std_msgs::msg::dds_::String_");
 // QoS 用 ROS2 发布端默认底座：RELIABLE offered 对 ros2 topic echo 任意 requested 可匹配
-resp = yomk::dds().node("interop_pub").topic("rt/chatter_interop").type_ptr(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
+resp = yomk::dds().node("interop_pub").topic("rt/chatter_interop").type(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
 if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 {
     ::yomk::log().tag("ExampleRos2InteropPub").error("register pub topic failed: ", resp.m_msg);
@@ -98,7 +98,7 @@ auto onMessage = [&](const void* data)
 // QoS 用 ROS2 订阅端默认底座：BEST_EFFORT requested 对任意 offered（含 ros2 topic
 // pub 与 YomkDds pub 的 RELIABLE）均可匹配
 resp =
-    yomk::dds().node("interop_sub").topic("rt/chatter_interop").type_ptr(type).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
+    yomk::dds().node("interop_sub").topic("rt/chatter_interop").type(type).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
 ```
 
 ### 第 3 步：方向 1 验证——YomkDds 发布、ROS2 订阅

@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
 
     // 2. 注册发布主题（type 所有权移交 FastDDSNode）
     ::yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsService::registerPubTopic ===");
-    resp = yomk::dds().node("node0").topic("dds_demo_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
+    resp = yomk::dds().node("node0").topic("dds_demo_topic").type(new YomkDdsStd::MStringPubSubType()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopic").error("register pub topic failed: ", resp.msg);
@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
         received++;
         ::yomk::log().tag("ExampleYomkDdsTopic").info("[RECV] 收到消息: ", msg->data());
     };
-    resp = yomk::dds().node("node0").topic("dds_demo_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
+    resp = yomk::dds().node("node0").topic("dds_demo_topic").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopic").error("register sub topic failed: ", resp.msg);

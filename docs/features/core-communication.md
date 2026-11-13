@@ -13,8 +13,8 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 | 版本查询 | `yomk::dds().version()` | `/YomkDdsService/version` | 返回 Response 携带 String 版本串（"YomkDds v<版本号>"），解包/打印由调用方处理 |
 | 创建节点 | `yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | `/YomkDdsService/create_node` | 每节点一个独立 DDS 参与者 |
 | 删除节点 | `yomk::dds().node(nodeName).remove()` | `/YomkDdsService/delete_node` | 销毁节点及其全部 DDS 实体，不存在的节点返回错误 |
-| 注册发布主题 | `yomk::dds().node(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()` | `/YomkDdsService/register_pub_topic` | type 为 `new XxxPubSubType()`，所有权移交服务端 |
-| 注册订阅主题 | `yomk::dds().node(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()` | `/YomkDdsService/register_sub_topic` | callback 收到消息时回调，接收缓冲 data 由内部自动创建 |
+| 注册发布主题 | `yomk::dds().node(nodeName).topic(topicName).type(type)[.qos(qos)].create_pub()` | `/YomkDdsService/register_pub_topic` | type 为 `new XxxPubSubType()`，所有权移交服务端 |
+| 注册订阅主题 | `yomk::dds().node(nodeName).topic(topicName).type(type).sub_cb(callback)[.qos(qos)].create_sub()` | `/YomkDdsService/register_sub_topic` | callback 收到消息时回调，接收缓冲 data 由内部自动创建 |
 | 发布数据 | `yomk::dds().node(nodeName).topic(topicName).data(data).pub()` | `/YomkDdsService/publish` | data 为数据实例指针（借用，同步写入，caller 保留所有权） |
 | 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | `/YomkDdsService/load_xml` | participant 级配置入口，详见 [xml-profiles.md](./xml-profiles.md) |
 | Loan 借出零拷贝发布 | `yomk::dds().node(nodeName).topic(topicName).loan()` / `...topic(topicName).sample(sample).return_loan()` | `/YomkDdsService/loan`、`/YomkDdsService/discard_loan` | 详见 [loan-zero-copy.md](./loan-zero-copy.md) |
@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
     yomk::dds().node("node0").create();
 
     // 3. 注册发布主题（type 所有权移交 FastDDSNode）
-    yomk::dds().node("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
+    yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).create_pub();
 
     // 4. 注册订阅主题（data 由内部 create_data() 创建，回调中转型使用）
     std::atomic<int> received{0};
@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
         received++;
         ::yomk::log().tag("PubSubExample").info("[RECV] ", msg->data());
     };
-    yomk::dds().node("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
+    yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
 
     // 5. 等待 DDS discovery 完成后发布数据
     std::this_thread::sleep_for(std::chrono::seconds(1));

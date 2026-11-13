@@ -45,7 +45,7 @@ int main()
     ::yomk::server().srv<YomkDdsService>().create();
 
     // 创建节点（域 0 对齐 ROS2 默认域）
-    auto resp = yomk::dds().node_name("interop_sub").domain_id(0).create();
+    auto resp = yomk::dds().node("interop_sub").domain_id(0).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("TestRos2InteropSub").error("create node failed: ", resp.msg);
@@ -72,11 +72,11 @@ int main()
     };
     // QoS 用 ROS2 订阅端默认底座：BEST_EFFORT requested 对任意 offered（含 ros2 topic
     // pub 的 RELIABLE）均可匹配（create_sub() 头文件注释同口径）
-    resp = yomk::dds().node_name("interop_sub").topic("rt/chatter_interop_rev").type_ptr(type).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
+    resp = yomk::dds().node("interop_sub").topic("rt/chatter_interop_rev").type_ptr(type).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("TestRos2InteropSub").error("register sub topic failed: ", resp.msg);
-        yomk::dds().node_name("interop_sub").remove();
+        yomk::dds().node("interop_sub").remove();
         return 1;
     }
 
@@ -88,7 +88,7 @@ int main()
     }
 
     // 退出前显式销毁节点；收满 3 条返回 0，未收满返回 1
-    resp = yomk::dds().node_name("interop_sub").remove();
+    resp = yomk::dds().node("interop_sub").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("TestRos2InteropSub").error("delete node failed: ", resp.msg);

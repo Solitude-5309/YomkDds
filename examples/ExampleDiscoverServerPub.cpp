@@ -28,7 +28,7 @@ static void onSignal(int)
 // 发现服务器示例·发布端：演示 跨域经发现服务器互通 的发布侧代码流程——节点域 id 固定 100，
 // 以 CLIENT 角色直配发现服务器，与域 id 200 的 ExampleDiscoverServerSub 互通（DS 模式下
 // server 不校验域 id，原理见 README 5.7/5.8）。
-// 直配串经环境变量自动填入（node_name().create() 缺省形态，domain/udp/tcp 全缺省读 env）：
+// 直配串经环境变量自动填入（node().create() 缺省形态，domain/udp/tcp 全缺省读 env）：
 //   export YOMKDDS_USE_DISCOVER_SERVER=true
 //   export YOMKDDS_UDP_DISCOVER_SERVERS=127.0.0.1:11811   // 须与 LaunchDiscoverServer.sh
 //                                                         // 启动的 server 一致；TCP 场景改用
@@ -42,7 +42,7 @@ int main()
 
     // 1. 创建节点：域 id 显式 100（DS 模式下可与对端异域）；省略双通道尾参 →
     //    直配串自动取环境变量（总开关开启时生效，participant 以 CLIENT 发现协议运行）
-    auto resp = yomk::dds().node_name("ds_pub_node").domain_id(100).create();
+    auto resp = yomk::dds().node("ds_pub_node").domain_id(100).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleDiscoverServerPub").error("create node failed: ", resp.msg);
@@ -50,11 +50,11 @@ int main()
     }
 
     // 2. 注册发布主题：type 所有权移交服务端，new 后无需自行 delete
-    resp = yomk::dds().node_name("ds_pub_node").topic("ds_hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
+    resp = yomk::dds().node("ds_pub_node").topic("ds_hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleDiscoverServerPub").error("register pub topic failed: ", resp.msg);
-        yomk::dds().node_name("ds_pub_node").remove();
+        yomk::dds().node("ds_pub_node").remove();
         return 1;
     }
 
@@ -67,7 +67,7 @@ int main()
     {
         YomkDdsStd::MString msg;
         msg.data("hello world " + std::to_string(total));
-        resp = yomk::dds().node_name("ds_pub_node").topic("ds_hello_world").data(&msg).pub();
+        resp = yomk::dds().node("ds_pub_node").topic("ds_hello_world").data(&msg).pub();
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
             failCount++;
@@ -83,7 +83,7 @@ int main()
 
     // 4. 退出前显式销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
     ::yomk::log().tag("ExampleDiscoverServerPub").info("publish done: total=", total, " failed=", failCount);
-    resp = yomk::dds().node_name("ds_pub_node").remove();
+    resp = yomk::dds().node("ds_pub_node").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleDiscoverServerPub").error("delete node failed: ", resp.msg);

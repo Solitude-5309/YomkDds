@@ -67,15 +67,15 @@ auto onMessage = [&](const void *data)
 注册主题时成对使用：
 
 ```cpp
-yomk::dds().node_name("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
-yomk::dds().node_name("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
+yomk::dds().node("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
+yomk::dds().node("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
 ```
 
 两端主题类型必须一致（同一 PubSubType 生成的类型）才能匹配收发。
 
 ### 第 3 步：多节点多主题
 
-`yomk::dds().node_name(...).create()` 每调用一次即创建一个独立 DDS 参与者（每节点一个独立 DDS 参与者；节点名唯一、domainId 合法范围 [0,232]），一个进程可创建多个节点，每个节点可注册多个发布/订阅主题。完整示例（两个节点、两个主题）：
+`yomk::dds().node(...).create()` 每调用一次即创建一个独立 DDS 参与者（每节点一个独立 DDS 参与者；节点名唯一、domainId 合法范围 [0,232]），一个进程可创建多个节点，每个节点可注册多个发布/订阅主题。完整示例（两个节点、两个主题）：
 
 ```cpp
 #include <yomk/server/YomkServerApi.h>
@@ -97,12 +97,12 @@ int main(int argc, char *argv[])
     ::yomk::server().srv<YomkDdsService>().create();
 
     // 2. 创建两个节点（每节点一个独立 DDS 参与者）
-    yomk::dds().node_name("node_pub").create();
-    yomk::dds().node_name("node_sub").create();
+    yomk::dds().node("node_pub").create();
+    yomk::dds().node("node_sub").create();
 
     // 3. 在同一节点上注册多个主题；发布/订阅也可分属不同节点
-    yomk::dds().node_name("node_pub").topic("topic_a").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
-    yomk::dds().node_name("node_pub").topic("topic_b").type_ptr(new YomkDdsStd::MInt32PubSubType()).create_pub();
+    yomk::dds().node("node_pub").topic("topic_a").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
+    yomk::dds().node("node_pub").topic("topic_b").type_ptr(new YomkDdsStd::MInt32PubSubType()).create_pub();
 
     std::atomic<int> recvA{0};
     std::atomic<int> recvB{0};
@@ -118,8 +118,8 @@ int main(int argc, char *argv[])
         recvB++;
         ::yomk::log().tag("MultiTopicExample").info("[RECV B] ", msg->data());
     };
-    yomk::dds().node_name("node_sub").topic("topic_a").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onA).create_sub();
-    yomk::dds().node_name("node_sub").topic("topic_b").type_ptr(new YomkDdsStd::MInt32PubSubType()).sub_cb(onB).create_sub();
+    yomk::dds().node("node_sub").topic("topic_a").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onA).create_sub();
+    yomk::dds().node("node_sub").topic("topic_b").type_ptr(new YomkDdsStd::MInt32PubSubType()).sub_cb(onB).create_sub();
 
     // 4. 等待 DDS discovery 完成后，两个主题各自循环发布
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -127,11 +127,11 @@ int main(int argc, char *argv[])
     {
         YomkDdsStd::MString msgA;
         msgA.data("hello " + std::to_string(i));
-        yomk::dds().node_name("node_pub").topic("topic_a").data(&msgA).pub();
+        yomk::dds().node("node_pub").topic("topic_a").data(&msgA).pub();
 
         YomkDdsStd::MInt32 msgB;
         msgB.data(i);
-        yomk::dds().node_name("node_pub").topic("topic_b").data(&msgB).pub();
+        yomk::dds().node("node_pub").topic("topic_b").data(&msgB).pub();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -142,8 +142,8 @@ int main(int argc, char *argv[])
     ::yomk::log().tag("MultiTopicExample").info("topic_b received=", recvB.load(), "/5");
 
     // 6. 退出前逐个删除节点
-    yomk::dds().node_name("node_pub").remove();
-    yomk::dds().node_name("node_sub").remove();
+    yomk::dds().node("node_pub").remove();
+    yomk::dds().node("node_sub").remove();
     return 0;
 }
 ```
@@ -151,7 +151,7 @@ int main(int argc, char *argv[])
 ### 第 4 步：发布节奏与资源清理
 
 - **发布节奏**：发布链 `pub()` 为同步写入（data 为借用指针，caller 保留所有权），两次发布之间的间隔由你控制（示例用 `sleep_for(milliseconds(100))`）；持续发布的参考形态见安装包内 `ExampleYomkDdsPub`（每 1s 发布一次，Ctrl+C 退出）；
-- **资源清理**：每次 `yomk::dds().node_name(...).create()` 对应一次 `...node_name(...).remove()`，销毁节点及其全部 DDS 实体；删除不存在的节点返回错误。退出前不删节点可能造成程序退出阶段的资源清理问题，务必在 `return` 前逐个删除。
+- **资源清理**：每次 `yomk::dds().node(...).create()` 对应一次 `...node(...).remove()`，销毁节点及其全部 DDS 实体；删除不存在的节点返回错误。退出前不删节点可能造成程序退出阶段的资源清理问题，务必在 `return` 前逐个删除。
 
 ## 预期输出
 
@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
 | 回调里保存了 `data` 指针、之后读取崩溃或数据异常 | `data` 仅回调执行期间有效：回调内同步消费（读取或拷贝到自有存储），不要跨回调持有 |
 | ARM 设备上读取 `double`/`int64` 字段触发 SIGBUS | `alignof>4` 的 plain 标量在零拷贝交付下仅 4 字节对齐：回调中 `memcpy` 到对齐局部变量再读取（见第 1 步）；大数据负载优先选 `alignof<=4` 的 plain 类型 |
 | 两端注册了同名主题但收不到 | type 不一致：两端必须用同一种消息类型（同一 PubSubType）；并确认两端域号一致（`YOMKDDS_DDS_DOMAIN_ID`，合法范围 [0,232]） |
-| 宏调用返回非 `eOk` | 读 `m_msg` 获取原因；常见如节点名重复、删除不存在的节点——每节点名唯一，`yomk::dds().node_name(...).create()` 前确认同名节点已删除 |
+| 宏调用返回非 `eOk` | 读 `m_msg` 获取原因；常见如节点名重复、删除不存在的节点——每节点名唯一，`yomk::dds().node(...).create()` 前确认同名节点已删除 |
 | 多主题只收到其中一个 | 同样是 discovery 时序：注册全部主题后再统一 `sleep 1s`，不要边注册边立即发布 |
 | 收到的消息内容错乱 | 检查是否在回调外复用了发布侧的栈变量指针，或把 `const void *data` 强转成了错误的消息类型 |
 

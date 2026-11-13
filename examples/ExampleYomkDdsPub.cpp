@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
 
     // 1. 创建节点：domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID（无/非法回落 0；仅同域
     //    节点互通），nodeName 唯一
-    auto resp = yomk::dds().node_name("pub_node").create();
+    auto resp = yomk::dds().node("pub_node").create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsPub").error("create node failed: ", resp.msg);
@@ -43,11 +43,11 @@ int main(int argc, char* argv[])
     }
 
     // 2. 注册发布主题：type 所有权移交服务端，new 后无需自行 delete
-    resp = yomk::dds().node_name("pub_node").topic("hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
+    resp = yomk::dds().node("pub_node").topic("hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsPub").error("register pub topic failed: ", resp.msg);
-        yomk::dds().node_name("pub_node").remove();
+        yomk::dds().node("pub_node").remove();
         return 1;
     }
 
@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
     {
         YomkDdsStd::MString msg;
         msg.data("hello world " + std::to_string(total));
-        resp = yomk::dds().node_name("pub_node").topic("hello_world").data(&msg).pub();
+        resp = yomk::dds().node("pub_node").topic("hello_world").data(&msg).pub();
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
             failCount++;
@@ -76,7 +76,7 @@ int main(int argc, char* argv[])
 
     // 4. 退出前显式销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
     ::yomk::log().tag("ExampleYomkDdsPub").info("publish done: total=", total, " failed=", failCount);
-    resp = yomk::dds().node_name("pub_node").remove();
+    resp = yomk::dds().node("pub_node").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsPub").error("delete node failed: ", resp.msg);

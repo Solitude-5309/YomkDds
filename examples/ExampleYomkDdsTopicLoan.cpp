@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 
     // 1. 创建节点
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== YomkDdsService::createNode ===");
-    auto resp = yomk::dds().node_name("node0").create();
+    auto resp = yomk::dds().node("node0").create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("create node failed: ", resp.msg);
@@ -36,23 +36,23 @@ int main(int argc, char* argv[])
 
     // 2. 非 plain 类型 loan 回退演示：MString 含 string 成员不可 loan，借出返回 nullptr
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== loan fallback (non-plain MString) ===");
-    resp = yomk::dds().node_name("node0").topic("fallback_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
+    resp = yomk::dds().node("node0").topic("fallback_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("register pub topic failed: ", resp.msg);
-        yomk::dds().node_name("node0").remove();
+        yomk::dds().node("node0").remove();
         return 1;
     }
-    void* loanPtr = yomk::dds().node_name("node0").topic("fallback_topic").loan();
+    void* loanPtr = yomk::dds().node("node0").topic("fallback_topic").loan();
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("非 plain MString 借出指针=", (loanPtr != nullptr ? "非空" : "空"), "（预期为空，回退普通发布）");
 
     // 3. plain 类型 loan 全链路演示：MInt32 为纯基础类型，FINAL 后 is_plain 为 true
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== loan publish (plain MInt32) ===");
-    resp = yomk::dds().node_name("node0").topic("loan_topic").type_ptr(new YomkDdsStd::MInt32PubSubType()).create_pub();
+    resp = yomk::dds().node("node0").topic("loan_topic").type_ptr(new YomkDdsStd::MInt32PubSubType()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("register pub topic failed: ", resp.msg);
-        yomk::dds().node_name("node0").remove();
+        yomk::dds().node("node0").remove();
         return 1;
     }
 
@@ -69,11 +69,11 @@ int main(int argc, char* argv[])
         loanReceived++;
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("[RECV] 收到借出消息: ", msg->data());
     };
-    resp = yomk::dds().node_name("node0").topic("loan_topic").type_ptr(new YomkDdsStd::MInt32PubSubType()).sub_cb(onLoan).create_sub();
+    resp = yomk::dds().node("node0").topic("loan_topic").type_ptr(new YomkDdsStd::MInt32PubSubType()).sub_cb(onLoan).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("register sub topic failed: ", resp.msg);
-        yomk::dds().node_name("node0").remove();
+        yomk::dds().node("node0").remove();
         return 1;
     }
 
@@ -83,14 +83,14 @@ int main(int argc, char* argv[])
     // 借出 → 池内直接填值 → 发布（每次 write 后中间件收回指针，须重新借出）
     for (int i = 0; i < 5; ++i)
     {
-        loanPtr = yomk::dds().node_name("node0").topic("loan_topic").loan();
+        loanPtr = yomk::dds().node("node0").topic("loan_topic").loan();
         if (loanPtr == nullptr)
         {
             ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("[SEND] 借出失败: 第 ", i, " 次 loan 返回 nullptr");
             break;
         }
         static_cast<YomkDdsStd::MInt32*>(loanPtr)->data(100 + i);
-        resp = yomk::dds().node_name("node0").topic("loan_topic").data(loanPtr).pub();
+        resp = yomk::dds().node("node0").topic("loan_topic").data(loanPtr).pub();
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
             ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("[SEND] 借出发布失败: ", 100 + i, " status=", static_cast<int>(resp.status));
@@ -111,11 +111,11 @@ int main(int argc, char* argv[])
 
     // 6. discard 演示：借出后不发布须归还缓冲（否则池泄漏）
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== discard loan ===");
-    loanPtr = yomk::dds().node_name("node0").topic("loan_topic").loan();
+    loanPtr = yomk::dds().node("node0").topic("loan_topic").loan();
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("借出指针=", (loanPtr != nullptr ? "非空" : "空"));
     if (loanPtr != nullptr)
     {
-        resp = yomk::dds().node_name("node0").topic("loan_topic").sample(loanPtr).return_loan();
+        resp = yomk::dds().node("node0").topic("loan_topic").sample(loanPtr).return_loan();
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
             ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("discard loan failed: ", resp.msg);
@@ -124,7 +124,7 @@ int main(int argc, char* argv[])
 
     // 7. 退出前销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== YomkDdsService::deleteNode ===");
-    resp = yomk::dds().node_name("node0").remove();
+    resp = yomk::dds().node("node0").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("delete node failed: ", resp.msg);

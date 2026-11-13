@@ -28,10 +28,10 @@ YomkDds 与 ROS2 在同一 DDS 域内互通（YomkDds 节点发布、`ros2` 节�
 
 auto *type = new YomkDdsStd::MStringPubSubType();
 type->set_name("std_msgs::msg::dds_::String_");   // ROS2 命名（须在移交前改）
-yomk::dds().node_name("interop_pub").domain_id(0).create();
+yomk::dds().node("interop_pub").domain_id(0).create();
 // DDS 层话题名带 rt/ 前缀（rmw_fastrtps 对语义名 /chatter 的实际 DDS 名），QoS 用 ROS2 发布端默认底座
-yomk::dds().node_name("interop_pub").topic("rt/chatter").type_ptr(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
-// yomk::dds().node_name("interop_pub").topic("rt/chatter").data(&msg).pub();   // 之后正常发布（话题名与注册名逐字节一致）
+yomk::dds().node("interop_pub").topic("rt/chatter").type_ptr(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
+// yomk::dds().node("interop_pub").topic("rt/chatter").data(&msg).pub();   // 之后正常发布（话题名与注册名逐字节一致）
 ```
 
 **使用注意**：`set_name` 必须在类型对象移交（传宏）之前调用——宏实参位内联 `new` 无法先改名。

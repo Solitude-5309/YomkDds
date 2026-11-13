@@ -68,10 +68,10 @@ fastdds discovery -i 0 -l 127.0.0.1 -p 11811
 
 examples 提供一对发现服务器示例：`ExampleDiscoverServerPub`（域 100 发布端）与 `ExampleDiscoverServerSub`（域 200 订阅端）。两个示例的节点创建**不携带直配尾参**——直配串经环境变量自动填入（启动前 export，见第 4 步），两者经同一发现服务器以 CLIENT 模式互通（异域互通的原理见「前提与准备」）。
 
-`yomk::dds().node_name(nodeName)` 节点创建链（三个累积器均可选，次序不限）：
+`yomk::dds().node(nodeName)` 节点创建链（三个累积器均可选，次序不限）：
 
 ```cpp
-yomk::dds().node_name(nodeName)[.domain_id(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()
+yomk::dds().node(nodeName)[.domain_id(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()
 ```
 
 发布端关键代码（节选自 `examples/ExampleDiscoverServerPub.cpp`，完整程序见仓库源文件）：
@@ -82,7 +82,7 @@ yomk::dds().node_name(nodeName)[.domain_id(domainId)][.udp_ds(udpLocator)][.tcp_
 
 // 1. 创建节点：域 id 显式 100（DS 模式下可与对端异域）；省略双通道尾参 →
 //    直配串自动取环境变量（总开关开启时生效，participant 以 CLIENT 发现协议运行）
-auto resp = yomk::dds().node_name("ds_pub_node").domain_id(100).create();
+auto resp = yomk::dds().node("ds_pub_node").domain_id(100).create();
 if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 {
     ::yomk::log().tag("ExampleDiscoverServerPub").error("create node failed: ", resp.m_msg);
@@ -90,7 +90,7 @@ if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 }
 
 // 2. 注册发布主题：type 所有权移交服务端，new 后无需自行 delete
-resp = yomk::dds().node_name("ds_pub_node").topic("ds_hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
+resp = yomk::dds().node("ds_pub_node").topic("ds_hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
 ```
 
 发布主循环（每 1s 发布一次直到 Ctrl+C；`pub()` 失败计数）：
@@ -100,7 +100,7 @@ while (!g_stop.load())
 {
     YomkDdsStd::MString msg;
     msg.data("hello world " + std::to_string(total));
-    resp = yomk::dds().node_name("ds_pub_node").topic("ds_hello_world").data(&msg).pub();
+    resp = yomk::dds().node("ds_pub_node").topic("ds_hello_world").data(&msg).pub();
     // ... 成功打印 [SEND]，失败打印 [SEND] publish failed ...
     total++;
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -111,7 +111,7 @@ while (!g_stop.load())
 
 ```cpp
 // 1. 创建节点：域 id 显式 200（DS 模式下可与对端异域）；省略双通道尾参 → 同上
-auto resp = yomk::dds().node_name("ds_sub_node").domain_id(200).create();
+auto resp = yomk::dds().node("ds_sub_node").domain_id(200).create();
 
 // 2. 注册订阅主题：type 所有权移交服务端；收到消息时回调 onMessage
 std::atomic<int> received{0};
@@ -121,7 +121,7 @@ auto onMessage = [&](const void* data)
     received++;
     ::yomk::log().tag("ExampleDiscoverServerSub").info("[RECV] ", msg->data());
 };
-resp = yomk::dds().node_name("ds_sub_node").topic("ds_hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
+resp = yomk::dds().node("ds_sub_node").topic("ds_hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
 ```
 
 两端主题均为 `ds_hello_world`（MString 类型）；三个终端的运行命令见「预期输出」一节。
@@ -132,12 +132,12 @@ resp = yomk::dds().node_name("ds_sub_node").topic("ds_hello_world").type_ptr(new
 
 ```cpp
 // client 侧：三节点宏尾参直配
-yomk::dds().node_name("ds_node").domain_id(0).udp_ds("127.0.0.1:11811").create();            // 形态 3：仅 UDP 通道
+yomk::dds().node("ds_node").domain_id(0).udp_ds("127.0.0.1:11811").create();            // 形态 3：仅 UDP 通道
 YOMKDDS_DEBUG_NODE(0, "127.0.0.1:11811");
 YOMKDDS_BAG_NODE(0, "127.0.0.1:11811");
 // 形态 4：UDP+TCP 双通道（TCP port 为 server 的 TCP 监听口；仅 TCP 直配时 UDP 传空串占位）
-yomk::dds().node_name("ds_dual_node").domain_id(0).udp_ds("127.0.0.1:11811").tcp_ds("127.0.0.1:42100").create();
-yomk::dds().node_name("ds_tcp_only_node").domain_id(0).udp_ds("").tcp_ds("10.0.0.2:42100").create();
+yomk::dds().node("ds_dual_node").domain_id(0).udp_ds("127.0.0.1:11811").tcp_ds("127.0.0.1:42100").create();
+yomk::dds().node("ds_tcp_only_node").domain_id(0).udp_ds("").tcp_ds("10.0.0.2:42100").create();
 ```
 
 TCP 通道机制（README 5.7 原文口径）：
@@ -173,7 +173,7 @@ export YOMKDDS_UDP_DISCOVER_SERVERS="192.168.1.10:11811;192.168.1.11:11811"  # T
 
 - 总开关 `YOMKDDS_USE_DISCOVER_SERVER`：`true`/`1` 视为开启（大小写不敏感）；未设置/空/`false`/`0`/其余任意值关闭；
 - 两通道 server 聚合串 `YOMKDDS_UDP_DISCOVER_SERVERS`/`YOMKDDS_TCP_DISCOVER_SERVERS` 格式同宏尾参直配串：`ip[:port]` 分号分隔多 server；
-- 开关开启时，`yomk::dds().node_name(...).create()` 未累积的 udp_ds()/tcp_ds() 自动取对应环境变量值；`YOMKDDS_DEBUG_NODE`/`YOMKDDS_BAG_NODE` 同款支持全缺省（无参）形态——三字段（含 domainId）一并经缺省初始化器读 env（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`）；
+- 开关开启时，`yomk::dds().node(...).create()` 未累积的 udp_ds()/tcp_ds() 自动取对应环境变量值；`YOMKDDS_DEBUG_NODE`/`YOMKDDS_BAG_NODE` 同款支持全缺省（无参）形态——三字段（含 domainId）一并经缺省初始化器读 env（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`）；
 - 开关关闭时两串变量被忽略恒空（=不直配，行为同未设置）；
 - 非法串不静默回落——节点创建失败并回显，避免误配退化成多播发现而"看似正常实则不通"。
 
@@ -196,7 +196,7 @@ export YOMKDDS_UDP_DISCOVER_SERVERS="192.168.1.10:11811;192.168.1.11:11811"  # T
 
 ```cpp
 yomk::dds().xml("/path/to/profiles.xml").load_cfg();   // XML 打底
-yomk::dds().node_name("combo_node").domain_id(0).udp_ds("127.0.0.1:11811").create();   // 直配 server 项覆盖 XML discoveryServersList
+yomk::dds().node("combo_node").domain_id(0).udp_ds("127.0.0.1:11811").create();   // 直配 server 项覆盖 XML discoveryServersList
 ```
 
 3. 验证点：发现流量走直配 server（CLIENT 单播），XML 中其余打底配置继续生效——按「预期输出」一节跑通发布/订阅即证明发现链路建立。

@@ -43,7 +43,7 @@ int main()
     ::yomk::server().srv<YomkDdsService>().create();
 
     // 创建节点（域 0 对齐 ROS2 默认域）
-    auto resp = yomk::dds().node_name("interop_pub").domain_id(0).create();
+    auto resp = yomk::dds().node("interop_pub").domain_id(0).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("TestRos2InteropPub").error("create node failed: ", resp.msg);
@@ -54,11 +54,11 @@ int main()
     auto *type = new YomkDdsStd::MStringPubSubType();
     type->set_name("std_msgs::msg::dds_::String_");
     // QoS 用 ROS2 发布端默认底座：RELIABLE offered 对 ros2 topic echo 任意 requested 可匹配
-    resp = yomk::dds().node_name("interop_pub").topic("rt/chatter_interop").type_ptr(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
+    resp = yomk::dds().node("interop_pub").topic("rt/chatter_interop").type_ptr(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("TestRos2InteropPub").error("register pub topic failed: ", resp.msg);
-        yomk::dds().node_name("interop_pub").remove();
+        yomk::dds().node("interop_pub").remove();
         return 1;
     }
 
@@ -69,7 +69,7 @@ int main()
     {
         YomkDdsStd::MString msg;
         msg.data("hello ros2 " + std::to_string(i));
-        resp = yomk::dds().node_name("interop_pub").topic("rt/chatter_interop").data(&msg).pub();
+        resp = yomk::dds().node("interop_pub").topic("rt/chatter_interop").data(&msg).pub();
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
             ::yomk::log().tag("TestRos2InteropPub").error("[SEND] publish failed");
@@ -82,7 +82,7 @@ int main()
     }
 
     // 退出前显式销毁节点
-    resp = yomk::dds().node_name("interop_pub").remove();
+    resp = yomk::dds().node("interop_pub").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("TestRos2InteropPub").error("delete node failed: ", resp.msg);

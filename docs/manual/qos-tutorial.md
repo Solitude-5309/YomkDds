@@ -13,7 +13,7 @@
 ## 前提与准备
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成安装，并跑通 [quick-start.md](./quick-start.md)；
-- 知道注册链的可缺省 qos 累积：`yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()` 与 `yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()` 的 `qos` 为端点 QoS 描述 `DDSQosProfile`（定义于 `include/dds/YomkDdsService.h`，头文件已随 `yomk/dds/YomkDdsAPI.h` 引入）。
+- 知道注册链的可缺省 qos 累积：`yomk::dds().node(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()` 与 `yomk::dds().node(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()` 的 `qos` 为端点 QoS 描述 `DDSQosProfile`（定义于 `include/dds/YomkDdsService.h`，头文件已随 `yomk/dds/YomkDdsAPI.h` 引入）。
 
 ## 分步操作
 
@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
     ::yomk::server().srv<YomkDdsService>().create();
 
     // 2. 创建节点（domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
-    yomk::dds().node_name("qos_node").create();
+    yomk::dds().node("qos_node").create();
 
     // 3. 注册订阅主题：ROS2 默认订阅底座（BEST_EFFORT requested 对任意 offered 均可匹配）
     std::atomic<int> received{0};
@@ -62,12 +62,12 @@ int main(int argc, char *argv[])
         received++;
         ::yomk::log().tag("QosExample").info("[RECV] ", msg->data());
     };
-    yomk::dds().node_name("qos_node").topic("qos_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
+    yomk::dds().node("qos_node").topic("qos_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
 
     // 4. 注册发布主题：ROS2 默认发布底座上逐项覆盖（如只设 depth=10）
     DDSQosProfile pubQos = DDSQosProfile::ros2DefaultPublisher();
     pubQos.depth = 10;
-    yomk::dds().node_name("qos_node").topic("qos_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).qos(pubQos).create_pub();
+    yomk::dds().node("qos_node").topic("qos_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).qos(pubQos).create_pub();
 
     // 5. 等待 DDS discovery 完成后发布
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
     {
         YomkDdsStd::MString msg;
         msg.data("hello " + std::to_string(i));
-        yomk::dds().node_name("qos_node").topic("qos_topic").data(&msg).pub();
+        yomk::dds().node("qos_node").topic("qos_topic").data(&msg).pub();
         ::yomk::log().tag("QosExample").info("[SEND] ", msg.data());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
     // 6. 等待接收完成后删除节点
     std::this_thread::sleep_for(std::chrono::seconds(1));
     ::yomk::log().tag("QosExample").info("received=", received.load(), "/5");
-    yomk::dds().node_name("qos_node").remove();
+    yomk::dds().node("qos_node").remove();
     return 0;
 }
 ```

@@ -4,14 +4,14 @@
 
 ## 功能定位
 
-普通发布（`...node_name(...).topic(...).data(...).pub()` 传用户自有实例）需经中间件序列化拷贝；Loan 机制允许发布端向 writer 的样本池借出一块发送缓冲，在池内直接填值后发布，免序列化。plain 类型（如 MInt32）适用；loan 失败（非 plain 或池耗尽）时回退普通发布路径。订阅端完全透明、自动受益，适合高频 / 大负载的发布场景。
+普通发布（`...node(...).topic(...).data(...).pub()` 传用户自有实例）需经中间件序列化拷贝；Loan 机制允许发布端向 writer 的样本池借出一块发送缓冲，在池内直接填值后发布，免序列化。plain 类型（如 MInt32）适用；loan 失败（非 plain 或池耗尽）时回退普通发布路径。订阅端完全透明、自动受益，适合高频 / 大负载的发布场景。
 
 ## 能力清单
 
 | 能力 | 链式 API | URL 端点 | 说明 |
 |---|---|---|---|
-| 借出发送缓冲 | `yomk::dds().node_name(nodeName).topic(topicName).loan()` | `/YomkDdsService/loan` | 返回值即 `DDSLoanResult{sample}` 池内样本指针，失败为 nullptr（判空即失败判定）；仅 plain 类型支持 |
-| 归还未发布的借出缓冲 | `yomk::dds().node_name(nodeName).topic(topicName).sample(sample).return_loan()` | `/YomkDdsService/discard_loan` | 归还未发布样本避免池泄漏；sample 须为 loan() 借出的指针 |
+| 借出发送缓冲 | `yomk::dds().node(nodeName).topic(topicName).loan()` | `/YomkDdsService/loan` | 返回值即 `DDSLoanResult{sample}` 池内样本指针，失败为 nullptr（判空即失败判定）；仅 plain 类型支持 |
+| 归还未发布的借出缓冲 | `yomk::dds().node(nodeName).topic(topicName).sample(sample).return_loan()` | `/YomkDdsService/discard_loan` | 归还未发布样本避免池泄漏；sample 须为 loan() 借出的指针 |
 | 订阅端零拷贝接收 | —（自动，无需调用） | — | `FastDDSNode` 内部自动使用 reader loan 接收，回调接口与指针语义不变 |
 
 返回值约定同核心通信：宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；链式 `loan()` 除外——返回值即借出样本指针，判空即失败判定。
@@ -39,50 +39,50 @@ int main(int argc, char *argv[])
 
     // 2. 创建节点与发布主题（loan 仅支持 plain 类型：纯基础类型成员 + FINAL 可扩展性；
     //    domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
-    yomk::dds().node_name("node0").create();
-    yomk::dds().node_name("node0").topic("int_topic").type_ptr(new YomkDdsStd::MInt32PubSubType()).create_pub();
+    yomk::dds().node("node0").create();
+    yomk::dds().node("node0").topic("int_topic").type_ptr(new YomkDdsStd::MInt32PubSubType()).create_pub();
 
     // 3. 等待 DDS discovery 完成后借出发布
     std::this_thread::sleep_for(std::chrono::seconds(1));
     for (int i = 0; i < 5; ++i)
     {
-        void *sample = yomk::dds().node_name("node0").topic("int_topic").loan();
+        void *sample = yomk::dds().node("node0").topic("int_topic").loan();
         if (sample != nullptr)
         {
             // 直接在池内填值后发布，免序列化；write 后中间件收回指针，不可再访问
             static_cast<YomkDdsStd::MInt32 *>(sample)->data(i);
-            yomk::dds().node_name("node0").topic("int_topic").data(sample).pub();
+            yomk::dds().node("node0").topic("int_topic").data(sample).pub();
         }
         else
         {
             // loan 失败：回退普通发布路径
             YomkDdsStd::MInt32 msg;
             msg.data(i);
-            yomk::dds().node_name("node0").topic("int_topic").data(&msg).pub();
+            yomk::dds().node("node0").topic("int_topic").data(&msg).pub();
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // 4. 借出后不发布时须归还缓冲（否则池泄漏）
-    void *discardSample = yomk::dds().node_name("node0").topic("int_topic").loan();
+    void *discardSample = yomk::dds().node("node0").topic("int_topic").loan();
     if (discardSample != nullptr)
     {
-        yomk::dds().node_name("node0").topic("int_topic").sample(discardSample).return_loan();
+        yomk::dds().node("node0").topic("int_topic").sample(discardSample).return_loan();
     }
 
     // 5. 退出前删除节点（显式销毁 DDS 实体）
-    yomk::dds().node_name("node0").remove();
+    yomk::dds().node("node0").remove();
     return 0;
 }
 ```
 
 标准流程拆解（借出→判空→填值→发布→归还）：
 
-1. **借出**：`void* sample = yomk::dds().node_name("node0").topic("int_topic").loan();` 向该主题 writer 的样本池借出一块发送缓冲。
+1. **借出**：`void* sample = yomk::dds().node("node0").topic("int_topic").loan();` 向该主题 writer 的样本池借出一块发送缓冲。
 2. **判空**：返回值非 `nullptr` 才是借出成功；失败（非 plain 或池耗尽）走 else 分支回退普通发布路径。
 3. **填值**：`static_cast<YomkDdsStd::MInt32 *>(sample)->data(i)` 直接在池内填值，免序列化。
-4. **发布**：`yomk::dds().node_name("node0").topic("int_topic").data(sample).pub()` 发布（与普通发布同一 pub() 链）；write 后中间件收回指针，不可再访问，下一条消息须重新借出。
-5. **归还**：借出后决定不发布时，用 `...node_name("node0").topic("int_topic").sample(sample).return_loan()` 归还，避免池泄漏。
+4. **发布**：`yomk::dds().node("node0").topic("int_topic").data(sample).pub()` 发布（与普通发布同一 pub() 链）；write 后中间件收回指针，不可再访问，下一条消息须重新借出。
+5. **归还**：借出后决定不发布时，用 `...node("node0").topic("int_topic").sample(sample).return_loan()` 归还，避免池泄漏。
 
 ## 参数与约束
 

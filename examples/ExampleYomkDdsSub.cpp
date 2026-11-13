@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
     ::yomk::server().srv<YomkDdsService>().create();
 
     // 1. 创建节点：domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID，须与发布端同域方可互通
-    auto resp = yomk::dds().node_name("sub_node").create();
+    auto resp = yomk::dds().node("sub_node").create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsSub").error("create node failed: ", resp.msg);
@@ -48,11 +48,11 @@ int main(int argc, char* argv[])
         received++;
         ::yomk::log().tag("ExampleYomkDdsSub").info("[RECV] ", msg->data());
     };
-    resp = yomk::dds().node_name("sub_node").topic("hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
+    resp = yomk::dds().node("sub_node").topic("hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsSub").error("register sub topic failed: ", resp.msg);
-        yomk::dds().node_name("sub_node").remove();
+        yomk::dds().node("sub_node").remove();
         return 1;
     }
 
@@ -66,7 +66,7 @@ int main(int argc, char* argv[])
 
     // 4. 退出前显式销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
     ::yomk::log().tag("ExampleYomkDdsSub").info("received total=", received.load(), " messages");
-    resp = yomk::dds().node_name("sub_node").remove();
+    resp = yomk::dds().node("sub_node").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsSub").error("delete node failed: ", resp.msg);

@@ -22,7 +22,7 @@ YomkDds 节点的 participant 级**发现配置/传输/QoS** 可以不经代码�
 ```cpp
 yomk::dds().xml("/path/to/profiles.xml").load_cfg();   // 形态 1：显式路径；必须在任何节点创建之前调用！
 yomk::dds().load_cfg();                          // 形态 2：无参缺省，读下方两环境变量（总开关+路径）
-yomk::dds().node_name("xml_node").domain_id(0).create();                 // 创建时按三级提取链叠加 XML 配置
+yomk::dds().node("xml_node").domain_id(0).create();                 // 创建时按三级提取链叠加 XML 配置
 ```
 
 宏内部读文件经 `load_XML_profiles_file` 解析校验（返回码显式检查）后缓存，供后续 create_node 的 participant 按三级提取链叠加。
@@ -79,7 +79,7 @@ export YOMKDDS_XML_PROFILE_PATH="/path/to/profiles.xml"
 
 ### 时序约束
 
-- **必须在任何节点创建之前调用**——participant 的发现配置/传输/QoS 在创建时固化，先 `yomk::dds().load_cfg()` 再 `yomk::dds().node_name(...).create()`；
+- **必须在任何节点创建之前调用**——participant 的发现配置/传输/QoS 在创建时固化，先 `yomk::dds().load_cfg()` 再 `yomk::dds().node(...).create()`；
 - 节点创建后加载仅影响后续新建实体，对已建节点不生效；
 - 再次调用以最新成功文件整体替换。
 
@@ -94,7 +94,7 @@ export YOMKDDS_XML_PROFILE_PATH="/path/to/profiles.xml"
 ## 与其他功能的关系
 
 - **发现服务器直配**：直配可单独使用或配合 `yomk::dds().load_cfg()`——XML 打底，直配 server 项覆盖 XML `discoveryServersList`；叠加规则以 [discovery-server.md](./discovery-server.md) 为主责方，本文不重复展开；
-- **节点创建**：加载结果作用于 `yomk::dds().node_name(...).create()` 创建的 participant（每节点一个独立参与者），节点生命周期见 [core-communication.md](./core-communication.md)；
+- **节点创建**：加载结果作用于 `yomk::dds().node(...).create()` 创建的 participant（每节点一个独立参与者），节点生命周期见 [core-communication.md](./core-communication.md)；
 - **环境变量**：`YOMKDDS_USE_XML_PROFILE`/`YOMKDDS_XML_PROFILE_PATH` 及 CLI 侧 `.bashrc` 幂等写入行为详见[环境变量与公共配置参考](../manual/env-vars-reference.md)。
 
 ## 教程链接

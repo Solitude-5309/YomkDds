@@ -47,7 +47,7 @@ source /opt/ros/humble/setup.bash
 ::yomk::server().srv<YomkDdsService>().create();
 
 // 1. 创建节点（域 0 对齐 ROS2 默认域）
-auto resp = yomk::dds().node_name("interop_pub").domain_id(0).create();
+auto resp = yomk::dds().node("interop_pub").domain_id(0).create();
 if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 {
     ::yomk::log().tag("ExampleRos2InteropPub").error("create node failed: ", resp.m_msg);
@@ -58,18 +58,18 @@ if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 auto *type = new YomkDdsStd::MStringPubSubType();
 type->set_name("std_msgs::msg::dds_::String_");
 // QoS 用 ROS2 发布端默认底座：RELIABLE offered 对 ros2 topic echo 任意 requested 可匹配
-resp = yomk::dds().node_name("interop_pub").topic("rt/chatter_interop").type_ptr(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
+resp = yomk::dds().node("interop_pub").topic("rt/chatter_interop").type_ptr(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
 if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 {
     ::yomk::log().tag("ExampleRos2InteropPub").error("register pub topic failed: ", resp.m_msg);
-    yomk::dds().node_name("interop_pub").remove();
+    yomk::dds().node("interop_pub").remove();
     return 1;
 }
 
 // 3. 1Hz 持续发布（Ctrl+C/SIGTERM 置位 g_stop 后跳出，清理退出）
 YomkDdsStd::MString msg;
 msg.data("interop hello " + std::to_string(seq++));
-resp = yomk::dds().node_name("interop_pub").topic("rt/chatter_interop").data(&msg).pub();
+resp = yomk::dds().node("interop_pub").topic("rt/chatter_interop").data(&msg).pub();
 ```
 
 两个关键约束：
@@ -83,7 +83,7 @@ resp = yomk::dds().node_name("interop_pub").topic("rt/chatter_interop").data(&ms
 
 ```cpp
 // 创建节点（域 0 对齐 ROS2 默认域）
-auto resp = yomk::dds().node_name("interop_sub").domain_id(0).create();
+auto resp = yomk::dds().node("interop_sub").domain_id(0).create();
 
 // 类型对象 new 后、移交前 set_name 成 ROS2 约定名（宏实参位内联 new 无法先改名）
 std::atomic<int> received{0};
@@ -98,7 +98,7 @@ auto onMessage = [&](const void* data)
 // QoS 用 ROS2 订阅端默认底座：BEST_EFFORT requested 对任意 offered（含 ros2 topic
 // pub 与 YomkDds pub 的 RELIABLE）均可匹配
 resp =
-    yomk::dds().node_name("interop_sub").topic("rt/chatter_interop").type_ptr(type).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
+    yomk::dds().node("interop_sub").topic("rt/chatter_interop").type_ptr(type).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
 ```
 
 ### 第 3 步：方向 1 验证——YomkDds 发布、ROS2 订阅

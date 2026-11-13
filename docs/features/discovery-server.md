@@ -15,7 +15,7 @@ Fast DDS 默认走**简单发现**（多播 PDP）：同网段参与者经多播
 
 | 能力 | 入口 |
 |---|---|
-| 节点创建的 UDP/TCP 发现服务器直配累积器/尾参 | `yomk::dds().node_name(...).udp_ds()/.tcp_ds()` / `YOMKDDS_DEBUG_NODE` / `YOMKDDS_BAG_NODE` |
+| 节点创建的 UDP/TCP 发现服务器直配累积器/尾参 | `yomk::dds().node(...).udp_ds()/.tcp_ds()` / `YOMKDDS_DEBUG_NODE` / `YOMKDDS_BAG_NODE` |
 | 显式直配聚合串（分号分隔 `ip[:port]` 多 server） | 宏尾参 `udpDiscoverServerLocator` / `tcpDiscoverServerLocator` |
 | 环境变量门控直配（进程级，无需改代码） | `YOMKDDS_USE_DISCOVER_SERVER` + `YOMKDDS_UDP_DISCOVER_SERVERS` / `YOMKDDS_TCP_DISCOVER_SERVERS` |
 | CLIENT 发现协议（禁用多播 PDP，发现流量单播直送 server） | 直配后自动生效 |
@@ -41,12 +41,12 @@ fastdds discovery -i 0 -l 127.0.0.1 -p 11811
 ```cpp
 // client 侧：三节点宏尾参直配（UDP/TCP 通道格式一致："ip[:port]" 分号分隔多 server，
 // UDP port 缺省 11811，非法串创建失败回显）
-yomk::dds().node_name("ds_node").domain_id(0).udp_ds("127.0.0.1:11811").create();            // 形态 3：仅 UDP 通道
+yomk::dds().node("ds_node").domain_id(0).udp_ds("127.0.0.1:11811").create();            // 形态 3：仅 UDP 通道
 YOMKDDS_DEBUG_NODE(0, "127.0.0.1:11811");
 YOMKDDS_BAG_NODE(0, "127.0.0.1:11811");
 // 形态 4：UDP+TCP 双通道（TCP port 为 server 的 TCP 监听口；仅 TCP 直配时 UDP 传空串占位）
-yomk::dds().node_name("ds_dual_node").domain_id(0).udp_ds("127.0.0.1:11811").tcp_ds("127.0.0.1:42100").create();
-yomk::dds().node_name("ds_tcp_only_node").domain_id(0).udp_ds("").tcp_ds("10.0.0.2:42100").create();
+yomk::dds().node("ds_dual_node").domain_id(0).udp_ds("127.0.0.1:11811").tcp_ds("127.0.0.1:42100").create();
+yomk::dds().node("ds_tcp_only_node").domain_id(0).udp_ds("").tcp_ds("10.0.0.2:42100").create();
 ```
 
 ### client 侧方式二：环境变量自动直配
@@ -56,7 +56,7 @@ export YOMKDDS_USE_DISCOVER_SERVER=true
 export YOMKDDS_UDP_DISCOVER_SERVERS="192.168.1.10:11811;192.168.1.11:11811"  # TCP 场景换 YOMKDDS_TCP_DISCOVER_SERVERS
 ```
 
-开关开启时，`yomk::dds().node_name(...).create()` 未累积的 udp_ds()/tcp_ds() 自动取对应环境变量值；`YOMKDDS_DEBUG_NODE`/`YOMKDDS_BAG_NODE` 同款支持全缺省（无参）形态——三字段（含 domainId）一并经缺省初始化器读 env（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`）。
+开关开启时，`yomk::dds().node(...).create()` 未累积的 udp_ds()/tcp_ds() 自动取对应环境变量值；`YOMKDDS_DEBUG_NODE`/`YOMKDDS_BAG_NODE` 同款支持全缺省（无参）形态——三字段（含 domainId）一并经缺省初始化器读 env（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`）。
 
 另有 ROS2 生态通用等价形态：`ROS_DISCOVERY_SERVER=127.0.0.1:11811`（id 即 `-i` 指定的 server 位序）。
 
@@ -87,8 +87,8 @@ TCP 场景：终端 1 换 `--type tcp --port 42100` 启动，终端 2/3 换 expo
 
 | 入口 | 直配通道 | 说明 |
 |---|---|---|
-| `yomk::dds().node_name(nodeName)[.domain_id(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | udp_ds() / tcp_ds() 累积器 | 未累积项经类内缺省初始化器按开关门控读环境变量 |
-| `YOMKDDS_DEBUG_NODE([domainId[, udpDiscoverServerLocator[, tcpDiscoverServerLocator]]])` | 第 2/3 尾参 | 语义同 `yomk::dds().node_name(...)` 的 udp_ds()/tcp_ds() 直配（CLIENT 协议强制，非法串创建失败回显） |
+| `yomk::dds().node(nodeName)[.domain_id(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | udp_ds() / tcp_ds() 累积器 | 未累积项经类内缺省初始化器按开关门控读环境变量 |
+| `YOMKDDS_DEBUG_NODE([domainId[, udpDiscoverServerLocator[, tcpDiscoverServerLocator]]])` | 第 2/3 尾参 | 语义同 `yomk::dds().node(...)` 的 udp_ds()/tcp_ds() 直配（CLIENT 协议强制，非法串创建失败回显） |
 | `YOMKDDS_BAG_NODE([domainId[, udpDiscoverServerLocator[, tcpDiscoverServerLocator]]])` | 第 2/3 尾参 | 同上 |
 
 ### 直配聚合串格式
@@ -146,7 +146,7 @@ TCP 场景：终端 1 换 `--type tcp --port 42100` 启动，终端 2/3 换 expo
 ## 与其他功能的关系
 
 - **XML profiles**：直配可单独使用或配合 `yomk::dds().load_cfg()`——XML 打底，直配 server 项覆盖 XML `discoveryServersList`；叠加细节以 [xml-profiles.md](./xml-profiles.md) 为主责方；
-- **调试/Bag 节点**：`YOMKDDS_DEBUG_NODE`、`YOMKDDS_BAG_NODE` 的直配尾参与环境变量语义与 `yomk::dds().node_name(...)` 的 udp_ds()/tcp_ds() 完全一致，分别见 [debug-service.md](./debug-service.md) 与 [bag-service.md](./bag-service.md)；
+- **调试/Bag 节点**：`YOMKDDS_DEBUG_NODE`、`YOMKDDS_BAG_NODE` 的直配尾参与环境变量语义与 `yomk::dds().node(...)` 的 udp_ds()/tcp_ds() 完全一致，分别见 [debug-service.md](./debug-service.md) 与 [bag-service.md](./bag-service.md)；
 - **域号**：client 域 id 经 `YOMKDDS_DDS_DOMAIN_ID` 或宏显式 domainId 指定，语义见 [core-communication.md](./core-communication.md)；
 - **CLI 公共参数**：`yomkdds` 各子命令创建调试/bag 节点时同款直配，环境变量族详见[环境变量与公共配置参考](../manual/env-vars-reference.md)。
 

@@ -60,11 +60,11 @@ public:
 
 /**
  * @brief Topic registration facet: carries the nodeName/topicName accumulated by
- *        node_name().topic(), required type_ptr() and optional qos() accumulators,
+ *        node().topic(), required type_ptr() and optional qos() accumulators,
  *        terminated by create_pub() (publisher) or sub_cb()...create_sub() (subscriber);
  *        data()...pub() publishes one message on an already-registered publisher topic
  */
-// @zh: 主题注册分面：承载 node_name().topic() 累积的节点名/主题名，type_ptr() 必填与
+// @zh: 主题注册分面：承载 node().topic() 累积的节点名/主题名，type_ptr() 必填与
 // @zh: qos() 可选累积器，create_pub()（发布）或 sub_cb()...create_sub()（订阅）终结；
 // @zh: data()...pub() 向已注册发布主题发送一条消息
 class DdsTopicBuilder
@@ -263,10 +263,10 @@ public:
 };
 
 /**
- * @brief Node creation facet: carries the nodeName accumulated by dds().node_name(),
+ * @brief Node creation facet: carries the nodeName accumulated by dds().node(),
  *        optional domain_id()/udp_ds()/tcp_ds() accumulators (order-free), terminated by create()
  */
-// @zh: 节点创建分面：承载 dds().node_name() 累积的节点名，domain_id()/udp_ds()/tcp_ds()
+// @zh: 节点创建分面：承载 dds().node() 累积的节点名，domain_id()/udp_ds()/tcp_ds()
 // @zh: 可选累积器（次序不限），create() 终结
 class DdsNodeBuilder
 {
@@ -328,7 +328,7 @@ public:
     // @zh: return 主题注册分面，经 create_pub() 或 create_sub() 终结
     DdsTopicBuilder topic(std::string topicName)
     {
-        return DdsTopicBuilder(m_nodeName, std::move(topicName));  // 拷贝节点名：node_name 分面其后仍可 create()
+        return DdsTopicBuilder(m_nodeName, std::move(topicName));  // 拷贝节点名：node 分面其后仍可 create()
     }
 
     /**
@@ -386,7 +386,7 @@ public:
     // @zh: 切入节点创建分面并累积节点唯一名
     // @zh: nodeName 节点唯一名，不可为空
     // @zh: return 节点创建分面，经 create() 终结
-    DdsNodeBuilder node_name(std::string nodeName)
+    DdsNodeBuilder node(std::string nodeName)
     {
         return DdsNodeBuilder(std::move(nodeName));
     }
@@ -482,11 +482,11 @@ inline detail::DdsBuilder dds()
 
 /**
  * @brief Create the debug node (type-agnostic domain observer)
- * @param[in] ... variadic tails, all optional: same form as yomk::dds().node_name(...).create()
+ * @param[in] ... variadic tails, all optional: same form as yomk::dds().node(...).create()
  * @note Single node per process; delete it before re-creating
  */
 // @zh: 创建调试节点（类型无关域观察者）
-// @zh: 可变尾参语义同 yomk::dds().node_name(...).create()
+// @zh: 可变尾参语义同 yomk::dds().node(...).create()
 // @zh: note 单节点模型：一个进程至多一个，重复创建须先删除
 
 #define YOMKDDS_DEBUG_NODE(...) \
@@ -674,11 +674,11 @@ inline detail::DdsBuilder dds()
 
 /**
  * @brief Create the bag node (mcap record/replay)
- * @param[in] ... variadic tails, all optional: same form as yomk::dds().node_name(...).create()
+ * @param[in] ... variadic tails, all optional: same form as yomk::dds().node(...).create()
  * @note Single node per process; delete it before re-creating
  */
 // @zh: 创建 bag 节点（mcap 录制回放）
-// @zh: 可变尾参语义同 yomk::dds().node_name(...).create()
+// @zh: 可变尾参语义同 yomk::dds().node(...).create()
 // @zh: note 单节点模型：一个进程至多一个，重复创建须先删除
 
 #define YOMKDDS_BAG_NODE(...) \

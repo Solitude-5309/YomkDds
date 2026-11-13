@@ -13,7 +13,7 @@
 ## 前提与准备
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成安装，并跑通 [quick-start.md](./quick-start.md) 的普通发布订阅；
-- 理解普通发布路径：`yomk::dds().node_name(nodeName).topic(topicName).data(data).pub()` 传入消息实例指针（借用，同步写入，caller 保留所有权）；
+- 理解普通发布路径：`yomk::dds().node(nodeName).topic(topicName).data(data).pub()` 传入消息实例指针（借用，同步写入，caller 保留所有权）；
 - 了解 plain 类型判定规则（见下方「plain 类型判定与失败回退」）。
 
 ## 分步操作
@@ -22,7 +22,7 @@
 
 loan 发布的四步循环：
 
-1. `void* sample = yomk::dds().node_name(nodeName).topic(topicName).loan();` 借出——返回值即池内样本指针，判空即失败判定（`nullptr` 为失败）；
+1. `void* sample = yomk::dds().node(nodeName).topic(topicName).loan();` 借出——返回值即池内样本指针，判空即失败判定（`nullptr` 为失败）；
 2. **判空**：`nullptr` 则回退普通发布路径；
 3. 借出成功：直接在池内填值后经 `...data(...).pub()` 发布，免序列化；**write 后中间件收回指针，不可再访问**；
 4. 借出后不发布时，用 `...topic(topicName).sample(sample).return_loan()` 归还，避免池泄漏。
@@ -50,39 +50,39 @@ int main(int argc, char *argv[])
 
     // 2. 创建节点与发布主题（loan 仅支持 plain 类型：纯基础类型成员 + FINAL 可扩展性；
     //    domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
-    yomk::dds().node_name("node0").create();
-    yomk::dds().node_name("node0").topic("int_topic").type_ptr(new YomkDdsStd::MInt32PubSubType()).create_pub();
+    yomk::dds().node("node0").create();
+    yomk::dds().node("node0").topic("int_topic").type_ptr(new YomkDdsStd::MInt32PubSubType()).create_pub();
 
     // 3. 等待 DDS discovery 完成后借出发布
     std::this_thread::sleep_for(std::chrono::seconds(1));
     for (int i = 0; i < 5; ++i)
     {
-        void *sample = yomk::dds().node_name("node0").topic("int_topic").loan();
+        void *sample = yomk::dds().node("node0").topic("int_topic").loan();
         if (sample != nullptr)
         {
             // 直接在池内填值后发布，免序列化；write 后中间件收回指针，不可再访问
             static_cast<YomkDdsStd::MInt32 *>(sample)->data(i);
-            yomk::dds().node_name("node0").topic("int_topic").data(sample).pub();
+            yomk::dds().node("node0").topic("int_topic").data(sample).pub();
         }
         else
         {
             // loan 失败：回退普通发布路径
             YomkDdsStd::MInt32 msg;
             msg.data(i);
-            yomk::dds().node_name("node0").topic("int_topic").data(&msg).pub();
+            yomk::dds().node("node0").topic("int_topic").data(&msg).pub();
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // 4. 借出后不发布时须归还缓冲（否则池泄漏）
-    void *discardSample = yomk::dds().node_name("node0").topic("int_topic").loan();
+    void *discardSample = yomk::dds().node("node0").topic("int_topic").loan();
     if (discardSample != nullptr)
     {
-        yomk::dds().node_name("node0").topic("int_topic").sample(discardSample).return_loan();
+        yomk::dds().node("node0").topic("int_topic").sample(discardSample).return_loan();
     }
 
     // 5. 退出前删除节点（显式销毁 DDS 实体）
-    yomk::dds().node_name("node0").remove();
+    yomk::dds().node("node0").remove();
     return 0;
 }
 ```
@@ -91,10 +91,10 @@ int main(int argc, char *argv[])
 
 | 片段 | 说明 |
 |---|---|
-| `void* sample = yomk::dds().node_name("node0").topic("int_topic").loan();` | 借出 writer 池内样本；返回值即样本指针，判空即失败判定 |
+| `void* sample = yomk::dds().node("node0").topic("int_topic").loan();` | 借出 writer 池内样本；返回值即样本指针，判空即失败判定 |
 | `if (sample != nullptr)` | **必须判空**：非 plain 类型或池耗尽时返回 `nullptr` |
 | `static_cast<YomkDdsStd::MInt32 *>(sample)->data(i);` | 直接在池内样本上填值，免序列化 |
-| `yomk::dds().node_name("node0").topic("int_topic").data(sample).pub();` | 用与普通发布相同的 pub() 链发布借出样本；write 后指针即被中间件收回，**不可再访问、须重新借出** |
+| `yomk::dds().node("node0").topic("int_topic").data(sample).pub();` | 用与普通发布相同的 pub() 链发布借出样本；write 后指针即被中间件收回，**不可再访问、须重新借出** |
 | `else` 分支 | loan 失败回退普通发布路径：栈上实例填值后按借用指针发布 |
 | `...topic(topicName).sample(sample).return_loan()` | 归还未发布的借出缓冲，避免池泄漏；仅对借出后**未发布**的样本调用 |
 

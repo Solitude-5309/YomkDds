@@ -53,13 +53,13 @@
 |---|---|
 | `yomk::dds().version()` | 版本查询（Response 携带 String 版本串，解包/打印由调用方处理） |
 | `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | 加载 Fast DDS XML profiles 文件（详见 [xml-profiles](docs/features/xml-profiles.md)） |
-| `yomk::dds().node_name(nodeName)[.domain_id(domainId)][.udp_ds/.tcp_ds(locator)].create()` | 创建节点（详见 [discovery-server](docs/features/discovery-server.md)） |
-| `yomk::dds().node_name(nodeName).remove()` | 删除节点 |
-| `yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()` | 注册发布主题（qos 详见 [qos-profiles](docs/features/qos-profiles.md)） |
-| `yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()` | 注册订阅主题 |
-| `yomk::dds().node_name(nodeName).topic(topicName).data(data).pub()` | 发布数据 |
-| `yomk::dds().node_name(nodeName).topic(topicName).loan()` | 借出发送缓冲，返回值判空即失败判定（详见 [loan-zero-copy](docs/features/loan-zero-copy.md)） |
-| `yomk::dds().node_name(nodeName).topic(topicName).sample(sample).return_loan()` | 归还未发布的借出缓冲 |
+| `yomk::dds().node(nodeName)[.domain_id(domainId)][.udp_ds/.tcp_ds(locator)].create()` | 创建节点（详见 [discovery-server](docs/features/discovery-server.md)） |
+| `yomk::dds().node(nodeName).remove()` | 删除节点 |
+| `yomk::dds().node(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()` | 注册发布主题（qos 详见 [qos-profiles](docs/features/qos-profiles.md)） |
+| `yomk::dds().node(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()` | 注册订阅主题 |
+| `yomk::dds().node(nodeName).topic(topicName).data(data).pub()` | 发布数据 |
+| `yomk::dds().node(nodeName).topic(topicName).loan()` | 借出发送缓冲，返回值判空即失败判定（详见 [loan-zero-copy](docs/features/loan-zero-copy.md)） |
+| `yomk::dds().node(nodeName).topic(topicName).sample(sample).return_loan()` | 归还未发布的借出缓冲 |
 
 **调试服务（YomkDdsDebugService）** — 详见 [功能文档：调试服务](docs/features/debug-service.md)，等价 CLI 见 `yomkdds` 命令：
 

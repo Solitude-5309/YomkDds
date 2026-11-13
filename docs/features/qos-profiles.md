@@ -1,6 +1,6 @@
 # 功能文档：QoS 配置
 
-> **本文档覆盖范围**：端点 QoS 描述 `DDSQosProfile` 的 8 项配置与哨兵/底座/覆盖三层语义、三个 ROS2 预置底座；库侧 qos 挂载（`yomk::dds().node_name(...).topic(...).type_ptr(...)[.sub_cb(...)].qos(...).create_pub()/create_sub()` 的 qos() 累积器、`YOMKDDS_DEBUG_TOPIC_PUB` 的可缺省尾参）与 `yomkdds` CLI 侧 `--qos-ros` / `--qos-*` / `--qos-file` 参数族的用法与优先级链。
+> **本文档覆盖范围**：端点 QoS 描述 `DDSQosProfile` 的 8 项配置与哨兵/底座/覆盖三层语义、三个 ROS2 预置底座；库侧 qos 挂载（`yomk::dds().node(...).topic(...).type_ptr(...)[.sub_cb(...)].qos(...).create_pub()/create_sub()` 的 qos() 累积器、`YOMKDDS_DEBUG_TOPIC_PUB` 的可缺省尾参）与 `yomkdds` CLI 侧 `--qos-ros` / `--qos-*` / `--qos-file` 参数族的用法与优先级链。
 
 ## 功能定位
 
@@ -22,7 +22,7 @@ qos 为主题注册链式 `qos()` 累积器（create_pub()/create_sub() 共用�
 
 ```cpp
 // DDS 层话题名带 rt/ 前缀（rmw_fastrtps 对语义名 /chatter 的实际 DDS 名），QoS 用 ROS2 发布端默认底座
-yomk::dds().node_name("interop_pub").topic("rt/chatter").type_ptr(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
+yomk::dds().node("interop_pub").topic("rt/chatter").type_ptr(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
 ```
 
 底座上逐项覆盖（如只设 depth=10，其余项保持底座值；字段定义见公共头 `include/dds/YomkDdsService.h` 的 `DDSQosProfile`）：
@@ -30,7 +30,7 @@ yomk::dds().node_name("interop_pub").topic("rt/chatter").type_ptr(type).qos(DDSQ
 ```cpp
 DDSQosProfile qos = DDSQosProfile::ros2DefaultPublisher();
 qos.depth = 10;   // 未设置项为哨兵保持底座值，仅覆盖 depth
-yomk::dds().node_name("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).qos(qos).create_pub();
+yomk::dds().node("node0").topic("my_topic").type_ptr(new YomkDdsStd::MStringPubSubType()).qos(qos).create_pub();
 ```
 
 ### CLI 侧（yomkdds 命令行）
@@ -80,7 +80,7 @@ yomkdds topic pub --qos-file qos.json <主题名> <JSON数据>
 
 ### 宏侧约束
 
-- qos 为可缺省尾参：`yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()`、`yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()`、`YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes[, qos])`。
+- qos 为可缺省尾参：`yomk::dds().node(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()`、`yomk::dds().node(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()`、`YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes[, qos])`。
 - `YOMKDDS_DEBUG_TOPIC_PUB` 的 qos：临时发布 writer 的 QoS 描述 `DDSQosProfile`，全哨兵=既有固定值 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL，ROS2 底座建议 `ros2DefaultPublisher()`。
 - 订阅端（create_sub() 链）推荐 `DDSQosProfile::ros2DefaultSubscriber()`（BEST_EFFORT requested 对任意 offered 均可匹配）。
 

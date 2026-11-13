@@ -264,9 +264,9 @@ public:
 
 /**
  * @brief Node creation facet: carries the nodeName accumulated by dds().node(),
- *        optional domain_id()/udp_ds()/tcp_ds() accumulators (order-free), terminated by create()
+ *        optional domain()/udp_ds()/tcp_ds() accumulators (order-free), terminated by create()
  */
-// @zh: 节点创建分面：承载 dds().node() 累积的节点名，domain_id()/udp_ds()/tcp_ds()
+// @zh: 节点创建分面：承载 dds().node() 累积的节点名，domain()/udp_ds()/tcp_ds()
 // @zh: 可选累积器（次序不限），create() 终结
 class DdsNodeBuilder
 {
@@ -287,7 +287,7 @@ public:
     // @zh: 累积 DDS 域号
     // @zh: domainId DDS 域号 [0,232]
     // @zh: return 自身链式引用
-    DdsNodeBuilder& domain_id(uint32_t domainId)
+    DdsNodeBuilder& domain(uint32_t domainId)
     {
         m_domainId = domainId;
         return *this;

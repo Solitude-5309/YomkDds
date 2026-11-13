@@ -175,7 +175,7 @@ Ctrl+C 先停发布端，再停订阅端，订阅端会打印累计接收条数�
 
 | 现象 | 原因与处理 |
 |---|---|
-| 订阅端一条消息都收不到 | 先查两端**域号**是否一致：`yomk::dds().node(...).create()` 的 domain_id() 缺省读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（合法范围 [0,232]，默认 0），两个进程域号不同即互不可见，`echo $YOMKDDS_DDS_DOMAIN_ID` 对齐；再查 **discovery 是否完成**：注册订阅后立即发布，首条消息可能因 discovery 时序丢失，发布前 `sleep 1s`（本文示例已内置） |
+| 订阅端一条消息都收不到 | 先查两端**域号**是否一致：`yomk::dds().node(...).create()` 的 domain() 缺省读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（合法范围 [0,232]，默认 0），两个进程域号不同即互不可见，`echo $YOMKDDS_DDS_DOMAIN_ID` 对齐；再查 **discovery 是否完成**：注册订阅后立即发布，首条消息可能因 discovery 时序丢失，发布前 `sleep 1s`（本文示例已内置） |
 | 双进程演示订阅端有输出、自己编译的程序收不到 | 检查两端主题名是否逐字节一致（本文示例为 `my_topic` / `hello_world`），以及 type 是否为同一种消息类型 |
 | 编译报找不到 `yomk/dds/YomkDdsAPI.h` 等头文件 | CMake 未找到包：确认 `-DCMAKE_PREFIX_PATH="$YOMK_PREFIX_PATH"`，且 `find_package(YomkServer REQUIRED)` 与 `find_package(YomkDds REQUIRED)` 均在 target 之前 |
 | 链接报 `cannot find -lYomkDdsStdMsgs` | `YomkDdsStdMsgs` 无导出包、以裸库名链接：保留 `link_directories(${YomkDds_LIB_DIR})` 一行（见第 1 步 CMake 片段） |

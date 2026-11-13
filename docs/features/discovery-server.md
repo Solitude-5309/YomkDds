@@ -41,12 +41,12 @@ fastdds discovery -i 0 -l 127.0.0.1 -p 11811
 ```cpp
 // client 侧：三节点宏尾参直配（UDP/TCP 通道格式一致："ip[:port]" 分号分隔多 server，
 // UDP port 缺省 11811，非法串创建失败回显）
-yomk::dds().node("ds_node").domain_id(0).udp_ds("127.0.0.1:11811").create();            // 形态 3：仅 UDP 通道
+yomk::dds().node("ds_node").domain(0).udp_ds("127.0.0.1:11811").create();            // 形态 3：仅 UDP 通道
 YOMKDDS_DEBUG_NODE(0, "127.0.0.1:11811");
 YOMKDDS_BAG_NODE(0, "127.0.0.1:11811");
 // 形态 4：UDP+TCP 双通道（TCP port 为 server 的 TCP 监听口；仅 TCP 直配时 UDP 传空串占位）
-yomk::dds().node("ds_dual_node").domain_id(0).udp_ds("127.0.0.1:11811").tcp_ds("127.0.0.1:42100").create();
-yomk::dds().node("ds_tcp_only_node").domain_id(0).udp_ds("").tcp_ds("10.0.0.2:42100").create();
+yomk::dds().node("ds_dual_node").domain(0).udp_ds("127.0.0.1:11811").tcp_ds("127.0.0.1:42100").create();
+yomk::dds().node("ds_tcp_only_node").domain(0).udp_ds("").tcp_ds("10.0.0.2:42100").create();
 ```
 
 ### client 侧方式二：环境变量自动直配
@@ -87,7 +87,7 @@ TCP 场景：终端 1 换 `--type tcp --port 42100` 启动，终端 2/3 换 expo
 
 | 入口 | 直配通道 | 说明 |
 |---|---|---|
-| `yomk::dds().node(nodeName)[.domain_id(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | udp_ds() / tcp_ds() 累积器 | 未累积项经类内缺省初始化器按开关门控读环境变量 |
+| `yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | udp_ds() / tcp_ds() 累积器 | 未累积项经类内缺省初始化器按开关门控读环境变量 |
 | `YOMKDDS_DEBUG_NODE([domainId[, udpDiscoverServerLocator[, tcpDiscoverServerLocator]]])` | 第 2/3 尾参 | 语义同 `yomk::dds().node(...)` 的 udp_ds()/tcp_ds() 直配（CLIENT 协议强制，非法串创建失败回显） |
 | `YOMKDDS_BAG_NODE([domainId[, udpDiscoverServerLocator[, tcpDiscoverServerLocator]]])` | 第 2/3 尾参 | 同上 |
 

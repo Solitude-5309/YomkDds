@@ -47,7 +47,7 @@ source /opt/ros/humble/setup.bash
 ::yomk::server().srv<YomkDdsService>().create();
 
 // 1. 创建节点（域 0 对齐 ROS2 默认域）
-auto resp = yomk::dds().node("interop_pub").domain_id(0).create();
+auto resp = yomk::dds().node("interop_pub").domain(0).create();
 if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 {
     ::yomk::log().tag("ExampleRos2InteropPub").error("create node failed: ", resp.m_msg);
@@ -83,7 +83,7 @@ resp = yomk::dds().node("interop_pub").topic("rt/chatter_interop").data(&msg).pu
 
 ```cpp
 // 创建节点（域 0 对齐 ROS2 默认域）
-auto resp = yomk::dds().node("interop_sub").domain_id(0).create();
+auto resp = yomk::dds().node("interop_sub").domain(0).create();
 
 // 类型对象 new 后、移交前 set_name 成 ROS2 约定名（宏实参位内联 new 无法先改名）
 std::atomic<int> received{0};

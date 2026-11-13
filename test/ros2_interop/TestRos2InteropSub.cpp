@@ -45,7 +45,7 @@ int main()
     ::yomk::server().srv<YomkDdsService>().create();
 
     // 创建节点（域 0 对齐 ROS2 默认域）
-    auto resp = yomk::dds().node("interop_sub").domain_id(0).create();
+    auto resp = yomk::dds().node("interop_sub").domain(0).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("TestRos2InteropSub").error("create node failed: ", resp.msg);

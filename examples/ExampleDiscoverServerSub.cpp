@@ -42,7 +42,7 @@ int main()
 
     // 1. 创建节点：域 id 显式 200（DS 模式下可与对端异域）；省略双通道尾参 →
     //    直配串自动取环境变量（总开关开启时生效，participant 以 CLIENT 发现协议运行）
-    auto resp = yomk::dds().node("ds_sub_node").domain_id(200).create();
+    auto resp = yomk::dds().node("ds_sub_node").domain(200).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleDiscoverServerSub").error("create node failed: ", resp.msg);

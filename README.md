@@ -53,7 +53,7 @@
 |---|---|
 | `yomk::dds().version()` | 版本查询（Response 携带 String 版本串，解包/打印由调用方处理） |
 | `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | 加载 Fast DDS XML profiles 文件（详见 [xml-profiles](docs/features/xml-profiles.md)） |
-| `yomk::dds().node(nodeName)[.domain_id(domainId)][.udp_ds/.tcp_ds(locator)].create()` | 创建节点（详见 [discovery-server](docs/features/discovery-server.md)） |
+| `yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` | 创建节点（详见 [discovery-server](docs/features/discovery-server.md)） |
 | `yomk::dds().node(nodeName).remove()` | 删除节点 |
 | `yomk::dds().node(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()` | 注册发布主题（qos 详见 [qos-profiles](docs/features/qos-profiles.md)） |
 | `yomk::dds().node(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()` | 注册订阅主题 |

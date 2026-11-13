@@ -104,14 +104,14 @@ int main()
     }
 
     // 2. 创建节点：xml_node 精确命中具名档；other_node 具名档无匹配走默认档兜底
-    resp = yomk::dds().node("xml_node").domain_id(0).create();
+    resp = yomk::dds().node("xml_node").domain(0).create();
     if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("XmlProfilesDemo").error("create xml_node failed: ", resp.m_msg);
         return 1;
     }
 
-    resp = yomk::dds().node("other_node").domain_id(0).create();
+    resp = yomk::dds().node("other_node").domain(0).create();
     if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("XmlProfilesDemo").error("create other_node failed: ", resp.m_msg);

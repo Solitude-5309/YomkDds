@@ -35,7 +35,7 @@
 ### YOMKDDS_DDS_DOMAIN_ID：DDS 域号
 
 - **作用**：指定 DDS 域号（domainId）。仅同域端点可相互发现/收发——库侧 `yomk::dds().node(...).create()` 建的发布订阅节点、`YOMKDDS_DEBUG_NODE` 调试节点、`YOMKDDS_BAG_NODE` bag 节点，以及 yomkdds 各命令均经它选择域。
-- **作用域**：两侧。库侧——`yomk::dds().node(nodeName)` 的 domain_id()/udp_ds()/tcp_ds() 均可选累积器，未累积项经类内缺省初始化器读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0）；`YOMKDDS_DEBUG_NODE`/`YOMKDDS_BAG_NODE` 全可变参，无参形态 domainId 同样读该变量。CLI 侧——`yomkdds` 各命令的域号经该环境变量选择；亦可用显式选项 `-D/--domain <N>` 单次指定（合法范围 [0,232]，**显式选项优先于环境变量**，缺参数/非法值报错退出码 2）。
+- **作用域**：两侧。库侧——`yomk::dds().node(nodeName)` 的 domain()/udp_ds()/tcp_ds() 均可选累积器，未累积项经类内缺省初始化器读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0）；`YOMKDDS_DEBUG_NODE`/`YOMKDDS_BAG_NODE` 全可变参，无参形态 domainId 同样读该变量。CLI 侧——`yomkdds` 各命令的域号经该环境变量选择；亦可用显式选项 `-D/--domain <N>` 单次指定（合法范围 [0,232]，**显式选项优先于环境变量**，缺参数/非法值报错退出码 2）。
 - **默认值**：`0`。
 - **取值约束**：合法范围 [0,232]。
 - **`.bashrc` 幂等写入**：yomkdds 启动时无该变量则自动创建并默认 0，同时幂等写入 `~/.bashrc`（仅当其中无该变量时，带 `# added by yomkdds` 注释便于识别）——新开任意终端可直接 `echo $YOMKDDS_DDS_DOMAIN_ID` 查看并自动继承；已打开的终端须 `source ~/.bashrc` 或重开才生效。

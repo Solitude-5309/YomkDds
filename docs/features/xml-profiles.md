@@ -22,7 +22,7 @@ YomkDds 节点的 participant 级**发现配置/传输/QoS** 可以不经代码�
 ```cpp
 yomk::dds().xml("/path/to/profiles.xml").load_cfg();   // 形态 1：显式路径；必须在任何节点创建之前调用！
 yomk::dds().load_cfg();                          // 形态 2：无参缺省，读下方两环境变量（总开关+路径）
-yomk::dds().node("xml_node").domain_id(0).create();                 // 创建时按三级提取链叠加 XML 配置
+yomk::dds().node("xml_node").domain(0).create();                 // 创建时按三级提取链叠加 XML 配置
 ```
 
 宏内部读文件经 `load_XML_profiles_file` 解析校验（返回码显式检查）后缓存，供后续 create_node 的 participant 按三级提取链叠加。

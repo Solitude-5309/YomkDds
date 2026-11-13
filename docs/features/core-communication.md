@@ -11,7 +11,7 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 | 能力 | 链式 API | URL 端点 | 说明 |
 |---|---|---|---|
 | 版本查询 | `yomk::dds().version()` | `/YomkDdsService/version` | 返回 Response 携带 String 版本串（"YomkDds v<版本号>"），解包/打印由调用方处理 |
-| 创建节点 | `yomk::dds().node(nodeName)[.domain_id(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | `/YomkDdsService/create_node` | 每节点一个独立 DDS 参与者 |
+| 创建节点 | `yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | `/YomkDdsService/create_node` | 每节点一个独立 DDS 参与者 |
 | 删除节点 | `yomk::dds().node(nodeName).remove()` | `/YomkDdsService/delete_node` | 销毁节点及其全部 DDS 实体，不存在的节点返回错误 |
 | 注册发布主题 | `yomk::dds().node(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()` | `/YomkDdsService/register_pub_topic` | type 为 `new XxxPubSubType()`，所有权移交服务端 |
 | 注册订阅主题 | `yomk::dds().node(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()` | `/YomkDdsService/register_sub_topic` | callback 收到消息时回调，接收缓冲 data 由内部自动创建 |
@@ -136,9 +136,9 @@ auto onMessage = [&](const void *data)
 | 形态 | 调用示例 | 说明 |
 |---|---|---|
 | 1 | `yomk::dds().node("node0").create()` | 仅节点名，domainId 与两 serverLocator 全缺省 |
-| 2 | `yomk::dds().node("node").domain_id(0).create()` | 显式 domainId |
-| 3 | `yomk::dds().node("ds_node").domain_id(0).udp_ds("127.0.0.1:11811").create()` | 仅 UDP 通道直配 |
-| 4 | `yomk::dds().node("ds_dual_node").domain_id(0).udp_ds("127.0.0.1:11811").tcp_ds("127.0.0.1:42100").create()` | UDP+TCP 双通道直配；仅 TCP 直配时 UDP 传空串占位 |
+| 2 | `yomk::dds().node("node").domain(0).create()` | 显式 domainId |
+| 3 | `yomk::dds().node("ds_node").domain(0).udp_ds("127.0.0.1:11811").create()` | 仅 UDP 通道直配 |
+| 4 | `yomk::dds().node("ds_dual_node").domain(0).udp_ds("127.0.0.1:11811").tcp_ds("127.0.0.1:42100").create()` | UDP+TCP 双通道直配；仅 TCP 直配时 UDP 传空串占位 |
 
 - **nodeName 必填**，不可为空。
 - **domainId** 合法范围 [0,232]，越界返回错误；可缺省——缺省时经 DDSNode 类内缺省初始化器读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0）。

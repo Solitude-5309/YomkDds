@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 
     // 1. 创建节点
     ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== YomkDdsService::createNode ===");
-    auto resp = YOMKDDS_NODE("node0");
+    auto resp = yomk::dds().node_name("node0").create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("create node failed: ", resp.msg);

@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
     ::yomk::server().srv<YomkDdsService>().create();
 
     // 2. 创建节点（domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
-    YOMKDDS_NODE("qos_node");
+    yomk::dds().node_name("qos_node").create();
 
     // 3. 注册订阅主题：ROS2 默认订阅底座（BEST_EFFORT requested 对任意 offered 均可匹配）
     std::atomic<int> received{0};

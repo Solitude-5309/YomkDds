@@ -151,7 +151,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 | 形参形态 | 全可变参 `[domainId[, udpDiscoverServerLocator[, tcpDiscoverServerLocator]]]`；显式实参完全兼容旧调用 |
 | 单节点模型 | 一个进程至多一个，重复创建须先删除 |
 | domainId | 合法范围 [0,232]；仅同域节点的主题可被调试；缺省（无参形态）读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0） |
-| 两 serverLocator | UDP/TCP 发现服务器直配聚合串，语义同 `YOMKDDS_NODE` 形态 3/4（CLIENT 协议强制，非法串创建失败回显），详见 [discovery-server.md](./discovery-server.md) |
+| 两 serverLocator | UDP/TCP 发现服务器直配聚合串，语义同 `yomk::dds().node_name(...)` 的 udp_ds()/tcp_ds() 直配（CLIENT 协议强制，非法串创建失败回显），详见 [discovery-server.md](./discovery-server.md) |
 
 ### 收敛查询语义
 
@@ -207,7 +207,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 ## 与其他功能的关系
 
-- **核心通信**：调试服务是独立服务域（`YomkDdsDebugService`），与业务节点互不干扰；节点名经 `YOMKDDS_NODE(nodeName[, domainId[, serverLocator]])` 下沉到 DDS 参与者（随 SPDP 发现传播给同域对端），`node list`/`node info` 查到的即这些参与者，见 [core-communication.md](./core-communication.md)；
+- **核心通信**：调试服务是独立服务域（`YomkDdsDebugService`），与业务节点互不干扰；节点名经 `yomk::dds().node_name(nodeName)[.domain_id(domainId)][.udp_ds/.tcp_ds(serverLocator)].create()` 下沉到 DDS 参与者（随 SPDP 发现传播给同域对端），`node list`/`node info` 查到的即这些参与者，见 [core-communication.md](./core-communication.md)；
 - **发现服务器**：调试节点支持 UDP/TCP 直配尾参（同域才可调试，跨网段调试须经 server），见 [discovery-server.md](./discovery-server.md)；
 - **QoS**：`topic print`/`topic hz`/`topic pub` 的 QoS 参数族（`--qos-ros`/`--qos-*`/`--qos-file` 优先级链）与宏侧 `DDSQosProfile` 语义见 [qos-profiles.md](./qos-profiles.md)；
 - **ROS2 互通**：ROS2 rmw_fastrtps 端点不提供 XTypes TypeObject，观察其主题会触发类型不可重建告警、`interface show` 报 `type object for [...] not available`（互通判定以数据到达为准），见 [ros2-interop.md](./ros2-interop.md)；

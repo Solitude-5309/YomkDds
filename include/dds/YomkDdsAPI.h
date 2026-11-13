@@ -59,12 +59,103 @@ public:
 };
 
 /**
+ * @brief Node creation facet: carries the nodeName accumulated by dds().node_name(),
+ *        optional domain_id()/udp_ds()/tcp_ds() accumulators (order-free), terminated by create()
+ */
+// @zh: 节点创建分面：承载 dds().node_name() 累积的节点名，domain_id()/udp_ds()/tcp_ds()
+// @zh: 可选累积器（次序不限），create() 终结
+class DdsNodeBuilder
+{
+    std::string m_nodeName;
+    uint32_t m_domainId = yomk::payload::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
+    std::string m_udpDiscoverServerLocator = yomk::payload::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
+    std::string m_tcpDiscoverServerLocator = yomk::payload::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
+public:
+    explicit DdsNodeBuilder(std::string nodeName)
+        : m_nodeName(std::move(nodeName))
+    {
+    }
+    /**
+     * @brief Accumulate the DDS domain id
+     * @param[in] domainId DDS domain id [0,232]
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积 DDS 域号
+    // @zh: domainId DDS 域号 [0,232]
+    // @zh: return 自身链式引用
+    DdsNodeBuilder& domain_id(uint32_t domainId)
+    {
+        m_domainId = domainId;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the UDP channel discovery-server locator aggregate
+     * @param[in] locator "ip[:port]" aggregate, semicolon-separated for multiple servers
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积 UDP 通道发现服务器直配聚合串
+    // @zh: locator "ip[:port]" 聚合串，多 server 分号分隔
+    // @zh: return 自身链式引用
+    DdsNodeBuilder& udp_ds(std::string locator)
+    {
+        m_udpDiscoverServerLocator = std::move(locator);
+        return *this;
+    }
+    /**
+     * @brief Accumulate the TCP channel discovery-server locator aggregate
+     * @param[in] locator Same form as udp_ds()
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积 TCP 通道发现服务器直配聚合串
+    // @zh: locator 形式同 udp_ds()
+    // @zh: return 自身链式引用
+    DdsNodeBuilder& tcp_ds(std::string locator)
+    {
+        m_tcpDiscoverServerLocator = std::move(locator);
+        return *this;
+    }
+    /**
+     * @brief Create the DDS node, one dedicated DDS participant per node (request terminator)
+     * @return Response; invalid locator input fails with the reason echoed back
+     * @note nodeName is unique and must not be empty; only same-domain nodes
+     *       interoperate. Unset accumulators keep the environment-variable defaults
+     */
+    // @zh: 创建 DDS 节点（每节点一个独立 DDS 参与者，请求终结）
+    // @zh: return Response；非法直配串创建失败并回显原因
+    // @zh: note nodeName 唯一且不可为空；仅同域节点可互通；未累积项保持环境变量缺省
+    yomk::payload::Response create()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsCreateNode)
+            .msg(yomk::msgs::DDSNode::shared(
+                yomk::payload::DDSNode{std::move(m_nodeName), m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
+            .request();
+    }
+};
+
+/**
  * @brief Core communication chained builder: chained endpoints live here during the macro-to-chain migration
  */
 // @zh: 核心通信链式 Builder：宏链迁移期内的链式端点挂载于此
 class DdsBuilder
 {
 public:
+    /**
+     * @brief Switch into the node creation facet with the unique node name
+     * @param[in] nodeName Unique node name, must not be empty
+     * @return Node creation facet, terminated by create()
+     */
+    // @zh: 切入节点创建分面并累积节点唯一名
+    // @zh: nodeName 节点唯一名，不可为空
+    // @zh: return 节点创建分面，经 create() 终结
+    DdsNodeBuilder node_name(std::string nodeName)
+    {
+        return DdsNodeBuilder(std::move(nodeName));
+    }
+
     /**
      * @brief Switch into the XML profiles loading facet with an explicit path
      * @param[in] xmlPath Explicit path, relative or absolute
@@ -134,23 +225,6 @@ inline detail::DdsBuilder dds()
 // @zh: 核心通信宏（YomkDdsService 端点）
 // @zh: 除 YOMKDDS_VERSION 外均返回 yomk::payload::Response，成功判定
 // @zh: status == Succeeded，失败原因读 msg；完整约束见 docs/features/core-communication.md
-
-/**
- * @brief Create a DDS node (one dedicated DDS participant per node)
- * @param[in] nodeName Unique node name, must not be empty; only same-domain nodes interoperate
- * @param[in] ... variadic tails, all optional: domainId [0,232] (default reads
- *            YOMKDDS_DDS_DOMAIN_ID), then UDP and TCP discovery-server locator
- *            aggregates "ip[:port]" (semicolon-separated for multiple servers)
- * @note Invalid locator input fails with the reason echoed back
- */
-// @zh: 创建 DDS 节点（每节点一个独立 DDS 参与者）
-// @zh: nodeName 节点唯一名，不可为空；仅同域节点可互通
-// @zh: 可变尾参均可缺省：domainId [0,232]（缺省读 YOMKDDS_DDS_DOMAIN_ID）、UDP/TCP
-// @zh: 发现服务器直配聚合串 "ip[:port]"（多 server 分号分隔）
-// @zh: note 非法直配串创建失败并回显原因
-
-#define YOMKDDS_NODE(nodeName, ...) \
-    ::yomk::server().url(::yomk::url::ddsCreateNode).msg(::yomk::msgs::DDSNode::shared(yomk::payload::DDSNode{nodeName, ##__VA_ARGS__})).request()
 
 /**
  * @brief Query the extension version and print it via yomk::log()
@@ -282,11 +356,11 @@ inline detail::DdsBuilder dds()
 
 /**
  * @brief Create the debug node (type-agnostic domain observer)
- * @param[in] ... variadic tails, all optional: same form as YOMKDDS_NODE
+ * @param[in] ... variadic tails, all optional: same form as yomk::dds().node_name(...).create()
  * @note Single node per process; delete it before re-creating
  */
 // @zh: 创建调试节点（类型无关域观察者）
-// @zh: 可变尾参语义同 YOMKDDS_NODE
+// @zh: 可变尾参语义同 yomk::dds().node_name(...).create()
 // @zh: note 单节点模型：一个进程至多一个，重复创建须先删除
 
 #define YOMKDDS_DEBUG_NODE(...) \
@@ -474,11 +548,11 @@ inline detail::DdsBuilder dds()
 
 /**
  * @brief Create the bag node (mcap record/replay)
- * @param[in] ... variadic tails, all optional: same form as YOMKDDS_NODE
+ * @param[in] ... variadic tails, all optional: same form as yomk::dds().node_name(...).create()
  * @note Single node per process; delete it before re-creating
  */
 // @zh: 创建 bag 节点（mcap 录制回放）
-// @zh: 可变尾参语义同 YOMKDDS_NODE
+// @zh: 可变尾参语义同 yomk::dds().node_name(...).create()
 // @zh: note 单节点模型：一个进程至多一个，重复创建须先删除
 
 #define YOMKDDS_BAG_NODE(...) \

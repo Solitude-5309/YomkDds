@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
 
     // 1. 创建节点（每节点一个独立 DDS 参与者）
     ::yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsService::createNode ===");
-    auto resp = YOMKDDS_NODE("node0");
+    auto resp = yomk::dds().node_name("node0").create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsTopic").error("create node failed: ", resp.msg);

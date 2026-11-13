@@ -75,7 +75,7 @@ YOMKDDS_SUB_TOPIC("node0", "my_topic", new YomkDdsStd::MStringPubSubType(), onMe
 
 ### 第 3 步：多节点多主题
 
-`YOMKDDS_NODE` 每调用一次即创建一个独立 DDS 参与者（每节点一个独立 DDS 参与者；节点名唯一、domainId 合法范围 [0,232]），一个进程可创建多个节点，每个节点可注册多个发布/订阅主题。完整示例（两个节点、两个主题）：
+`yomk::dds().node_name(...).create()` 每调用一次即创建一个独立 DDS 参与者（每节点一个独立 DDS 参与者；节点名唯一、domainId 合法范围 [0,232]），一个进程可创建多个节点，每个节点可注册多个发布/订阅主题。完整示例（两个节点、两个主题）：
 
 ```cpp
 #include <yomk/server/YomkServerApi.h>
@@ -97,8 +97,8 @@ int main(int argc, char *argv[])
     ::yomk::server().srv<YomkDdsService>().create();
 
     // 2. 创建两个节点（每节点一个独立 DDS 参与者）
-    YOMKDDS_NODE("node_pub");
-    YOMKDDS_NODE("node_sub");
+    yomk::dds().node_name("node_pub").create();
+    yomk::dds().node_name("node_sub").create();
 
     // 3. 在同一节点上注册多个主题；发布/订阅也可分属不同节点
     YOMKDDS_PUB_TOPIC("node_pub", "topic_a", new YomkDdsStd::MStringPubSubType());
@@ -151,7 +151,7 @@ int main(int argc, char *argv[])
 ### 第 4 步：发布节奏与资源清理
 
 - **发布节奏**：`YOMKDDS_PUB_MSG` 为同步写入（data 为借用指针，caller 保留所有权），两次发布之间的间隔由你控制（示例用 `sleep_for(milliseconds(100))`）；持续发布的参考形态见安装包内 `ExampleYomkDdsPub`（每 1s 发布一次，Ctrl+C 退出）；
-- **资源清理**：每个 `YOMKDDS_NODE` 对应一次 `YOMKDDS_DEL_NODE`，销毁节点及其全部 DDS 实体；删除不存在的节点返回错误。退出前不删节点可能造成程序退出阶段的资源清理问题，务必在 `return` 前逐个删除。
+- **资源清理**：每次 `yomk::dds().node_name(...).create()` 对应一次 `YOMKDDS_DEL_NODE`，销毁节点及其全部 DDS 实体；删除不存在的节点返回错误。退出前不删节点可能造成程序退出阶段的资源清理问题，务必在 `return` 前逐个删除。
 
 ## 预期输出
 
@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
 | 回调里保存了 `data` 指针、之后读取崩溃或数据异常 | `data` 仅回调执行期间有效：回调内同步消费（读取或拷贝到自有存储），不要跨回调持有 |
 | ARM 设备上读取 `double`/`int64` 字段触发 SIGBUS | `alignof>4` 的 plain 标量在零拷贝交付下仅 4 字节对齐：回调中 `memcpy` 到对齐局部变量再读取（见第 1 步）；大数据负载优先选 `alignof<=4` 的 plain 类型 |
 | 两端注册了同名主题但收不到 | type 不一致：两端必须用同一种消息类型（同一 PubSubType）；并确认两端域号一致（`YOMKDDS_DDS_DOMAIN_ID`，合法范围 [0,232]） |
-| 宏调用返回非 `eOk` | 读 `m_msg` 获取原因；常见如节点名重复、删除不存在的节点——每节点名唯一，`YOMKDDS_NODE` 前确认同名节点已删除 |
+| 宏调用返回非 `eOk` | 读 `m_msg` 获取原因；常见如节点名重复、删除不存在的节点——每节点名唯一，`yomk::dds().node_name(...).create()` 前确认同名节点已删除 |
 | 多主题只收到其中一个 | 同样是 discovery 时序：注册全部主题后再统一 `sleep 1s`，不要边注册边立即发布 |
 | 收到的消息内容错乱 | 检查是否在回调外复用了发布侧的栈变量指针，或把 `const void *data` 强转成了错误的消息类型 |
 

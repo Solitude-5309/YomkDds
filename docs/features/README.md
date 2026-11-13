@@ -45,12 +45,12 @@ flowchart LR
 |---|---|---|---|---|
 | 核心通信 | 版本查询 | `YOMKDDS_VERSION()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg()` | — | [xml-profiles.md](./xml-profiles.md) |
-| 核心通信 | 创建/删除节点 | `YOMKDDS_NODE()` / `YOMKDDS_DEL_NODE()` | — | [core-communication.md](./core-communication.md) |
+| 核心通信 | 创建/删除节点 | `yomk::dds().node_name(nodeName).create()` / `YOMKDDS_DEL_NODE()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | 注册发布/订阅主题 | `YOMKDDS_PUB_TOPIC()` / `YOMKDDS_SUB_TOPIC()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | 发布消息 | `YOMKDDS_PUB_MSG()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | Loan 借出零拷贝发布 | `YOMKDDS_LOAN()` / `YOMKDDS_DISCARD_LOAN()` | — | [loan-zero-copy.md](./loan-zero-copy.md) |
 | QoS | 端点 QoS 描述（8 项 + ROS2 底座） | `DDSQosProfile`（qos 尾参） | `--qos-ros` / `--qos-*` / `--qos-file` | [qos-profiles.md](./qos-profiles.md) |
-| 发现 | 发现服务器 UDP/TCP 直配 | `YOMKDDS_NODE/DEBUG_NODE/BAG_NODE` 定位串参数 | 发现服务器三环境变量 | [discovery-server.md](./discovery-server.md) |
+| 发现 | 发现服务器 UDP/TCP 直配 | `yomk::dds().node_name(...)` 直配累积器 / `YOMKDDS_DEBUG_NODE/BAG_NODE` 定位串尾参 | 发现服务器三环境变量 | [discovery-server.md](./discovery-server.md) |
 | 发现 | XML profiles 三级提取链 | `yomk::dds().xml(xmlPath).load_cfg()` | — | [xml-profiles.md](./xml-profiles.md) |
 | 互通 | 与 ROS2 收发同类型消息 | set_name 类型名直改（编程约定） | — | [ros2-interop.md](./ros2-interop.md) |
 | 调试 | 主题消息观察 / 频率测量 | `YOMKDDS_DEBUG_TOPIC_PRINT()` | `topic print` / `topic hz` | [debug-service.md](./debug-service.md) |

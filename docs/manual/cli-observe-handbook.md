@@ -206,7 +206,7 @@ yomkdds node list          # 默认域 0
 - **关键选项**：无。列出规则（了解后可解释「为什么有的进程没出现」）：
   - 仅列 `participant_name` 非空且非 `/` 的参与者——`/` 是 ROS2 参与者的默认占位名（rmw_fastrtps 把参与者名统一置为根 enclave `/`，其真实节点名走 `ros2 node list` 所依赖的另一通道）；
   - 调试节点自身不在自身发现回调中，天然不列出；同域其他进程的调试节点与 bag 节点分别以唯一名 `yomkdds_debug_<uid>` / `yomkdds_bag_<uid>` 列出（uid 为 12 位随机 hex）；
-  - 节点名称由库用户在创建节点时经 `YOMKDDS_NODE(nodeName[, domainId[, serverLocator]])` 下沉到 DDS 参与者（随 SPDP 发现传播给同域对端）。
+  - 节点名称由库用户在创建节点时经 `yomk::dds().node_name(nodeName)[.domain_id(domainId)][.udp_ds/.tcp_ds(serverLocator)].create()` 下沉到 DDS 参与者（随 SPDP 发现传播给同域对端）。
 - **示例输出**（域内仅发布端一个命名参与者时恰一行）：
 
 ```

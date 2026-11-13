@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
     ::yomk::server().srv<YomkDdsService>().create();
 
     // 1. 创建节点：domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID，须与发布端同域方可互通
-    auto resp = YOMKDDS_NODE("sub_node");
+    auto resp = yomk::dds().node_name("sub_node").create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsSub").error("create node failed: ", resp.msg);

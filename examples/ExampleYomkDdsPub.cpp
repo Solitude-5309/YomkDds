@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
 
     // 1. 创建节点：domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID（无/非法回落 0；仅同域
     //    节点互通），nodeName 唯一
-    auto resp = YOMKDDS_NODE("pub_node");
+    auto resp = yomk::dds().node_name("pub_node").create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("ExampleYomkDdsPub").error("create node failed: ", resp.msg);

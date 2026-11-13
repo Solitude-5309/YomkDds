@@ -98,14 +98,14 @@ int main()
     }
 
     // 2. 创建节点：xml_node 精确命中具名档；other_node 具名档无匹配走默认档兜底
-    resp = YOMKDDS_NODE("xml_node", 0);
+    resp = yomk::dds().node_name("xml_node").domain_id(0).create();
     if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("XmlProfilesDemo").error("create xml_node failed: ", resp.m_msg);
         return 1;
     }
 
-    resp = YOMKDDS_NODE("other_node", 0);
+    resp = yomk::dds().node_name("other_node").domain_id(0).create();
     if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("XmlProfilesDemo").error("create other_node failed: ", resp.m_msg);
@@ -134,7 +134,7 @@ cmake --build build
 
 1. **具名档精确匹配优先**：节点名 `xml_node` 与 XML 中 `profile_name="xml_node"` 精确匹配，命中具名档；
 2. **默认档兜底**：节点名 `other_node` 在具名档中无匹配，命中 `is_default_profile="true"` 的默认档；若 XML 未写默认档，则保持默认底座（即不叠加任何 XML 配置）；
-3. **命中后节点名仍最后覆盖**：命中 profile 只提取 participant 的发现/传输/QoS 配置，participant 最终仍以 `YOMKDDS_NODE` 传入的节点名命名——`xml_node` 节点的名字不会变成 profile 的 `profile_name` 以外的东西，`other_node` 也不会因命中默认档而改名。
+3. **命中后节点名仍最后覆盖**：命中 profile 只提取 participant 的发现/传输/QoS 配置，participant 最终仍以 `yomk::dds().node_name(...)` 传入的节点名命名——`xml_node` 节点的名字不会变成 profile 的 `profile_name` 以外的东西，`other_node` 也不会因命中默认档而改名。
 
 命中效果的观察方式：
 
@@ -143,7 +143,7 @@ cmake --build build
 
 ### 时序红线（务必遵守）
 
-- **必须在任何节点创建之前调用**：participant 的发现配置/传输/QoS 在创建时固化——先 `yomk::dds().load_cfg()` 再 `YOMKDDS_NODE`；
+- **必须在任何节点创建之前调用**：participant 的发现配置/传输/QoS 在创建时固化——先 `yomk::dds().load_cfg()` 再 `yomk::dds().node_name(...).create()`；
 - 节点创建后加载仅影响后续新建实体，**对已建节点不生效**；
 - 再次调用以**最新成功文件整体替换**（注意：替换同样只影响之后新建的节点）。
 
@@ -151,7 +151,7 @@ cmake --build build
 
 - 程序启动先打印版本号（`YOMKDDS_VERSION` 输出）；
 - `yomk::dds().load_cfg()` 成功返回 `eOk`，无额外打印；
-- 两次 `YOMKDDS_NODE` 均返回 `eOk`（框架日志前缀以实际环境为准）；两个节点按各自命中的档运行——本示例的 leaseDuration 数值差异不产生可见打印，命中效果体现在 participant 配置上（观察方式见第 3 步）；
+- 两次 `yomk::dds().node_name(...).create()` 均返回 `eOk`（框架日志前缀以实际环境为准）；两个节点按各自命中的档运行——本示例的 leaseDuration 数值差异不产生可见打印，命中效果体现在 participant 配置上（观察方式见第 3 步）；
 - 失败路径示例：把路径改成不存在的文件重跑，程序打印 `load xml failed: <m_msg 携原因与返回码>` 后以退出码 1 退出（失败回显，不静默降级）。
 
 ## 常见错误与排障
@@ -160,10 +160,10 @@ cmake --build build
 |---|---|
 | `yomk::dds().load_cfg()` 返回错误，`m_msg` 携原因与返回码 | 三类失败：路径不存在/文件为空/格式非法——核对路径（相对/绝对均可）与文件内容，确认 XML 经 Fast DDS XML schema 校验合法后重试 |
 | 形态 2 无参加载报 `xml path is empty` | 总开关 `YOMKDDS_USE_XML_PROFILE` 关闭时路径变量被忽略恒空（服务端报 `xml path is empty`）——先 `export YOMKDDS_USE_XML_PROFILE=true` 再设置 `YOMKDDS_XML_PROFILE_PATH` |
-| 「改了 XML 不生效」 | 时序原因：节点创建后才加载——participant 的发现配置/传输/QoS 在创建时固化，对已建节点不生效，仅影响后续新建实体；把 `yomk::dds().load_cfg()` 挪到第一个 `YOMKDDS_NODE` 之前，或删除相关节点后重建 |
-| 具名档没命中、走了默认档 | 三级提取链第一级按节点名 `profile_name` **精确匹配**——检查 XML 的 `profile_name` 与 `YOMKDDS_NODE` 第一参是否逐字节一致 |
+| 「改了 XML 不生效」 | 时序原因：节点创建后才加载——participant 的发现配置/传输/QoS 在创建时固化，对已建节点不生效，仅影响后续新建实体；把 `yomk::dds().load_cfg()` 挪到第一个 `yomk::dds().node_name(...).create()` 之前，或删除相关节点后重建 |
+| 具名档没命中、走了默认档 | 三级提取链第一级按节点名 `profile_name` **精确匹配**——检查 XML 的 `profile_name` 与 `yomk::dds().node_name(...)` 首参是否逐字节一致 |
 | 想让多个节点共用不同配置却只命中同一档 | 同文件多默认档只取首个：需要差异化配置时为每个节点写独立具名档（`profile_name` 等于节点名），默认档只作兜底 |
-| 节点名与预期不符 | 命中后节点名仍最后覆盖：profile 只提供 participant 配置，participant 仍以 `YOMKDDS_NODE` 传入的节点名命名，属正常 |
+| 节点名与预期不符 | 命中后节点名仍最后覆盖：profile 只提供 participant 配置，participant 仍以 `yomk::dds().node_name(...)` 传入的节点名命名，属正常 |
 
 ## 延伸阅读
 

@@ -26,8 +26,8 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 `YOMKDDS_BAG_NODE([domainId[, udpDiscoverServerLocator[, tcpDiscoverServerLocator]]])`（端点 `/YomkDdsBagService/create_node`）：
 
 - 单节点模型（一个进程至多一个，重复创建须先删除）；`YOMKDDS_BAG_DEL_NODE()` 删除 bag 节点并销毁其全部 DDS 实体，未创建时返回错误；
-- 全可变参——无参形态三字段均经 DDSBagNode 类内缺省初始化器读环境变量（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`，两 serverLocator 按 5.7 开关门控读 `YOMKDDS_UDP/TCP_DISCOVER_SERVERS`，语义同 `YOMKDDS_NODE`）；显式实参完全兼容旧调用；
-- domainId 合法范围 [0,232]，仅同域端点可被发现与录制；两 serverLocator 为 UDP/TCP 发现服务器直配聚合串，语义同 `YOMKDDS_NODE` 形态 3/4（CLIENT 协议强制，非法串创建失败回显），详见 [discovery-server.md](./discovery-server.md)。
+- 全可变参——无参形态三字段均经 DDSBagNode 类内缺省初始化器读环境变量（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`，两 serverLocator 按 5.7 开关门控读 `YOMKDDS_UDP/TCP_DISCOVER_SERVERS`，语义同 `yomk::dds().node_name(...)` 缺省项）；显式实参完全兼容旧调用；
+- domainId 合法范围 [0,232]，仅同域端点可被发现与录制；两 serverLocator 为 UDP/TCP 发现服务器直配聚合串，语义同 `yomk::dds().node_name(...)` 的 udp_ds()/tcp_ds() 直配（CLIENT 协议强制，非法串创建失败回显），详见 [discovery-server.md](./discovery-server.md)。
 
 ### 录制（`YOMKDDS_BAG_RECORD` / `bag record`）
 
@@ -314,7 +314,7 @@ yomkdds bag play bag_in --qos-profile-overrides-path qos.json   # 按主题覆�
 
 ## 与其他功能的关系
 
-- **核心通信/bag 节点定位串**：bag 节点的 domainId 与 UDP/TCP 直配尾参语义同 `YOMKDDS_NODE`（每节点一个独立 DDS 参与者），见 [core-communication.md](./core-communication.md) 与 [discovery-server.md](./discovery-server.md)；
+- **核心通信/bag 节点定位串**：bag 节点的 domainId 与 UDP/TCP 直配尾参语义同 `yomk::dds().node_name(...)` 的 udp_ds()/tcp_ds()（每节点一个独立 DDS 参与者），见 [core-communication.md](./core-communication.md) 与 [discovery-server.md](./discovery-server.md)；
 - **调试服务**：调试节点与 bag 节点同为单节点全可变参模型（`YOMKDDS_DEBUG_NODE` 同款），见 [debug-service.md](./debug-service.md)；
 - **ROS2 互通**：bag 录制/回放为透传设计（按发现名动态建类型、payload 字节搬运），与类型名无关——互通话题可直接录制/回放，见 [ros2-interop.md](./ros2-interop.md)；
 - **环境变量**：域号 `YOMKDDS_DDS_DOMAIN_ID`、发现服务器直配三环境变量详见[环境变量与公共配置参考](../manual/env-vars-reference.md)。

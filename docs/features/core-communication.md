@@ -11,7 +11,7 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 | 能力 | 宏 API | URL 端点 | 说明 |
 |---|---|---|---|
 | 版本查询 | `YOMKDDS_VERSION()` | `/YomkDdsService/version` | 宏内部自动解包并打印版本，无返回值 |
-| 创建节点 | `YOMKDDS_NODE(nodeName[, domainId[, udpDiscoverServerLocator[, tcpDiscoverServerLocator]]])` | `/YomkDdsService/create_node` | 每节点一个独立 DDS 参与者 |
+| 创建节点 | `yomk::dds().node_name(nodeName)[.domain_id(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | `/YomkDdsService/create_node` | 每节点一个独立 DDS 参与者 |
 | 删除节点 | `YOMKDDS_DEL_NODE(nodeName)` | `/YomkDdsService/delete_node` | 销毁节点及其全部 DDS 实体，不存在的节点返回错误 |
 | 注册发布主题 | `YOMKDDS_PUB_TOPIC(nodeName, topicName, type[, qos])` | `/YomkDdsService/register_pub_topic` | type 为 `new XxxPubSubType()`，所有权移交服务端 |
 | 注册订阅主题 | `YOMKDDS_SUB_TOPIC(nodeName, topicName, type, callback[, qos])` | `/YomkDdsService/register_sub_topic` | callback 收到消息时回调，接收缓冲 data 由内部自动创建 |
@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
     YOMKDDS_VERSION(); // 查看版本（宏内部自动解包并打印）
 
     // 2. 创建节点（每节点一个独立 DDS 参与者；domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
-    YOMKDDS_NODE("node0");
+    yomk::dds().node_name("node0").create();
 
     // 3. 注册发布主题（type 所有权移交 FastDDSNode）
     YOMKDDS_PUB_TOPIC("node0", "my_topic", new YomkDdsStd::MStringPubSubType());
@@ -123,16 +123,16 @@ auto onMessage = [&](const void *data)
 
 ## 参数与约束
 
-### 节点创建（YOMKDDS_NODE）
+### 节点创建（yomk::dds().node_name().create()）
 
 四种形态（形态 3/4 命名沿 README 5.7）：
 
 | 形态 | 调用示例 | 说明 |
 |---|---|---|
-| 1 | `YOMKDDS_NODE("node0")` | 仅节点名，domainId 与两 serverLocator 全缺省 |
-| 2 | `YOMKDDS_NODE("node", 0)` | 显式 domainId |
-| 3 | `YOMKDDS_NODE("ds_node", 0, "127.0.0.1:11811")` | 仅 UDP 通道直配 |
-| 4 | `YOMKDDS_NODE("ds_dual_node", 0, "127.0.0.1:11811", "127.0.0.1:42100")` | UDP+TCP 双通道直配；仅 TCP 直配时 UDP 传空串占位 |
+| 1 | `yomk::dds().node_name("node0").create()` | 仅节点名，domainId 与两 serverLocator 全缺省 |
+| 2 | `yomk::dds().node_name("node").domain_id(0).create()` | 显式 domainId |
+| 3 | `yomk::dds().node_name("ds_node").domain_id(0).udp_ds("127.0.0.1:11811").create()` | 仅 UDP 通道直配 |
+| 4 | `yomk::dds().node_name("ds_dual_node").domain_id(0).udp_ds("127.0.0.1:11811").tcp_ds("127.0.0.1:42100").create()` | UDP+TCP 双通道直配；仅 TCP 直配时 UDP 传空串占位 |
 
 - **nodeName 必填**，不可为空。
 - **domainId** 合法范围 [0,232]，越界返回错误；可缺省——缺省时经 DDSNode 类内缺省初始化器读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0）。
@@ -170,7 +170,7 @@ auto onMessage = [&](const void *data)
 ## 与其他功能的关系
 
 - **XML profiles**：`yomk::dds().load_cfg()` 是 participant 级发现/传输/QoS 配置入口，三级提取链与「必须先于建节点」时序约束见 [xml-profiles.md](./xml-profiles.md)。
-- **发现服务器直配**：`YOMKDDS_NODE` 的两 serverLocator 尾参（及同名环境变量自动直配）承担发现服务器直配，UDP/TCP 格式、CLIENT 协议、跨域互通见 [discovery-server.md](./discovery-server.md)。
+- **发现服务器直配**：`yomk::dds().node_name(nodeName)` 的 udp_ds()/tcp_ds() 累积器（及同名环境变量自动直配）承担发现服务器直配，UDP/TCP 格式、CLIENT 协议、跨域互通见 [discovery-server.md](./discovery-server.md)。
 - **QoS**：主题注册宏的 qos 尾参（`DDSQosProfile` 8 项与 ROS2 预置底座）见 [qos-profiles.md](./qos-profiles.md)。
 - **Loan 借出零拷贝发布**：`YOMKDDS_LOAN`/`YOMKDDS_DISCARD_LOAN` 在本篇的发布链路上提供 plain 类型免序列化路径，见 [loan-zero-copy.md](./loan-zero-copy.md)。
 

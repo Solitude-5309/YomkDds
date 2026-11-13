@@ -37,13 +37,13 @@ flowchart LR
 | YomkDdsDebugService | 类型无关的域内观察（主题/节点/类型/端点）与 JSON 载荷发布 | `YOMKDDS_DEBUG_*` | `yomkdds topic/node/interface` 全部覆盖 |
 | YomkDdsBagService | mcap 格式录制、元信息、重建索引、转换、回放 | `YOMKDDS_BAG_*` | `yomkdds bag` 全部覆盖（play 仅 CLI） |
 
-> 除 `YOMKDDS_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
+> 除 `YOMKDDS_LOAN`（借出结果经 outPtr 出参获取）外，其余核心通信宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 ## 二、功能速查矩阵
 
 | 功能域 | 能力 | 宏 API | yomkdds CLI | 详见 |
 |---|---|---|---|---|
-| 核心通信 | 版本查询 | `YOMKDDS_VERSION()` | — | [core-communication.md](./core-communication.md) |
+| 核心通信 | 版本查询 | `yomk::dds().version()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg()` | — | [xml-profiles.md](./xml-profiles.md) |
 | 核心通信 | 创建/删除节点 | `yomk::dds().node_name(nodeName).create()` / `YOMKDDS_DEL_NODE()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | 注册发布/订阅主题 | `YOMKDDS_PUB_TOPIC()` / `YOMKDDS_SUB_TOPIC()` | — | [core-communication.md](./core-communication.md) |

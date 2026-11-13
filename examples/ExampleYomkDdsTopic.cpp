@@ -24,9 +24,21 @@ int main(int argc, char* argv[])
     ::yomk::server().init();
     ::yomk::server().srv<YomkDdsService>().create();
 
-    // 查看版本（宏内部自动解包并打印）
+    // 查看版本（链式 version() 返回 Response，解包/打印由调用方处理）
     ::yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsService::getVersion ===");
-    YOMKDDS_VERSION();
+    auto vresp = yomk::dds().version();
+    if (vresp.status == yomk::payload::ResStatus::Succeeded)
+    {
+        auto ver = ::yomk::msgs::unpack<::yomk::msgs::String>(vresp.data);
+        if (ver)
+        {
+            ::yomk::log().tag("YomkDdsService").info(ver->d);
+        }
+    }
+    else
+    {
+        ::yomk::log().tag("YomkDdsService").error("getVersion failed: ", vresp.msg);
+    }
 
     // 1. 创建节点（每节点一个独立 DDS 参与者）
     ::yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsService::createNode ===");

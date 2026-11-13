@@ -14,7 +14,7 @@
 | 归还未发布的借出缓冲 | `YOMKDDS_DISCARD_LOAN(nodeName, topicName, sample)` | `/YomkDdsService/discard_loan` | 归还未发布样本避免池泄漏 |
 | 订阅端零拷贝接收 | —（自动，无需调用） | — | `FastDDSNode` 内部自动使用 reader loan 接收，回调接口与指针语义不变 |
 
-返回值约定同核心通信：除 `YOMKDDS_VERSION()` 外其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；`YOMKDDS_LOAN` 的借出结果另经 outPtr 判空获取。
+返回值约定同核心通信：宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；`YOMKDDS_LOAN` 的借出结果另经 outPtr 判空获取。
 
 ## 使用方式概述
 

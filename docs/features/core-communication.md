@@ -10,7 +10,7 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 
 | 能力 | 宏 API | URL 端点 | 说明 |
 |---|---|---|---|
-| 版本查询 | `YOMKDDS_VERSION()` | `/YomkDdsService/version` | 宏内部自动解包并打印版本，无返回值 |
+| 版本查询 | `yomk::dds().version()` | `/YomkDdsService/version` | 返回 Response 携带 String 版本串（"YomkDds v<版本号>"），解包/打印由调用方处理 |
 | 创建节点 | `yomk::dds().node_name(nodeName)[.domain_id(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | `/YomkDdsService/create_node` | 每节点一个独立 DDS 参与者 |
 | 删除节点 | `YOMKDDS_DEL_NODE(nodeName)` | `/YomkDdsService/delete_node` | 销毁节点及其全部 DDS 实体，不存在的节点返回错误 |
 | 注册发布主题 | `YOMKDDS_PUB_TOPIC(nodeName, topicName, type[, qos])` | `/YomkDdsService/register_pub_topic` | type 为 `new XxxPubSubType()`，所有权移交服务端 |
@@ -19,7 +19,7 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 | 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | `/YomkDdsService/load_xml` | participant 级配置入口，详见 [xml-profiles.md](./xml-profiles.md) |
 | Loan 借出零拷贝发布 | `YOMKDDS_LOAN(nodeName, topicName, outPtr)` / `YOMKDDS_DISCARD_LOAN(nodeName, topicName, sample)` | `/YomkDdsService/loan`、`/YomkDdsService/discard_loan` | 详见 [loan-zero-copy.md](./loan-zero-copy.md) |
 
-返回值约定：除 `YOMKDDS_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
+返回值约定：除 `YOMKDDS_LOAN`（借出结果经 outPtr 出参获取）外，其余宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 ## 使用方式概述
 
@@ -54,7 +54,13 @@ int main(int argc, char *argv[])
     // 1. 初始化框架并启动 YomkDds 服务
     ::yomk::server().init();
     ::yomk::server().srv<YomkDdsService>().create();
-    YOMKDDS_VERSION(); // 查看版本（宏内部自动解包并打印）
+    // 查看版本（链式 version() 返回 Response，解包/打印由调用方处理）
+    auto vresp = yomk::dds().version();
+    if (vresp.status == yomk::payload::ResStatus::Succeeded)
+    {
+        auto ver = yomk::msgs::unpack<yomk::msgs::String>(vresp.data);
+        if (ver) { yomk::log().tag("YomkDdsService").info(ver->d); }
+    }
 
     // 2. 创建节点（每节点一个独立 DDS 参与者；domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
     yomk::dds().node_name("node0").create();
@@ -149,9 +155,9 @@ auto onMessage = [&](const void *data)
 
 - **data** 为数据实例指针（借用，同步写入，caller 保留所有权）；同步写入意味着调用返回时数据已交由 writer 处理，实例后续可复用。
 
-### 版本查询（YOMKDDS_VERSION()）
+### 版本查询（yomk::dds().version()）
 
-- 无参数；宏内部自动解包并打印版本，无返回值（无需判 `eOk`）。
+- 无参数；返回 Response 携带 String 版本串（"YomkDds v<版本号>"），解包/打印由调用方处理；须判 `eOk`。
 
 ### 代码位置与链接要求
 
@@ -160,7 +166,7 @@ auto onMessage = [&](const void *data)
 
 ## 错误与边界行为
 
-- **返回值**：除 `YOMKDDS_VERSION()` 外的宏调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`，失败读 `m_msg`。
+- **返回值**：除 `YOMKDDS_LOAN`（借出结果经 outPtr 出参获取）外的宏与链式终结调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`，失败读 `m_msg`。
 - **节点创建失败**：domainId 非法（超出 [0,232]）或 nodeName 为空，返回错误；serverLocator 非法串创建失败回显（不静默回落多播发现）。
 - **节点删除**：`YOMKDDS_DEL_NODE` 对不存在的节点返回错误。
 - **discovery 时序**：注册订阅后远端发布者需要时间被发现——示例在发布前等待 1 秒（`std::this_thread::sleep_for(std::chrono::seconds(1))`），首条消息可能因 discovery 时序丢失；对收发条数做精确预期的程序须预留等待。

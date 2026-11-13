@@ -14,7 +14,7 @@
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成编译安装；C++ 工程骨架与 [quick-start.md](./quick-start.md) 相同（`find_package(YomkServer REQUIRED)` + `find_package(YomkDds REQUIRED)`，链接 `YomkDds::YomkDds YomkServer::YomkServer`——本教程示例未使用消息类型，无需 `YomkDdsStdMsgs`）；
 - 加载语义（README 5.7 口径）：`yomk::dds().load_cfg()` 读文件经 `load_XML_profiles_file` 解析校验（返回码显式检查）后缓存，供后续 create_node 的 participant 按**三级提取链**叠加：按节点名 `profile_name` 精确匹配 → `is_default_profile="true"` 默认档兜底（同文件多默认档取首个）→ 均未命中保持默认底座；命中后节点名仍最后覆盖。可配置范围为 participant 级发现/传输/QoS 配置，字段写法经 Fast DDS XML schema 校验；
-- 宏返回值约定：除 `YOMKDDS_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`，失败时读 `m_msg` 获取错误信息。
+- 返回值约定：除 `YOMKDDS_LOAN`（借出结果经 outPtr 出参获取）外，其余核心通信宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`，失败时读 `m_msg` 获取错误信息。
 
 ## 分步操作
 
@@ -87,7 +87,13 @@ int main()
 {
     ::yomk::server().init();
     ::yomk::server().srv<YomkDdsService>().create();
-    YOMKDDS_VERSION();
+    // 查看版本（链式 version() 返回 Response，解包/打印由调用方处理）
+    auto vresp = yomk::dds().version();
+    if (vresp.status == yomk::payload::ResStatus::Succeeded)
+    {
+        auto ver = yomk::msgs::unpack<yomk::msgs::String>(vresp.data);
+        if (ver) { yomk::log().tag("YomkDdsService").info(ver->d); }
+    }
 
     // 1. 加载 XML profiles——必须在任何节点创建之前调用！
     auto resp = yomk::dds().xml("/path/to/profiles.xml").load_cfg();
@@ -149,7 +155,7 @@ cmake --build build
 
 ## 预期输出
 
-- 程序启动先打印版本号（`YOMKDDS_VERSION` 输出）；
+- 程序启动先打印版本号（`yomk::dds().version()` 解包后经 `yomk::log()` 输出）；
 - `yomk::dds().load_cfg()` 成功返回 `eOk`，无额外打印；
 - 两次 `yomk::dds().node_name(...).create()` 均返回 `eOk`（框架日志前缀以实际环境为准）；两个节点按各自命中的档运行——本示例的 leaseDuration 数值差异不产生可见打印，命中效果体现在 participant 配置上（观察方式见第 3 步）；
 - 失败路径示例：把路径改成不存在的文件重跑，程序打印 `load xml failed: <m_msg 携原因与返回码>` 后以退出码 1 退出（失败回显，不静默降级）。

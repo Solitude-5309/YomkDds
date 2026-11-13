@@ -157,6 +157,25 @@ public:
     }
 
     /**
+     * @brief Query the extension version (read terminator)
+     * @return Response carrying a String packet ("YomkDds v<version>");
+     *         returns Invalid if YomkServer is not initialized
+     * @note Unpacking and printing the version string are the caller's
+     *       responsibility (the former macro did both internally)
+     */
+    // @zh: 查询扩展版本（读终结）
+    // @zh: return Response 携带 String 包（"YomkDds v<版本号>"）；未初始化返回 Invalid
+    // @zh: note 版本串的解包与打印由调用方自行处理（原宏内部代做）
+    yomk::payload::Response version()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsVersion).msg(nullptr).request();
+    }
+
+    /**
      * @brief Switch into the XML profiles loading facet with an explicit path
      * @param[in] xmlPath Explicit path, relative or absolute
      * @return XML loading facet, terminated by load_cfg()
@@ -223,33 +242,8 @@ inline detail::DdsBuilder dds()
  * Full behavior and constraints: docs/features/core-communication.md
  */
 // @zh: 核心通信宏（YomkDdsService 端点）
-// @zh: 除 YOMKDDS_VERSION 外均返回 yomk::payload::Response，成功判定
+// @zh: 除 YOMKDDS_LOAN（借出指针经出参）外均返回 yomk::payload::Response，成功判定
 // @zh: status == Succeeded，失败原因读 msg；完整约束见 docs/features/core-communication.md
-
-/**
- * @brief Query the extension version and print it via yomk::log()
- * @note No return value; failures are logged as errors
- */
-// @zh: 查询扩展版本并打印（经 yomk::log()）
-// @zh: note 无返回值；失败走错误日志
-
-#define YOMKDDS_VERSION()                                                          \
-    do                                                                             \
-    {                                                                              \
-        auto __resp = ::yomk::server().url(::yomk::url::ddsVersion).msg(nullptr).request();            \
-        if (__resp.status == yomk::payload::ResStatus::Succeeded)                                  \
-        {                                                                          \
-            auto __ver = ::yomk::msgs::unpack<::yomk::msgs::String>(__resp.data);                            \
-            if (__ver)                                                             \
-            {                                                                      \
-                ::yomk::log().tag("YomkDdsService").info(__ver->d);                         \
-            }                                                                      \
-        }                                                                          \
-        else                                                                       \
-        {                                                                          \
-            ::yomk::log().tag("YomkDdsService").error("getVersion failed: ", __resp.msg); \
-        }                                                                          \
-    } while (0)
 
 /**
  * @brief Register a publisher topic on a node

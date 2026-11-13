@@ -89,7 +89,7 @@ export YOMKDDS_XML_PROFILE_PATH="/path/to/profiles.xml"
 - 开关关闭时无参形态不加载（路径变量被忽略恒空，服务端报 `xml path is empty`）；
 - 开关开启但路径空：静默不加载（同发现服务器空串=不直配）。
 
-> 除 `YOMKDDS_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
+> 核心通信套件中除 `YOMKDDS_LOAN`（借出结果经 outPtr 出参获取）外，其余宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 ## 与其他功能的关系
 

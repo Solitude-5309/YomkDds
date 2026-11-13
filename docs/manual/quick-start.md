@@ -63,7 +63,13 @@ int main(int argc, char *argv[])
     // 1. 初始化框架并启动 YomkDds 服务
     ::yomk::server().init();
     ::yomk::server().srv<YomkDdsService>().create();
-    YOMKDDS_VERSION(); // 查看版本（宏内部自动解包并打印）
+    // 查看版本（链式 version() 返回 Response，解包/打印由调用方处理）
+    auto vresp = yomk::dds().version();
+    if (vresp.status == yomk::payload::ResStatus::Succeeded)
+    {
+        auto ver = yomk::msgs::unpack<yomk::msgs::String>(vresp.data);
+        if (ver) { yomk::log().tag("YomkDdsService").info(ver->d); }
+    }
 
     // 2. 创建节点（每节点一个独立 DDS 参与者；domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
     yomk::dds().node_name("node0").create();
@@ -107,7 +113,7 @@ int main(int argc, char *argv[])
 | 片段 | 作用 |
 |---|---|
 | `::yomk::server().init()` + `::yomk::server().srv<YomkDdsService>().create()` | 初始化 YomkServer 框架并启动 YomkDds 服务（`yomk/server/YomkServerApi.h` 提供）；每个使用 YomkDds 宏 API 的程序开头都需要 |
-| `YOMKDDS_VERSION()` | 版本查询宏，内部自动解包并打印，无返回值 |
+| `yomk::dds().version()` | 版本查询，返回 Response 携带 String 版本串，解包/打印由调用方处理 |
 | `yomk::dds().node_name("node0").create()` | 创建节点，每节点一个独立 DDS 参与者；domainId 缺省取环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0，合法范围 [0,232]） |
 | `YOMKDDS_PUB_TOPIC(...)` / `YOMKDDS_SUB_TOPIC(...)` | 在节点上注册发布/订阅主题；type 实参为 `new XxxPubSubType()`，**所有权移交服务端，调用后 caller 不再持有/释放** |
 | `YOMKDDS_SUB_TOPIC` 的 `onMessage` | 回调签名 `std::function<void(const void *data)>`，收到消息时被调用；`data` 是交付的消息实例指针，回调中转型使用（详见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)） |
@@ -115,7 +121,7 @@ int main(int argc, char *argv[])
 | `YOMKDDS_PUB_MSG("node0", "my_topic", &msg)` | 发布数据；data 为数据实例指针（借用，同步写入，caller 保留所有权） |
 | `YOMKDDS_DEL_NODE("node0")` | 退出前删除节点，显式销毁 DDS 实体 |
 
-除 `YOMKDDS_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`，失败时可读 `m_msg` 获取错误信息（上例为最小篇幅省略了判断，正式代码建议参照 `examples/ExampleYomkDdsTopic.cpp` 逐宏判错）。
+除 `YOMKDDS_LOAN`（借出结果经 outPtr 出参获取）外，其余核心通信宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。（上例为最小篇幅省略了判断，正式代码建议参照 `examples/ExampleYomkDdsTopic.cpp` 逐宏判错）。
 
 ### 第 3 步：编译并运行
 
@@ -152,7 +158,7 @@ Ctrl+C 先停发布端，再停订阅端，订阅端会打印累计接收条数�
 
 运行后依次看到（时间戳等日志前缀以实际环境为准）：
 
-- 版本号打印（`YOMKDDS_VERSION` 输出）；
+- 版本号打印（`yomk::dds().version()` 解包后经 `yomk::log()` 输出）；
 - `[SEND] hello 0` 至 `[SEND] hello 4` 共 5 条发送日志；
 - 交错的 `[RECV] hello 0` 至 `[RECV] hello 4` 接收日志；
 - 结尾 `received=5/5`。

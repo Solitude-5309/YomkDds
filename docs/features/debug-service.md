@@ -203,7 +203,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 - **`topic pub` 发布失败**：未发现主题/载荷不合法/送达未确认返回错误，错误文本枚举：`invalid json for type [...]`（非法 JSON）、`not all subscribers acknowledged`（未全部确认送达）、`subscribers exist but not all matched (suspended or offline)`（订阅者在场却无一与发布端匹配）、`cannot open json file`/`json file is empty`（`-f` 文件问题）、`非法频率 "..."`/`非法订阅者数量 "..."`/`非法发布条数 "..."`/`waiting for subscribers interrupted` 等。ack 确认覆盖语义：RELIABLE 订阅者运行中 → ack 协议级确认送达；中途挂起 → ack 超时报错退出不假成功；发布端启动前已离线的订阅者无从期待、照常返回成功（DDS 发现机制的客观边界）；BEST_EFFORT 订阅者不参与 ack 与 matched 校验，始终尽力而为。
 
-> 除 `YOMKDDS_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
+> 核心通信套件中除 `YOMKDDS_LOAN`（借出结果经 outPtr 出参获取）外，其余宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 ## 与其他功能的关系
 

@@ -45,13 +45,13 @@
 
 对外头文件按标准扩展四件套组织（安装后统一 `<yomk/dds/...>` 引用）：`YomkDdsUrl.h`（`yomk::url` 命名空间 URL 常量，请求链一律引用常量不裸写字面量）、`YomkDdsPayload.h`（扩展专属载荷 `yomk::payload`：请求/响应结构、回调类型、QoS 描述与公共配置辅助）、`YomkDdsMsg.h`（消息包：全部 `YOMK_DEFINE_MSG` 集中声明，生成 `yomk::msgs::Xxx`；用户 DDS 载荷为 IDL 生成类型，独立入口 `<yomk/dds/YomkDdsStdMsgs.hpp>`）、`YomkDdsAPI.h`（宏形态 Api，本节内容）。
 
-> 除 `YOMKDDS_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
+> 除 `YOMKDDS_LOAN`（借出结果经 outPtr 出参获取）外，其余核心通信宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 **核心通信（YomkDdsService）** — 详见 [功能文档：核心通信](docs/features/core-communication.md)：
 
 | 宏 | 简述 |
 |---|---|
-| `YOMKDDS_VERSION()` | 版本查询（宏内部自动解包并打印） |
+| `yomk::dds().version()` | 版本查询（Response 携带 String 版本串，解包/打印由调用方处理） |
 | `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | 加载 Fast DDS XML profiles 文件（详见 [xml-profiles](docs/features/xml-profiles.md)） |
 | `yomk::dds().node_name(nodeName)[.domain_id(domainId)][.udp_ds/.tcp_ds(locator)].create()` | 创建节点（详见 [discovery-server](docs/features/discovery-server.md)） |
 | `YOMKDDS_DEL_NODE(nodeName)` | 删除节点 |

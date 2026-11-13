@@ -17,7 +17,7 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 | 转换 bag（过滤/裁剪/归并） | `YOMKDDS_BAG_CONVERT(inputs, cfgPath)` | `bag convert` | 不须（纯文件操作，无须 create_node） |
 | 回放 bag | `YOMKDDS_BAG_PLAY(...)`（等价宏见 README 6.11，须先自建 bag 节点） | `bag play` | CLI 自动创建并在退出前删除 bag 节点 |
 
-> 除 `YOMKDDS_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
+> 核心通信套件中除 `YOMKDDS_LOAN`（借出结果经 outPtr 出参获取）外，其余宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
 ## 使用方式概述
 

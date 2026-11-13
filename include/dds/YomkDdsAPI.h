@@ -1,17 +1,128 @@
 #pragma once
+#include <string>
+#include <utility>
+
+#include <yomk/server/YomkServerApi.h>
 #include <yomk/dds/YomkDdsBagService.h>
 #include <yomk/dds/YomkDdsDebugService.h>
 #include <yomk/dds/YomkDdsMsg.h>
 #include <yomk/dds/YomkDdsService.h>
 #include <yomk/dds/YomkDdsUrl.h>
 
-// Maintainer notes: this header is the macro-form Api of the four-suite
-// (chained API intentionally not provided). Each macro wraps one unified
-// request: yomk::server().url(<yomk::url constant>).msg(<yomk::msgs message>).request().
+// Maintainer notes: this header is migrating from the macro-form Api to the
+// chained Api (per-suite, see tmp/链式api改造.md). load_xml is chained
+// (yomk::dds()); all other endpoints are still macros. Each unit — chained
+// terminator or macro — wraps one unified request:
+// yomk::server().url(<yomk::url constant>).msg(<yomk::msgs message>).request().
 // URLs come from YomkDdsUrl.h, payload structures from YomkDdsPayload.h,
 // message declarations from YomkDdsMsg.h.
 
+// ===== Chained Api — YomkDdsService core communication (migration in progress) =====
+// 设计对齐 YomkServer 链式 API（srv_info/log）：域入口按值返回 builder，builder 机制
+// 内敛于 yomk::detail，调用方全程以 auto 接收，从不具名引用类型；builder 禁止缓存复用。
+namespace yomk::detail
+{
+/**
+ * @brief XML profiles loading facet: carries the explicit path accumulated by dds().xml(), terminated by load_cfg()
+ */
+// @zh: XML profiles 加载分面：承载 dds().xml() 累积的显式路径，load_cfg() 终结
+class DdsXmlBuilder
+{
+    std::string m_xmlPath;
+public:
+    explicit DdsXmlBuilder(std::string xmlPath)
+        : m_xmlPath(std::move(xmlPath))
+    {
+    }
+    /**
+     * @brief Load the Fast DDS XML profiles file given by xml() (request terminator)
+     * @return Response; success requires status == Succeeded, failure details in msg;
+     *         returns Invalid if YomkServer is not initialized
+     * @note Must be called before node creation; a later successful call replaces
+     *       the cache wholesale. Success only proves the file parses — profiles
+     *       apply via the three-level extraction chain when nodes are created
+     */
+    // @zh: 加载 xml() 指定的 Fast DDS XML profiles 文件（请求终结）
+    // @zh: return Response，成功判定 status == Succeeded，失败原因读 msg；未初始化返回 Invalid
+    // @zh: note 须在建点前调用；再次成功调用整体替换缓存；成功仅证明文件可解析，
+    // @zh: profiles 在后续建点时按三级提取链叠加
+    yomk::payload::Response load_cfg()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsLoadXml)
+            .msg(yomk::msgs::DDSXmlLoad::shared(yomk::payload::DDSXmlLoad{std::move(m_xmlPath)}))
+            .request();
+    }
+};
 
+/**
+ * @brief Core communication chained builder: chained endpoints live here during the macro-to-chain migration
+ */
+// @zh: 核心通信链式 Builder：宏链迁移期内的链式端点挂载于此
+class DdsBuilder
+{
+public:
+    /**
+     * @brief Switch into the XML profiles loading facet with an explicit path
+     * @param[in] xmlPath Explicit path, relative or absolute
+     * @return XML loading facet, terminated by load_cfg()
+     */
+    // @zh: 切入 XML profiles 加载分面并累积显式路径
+    // @zh: xmlPath 显式路径（相对/绝对均可）
+    // @zh: return XML 加载分面，经 load_cfg() 终结
+    DdsXmlBuilder xml(std::string xmlPath)
+    {
+        return DdsXmlBuilder(std::move(xmlPath));
+    }
+
+    /**
+     * @brief Load the default Fast DDS XML profiles file (request terminator)
+     * @return Response; success requires status == Succeeded, failure details in msg;
+     *         returns Invalid if YomkServer is not initialized
+     * @note Default path reads YOMKDDS_XML_PROFILE_PATH gated by
+     *       YOMKDDS_USE_XML_PROFILE=true; empty path skips loading silently.
+     *       Must be called before node creation; a later successful call replaces
+     *       the cache wholesale. Success only proves the file parses — profiles
+     *       apply via the three-level extraction chain when nodes are created
+     */
+    // @zh: 加载缺省 Fast DDS XML profiles 文件（请求终结）
+    // @zh: return Response，成功判定 status == Succeeded，失败原因读 msg；未初始化返回 Invalid
+    // @zh: note 缺省路径经总开关 YOMKDDS_USE_XML_PROFILE=true 读取 YOMKDDS_XML_PROFILE_PATH，
+    // @zh: 空串由调用方静默跳过加载；须在建点前调用；再次成功调用整体替换缓存；
+    // @zh: 成功仅证明文件可解析，profiles 在后续建点时按三级提取链叠加
+    yomk::payload::Response load_cfg()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsLoadXml)
+            .msg(yomk::msgs::DDSXmlLoad::shared(yomk::payload::DDSXmlLoad{}))
+            .request();
+    }
+};
+}  // namespace yomk::detail
+
+namespace yomk
+{
+/**
+ * @brief YomkDds core communication domain entry: starting point for chained calls
+ * @return detail::DdsBuilder (by value, for single-expression chained calls only)
+ * @note Thread-safe, non-blocking
+ */
+// @zh: YomkDds 核心通信域入口：链式调用的起点
+// @zh: return detail::DdsBuilder（按值，仅用于单表达式链式调用）
+// @zh: note 线程安全，非阻塞
+inline detail::DdsBuilder dds()
+{
+    return detail::DdsBuilder{};
+}
+}  // namespace yomk
+
+// ===== YomkDdsService — core communication =====
 // ===== YomkDdsService — core communication =====
 /**
  * @brief Core communication macros (YomkDdsService endpoints)
@@ -23,23 +134,6 @@
 // @zh: 核心通信宏（YomkDdsService 端点）
 // @zh: 除 YOMKDDS_VERSION 外均返回 yomk::payload::Response，成功判定
 // @zh: status == Succeeded，失败原因读 msg；完整约束见 docs/features/core-communication.md
-
-/**
- * @brief Load a Fast DDS XML profiles file
- * @param[in] xmlPath (variadic tail, optional) explicit path, relative or absolute;
- *            default reads YOMKDDS_XML_PROFILE_PATH gated by YOMKDDS_USE_XML_PROFILE=true
- * @note Must be called before create_node; a later successful call replaces the
- *       cache wholesale. Success only proves the file parses — profiles apply
- *       via the three-level extraction chain when nodes are created
- */
-// @zh: 加载 Fast DDS XML profiles 文件
-// @zh: xmlPath 可缺省尾参：显式路径（相对/绝对均可）；缺省时经总开关 YOMKDDS_USE_XML_PROFILE=true
-// @zh: 读取 YOMKDDS_XML_PROFILE_PATH
-// @zh: note 须在 create_node 前调用；再次成功调用整体替换缓存；成功仅证明文件可解析，
-// @zh: profiles 在后续 create_node 时按三级提取链叠加
-
-#define YOMKDDS_LOAD_XML(...) \
-    ::yomk::server().url(::yomk::url::ddsLoadXml).msg(::yomk::msgs::DDSXmlLoad::shared(yomk::payload::DDSXmlLoad{##__VA_ARGS__})).request()
 
 /**
  * @brief Create a DDS node (one dedicated DDS participant per node)

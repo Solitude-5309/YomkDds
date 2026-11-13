@@ -34,7 +34,7 @@
 - **Loan 借出零拷贝**：plain 类型借出 writer 池内样本直接填值发布，免序列化
 - **QoS 可配**：`DDSQosProfile` 8 项独立设置 + ROS2 预置底座（含 ROS2 互通）
 - **发现服务器**：UDP/TCP 双通道直配（CLIENT 协议），支持跨域互通与 XML profiles 叠加
-- **XML profiles**：`YOMKDDS_LOAD_XML` 三级提取链（节点名精确匹配 → 默认档兜底 → 默认底座）
+- **XML profiles**：`yomk::dds().load_cfg()` 三级提取链（节点名精确匹配 → 默认档兜底 → 默认底座）
 - **ROS2 互通**：set_name 类型名直改，与 ROS2 节点就同名类型互相收发
 - **类型无关调试**：`yomkdds` CLI 与 `YOMKDDS_DEBUG_*` 宏观察任意 DDS 域（无需 IDL 生成代码）：主题观察/频率测量、主题与节点详情、类型内省、JSON 载荷发布
 - **Bag 录制回放**：mcap 格式录制（分片/缓存/暂停/通配）、元信息、重建索引、转换、按时间轴回放
@@ -52,7 +52,7 @@
 | 宏 | 简述 |
 |---|---|
 | `YOMKDDS_VERSION()` | 版本查询（宏内部自动解包并打印） |
-| `YOMKDDS_LOAD_XML([xmlPath])` | 加载 Fast DDS XML profiles 文件（详见 [xml-profiles](docs/features/xml-profiles.md)） |
+| `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | 加载 Fast DDS XML profiles 文件（详见 [xml-profiles](docs/features/xml-profiles.md)） |
 | `YOMKDDS_NODE(nodeName[, domainId[, udp/tcp serverLocator]])` | 创建节点（详见 [discovery-server](docs/features/discovery-server.md)） |
 | `YOMKDDS_DEL_NODE(nodeName)` | 删除节点 |
 | `YOMKDDS_PUB_TOPIC(nodeName, topicName, type[, qos])` | 注册发布主题（qos 详见 [qos-profiles](docs/features/qos-profiles.md)） |

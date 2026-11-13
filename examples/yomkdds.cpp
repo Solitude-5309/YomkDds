@@ -282,7 +282,7 @@ static constexpr char kUseDiscoverServerEnv[] = "YOMKDDS_USE_DISCOVER_SERVER";
 static constexpr char kUdpDiscoverServersEnv[] = "YOMKDDS_UDP_DISCOVER_SERVERS";
 static constexpr char kTcpDiscoverServersEnv[] = "YOMKDDS_TCP_DISCOVER_SERVERS";
 
-// XML profiles 自动加载双环境变量：总开关 + profiles 文件路径（YOMKDDS_LOAD_XML 无参形态
+// XML profiles 自动加载双环境变量：总开关 + profiles 文件路径（yomk::dds().load_cfg() 缺省形态
 // 经 DDSXmlLoad 类内缺省初始化器读取，见 include/dds/YomkDdsService.h）。启动时无则分别创建
 // 并设默认值 false/空（进程内生效），并幂等持久化到 ~/.bashrc 使新开任意终端可查看可
 // 继承；开关开启且路径非空时各子命令创建节点前自动加载该 profiles（见 autoLoadXmlProfile），
@@ -325,7 +325,7 @@ static void persistDefaultEnv(const char *name, const char *value, const char *n
 }
 
 // XML profiles 自动加载：总开关 YOMKDDS_USE_XML_PROFILE=true 且 YOMKDDS_XML_PROFILE_PATH
-// 非空时，在各子命令创建调试/bag 节点前先经 YOMKDDS_LOAD_XML 无参形态（环境变量缺省）
+// 非空时，在各子命令创建调试/bag 节点前先经 yomk::dds().load_cfg() 缺省形态（环境变量缺省）
 // 加载一次 profiles，server 侧 xmlCache 供本进程后续全部节点的三级提取链取用；开关关闭
 // 或路径空静默跳过（同发现服务器空串=不直配语义），加载失败报错返回 false（路径非法不
 // 静默降级，对齐 serverLocator 非法串创建失败回显）。返回 true=可继续创建节点。
@@ -344,7 +344,7 @@ static bool autoLoadXmlProfile()
         ::yomk::log().tag("yomkdds").error("register /YomkDdsService failed");
         return false;
     }
-    auto resp = YOMKDDS_LOAD_XML();
+    auto resp = yomk::dds().load_cfg();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("auto load xml profile [", path, "] failed: ", resp.msg);

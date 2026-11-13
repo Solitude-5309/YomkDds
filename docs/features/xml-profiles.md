@@ -1,17 +1,17 @@
 # 功能文档：XML profiles 配置
 
-> **本文档覆盖范围**：`YOMKDDS_LOAD_XML` 加载 Fast DDS XML profiles 文件的完整语义——显式路径与无参缺省（环境变量自动加载）两种形态、participant 三级 profile 提取链、时序约束、重复调用替换语义与失败行为。与发现服务器直配的组合边界仅给出结论，叠加细节以 [discovery-server.md](./discovery-server.md) 为主责方。
+> **本文档覆盖范围**：`yomk::dds().load_cfg()` 加载 Fast DDS XML profiles 文件的完整语义——显式路径与无参缺省（环境变量自动加载）两种形态、participant 三级 profile 提取链、时序约束、重复调用替换语义与失败行为。与发现服务器直配的组合边界仅给出结论，叠加细节以 [discovery-server.md](./discovery-server.md) 为主责方。
 
 ## 功能定位
 
-YomkDds 节点的 participant 级**发现配置/传输/QoS** 可以不经代码、经 Fast DDS XML profiles 文件下发：用户编写符合 Fast DDS XML schema 的 profiles 文件，用 `YOMKDDS_LOAD_XML` 宏加载缓存，后续创建的节点（participant）按三级提取链叠加对应 profile。适合统一调整租约时长、注入传输描述符、打底 QoS 等进程级配置，且可与发现服务器直配组合。
+YomkDds 节点的 participant 级**发现配置/传输/QoS** 可以不经代码、经 Fast DDS XML profiles 文件下发：用户编写符合 Fast DDS XML schema 的 profiles 文件，用 `yomk::dds().xml(xmlPath).load_cfg()` 链式 API 加载缓存，后续创建的节点（participant）按三级提取链叠加对应 profile。适合统一调整租约时长、注入传输描述符、打底 QoS 等进程级配置，且可与发现服务器直配组合。
 
 ## 能力清单
 
 | 能力 | 说明 |
 |---|---|
-| 显式路径加载 | `YOMKDDS_LOAD_XML(xmlPath)` |
-| 无参缺省加载（环境变量自动加载） | `YOMKDDS_LOAD_XML()` 读 `YOMKDDS_USE_XML_PROFILE` + `YOMKDDS_XML_PROFILE_PATH` |
+| 显式路径加载 | `yomk::dds().xml(xmlPath).load_cfg()` |
+| 无参缺省加载（环境变量自动加载） | `yomk::dds().load_cfg()` 读 `YOMKDDS_USE_XML_PROFILE` + `YOMKDDS_XML_PROFILE_PATH` |
 | participant 三级提取链 | 节点名精确匹配 → 默认档兜底 → 保持默认底座 |
 | 时序约束 | 必须在任何节点创建之前调用 |
 | 重复调用替换 | 以最新成功文件整体替换 |
@@ -20,8 +20,8 @@ YomkDds 节点的 participant 级**发现配置/传输/QoS** 可以不经代码�
 ## 使用方式概述
 
 ```cpp
-YOMKDDS_LOAD_XML("/path/to/profiles.xml");   // 形态 1：显式路径；必须在任何节点创建之前调用！
-YOMKDDS_LOAD_XML();                          // 形态 2：无参缺省，读下方两环境变量（总开关+路径）
+yomk::dds().xml("/path/to/profiles.xml").load_cfg();   // 形态 1：显式路径；必须在任何节点创建之前调用！
+yomk::dds().load_cfg();                          // 形态 2：无参缺省，读下方两环境变量（总开关+路径）
 YOMKDDS_NODE("xml_node", 0);                 // 创建时按三级提取链叠加 XML 配置
 ```
 
@@ -55,7 +55,7 @@ participant 档 XML 片段示例（格式经 Fast DDS XML schema 校验）：
 | `YOMKDDS_USE_XML_PROFILE` | 总开关 | 默认 `false`，`true`/`1` 视为开启（大小写不敏感）；未设置/空/`false`/`0`/其余任意值关闭 |
 | `YOMKDDS_XML_PROFILE_PATH` | profiles 文件路径 | 默认空，相对/绝对均可 |
 
-- 开关开启时 `YOMKDDS_LOAD_XML` 无参形态经 `DDSXmlLoad` 类内缺省初始化器自动取该路径（显式传参覆盖 env 缺省，语义同 serverLocator 尾参）；
+- 开关开启时 `yomk::dds().load_cfg()` 无参形态经 `DDSXmlLoad` 类内缺省初始化器自动取该路径（显式传参覆盖 env 缺省，语义同 serverLocator 尾参）；
 - 路径空静默不加载（同发现服务器空串=不直配），路径不存在/文件为空/格式非法失败回显不静默降级；
 - 开关关闭时路径变量被忽略恒空（服务端报 `xml path is empty`）；
 - `yomkdds` CLI 与该双环境变量对齐：启动时无则创建默认值并幂等写入 `~/.bashrc`（仅可见性，行为同未设置），且各子命令创建调试/bag 节点前自动加载（开关关闭或路径空行为不变），适合容器/CI 批量注入：
@@ -79,7 +79,7 @@ export YOMKDDS_XML_PROFILE_PATH="/path/to/profiles.xml"
 
 ### 时序约束
 
-- **必须在任何节点创建之前调用**——participant 的发现配置/传输/QoS 在创建时固化，先 `YOMKDDS_LOAD_XML` 再 `YOMKDDS_NODE`；
+- **必须在任何节点创建之前调用**——participant 的发现配置/传输/QoS 在创建时固化，先 `yomk::dds().load_cfg()` 再 `YOMKDDS_NODE`；
 - 节点创建后加载仅影响后续新建实体，对已建节点不生效；
 - 再次调用以最新成功文件整体替换。
 
@@ -93,7 +93,7 @@ export YOMKDDS_XML_PROFILE_PATH="/path/to/profiles.xml"
 
 ## 与其他功能的关系
 
-- **发现服务器直配**：直配可单独使用或配合 `YOMKDDS_LOAD_XML`——XML 打底，直配 server 项覆盖 XML `discoveryServersList`；叠加规则以 [discovery-server.md](./discovery-server.md) 为主责方，本文不重复展开；
+- **发现服务器直配**：直配可单独使用或配合 `yomk::dds().load_cfg()`——XML 打底，直配 server 项覆盖 XML `discoveryServersList`；叠加规则以 [discovery-server.md](./discovery-server.md) 为主责方，本文不重复展开；
 - **节点创建**：加载结果作用于 `YOMKDDS_NODE` 创建的 participant（每节点一个独立参与者），节点生命周期见 [core-communication.md](./core-communication.md)；
 - **环境变量**：`YOMKDDS_USE_XML_PROFILE`/`YOMKDDS_XML_PROFILE_PATH` 及 CLI 侧 `.bashrc` 幂等写入行为详见[环境变量与公共配置参考](../manual/env-vars-reference.md)。
 

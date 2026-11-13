@@ -1,19 +1,19 @@
 # 使用手册：XML profiles 配置教程
 
-> **本文档覆盖范围**：用 Fast DDS XML profiles 文件集中配置 YomkDds 节点的发现/传输/QoS——编写一份含具名 profile 与默认档的最小可用 profiles XML、用 `YOMKDDS_LOAD_XML` 宏加载并检查返回值、验证三级提取链的 profile 命中规则（节点名精确匹配优先、默认档兜底、命中后节点名最后覆盖），以及加载时序红线与失败排障。功能原理与能力边界详见[功能文档](../features/xml-profiles.md)。
+> **本文档覆盖范围**：用 Fast DDS XML profiles 文件集中配置 YomkDds 节点的发现/传输/QoS——编写一份含具名 profile 与默认档的最小可用 profiles XML、用 `yomk::dds().xml(xmlPath).load_cfg()` 链式 API 加载并检查返回值、验证三级提取链的 profile 命中规则（节点名精确匹配优先、默认档兜底、命中后节点名最后覆盖），以及加载时序红线与失败排障。功能原理与能力边界详见[功能文档](../features/xml-profiles.md)。
 
 ## 目标
 
 完成本文档后，你将：
 
 1. 编写一份最小可用的 profiles XML（具名 participant 档 + `is_default_profile="true"` 默认档）；
-2. 在任何节点创建之前用 `YOMKDDS_LOAD_XML` 加载，并正确判错（读 `m_msg`）；
+2. 在任何节点创建之前用 `yomk::dds().load_cfg()` 加载，并正确判错（读 `m_msg`）；
 3. 验证 profile 命中：节点名精确匹配优先、默认档兜底、命中后节点名仍最后覆盖。
 
 ## 前提与准备
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成编译安装；C++ 工程骨架与 [quick-start.md](./quick-start.md) 相同（`find_package(YomkServer REQUIRED)` + `find_package(YomkDds REQUIRED)`，链接 `YomkDds::YomkDds YomkServer::YomkServer`——本教程示例未使用消息类型，无需 `YomkDdsStdMsgs`）；
-- 加载语义（README 5.7 口径）：`YOMKDDS_LOAD_XML` 读文件经 `load_XML_profiles_file` 解析校验（返回码显式检查）后缓存，供后续 create_node 的 participant 按**三级提取链**叠加：按节点名 `profile_name` 精确匹配 → `is_default_profile="true"` 默认档兜底（同文件多默认档取首个）→ 均未命中保持默认底座；命中后节点名仍最后覆盖。可配置范围为 participant 级发现/传输/QoS 配置，字段写法经 Fast DDS XML schema 校验；
+- 加载语义（README 5.7 口径）：`yomk::dds().load_cfg()` 读文件经 `load_XML_profiles_file` 解析校验（返回码显式检查）后缓存，供后续 create_node 的 participant 按**三级提取链**叠加：按节点名 `profile_name` 精确匹配 → `is_default_profile="true"` 默认档兜底（同文件多默认档取首个）→ 均未命中保持默认底座；命中后节点名仍最后覆盖。可配置范围为 participant 级发现/传输/QoS 配置，字段写法经 Fast DDS XML schema 校验；
 - 宏返回值约定：除 `YOMKDDS_VERSION()` 外，其余宏均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`，失败时读 `m_msg` 获取错误信息。
 
 ## 分步操作
@@ -54,13 +54,13 @@
 
 要点：同一文件可共存多档；同文件多个默认档只取首个，避免写多个 `is_default_profile="true"`。
 
-### 第 2 步：YOMKDDS_LOAD_XML 加载并检查返回值
+### 第 2 步：load_cfg 链式加载并检查返回值
 
 宏的两种形态（README 5.7 原文）：
 
 ```cpp
-YOMKDDS_LOAD_XML("/path/to/profiles.xml");   // 形态 1：显式路径；必须在任何节点创建之前调用！
-YOMKDDS_LOAD_XML();                          // 形态 2：无参缺省，读下方两环境变量（总开关+路径）
+yomk::dds().xml("/path/to/profiles.xml").load_cfg();   // 形态 1：显式路径；必须在任何节点创建之前调用！
+yomk::dds().load_cfg();                          // 形态 2：无参缺省，读下方两环境变量（总开关+路径）
 ```
 
 形态 2 依赖的双环境变量（进程级，无需改代码）：
@@ -90,7 +90,7 @@ int main()
     YOMKDDS_VERSION();
 
     // 1. 加载 XML profiles——必须在任何节点创建之前调用！
-    auto resp = YOMKDDS_LOAD_XML("/path/to/profiles.xml");
+    auto resp = yomk::dds().xml("/path/to/profiles.xml").load_cfg();
     if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("XmlProfilesDemo").error("load xml failed: ", resp.m_msg);
@@ -143,14 +143,14 @@ cmake --build build
 
 ### 时序红线（务必遵守）
 
-- **必须在任何节点创建之前调用**：participant 的发现配置/传输/QoS 在创建时固化——先 `YOMKDDS_LOAD_XML` 再 `YOMKDDS_NODE`；
+- **必须在任何节点创建之前调用**：participant 的发现配置/传输/QoS 在创建时固化——先 `yomk::dds().load_cfg()` 再 `YOMKDDS_NODE`；
 - 节点创建后加载仅影响后续新建实体，**对已建节点不生效**；
 - 再次调用以**最新成功文件整体替换**（注意：替换同样只影响之后新建的节点）。
 
 ## 预期输出
 
 - 程序启动先打印版本号（`YOMKDDS_VERSION` 输出）；
-- `YOMKDDS_LOAD_XML` 成功返回 `eOk`，无额外打印；
+- `yomk::dds().load_cfg()` 成功返回 `eOk`，无额外打印；
 - 两次 `YOMKDDS_NODE` 均返回 `eOk`（框架日志前缀以实际环境为准）；两个节点按各自命中的档运行——本示例的 leaseDuration 数值差异不产生可见打印，命中效果体现在 participant 配置上（观察方式见第 3 步）；
 - 失败路径示例：把路径改成不存在的文件重跑，程序打印 `load xml failed: <m_msg 携原因与返回码>` 后以退出码 1 退出（失败回显，不静默降级）。
 
@@ -158,9 +158,9 @@ cmake --build build
 
 | 现象 | 原因与处理 |
 |---|---|
-| `YOMKDDS_LOAD_XML` 返回错误，`m_msg` 携原因与返回码 | 三类失败：路径不存在/文件为空/格式非法——核对路径（相对/绝对均可）与文件内容，确认 XML 经 Fast DDS XML schema 校验合法后重试 |
+| `yomk::dds().load_cfg()` 返回错误，`m_msg` 携原因与返回码 | 三类失败：路径不存在/文件为空/格式非法——核对路径（相对/绝对均可）与文件内容，确认 XML 经 Fast DDS XML schema 校验合法后重试 |
 | 形态 2 无参加载报 `xml path is empty` | 总开关 `YOMKDDS_USE_XML_PROFILE` 关闭时路径变量被忽略恒空（服务端报 `xml path is empty`）——先 `export YOMKDDS_USE_XML_PROFILE=true` 再设置 `YOMKDDS_XML_PROFILE_PATH` |
-| 「改了 XML 不生效」 | 时序原因：节点创建后才加载——participant 的发现配置/传输/QoS 在创建时固化，对已建节点不生效，仅影响后续新建实体；把 `YOMKDDS_LOAD_XML` 挪到第一个 `YOMKDDS_NODE` 之前，或删除相关节点后重建 |
+| 「改了 XML 不生效」 | 时序原因：节点创建后才加载——participant 的发现配置/传输/QoS 在创建时固化，对已建节点不生效，仅影响后续新建实体；把 `yomk::dds().load_cfg()` 挪到第一个 `YOMKDDS_NODE` 之前，或删除相关节点后重建 |
 | 具名档没命中、走了默认档 | 三级提取链第一级按节点名 `profile_name` **精确匹配**——检查 XML 的 `profile_name` 与 `YOMKDDS_NODE` 第一参是否逐字节一致 |
 | 想让多个节点共用不同配置却只命中同一档 | 同文件多默认档只取首个：需要差异化配置时为每个节点写独立具名档（`profile_name` 等于节点名），默认档只作兜底 |
 | 节点名与预期不符 | 命中后节点名仍最后覆盖：profile 只提供 participant 配置，participant 仍以 `YOMKDDS_NODE` 传入的节点名命名，属正常 |

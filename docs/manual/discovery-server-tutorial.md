@@ -189,13 +189,13 @@ export YOMKDDS_UDP_DISCOVER_SERVERS="192.168.1.10:11811;192.168.1.11:11811"  # T
 
 ### 第 5 步：直配与 XML 打底组合验证
 
-直配可与 `YOMKDDS_LOAD_XML` 组合：**XML 打底，直配 server 项覆盖 XML `discoveryServersList`**。操作步骤：
+直配可与 `yomk::dds().load_cfg()` 组合：**XML 打底，直配 server 项覆盖 XML `discoveryServersList`**。操作步骤：
 
-1. 先准备一份 profiles XML 并在代码最前面加载（XML 的发现配置作为打底，编写与加载方法见 [xml-profiles-tutorial.md](./xml-profiles-tutorial.md)；注意 `YOMKDDS_LOAD_XML` 必须在任何节点创建之前调用）；
+1. 先准备一份 profiles XML 并在代码最前面加载（XML 的发现配置作为打底，编写与加载方法见 [xml-profiles-tutorial.md](./xml-profiles-tutorial.md)；注意 `yomk::dds().load_cfg()` 必须在任何节点创建之前调用）；
 2. 再创建节点并带直配（显式尾参或 env 门控均可），例如：
 
 ```cpp
-YOMKDDS_LOAD_XML("/path/to/profiles.xml");   // XML 打底
+yomk::dds().xml("/path/to/profiles.xml").load_cfg();   // XML 打底
 YOMKDDS_NODE("combo_node", 0, "127.0.0.1:11811");   // 直配 server 项覆盖 XML discoveryServersList
 ```
 

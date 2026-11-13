@@ -20,7 +20,7 @@ Fast DDS 默认走**简单发现**（多播 PDP）：同网段参与者经多播
 | 环境变量门控直配（进程级，无需改代码） | `YOMKDDS_USE_DISCOVER_SERVER` + `YOMKDDS_UDP_DISCOVER_SERVERS` / `YOMKDDS_TCP_DISCOVER_SERVERS` |
 | CLIENT 发现协议（禁用多播 PDP，发现流量单播直送 server） | 直配后自动生效 |
 | TCP 通道自动补注入 TCPv4 传输 | TCP 直配串非空时自动 |
-| 与 XML profiles 组合（XML 打底，直配 server 项覆盖） | 配合 `YOMKDDS_LOAD_XML` |
+| 与 XML profiles 组合（XML 打底，直配 server 项覆盖） | 配合 `yomk::dds().load_cfg()` |
 | 跨域互通（域号与 server 无关） | CLIENT 直配语义 |
 | 发现服务器启动脚本 | `examples/LaunchDiscoverServer.sh` |
 
@@ -145,7 +145,7 @@ TCP 场景：终端 1 换 `--type tcp --port 42100` 启动，终端 2/3 换 expo
 
 ## 与其他功能的关系
 
-- **XML profiles**：直配可单独使用或配合 `YOMKDDS_LOAD_XML`——XML 打底，直配 server 项覆盖 XML `discoveryServersList`；叠加细节以 [xml-profiles.md](./xml-profiles.md) 为主责方；
+- **XML profiles**：直配可单独使用或配合 `yomk::dds().load_cfg()`——XML 打底，直配 server 项覆盖 XML `discoveryServersList`；叠加细节以 [xml-profiles.md](./xml-profiles.md) 为主责方；
 - **调试/Bag 节点**：`YOMKDDS_DEBUG_NODE`、`YOMKDDS_BAG_NODE` 的直配尾参与环境变量语义与 `YOMKDDS_NODE` 完全一致，分别见 [debug-service.md](./debug-service.md) 与 [bag-service.md](./bag-service.md)；
 - **域号**：client 域 id 经 `YOMKDDS_DDS_DOMAIN_ID` 或宏显式 domainId 指定，语义见 [core-communication.md](./core-communication.md)；
 - **CLI 公共参数**：`yomkdds` 各子命令创建调试/bag 节点时同款直配，环境变量族详见[环境变量与公共配置参考](../manual/env-vars-reference.md)。

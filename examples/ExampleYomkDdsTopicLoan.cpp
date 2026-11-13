@@ -91,7 +91,7 @@ int main(int argc, char* argv[])
             break;
         }
         static_cast<YomkDdsStd::MInt32*>(loanPtr)->data(100 + i);
-        resp = YOMKDDS_PUB_MSG("node0", "loan_topic", loanPtr);
+        resp = yomk::dds().node_name("node0").topic("loan_topic").data(loanPtr).pub();
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
             ::yomk::log().tag("ExampleYomkDdsTopicLoan").error("[SEND] 借出发布失败: ", 100 + i, " status=", static_cast<int>(resp.status));

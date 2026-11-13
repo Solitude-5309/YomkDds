@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
     {
         YomkDdsStd::MString msg;
         msg.data("hello " + std::to_string(i));
-        YOMKDDS_PUB_MSG("qos_node", "qos_topic", &msg);
+        yomk::dds().node_name("qos_node").topic("qos_topic").data(&msg).pub();
         ::yomk::log().tag("QosExample").info("[SEND] ", msg.data());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }

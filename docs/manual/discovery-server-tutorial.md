@@ -93,14 +93,14 @@ if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 resp = yomk::dds().node_name("ds_pub_node").topic("ds_hello_world").type_ptr(new YomkDdsStd::MStringPubSubType()).create_pub();
 ```
 
-发布主循环（每 1s 发布一次直到 Ctrl+C；`YOMKDDS_PUB_MSG` 失败计数）：
+发布主循环（每 1s 发布一次直到 Ctrl+C；`pub()` 失败计数）：
 
 ```cpp
 while (!g_stop.load())
 {
     YomkDdsStd::MString msg;
     msg.data("hello world " + std::to_string(total));
-    resp = YOMKDDS_PUB_MSG("ds_pub_node", "ds_hello_world", &msg);
+    resp = yomk::dds().node_name("ds_pub_node").topic("ds_hello_world").data(&msg).pub();
     // ... 成功打印 [SEND]，失败打印 [SEND] publish failed ...
     total++;
     std::this_thread::sleep_for(std::chrono::seconds(1));

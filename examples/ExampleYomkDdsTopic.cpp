@@ -88,7 +88,7 @@ int main(int argc, char* argv[])
     {
         YomkDdsStd::MString msg;
         msg.data("Hello YomkDdsService " + std::to_string(i));
-        resp = YOMKDDS_PUB_MSG("node0", "dds_demo_topic", &msg);
+        resp = yomk::dds().node_name("node0").topic("dds_demo_topic").data(&msg).pub();
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
             ::yomk::log().tag("ExampleYomkDdsTopic").error("[SEND] 发布失败: ", msg.data(), " status=", static_cast<int>(resp.status));

@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
     {
         YomkDdsStd::MString msg;
         msg.data("hello " + std::to_string(i));
-        YOMKDDS_PUB_MSG("node0", "my_topic", &msg);
+        yomk::dds().node_name("node0").topic("my_topic").data(&msg).pub();
         ::yomk::log().tag("PubSubExample").info("[SEND] ", msg.data());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
 | `yomk::dds().node_name(...).topic(...).type_ptr(...).create_pub() / ...create_sub()` | 在节点上注册发布/订阅主题；type_ptr() 实参为 `new XxxPubSubType()`，**所有权移交服务端，调用后 caller 不再持有/释放** |
 | 链式 `sub_cb(onMessage)` 回调 | 回调签名 `std::function<void(const void *data)>`，收到消息时被调用；`data` 是交付的消息实例指针，回调中转型使用（详见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)） |
 | `sleep_for(seconds(1))` 后再发布 | **discovery 时序**：DDS 参与者互相发现需要时间，发布前等待 discovery 完成；首条消息可能因 discovery 时序丢失 |
-| `YOMKDDS_PUB_MSG("node0", "my_topic", &msg)` | 发布数据；data 为数据实例指针（借用，同步写入，caller 保留所有权） |
+| `yomk::dds().node_name("node0").topic("my_topic").data(&msg).pub()` | 发布数据；data 为数据实例指针（借用，同步写入，caller 保留所有权） |
 | `YOMKDDS_DEL_NODE("node0")` | 退出前删除节点，显式销毁 DDS 实体 |
 
 除 `YOMKDDS_LOAN`（借出结果经 outPtr 出参获取）外，其余核心通信宏与链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。（上例为最小篇幅省略了判断，正式代码建议参照 `examples/ExampleYomkDdsTopic.cpp` 逐宏判错）。

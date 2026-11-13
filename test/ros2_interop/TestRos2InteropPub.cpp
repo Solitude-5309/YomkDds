@@ -69,7 +69,7 @@ int main()
     {
         YomkDdsStd::MString msg;
         msg.data("hello ros2 " + std::to_string(i));
-        resp = YOMKDDS_PUB_MSG("interop_pub", "rt/chatter_interop", &msg);
+        resp = yomk::dds().node_name("interop_pub").topic("rt/chatter_interop").data(&msg).pub();
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
             ::yomk::log().tag("TestRos2InteropPub").error("[SEND] publish failed");

@@ -1,6 +1,6 @@
 # 使用手册：Loan 零拷贝发布教程
 
-> **本文档覆盖范围**：用借出（loan）样本方式发布 plain 类型消息——`YOMKDDS_LOAN` 借出、判空、池内填值、`YOMKDDS_PUB_MSG` 发布、未用样本 `YOMKDDS_DISCARD_LOAN` 归还的完整流程（README 5.2 示例全文走读），plain 类型判定规则、失败回退路径与何时用/不用 loan（README 5.3 机制说明）。订阅端的零拷贝读取约束见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)。
+> **本文档覆盖范围**：用借出（loan）样本方式发布 plain 类型消息——`YOMKDDS_LOAN` 借出、判空、池内填值、`pub()` 发布、未用样本 `YOMKDDS_DISCARD_LOAN` 归还的完整流程（README 5.2 示例全文走读），plain 类型判定规则、失败回退路径与何时用/不用 loan（README 5.3 机制说明）。订阅端的零拷贝读取约束见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)。
 
 ## 目标
 
@@ -13,7 +13,7 @@
 ## 前提与准备
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成安装，并跑通 [quick-start.md](./quick-start.md) 的普通发布订阅；
-- 理解普通发布路径：`YOMKDDS_PUB_MSG(nodeName, topicName, data)` 传入消息实例指针（借用，同步写入，caller 保留所有权）；
+- 理解普通发布路径：`yomk::dds().node_name(nodeName).topic(topicName).data(data).pub()` 传入消息实例指针（借用，同步写入，caller 保留所有权）；
 - 了解 plain 类型判定规则（见下方「plain 类型判定与失败回退」）。
 
 ## 分步操作
@@ -24,7 +24,7 @@ loan 发布的四步循环：
 
 1. `YOMKDDS_LOAN(nodeName, topicName, outPtr)` 借出——`outPtr` 为输出参数，成功指向池内样本、失败置 `nullptr`；
 2. **判空**：`nullptr` 则回退普通发布路径；
-3. 借出成功：直接在池内填值后 `YOMKDDS_PUB_MSG` 发布，免序列化；**write 后中间件收回指针，不可再访问**；
+3. 借出成功：直接在池内填值后经 `...data(...).pub()` 发布，免序列化；**write 后中间件收回指针，不可再访问**；
 4. 借出后不发布时，用 `YOMKDDS_DISCARD_LOAN(nodeName, topicName, sample)` 归还，避免池泄漏。
 
 ### 第 2 步：完整示例程序
@@ -63,14 +63,14 @@ int main(int argc, char *argv[])
         {
             // 直接在池内填值后发布，免序列化；write 后中间件收回指针，不可再访问
             static_cast<YomkDdsStd::MInt32 *>(sample)->data(i);
-            YOMKDDS_PUB_MSG("node0", "int_topic", sample);
+            yomk::dds().node_name("node0").topic("int_topic").data(sample).pub();
         }
         else
         {
             // loan 失败：回退普通发布路径
             YomkDdsStd::MInt32 msg;
             msg.data(i);
-            YOMKDDS_PUB_MSG("node0", "int_topic", &msg);
+            yomk::dds().node_name("node0").topic("int_topic").data(&msg).pub();
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 | `void *sample = nullptr; YOMKDDS_LOAN("node0", "int_topic", sample);` | 借出 writer 池内样本；`sample` 是输出参数，宏内部先置 `nullptr` 再尝试借出 |
 | `if (sample != nullptr)` | **必须判空**：非 plain 类型或池耗尽时保持 `nullptr` |
 | `static_cast<YomkDdsStd::MInt32 *>(sample)->data(i);` | 直接在池内样本上填值，免序列化 |
-| `YOMKDDS_PUB_MSG("node0", "int_topic", sample);` | 用与普通发布相同的宏发布借出样本；write 后指针即被中间件收回，**不可再访问、须重新借出** |
+| `yomk::dds().node_name("node0").topic("int_topic").data(sample).pub();` | 用与普通发布相同的 pub() 链发布借出样本；write 后指针即被中间件收回，**不可再访问、须重新借出** |
 | `else` 分支 | loan 失败回退普通发布路径：栈上实例填值后按借用指针发布 |
 | `YOMKDDS_DISCARD_LOAN(...)` | 归还未发布的借出缓冲，避免池泄漏；仅对借出后**未发布**的样本调用 |
 
@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
 结合 loan 机制说明（README 5.3）：
 
 - **订阅端完全透明**：`FastDDSNode` 内部自动使用 reader loan 接收（回调接口与指针语义不变，仅回调期间有效），零序列化拷贝，配合 data-sharing 跨进程零拷贝读取——订阅端无需为此写任何额外代码；
-- **发布端显式 API**：`YOMKDDS_LOAN` 借出 writer 池内样本，直接在池内填值后 `YOMKDDS_PUB_MSG` 发布免序列化；每次 write 后指针即被中间件收回，须重新借出——适合高频、消息构造后即发即弃的发布路径；
+- **发布端显式 API**：`YOMKDDS_LOAN` 借出 writer 池内样本，直接在池内填值后经 `...data(...).pub()` 链发布免序列化；每次 write 后指针即被中间件收回，须重新借出——适合高频、消息构造后即发即弃的发布路径；
 - **不建议使用 loan 的场景**：消息类型含 string/sequence（非 plain，loan 必失败，直接走普通发布即可）；或需要构造消息后暂存、多次修改再发布的流程——loaned 指针 write/discard 后不可再访问，暂存需求更适合普通发布路径。
 
 ## 预期输出

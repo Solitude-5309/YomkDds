@@ -356,10 +356,10 @@ struct DDSLoan
 /**
  * @brief loan success response payload
  * @warning The loaned sample belongs to the writer pool: fill it and publish
- *          via YOMKDDS_PUB_MSG; the pointer is reclaimed after each write
+ *          via the chained data()...pub(); the pointer is reclaimed after each write
  */
 // @zh: loan 成功响应负载
-// @zh: warning 借出样本属 writer 池：填值后经 YOMKDDS_PUB_MSG 发布，每次 write 后指针失效
+// @zh: warning 借出样本属 writer 池：填值后经链式 data()...pub() 发布，每次 write 后指针失效
 struct DDSLoanResult
 {
     void* sample = nullptr;

@@ -67,7 +67,7 @@ int main()
     {
         YomkDdsStd::MString msg;
         msg.data("hello world " + std::to_string(total));
-        resp = YOMKDDS_PUB_MSG("ds_pub_node", "ds_hello_world", &msg);
+        resp = yomk::dds().node_name("ds_pub_node").topic("ds_hello_world").data(&msg).pub();
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
             failCount++;

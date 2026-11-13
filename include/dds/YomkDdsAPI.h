@@ -61,10 +61,12 @@ public:
 /**
  * @brief Topic registration facet: carries the nodeName/topicName accumulated by
  *        node_name().topic(), required type_ptr() and optional qos() accumulators,
- *        terminated by create_pub() (publisher) or sub_cb()...create_sub() (subscriber)
+ *        terminated by create_pub() (publisher) or sub_cb()...create_sub() (subscriber);
+ *        data()...pub() publishes one message on an already-registered publisher topic
  */
 // @zh: 主题注册分面：承载 node_name().topic() 累积的节点名/主题名，type_ptr() 必填与
-// @zh: qos() 可选累积器，create_pub()（发布）或 sub_cb()...create_sub()（订阅）终结
+// @zh: qos() 可选累积器，create_pub()（发布）或 sub_cb()...create_sub()（订阅）终结；
+// @zh: data()...pub() 向已注册发布主题发送一条消息
 class DdsTopicBuilder
 {
     std::string m_nodeName;
@@ -72,6 +74,7 @@ class DdsTopicBuilder
     void* m_type = nullptr;
     yomk::payload::DDSQosProfile m_qos;
     yomk::payload::DDSCallbackFunc m_callback;
+    void* m_data = nullptr;
 public:
     DdsTopicBuilder(std::string nodeName, std::string topicName)
         : m_nodeName(std::move(nodeName)), m_topicName(std::move(topicName))
@@ -160,6 +163,39 @@ public:
         return yomk::server().url(yomk::url::ddsRegisterSubTopic)
             .msg(yomk::msgs::DDSSubRequest::shared(
                 yomk::payload::DDSSubRequest{std::move(m_nodeName), std::move(m_topicName), m_type, std::move(m_callback), std::move(m_qos)}))
+            .request();
+    }
+    /**
+     * @brief Accumulate the message instance pointer to publish
+     * @param[in] data Borrowed (non-owning) message instance pointer
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积待发送的消息实例指针
+    // @zh: data 借用（非所有权）消息实例指针
+    // @zh: return 自身链式引用
+    DdsTopicBuilder& data(void* data)
+    {
+        m_data = data;
+        return *this;
+    }
+    /**
+     * @brief Publish one message on the already-registered publisher topic (request terminator)
+     * @return Response; success requires status == Succeeded, failure details in msg
+     * @note The publish writes synchronously; the topic must have been registered
+     *       via create_pub() first
+     */
+    // @zh: 向已注册发布主题发送一条消息（请求终结）
+    // @zh: return Response，成功判定 status == Succeeded，失败原因读 msg
+    // @zh: note publish 同步写入；主题须先经 create_pub() 注册，未注册返回错误
+    yomk::payload::Response pub()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsPublish)
+            .msg(yomk::msgs::DDSPublish::shared(
+                yomk::payload::DDSPublish{std::move(m_nodeName), std::move(m_topicName), m_data}))
             .request();
     }
 };
@@ -363,17 +399,6 @@ inline detail::DdsBuilder dds()
 // @zh: 核心通信宏（YomkDdsService 端点）
 // @zh: 除 YOMKDDS_LOAN（借出指针经出参）外均返回 yomk::payload::Response，成功判定
 // @zh: status == Succeeded，失败原因读 msg；完整约束见 docs/features/core-communication.md
-
-/**
- * @brief Publish one message on a registered publisher topic
- * @param[in] data Borrowed (non-owning) message instance pointer; publish
- *            writes synchronously and the caller keeps managing its lifetime
- */
-// @zh: 向已注册发布主题发送一条消息
-// @zh: data 借用（非所有权）：publish 同步写入，caller 保留并自行管理其生命周期
-
-#define YOMKDDS_PUB_MSG(nodeName, topicName, data) \
-    ::yomk::server().url(::yomk::url::ddsPublish).msg(::yomk::msgs::DDSPublish::shared(yomk::payload::DDSPublish{nodeName, topicName, data})).request()
 
 /**
  * @brief Loan a publish buffer for zero-copy write (plain types only)

@@ -69,7 +69,7 @@ if (resp.m_status != yomk::payload::ResStatus::Succeeded)
 // 3. 1Hz 持续发布（Ctrl+C/SIGTERM 置位 g_stop 后跳出，清理退出）
 YomkDdsStd::MString msg;
 msg.data("interop hello " + std::to_string(seq++));
-resp = YOMKDDS_PUB_MSG("interop_pub", "rt/chatter_interop", &msg);
+resp = yomk::dds().node_name("interop_pub").topic("rt/chatter_interop").data(&msg).pub();
 ```
 
 两个关键约束：

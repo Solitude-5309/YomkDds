@@ -127,11 +127,11 @@ int main(int argc, char *argv[])
     {
         YomkDdsStd::MString msgA;
         msgA.data("hello " + std::to_string(i));
-        YOMKDDS_PUB_MSG("node_pub", "topic_a", &msgA);
+        yomk::dds().node_name("node_pub").topic("topic_a").data(&msgA).pub();
 
         YomkDdsStd::MInt32 msgB;
         msgB.data(i);
-        YOMKDDS_PUB_MSG("node_pub", "topic_b", &msgB);
+        yomk::dds().node_name("node_pub").topic("topic_b").data(&msgB).pub();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
 
 ### 第 4 步：发布节奏与资源清理
 
-- **发布节奏**：`YOMKDDS_PUB_MSG` 为同步写入（data 为借用指针，caller 保留所有权），两次发布之间的间隔由你控制（示例用 `sleep_for(milliseconds(100))`）；持续发布的参考形态见安装包内 `ExampleYomkDdsPub`（每 1s 发布一次，Ctrl+C 退出）；
+- **发布节奏**：发布链 `pub()` 为同步写入（data 为借用指针，caller 保留所有权），两次发布之间的间隔由你控制（示例用 `sleep_for(milliseconds(100))`）；持续发布的参考形态见安装包内 `ExampleYomkDdsPub`（每 1s 发布一次，Ctrl+C 退出）；
 - **资源清理**：每次 `yomk::dds().node_name(...).create()` 对应一次 `YOMKDDS_DEL_NODE`，销毁节点及其全部 DDS 实体；删除不存在的节点返回错误。退出前不删节点可能造成程序退出阶段的资源清理问题，务必在 `return` 前逐个删除。
 
 ## 预期输出

@@ -15,7 +15,7 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 | 删除节点 | `YOMKDDS_DEL_NODE(nodeName)` | `/YomkDdsService/delete_node` | 销毁节点及其全部 DDS 实体，不存在的节点返回错误 |
 | 注册发布主题 | `yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type)[.qos(qos)].create_pub()` | `/YomkDdsService/register_pub_topic` | type 为 `new XxxPubSubType()`，所有权移交服务端 |
 | 注册订阅主题 | `yomk::dds().node_name(nodeName).topic(topicName).type_ptr(type).sub_cb(callback)[.qos(qos)].create_sub()` | `/YomkDdsService/register_sub_topic` | callback 收到消息时回调，接收缓冲 data 由内部自动创建 |
-| 发布数据 | `YOMKDDS_PUB_MSG(nodeName, topicName, data)` | `/YomkDdsService/publish` | data 为数据实例指针（借用，同步写入，caller 保留所有权） |
+| 发布数据 | `yomk::dds().node_name(nodeName).topic(topicName).data(data).pub()` | `/YomkDdsService/publish` | data 为数据实例指针（借用，同步写入，caller 保留所有权） |
 | 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | `/YomkDdsService/load_xml` | participant 级配置入口，详见 [xml-profiles.md](./xml-profiles.md) |
 | Loan 借出零拷贝发布 | `YOMKDDS_LOAN(nodeName, topicName, outPtr)` / `YOMKDDS_DISCARD_LOAN(nodeName, topicName, sample)` | `/YomkDdsService/loan`、`/YomkDdsService/discard_loan` | 详见 [loan-zero-copy.md](./loan-zero-copy.md) |
 
@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
     {
         YomkDdsStd::MString msg;
         msg.data("hello " + std::to_string(i));
-        YOMKDDS_PUB_MSG("node0", "my_topic", &msg);
+        yomk::dds().node_name("node0").topic("my_topic").data(&msg).pub();
         ::yomk::log().tag("PubSubExample").info("[SEND] ", msg.data());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -151,7 +151,7 @@ auto onMessage = [&](const void *data)
 - **callback**（仅订阅，经 sub_cb(callback) 累积）收到消息时回调，接收缓冲 data 由内部自动创建。
 - **qos**：端点 QoS 描述 `DDSQosProfile`（8 项 history/depth/reliability/durability/liveliness/deadline/lifespan/liveliness lease 可独立设置，未设置项为哨兵保持底座值）；发布/订阅端同为链式 `qos()` 累积器（缺省全哨兵 =Fast DDS 端点默认底座，订阅端在 sub_cb() 之后累积）；订阅端推荐 `DDSQosProfile::ros2DefaultSubscriber()`（BEST_EFFORT requested 对任意 offered 均可匹配）。完整语义与底座清单见 [qos-profiles.md](./qos-profiles.md)。
 
-### 发布（YOMKDDS_PUB_MSG）
+### 发布（pub 链式）
 
 - **data** 为数据实例指针（借用，同步写入，caller 保留所有权）；同步写入意味着调用返回时数据已交由 writer 处理，实例后续可复用。
 

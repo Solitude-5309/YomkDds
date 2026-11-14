@@ -8,20 +8,20 @@
 
 两个入口，能力对齐：
 
-- **库 API**：调试节点经链式 `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` 创建，其余端点仍为 `YOMKDDS_DEBUG_*` 宏（均定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
-- **CLI**：`yomkdds topic/node/interface` 命令经 `YomkDdsDebugService` 实现，各命令小节附等价宏调用。
+- **库 API**：调试节点经链式 `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` 创建、`yomk::dds().debug().quit()` 退出，主题登记经 `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()`，其余端点仍为 `YOMKDDS_DEBUG_*` 宏（均定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
+- **CLI**：`yomkdds topic/node/interface` 命令经 `YomkDdsDebugService` 实现，各命令小节附等价库调用。
 
 ## 能力清单
 
-按能力分组，每组给出宏与 CLI 的对照（CLI 命令形态与第 1 章宏 API 表均为权威口径）：
+按能力分组，每组给出库入口（链式或宏）与 CLI 的对照（CLI 命令形态与第 1 章 API 表均为权威口径）：
 
 ### 组 1：主题观察
 
 | 入口 | 能力 | 关键行为 |
 |---|---|---|
-| 宏 `YOMKDDS_DEBUG_TOPIC_PRINT(topicName, output)` | 登记调试主题 | 发现匹配的远端 DataWriter 后自动解析类型建立订阅（类型无关，无需 IDL 生成代码），消息文本逐条投递 output（用户自定义回调，服务层不打印） |
+| 链式 `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()` | 登记调试主题 | 发现匹配的远端 DataWriter 后自动解析类型建立订阅（类型无关，无需 IDL 生成代码），消息文本逐条投递 out_cb 回调（用户自定义回调，服务层不打印） |
 | CLI `yomkdds topic print [--qos-ros \| --qos-KEY VAL ... \| --qos-file FILE] <主题名>` | 订阅指定主题，消息 JSON 文本逐条直出控制台 | QoS 经 --qos-ros/--qos-*/--qos-file 可调（缺省 BEST_EFFORT+VOLATILE depth 1） |
-| CLI `yomkdds topic hz [--window N] [--qos-ros \| --qos-KEY VAL ... \| --qos-file FILE] <主题名>` | 订阅主题测量接收频率（每秒一行滚动窗口统计） | 复用 topic print 的登记订阅链路，回调只记时间戳不打印消息（无独立宏）；`--window` 为窗口样本数上限，默认 10000；对接高频流建议 --qos-ros 防 depth 1 丢帧偏频 |
+| CLI `yomkdds topic hz [--window N] [--qos-ros \| --qos-KEY VAL ... \| --qos-file FILE] <主题名>` | 订阅主题测量接收频率（每秒一行滚动窗口统计） | 复用 topic print 的登记订阅链路，回调只记时间戳不打印消息（无独立入口）；`--window` 为窗口样本数上限，默认 10000；对接高频流建议 --qos-ros 防 depth 1 丢帧偏频 |
 
 ### 组 2：主题/节点列表
 
@@ -104,9 +104,9 @@ int main(int argc, char *argv[])
     }
 
     // 2. 登记调试主题：发现匹配远端 DataWriter 后自动建订阅，
-    //    消息文本逐条投递 output 回调（输出权在调用方，服务层不打印）
-    resp = YOMKDDS_DEBUG_TOPIC_PRINT("hello_world", [](const std::string &text)
-        { std::cout << text << std::endl; });
+    //    消息文本逐条投递 out_cb 回调（输出权在调用方，服务层不打印）
+    resp = yomk::dds().debug().topic("hello_world").out_cb([](const std::string &text)
+        { std::cout << text << std::endl; }).print();
     if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("DebugExample").error("register debug topic failed: ", resp.m_msg);
@@ -153,6 +153,15 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 | domainId | 合法范围 [0,232]；仅同域节点的主题可被调试；缺省（未累积）读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0） |
 | 两 serverLocator | UDP/TCP 发现服务器直配聚合串，语义同 `yomk::dds().node(...)` 的 udp_ds()/tcp_ds() 直配（CLIENT 协议强制，非法串创建失败回显），详见 [discovery-server.md](./discovery-server.md) |
 
+### 主题登记参数（`yomk::dds().debug().topic(topicName)...print()`）
+
+| 参数 | 约束 |
+|---|---|
+| 形参形态 | `topic(topicName)` 必填起始，`out_cb(cb)` 必填累积输出回调，`qos(qos)` 可选累积动态订阅 reader QoS，`print()` 终结（累积器次序不限） |
+| out_cb | `DDSDebugOutputFunc`（`std::function<void(const std::string &)>`），每条消息投递一次 JSON 文本；投递发生在 DDS reader 线程，回调须线程安全且快速返回；空回调由 `print()` 拒绝（`out_cb() callback is required`） |
+| qos | reader QoS 描述 `DDSQosProfile`，全哨兵（默认）= BEST_EFFORT+VOLATILE depth 1；CLI 侧经 `--qos-ros`/`--qos-*`/`--qos-file` 指定 |
+| 重复登记 | 同一主题二次登记返回错误（`already registered`） |
+
 ### 收敛查询语义
 
 查询类能力（列表/详情/反查/内省/示例/描述，及 `YOMKDDS_DEBUG_TOPIC_PUB` 的首轮发现收敛）共用同一收敛模型：
@@ -175,8 +184,8 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 ## 错误与边界行为
 
-- **前置约束**：查询/登记/发布类宏须先经 `yomk::dds().debug()...create()` 创建调试节点，失败时 `m_msg` 携具体拒绝原因；`yomk::dds().debug().quit()` 未创建时返回错误；
-- **登记被拒**（`YOMKDDS_DEBUG_TOPIC_PRINT` 失败原因枚举）：`debug node not created` / `subscriber not created` / `empty topic name` / `already registered`；CLI 侧输出形态为 `register debug topic failed: subscribeTopic [<主题名>] failed: <具体原因>`（重复登记为 `topic [<主题名>] already registered`）；
+- **前置约束**：查询/发布类宏与主题登记链式入口须先经 `yomk::dds().debug()...create()` 创建调试节点，失败时 `m_msg` 携具体拒绝原因；`yomk::dds().debug().quit()` 未创建时返回错误；
+- **登记被拒**（主题登记 `yomk::dds().debug().topic(...).print()` 失败原因枚举）：`out_cb() callback is required`（未累积回调）/ `debug node not created` / `subscriber not created` / `empty topic name` / `already registered`；CLI 侧输出形态为 `register debug topic failed: subscribeTopic [<主题名>] failed: <具体原因>`（重复登记为 `topic [<主题名>] already registered`）；
 - **延迟登记语义**：登记为发现驱动的延迟行为，主题尚未被发布者上线时仍返回成功（登记约 3s 后仍无发布者则打一次性等待提示 `[FastDDSDebugNode] topic [<主题名>] not discovered yet, waiting for publisher...`——仅提示，不阻塞不改返回码，发布者上线后自动建订）；
 - **类型不可重建告警**：主题已发现但类型不可重建（典型为 ROS2 rmw_fastrtps 端点：编译期类型映射，不提供 XTypes TypeObject）时打 `warning: TypeObject not ready, keep pending. topic=... type=... -- the remote endpoint does not publish XTypes TypeInformation/TypeObject ...`——首次立即打印、之后按 5s 节流；同类告警覆盖 DynamicType 构建失败 / `create_topic` 失败 / `create_datareader` 失败 / 建订异常四类；
 - **查询未命中**：`topic [<主题名>] not found`（topic info/-v/type）、`type [<类型名>] not found`（topic find）、`node [<节点名>] not found`（node info）；
@@ -209,7 +218,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 - **核心通信**：调试服务是独立服务域（`YomkDdsDebugService`），与业务节点互不干扰；节点名经 `yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds/.tcp_ds(serverLocator)].create()` 下沉到 DDS 参与者（随 SPDP 发现传播给同域对端），`node list`/`node info` 查到的即这些参与者，见 [core-communication.md](./core-communication.md)；
 - **发现服务器**：调试节点支持 UDP/TCP 直配累积器（同域才可调试，跨网段调试须经 server），见 [discovery-server.md](./discovery-server.md)；
-- **QoS**：`topic print`/`topic hz`/`topic pub` 的 QoS 参数族（`--qos-ros`/`--qos-*`/`--qos-file` 优先级链）与宏侧 `DDSQosProfile` 语义见 [qos-profiles.md](./qos-profiles.md)；
+- **QoS**：`topic print`/`topic hz`/`topic pub` 的 QoS 参数族（`--qos-ros`/`--qos-*`/`--qos-file` 优先级链）与库侧 `DDSQosProfile` 语义见 [qos-profiles.md](./qos-profiles.md)；
 - **ROS2 互通**：ROS2 rmw_fastrtps 端点不提供 XTypes TypeObject，观察其主题会触发类型不可重建告警、`interface show` 报 `type object for [...] not available`（互通判定以数据到达为准），见 [ros2-interop.md](./ros2-interop.md)；
 - **Bag 服务**：bag 节点（`YOMKDDS_BAG_NODE`）模型与调试节点同构（单节点、域号与 UDP/TCP 直配参数、重复创建须先删除），见 [bag-service.md](./bag-service.md)。
 

@@ -692,7 +692,7 @@ static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQo
     {
         std::cout << text << std::endl; // 逐条直出并刷新
     };
-    resp = YOMKDDS_DEBUG_TOPIC_PRINT(topicName, onMessage, qos);
+    resp = yomk::dds().debug().topic(topicName).out_cb(onMessage).qos(qos).print();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("register debug topic failed: ", resp.msg);
@@ -1227,7 +1227,7 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
         hzLast = now;
         hzHasLast = true;
     };
-    resp = YOMKDDS_DEBUG_TOPIC_PRINT(topicName, onMessage, qos);
+    resp = yomk::dds().debug().topic(topicName).out_cb(onMessage).qos(qos).print();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("register debug topic failed: ", resp.msg);

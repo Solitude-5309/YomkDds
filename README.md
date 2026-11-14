@@ -66,7 +66,7 @@
 | 入口 | 简述 |
 |---|---|
 | `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` | 创建调试节点（单节点模型） |
-| `YOMKDDS_DEBUG_TOPIC_PRINT(topicName, output)` | 登记调试主题（消息文本逐条投递回调） |
+| `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()` | 登记调试主题（消息文本逐条投递回调） |
 | `YOMKDDS_DEBUG_TOPIC_LIST(_T)(stableRounds, intervalMs)` | 列出域内主题（_T 附类型名） |
 | `YOMKDDS_DEBUG_TOPIC_INFO(_V)(topicName, stableRounds, intervalMs)` | 查询主题详情（_V 含逐端点 GUID/QoS） |
 | `YOMKDDS_DEBUG_NODE_LIST(stableRounds, intervalMs)` | 列出域内节点 |

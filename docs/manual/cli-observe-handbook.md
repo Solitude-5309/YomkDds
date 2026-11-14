@@ -57,7 +57,7 @@ yomkdds topic print [--qos-ros | --qos-KEY VAL ... | --qos-file FILE] <主题名
   1. **主题尚未发现**：登记满约 3s 发现宽限窗后域内仍无该主题的 DataWriter（主题名拼错 / 发布者未上线 / 仅有订阅者）→ 一次性打印 `[FastDDSDebugNode] topic [<主题名>] not discovered yet, waiting for publisher...`（仅提示，不阻塞不改返回码；发布者上线后自动建订）；
   2. **主题已发现但类型不可重建**（典型为 ROS2 rmw_fastrtps 端点：编译期类型映射，不提供 XTypes TypeObject）→ 打印 `warning: TypeObject not ready, keep pending. topic=... type=... -- the remote endpoint does not publish XTypes TypeInformation/TypeObject ...`，首次立即打印、之后按 5s 节流重复；
   3. **登记被拒**：`register debug topic failed: subscribeTopic [<主题名>] failed: <具体原因>`（重复登记为 `topic [<主题名>] already registered`）。
-- **等价库调用**：`yomk::dds().debug().domain(0).create()` + `YOMKDDS_DEBUG_TOPIC_PRINT("hello_world", 回调)`（均声明于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`，完整用户代码见 README 6.2 或 [../features/debug-service.md](../features/debug-service.md)）。
+- **等价库调用**：`yomk::dds().debug().domain(0).create()` + `yomk::dds().debug().topic("hello_world").out_cb(回调).print()`（均声明于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`，完整用户代码见 README 6.2 或 [../features/debug-service.md](../features/debug-service.md)）。
 
 与发布端配合观察（另开两个终端）：
 
@@ -88,7 +88,7 @@ average rate: 1.000
 ```
 
 各输出项含义（对齐 ros2 topic hz）：`average rate` 为窗口内相邻消息间隔均值的倒数（Hz）；`min`/`max` 为间隔极值（秒）；`std dev` 为间隔的总体标准差（秒，除以 n）；`window` 为间隔样本数。无新消息不重复打印；首条消息前不打印统计；登记后的等待提示与类型不可重建告警同 `topic print`（见上一小节）；Ctrl+C 退出。
-- **等价宏名**：无独立宏（经 `/topic_print` 端点实现，复用 topic print 登记链路，回调侧改记时间戳）。
+- **等价库调用**：复用 `yomk::dds().debug().topic(主题名).out_cb(回调).print()`（同一 `/topic_print` 端点，回调侧改记时间戳）。
 
 ### topic list：列出域内主题
 
@@ -332,7 +332,7 @@ yomkdds topic hz hello_world
 
 ## 延伸阅读
 
-- [../features/debug-service.md](../features/debug-service.md)——调试服务能力全貌：调试节点模型、`YOMKDDS_DEBUG_*` 宏全集与 CLI 双入口对照
+- [../features/debug-service.md](../features/debug-service.md)——调试服务能力全貌：调试节点模型、库入口（链式/宏）与 CLI 双入口对照
 - [env-vars-reference.md](./env-vars-reference.md)——`YOMKDDS_DDS_DOMAIN_ID`、`YOMKDDS_DDS_DISCOVER_ROUNDS` 与发现服务器三环境变量的作用域、默认值与优先级
 - [cli-publish-handbook.md](./cli-publish-handbook.md)——不写代码发布消息（topic pub）与类型内省（interface show/list），与本文档的观察命令构成调试闭环
 - [返回手册入口](./README.md)

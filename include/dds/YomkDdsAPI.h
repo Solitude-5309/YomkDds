@@ -374,12 +374,88 @@ public:
 };
 
 /**
- * @brief Debug facet: carries the optional domain()/udp_ds()/tcp_ds() accumulators
- *        (order-free), terminated by create() or quit(); query/topic/type/node
- *        sub-facets join it in later migration rounds
+ * @brief Debug topic facet: carries the topicName opened by debug().topic(), the
+ *        required out_cb() output callback and the optional qos() accumulator,
+ *        terminated by print(); the remaining topic sub-facets join it in later
+ *        migration rounds
  */
-// @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 累积器（次序不限），create()/quit() 终结；
-// @zh: 查询/topic/type/node 子分面在后续迁移批次并入
+// @zh: 调试主题分面：承载 debug().topic() 起始的主题名、out_cb() 必填输出回调与
+// @zh: qos() 可选累积器（次序不限），print() 终结；其余 topic 子分面在后续迁移批次并入
+class DdsDebugTopicBuilder
+{
+    std::string m_topicName;
+    yomk::payload::DDSDebugOutputFunc m_output;
+    yomk::payload::DDSQosProfile m_qos;
+public:
+    explicit DdsDebugTopicBuilder(std::string topicName)
+        : m_topicName(std::move(topicName))
+    {
+    }
+    /**
+     * @brief Accumulate the output callback receiving one JSON text per message
+     * @param[in] callback DDSDebugOutputFunc; delivered on the DDS reader thread, so
+     *            it must be thread-safe and return quickly
+     * @return Reference to self for chaining
+     * @warning An empty callback is rejected by print()
+     */
+    // @zh: 累积输出回调，每收到一条消息投递一次 JSON 文本
+    // @zh: callback DDSDebugOutputFunc，投递发生在 DDS reader 线程，须线程安全且快速返回
+    // @zh: return 自身链式引用
+    // @zh: warning 空回调由 print() 拒绝
+    DdsDebugTopicBuilder& out_cb(yomk::payload::DDSDebugOutputFunc callback)
+    {
+        m_output = std::move(callback);
+        return *this;
+    }
+    /**
+     * @brief Accumulate the dynamic subscription reader QoS
+     * @param[in] qos Reader QoS DDSQosProfile; all-sentinel default keeps
+     *            BEST_EFFORT+VOLATILE depth 1
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积动态订阅 reader QoS
+    // @zh: qos reader QoS DDSQosProfile；全哨兵缺省保持 BEST_EFFORT+VOLATILE depth 1
+    // @zh: return 自身链式引用
+    DdsDebugTopicBuilder& qos(yomk::payload::DDSQosProfile qos)
+    {
+        m_qos = std::move(qos);
+        return *this;
+    }
+    /**
+     * @brief Register the topic-print observer, texts are delivered per message (request terminator)
+     * @return Response; Invalid when YomkServer is not initialized or out_cb()
+     *         was not accumulated
+     * @note Discovery-driven deferred behavior: succeeds even when the topic has
+     *       no writer yet and auto-subscribes once discovered; re-registering the
+     *       same topic fails
+     */
+    // @zh: 登记调试主题，消息 JSON 文本逐条投递 out_cb() 回调（请求终结）
+    // @zh: return Response；未初始化或未累积 out_cb() 回调时返回 Invalid
+    // @zh: note 发现驱动的延迟行为：主题尚无发布者仍返回成功，发现后自动建订；重复登记同一主题返回错误
+    yomk::payload::Response print()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        if (!m_output)
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "out_cb() callback is required");
+        }
+        return yomk::server().url(yomk::url::ddsDebugTopicPrint)
+            .msg(yomk::msgs::DDSDebugTopic::shared(
+                yomk::payload::DDSDebugTopic{std::move(m_topicName), std::move(m_output), std::move(m_qos)}))
+            .request();
+    }
+};
+
+/**
+ * @brief Debug facet: carries the optional domain()/udp_ds()/tcp_ds() accumulators
+ *        (order-free), terminated by create() or quit(), or hands over to the
+ *        topic() sub-facet; query/type/node sub-facets join it in later rounds
+ */
+// @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 累积器（次序不限），create()/quit() 终结，
+// @zh: 或交出 topic() 子分面；查询/type/node 子分面在后续迁移批次并入
 class DdsDebugBuilder
 {
     uint32_t m_domainId = yomk::payload::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
@@ -463,6 +539,18 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDebugDeleteNode).msg(nullptr).request();
+    }
+    /**
+     * @brief Switch into the topic facet with the observed topic name
+     * @param[in] topicName Topic to observe, must not be empty
+     * @return Topic facet, terminated by print()
+     */
+    // @zh: 切入主题分面并累积被观察的主题名
+    // @zh: topicName 被观察主题名，不可为空
+    // @zh: return 主题分面，经 print() 终结
+    DdsDebugTopicBuilder topic(std::string topicName)
+    {
+        return DdsDebugTopicBuilder(std::move(topicName));
     }
 };
 
@@ -582,34 +670,18 @@ inline detail::DdsBuilder dds()
  *
  * Every macro returns yomk::payload::Response and requires a debug node created
  * first via yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create(), deleted via
- * yomk::dds().debug().quit(). list/info/find share the convergence semantics:
- * consecutive stableRounds unchanged snapshots, 0 clamped to defaults 5 rounds /
- * 200ms. Full behavior: docs/features/debug-service.md
+ * yomk::dds().debug().quit(); topic registration is chained as
+ * yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print(). list/info/find
+ * share the convergence semantics: consecutive stableRounds unchanged snapshots,
+ * 0 clamped to defaults 5 rounds / 200ms. Full behavior:
+ * docs/features/debug-service.md
  */
 // @zh: 调试宏（YomkDdsDebugService 端点，等价 CLI：yomkdds）
 // @zh: 均返回 yomk::payload::Response，且须先经
 // @zh: yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create() 创建调试节点，
-// @zh: 退出经 yomk::dds().debug().quit()；list/info/find 组共用收敛语义：
+// @zh: 退出经 yomk::dds().debug().quit()；主题登记已链式化为
+// @zh: yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print()；list/info/find 组共用收敛语义：
 // @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
-
-/**
- * @brief Register a topic-print observer; JSON texts are delivered per message
- * @param[in] output User callback (DDSDebugOutputFunc); must be thread-safe and quick
- * @param[in] ... qos variadic tail: dynamic subscription reader QoS
- * @note Discovery-driven deferred behavior: succeeds even when the topic has
- *       no writer yet; repeated registration of the same topic fails
- * @warning Empty output callback is rejected
- */
-// @zh: 登记调试主题，消息 JSON 文本逐条投递 output
-// @zh: output 用户自定义回调（DDSDebugOutputFunc），须线程安全且快速返回
-// @zh: qos 可缺省尾参：动态订阅 reader QoS
-// @zh: note 发现驱动的延迟行为：主题尚无发布者仍返回成功；重复登记同一主题返回错误
-// @zh: warning 空输出回调拒绝
-
-#define YOMKDDS_DEBUG_TOPIC_PRINT(topicName, output, ...) \
-    ::yomk::server().url(\
-        ::yomk::url::ddsDebugTopicPrint).msg(\
-        ::yomk::msgs::DDSDebugTopic::shared(yomk::payload::DDSDebugTopic{topicName, output, ##__VA_ARGS__})).request()
 
 /**
  * @brief List discovered topics in the domain (names only, sorted)

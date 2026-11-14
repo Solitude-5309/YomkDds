@@ -1995,7 +1995,7 @@ static int runNodeList(uint32_t domainId, uint32_t waitRounds)
 
     // 2. 独立收敛查询域内命名参与者（与 topic 查询完全分开的路径）：命中返回 StringArray，
     //    每行一个节点名；域内暂无命名参与者返回空列表（合法，输出提示行）
-    resp = YOMKDDS_DEBUG_NODE_LIST(waitRounds, 200);
+    resp = yomk::dds().debug().rounds(waitRounds).interval(200).nodes();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("node list failed: ", resp.msg);

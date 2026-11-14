@@ -214,7 +214,7 @@ pub_node
 ```
 
 域内暂无命名参与者时输出提示行 `no nodes discovered on domain <N>`。
-- **等价宏名**：`YOMKDDS_DEBUG_NODE_LIST(5, 200)`。
+- **等价库调用**：`yomk::dds().debug().rounds(5).interval(200).nodes()`。
 
 ### node info：查询节点发布/订阅清单
 

@@ -55,7 +55,7 @@ flowchart LR
 | 互通 | 与 ROS2 收发同类型消息 | set_name 类型名直改（编程约定） | — | [ros2-interop.md](./ros2-interop.md) |
 | 调试 | 创建/删除调试节点 | `yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create()` / `yomk::dds().debug().quit()` | — | [debug-service.md](./debug-service.md) |
 | 调试 | 主题消息观察 / 频率测量 | `yomk::dds().debug().topic(name).out_cb(cb).print()` | `topic print` / `topic hz` | [debug-service.md](./debug-service.md) |
-| 调试 | 列出主题与节点 | `yomk::dds().debug()[.with_type()].topics()` / `YOMKDDS_DEBUG_NODE_LIST()` | `topic list` / `node list` | [debug-service.md](./debug-service.md) |
+| 调试 | 列出主题与节点 | `yomk::dds().debug()[.with_type()].topics()` / `yomk::dds().debug().nodes()` | `topic list` / `node list` | [debug-service.md](./debug-service.md) |
 | 调试 | 主题/节点详情（端点、GUID、QoS） | `yomk::dds().debug().topic(name)[.verbose(true)].info()` / `YOMKDDS_DEBUG_NODE_INFO()` | `topic info` / `node info` | [debug-service.md](./debug-service.md) |
 | 调试 | 按类型反查主题 | `yomk::dds().debug().type(name).find_topics()` | `topic type` / `topic find` | [debug-service.md](./debug-service.md) |
 | 调试 | 类型内省（IDL 结构） | `yomk::dds().debug().type(name).interface_show()` / `yomk::dds().debug().interfaces()` | `interface show` / `interface list` | [debug-service.md](./debug-service.md) |

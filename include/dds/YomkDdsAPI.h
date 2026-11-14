@@ -799,12 +799,12 @@ public:
  * @brief Debug facet: carries the optional domain()/udp_ds()/tcp_ds() creation
  *        accumulators plus the rounds()/interval()/with_type() query accumulators
  *        (order-free), terminated by create()/quit() or by the query terminators
- *        topics()/interfaces(), or hands over to the topic()/type() sub-facets; the
- *        remaining query/node sub-facets join it in later rounds
+ *        topics()/interfaces()/nodes(), or hands over to the topic()/type() sub-facets;
+ *        the remaining node sub-facets join it in later rounds
  */
 // @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器与 rounds()/interval()/with_type()
-// @zh: 查询累积器（次序不限），create()/quit() 或查询终结 topics()/interfaces() 收束，或交出 topic()/type() 子分面；
-// @zh: 其余查询/node 子分面在后续迁移批次并入
+// @zh: 查询累积器（次序不限），create()/quit() 或查询终结 topics()/interfaces()/nodes() 收束，
+// @zh: 或交出 topic()/type() 子分面；其余 node 子分面在后续迁移批次并入
 class DdsDebugBuilder
 {
     uint32_t m_domainId = yomk::payload::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
@@ -1006,6 +1006,30 @@ public:
                 yomk::payload::DDSDebugInterfaceList{m_stableRounds, m_intervalMs}))
             .request();
     }
+    /**
+     * @brief List the named participants discovered in the domain, sorted by name (request terminator)
+     * @return Response carrying a StringArray packet, one participant name per line; Invalid
+     *         when YomkServer is not initialized
+     * @note Independent convergence query (rounds()/interval(), 0 clamped to 5 rounds /
+     *       200ms); participants with an empty name and the ROS2 placeholder "/" are
+     *       skipped, and the debug node itself never shows up in its own discovery
+     *       callback, so the list may be empty
+     */
+    // @zh: 列出域内已发现的命名参与者（按名排序，请求终结）
+    // @zh: return Response 携带 StringArray 包，每行一个参与者名；未初始化返回 Invalid
+    // @zh: note 独立收敛查询（rounds()/interval()，0 钳制为 5 次/200ms）；空名与 ROS2 占位名 "/" 跳过，
+    // @zh: 调试节点自身不在自身发现回调中，天然不列出；列表可为空（不看 with_type()）
+    yomk::payload::Response nodes()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsDebugListNodes)
+            .msg(yomk::msgs::DDSNodeList::shared(
+                yomk::payload::DDSNodeList{m_stableRounds, m_intervalMs}))
+            .request();
+    }
 };
 
 /**
@@ -1136,7 +1160,8 @@ inline detail::DdsBuilder dds()
  * yomk::dds().debug().topic(name).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)]
  * [.required(n)][.max_times(n)][.qos(qos)].publish(), and the IDL struct dump as
  * yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show(), and the
- * type-name list as yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces().
+ * type-name list as yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces(), and the
+ * node list as yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes().
  * list/info/find share the convergence semantics: consecutive stableRounds
  * unchanged snapshots, 0 clamped to defaults 5 rounds / 200ms. Full behavior:
  * docs/features/debug-service.md
@@ -1154,19 +1179,10 @@ inline detail::DdsBuilder dds()
 // @zh: 类型反查为
 // @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics()，类型内省为
 // @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show()，类型清单为
-// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()；
+// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()，节点清单为
+// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()；
 // @zh: list/info/find 组共用收敛语义：
 // @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
-
-/**
- * @brief List named participants in the domain (sorted, empty names skipped)
- */
-// @zh: 列出当前域内已发现的全部命名参与者（按名排序，空名参与者跳过）
-
-#define YOMKDDS_DEBUG_NODE_LIST(stableRounds, intervalMs)                    \
-    ::yomk::server().url(\
-        ::yomk::url::ddsDebugListNodes).msg(\
-        ::yomk::msgs::DDSNodeList::shared(yomk::payload::DDSNodeList{stableRounds, intervalMs})).request()
 
 /**
  * @brief Query pub/sub topic lists of a named participant (GUID-prefix based)

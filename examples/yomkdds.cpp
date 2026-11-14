@@ -838,7 +838,7 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("bag record failed: ", resp.msg);
-        YOMKDDS_BAG_DEL_NODE(); // 失败路径同样须清理已建 bag 节点
+        yomk::dds().bag().quit(); // 失败路径同样须清理已建 bag 节点
         return 2;
     }
 
@@ -853,7 +853,7 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
     }
 
     // 5. 退出前显式删除 bag 节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
-    resp = YOMKDDS_BAG_DEL_NODE();
+    resp = yomk::dds().bag().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("delete bag node failed: ", resp.msg);
@@ -1083,7 +1083,7 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("bag play failed: ", resp.msg);
-        YOMKDDS_BAG_DEL_NODE(); // 失败路径同样须清理已建 bag 节点
+        yomk::dds().bag().quit(); // 失败路径同样须清理已建 bag 节点
         return 2;
     }
 
@@ -1098,7 +1098,7 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
     }
 
     // 6. 退出前显式删除 bag 节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
-    resp = YOMKDDS_BAG_DEL_NODE();
+    resp = yomk::dds().bag().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("delete bag node failed: ", resp.msg);

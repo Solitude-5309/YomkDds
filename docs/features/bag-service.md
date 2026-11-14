@@ -11,7 +11,7 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 | 能力 | 库 API（链式/宏） | yomkdds CLI | 是否须 bag 节点 |
 |---|---|---|---|
 | 创建 bag 节点 | 链式 `yomk::dds().bag()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` | —（CLI 内部自动建删） | — |
-| 删除 bag 节点 | 宏 `YOMKDDS_BAG_DEL_NODE()`（链式 `yomk::dds().bag().quit()` 待并入） | —（CLI 内部自动建删） | — |
+| 删除 bag 节点 | 链式 `yomk::dds().bag().quit()` | —（CLI 内部自动建删） | — |
 | 录制主题列表为 mcap bag | `YOMKDDS_BAG_RECORD(topics, outputDir, maxBagSize, maxBagDurationSec, maxCacheSize)` | `bag record` | **须**（库侧先 `yomk::dds().bag()...create()`） |
 | 查看 bag 元信息 | `YOMKDDS_BAG_INFO(bagDir)` | `bag info` | 不须（纯文件读，无须 create_node） |
 | 重建 bag 元信息 | `YOMKDDS_BAG_REINDEX(bagDir)` | `bag reindex` | 不须（纯文件操作，无须 create_node） |
@@ -22,11 +22,11 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 
 ## 使用方式概述
 
-### bag 节点（`yomk::dds().bag()[...].create()`）
+### bag 节点（`yomk::dds().bag()…create()` / `yomk::dds().bag().quit()`）
 
 `yomk::dds().bag()[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()`（端点 `/YomkDdsBagService/create_node`）：
 
-- 单节点模型（一个进程至多一个，重复创建须先删除）；`YOMKDDS_BAG_DEL_NODE()` 删除 bag 节点并销毁其全部 DDS 实体，未创建时返回错误（链式 `bag().quit()` 在后续批次并入）；
+- 单节点模型（一个进程至多一个，重复创建须先删除）；`yomk::dds().bag().quit()` 删除 bag 节点并销毁其全部 DDS 实体，未创建时返回错误；
 - 三个累积器均可选、次序不限：未累积项回退类内缺省初始化器（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`，两 locator 按 5.7 开关门控读 `YOMKDDS_UDP/TCP_DISCOVER_SERVERS`，语义同 `yomk::dds().node(...)` 缺省项）；全缺省形态即 `yomk::dds().bag().create()`；
 - domainId 合法范围 [0,232]，仅同域端点可被发现与录制；`udp_ds()/tcp_ds()` 为 UDP/TCP 发现服务器直配聚合串，语义同 `yomk::dds().node(...)` 的 udp_ds()/tcp_ds() 直配（CLIENT 协议强制，非法串创建失败回显），详见 [discovery-server.md](./discovery-server.md)。
 
@@ -87,7 +87,7 @@ int main()
     if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         // m_msg 为逐项原因（校验类多行）；失败路径同样须删除已建 bag 节点
-        YOMKDDS_BAG_DEL_NODE();
+        yomk::dds().bag().quit();
         return 2;
     }
 
@@ -99,7 +99,7 @@ int main()
     }
 
     // 5. 退出前显式删除 bag 节点（确保 DDS 实体在 FastDDS 静态资源销毁前清理）
-    YOMKDDS_BAG_DEL_NODE();
+    yomk::dds().bag().quit();
     return 0;
 }
 ```

@@ -35,7 +35,7 @@ flowchart LR
 |---|---|---|---|
 | YomkDdsService | 节点生命周期、主题注册、发布订阅、Loan、XML 加载 | `yomk::dds()` 链式 | 不覆盖（编程能力） |
 | YomkDdsDebugService | 类型无关的域内观察（主题/节点/类型/端点）与 JSON 载荷发布 | `yomk::dds().debug()` 链式面 | `yomkdds topic/node/interface` 全部覆盖 |
-| YomkDdsBagService | mcap 格式录制、元信息、重建索引、转换、回放 | `YOMKDDS_BAG_*`（建点 `yomk::dds().bag()` 链式） | `yomkdds bag` 全部覆盖（play 仅 CLI） |
+| YomkDdsBagService | mcap 格式录制、元信息、重建索引、转换、回放 | `YOMKDDS_BAG_*`（建删 `yomk::dds().bag()` 链式） | `yomkdds bag` 全部覆盖（play 仅 CLI） |
 
 > 除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
@@ -60,7 +60,7 @@ flowchart LR
 | 调试 | 按类型反查主题 | `yomk::dds().debug().type(name).find_topics()` | `topic type` / `topic find` | [debug-service.md](./debug-service.md) |
 | 调试 | 类型内省（IDL 结构） | `yomk::dds().debug().type(name).interface_show()` / `yomk::dds().debug().interfaces()` | `interface show` / `interface list` | [debug-service.md](./debug-service.md) |
 | 调试 | 发布示例与 JSON 载荷发布 | `yomk::dds().debug().topic(name).pub_example()` / `.sample_to_json()` / `.payload(json)….publish()` | `topic pub` | [debug-service.md](./debug-service.md) |
-| Bag | 创建 bag 节点 | `yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create()` | —（CLI 自动建删） | [bag-service.md](./bag-service.md) |
+| Bag | 创建/删除 bag 节点 | `yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create()` / `yomk::dds().bag().quit()` | —（CLI 自动建删） | [bag-service.md](./bag-service.md) |
 | Bag | 录制到 mcap（分片/缓存/暂停/通配） | `YOMKDDS_BAG_RECORD()` | `bag record` | [bag-service.md](./bag-service.md) |
 | Bag | 查看 bag 元信息 | `YOMKDDS_BAG_INFO()` | `bag info` | [bag-service.md](./bag-service.md) |
 | Bag | 重建 bag 元信息 | `YOMKDDS_BAG_REINDEX()` | `bag reindex` | [bag-service.md](./bag-service.md) |

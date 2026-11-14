@@ -1121,10 +1121,10 @@ public:
 
 /**
  * @brief Bag facet: carries the optional domain()/udp_ds()/tcp_ds() creation
- *        accumulators (order-free), terminated by create(); the record()/convert()
+ *        accumulators (order-free), terminated by create()/quit(); the record()/convert()
  *        terminators and the dir() sub-facet join it in later migration rounds
  */
-// @zh: Bag 分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器（次序不限），create() 收束；
+// @zh: Bag 分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器（次序不限），create()/quit() 收束；
 // @zh: 录制 record()/转换 convert() 终结与目录 dir() 子分面在后续迁移批次并入
 class DdsBagBuilder
 {
@@ -1193,6 +1193,25 @@ public:
             .msg(yomk::msgs::DDSBagNode::shared(
                 yomk::payload::DDSBagNode{m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
             .request();
+    }
+    /**
+     * @brief Delete the bag node and destroy all its DDS entities (request terminator)
+     * @return Response; fails when the bag node was not created
+     * @note Destroy counterpart of create() on the same facet; named quit() rather than
+     *       remove() because the bag node carries no name, which keeps the entry clear
+     *       of the core suite's node(nodeName).remove() facet
+     */
+    // @zh: 删除 bag 节点并销毁其全部 DDS 实体（请求终结）
+    // @zh: return Response；未创建时返回错误
+    // @zh: note 与 create() 同分面的销毁对；命名 quit() 而非 remove()——bag 节点无名，
+    // @zh: 与核心套件具名节点 node(nodeName).remove() 分开
+    yomk::payload::Response quit()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsBagDeleteNode).msg(nullptr).request();
     }
 };
 
@@ -1370,15 +1389,17 @@ inline detail::DdsBuilder dds()
 /**
  * @brief Bag record/replay macros (YomkDdsBagService endpoints)
  *
- * The bag node itself is chained as yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create().
+ * The bag node lifecycle is chained as
+ * yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit().
  * Every remaining macro returns yomk::payload::Response. bag_record/bag_play block
  * the calling thread until finished or stopped via the yomk::bag* flags.
  * Full behavior: docs/features/bag-service.md
  */
 // @zh: Bag 录制回放宏（YomkDdsBagService 端点）
-// @zh: bag 节点创建已链式化为 yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create()；
-// @zh: 其余宏均返回 yomk::payload::Response，bag_record/bag_play 阻塞调用线程至收尾
-// @zh: 或经 yomk::bag* 标志停止；详见 docs/features/bag-service.md
+// @zh: bag 节点生命周期已链式化为 yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() /
+// @zh: yomk::dds().bag().quit()；其余宏均返回 yomk::payload::Response，
+// @zh: bag_record/bag_play 阻塞调用线程至收尾或经 yomk::bag* 标志停止；
+// @zh: 详见 docs/features/bag-service.md
 
 /**
  * @brief Record topics into an mcap bag (blocks the calling thread until done)
@@ -1458,12 +1479,3 @@ inline detail::DdsBuilder dds()
 #define YOMKDDS_BAG_PLAY(bagDir, playbackRate, topics, loop, startOffset, delay, waitForAllAckedMs, topicRemaps, readAheadQueueSize, qosOverridesPath) \
     ::yomk::server().url(::yomk::url::ddsBagPlay).msg(\
         ::yomk::msgs::DDSBagPlay::shared(yomk::payload::DDSBagPlay{(bagDir), (playbackRate), (topics), (loop), (startOffset), (delay), (waitForAllAckedMs), (topicRemaps), (readAheadQueueSize), (qosOverridesPath)})).request()
-
-/**
- * @brief Quit bag mode: delete the bag node and its DDS entities
- * @note Fails when the bag node was not created
- */
-// @zh: 退出录制：删除 bag 节点及其全部 DDS 实体
-// @zh: note 未创建时返回错误
-
-#define YOMKDDS_BAG_DEL_NODE() ::yomk::server().url(::yomk::url::ddsBagDeleteNode).msg(nullptr).request()

@@ -1717,7 +1717,7 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
     }
 
     // 2. 独立收敛查询消息描述两要素（StringArray 恰 2 行：类型名 + 紧凑 msg JSON）
-    resp = YOMKDDS_DEBUG_TOPIC_MSG(topicName, waitRounds, 200);
+    resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).sample_to_json();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("topic msg failed: ", resp.msg);

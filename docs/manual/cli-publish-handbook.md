@@ -88,7 +88,7 @@ message description written: hello_world_msg_2026-09-28-12-14-42-626.json (topic
 
 - **要点**：主题名/类型名不在文件内，从文件名与 stdout 提示行追溯；编辑文件改字段值后按文件发布（见下文 `-f` 形态）——`"$(cat 文件)"` 命令替换结果不再经历引号删除，内层双引号与换行原样保留，多行缩进 JSON 解析无碍。
 - **失败报错**：按节点层两步骤归类——步骤 1 `topic [<主题名>] not found` 主题未发现；步骤 2 类型重建与 JSON 模板生成侧原因（同 `topic pub -e` 的步骤 2/3 错误文本）。
-- **等价宏名**：`YOMKDDS_DEBUG_TOPIC_MSG(topicName, stableRounds, intervalMs)`（CLI 侧由两要素拼装导出文件）。
+- **等价库调用**：`yomk::dds().debug().topic(topicName).rounds(5).interval(200).sample_to_json()`（返回两行：类型名 + 紧凑 JSON 样本；`-o` 目录与写文件为 CLI 本地行为，不进入库调用）。
 
 ### topic pub 直发：发布 JSON 载荷
 

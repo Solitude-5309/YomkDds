@@ -376,14 +376,15 @@ public:
 /**
  * @brief Debug topic facet: carries the topicName opened by debug().topic(), the
  *        out_cb() output callback and qos() accumulator of the print() surface, and
- *        the rounds()/interval()/verbose() accumulators of the info()/pub_example()
- *        query surfaces (all optional accumulators are order-free); terminated by
- *        print(), info() or pub_example(), the remaining topic sub-facets join it in
- *        later migration rounds
+ *        the rounds()/interval()/verbose() accumulators of the info()/pub_example()/
+ *        sample_to_json() query surfaces (all optional accumulators are order-free);
+ *        terminated by print(), info(), pub_example() or sample_to_json(), the remaining
+ *        topic sub-facets join it in later migration rounds
  */
 // @zh: 调试主题分面：承载 debug().topic() 起始的主题名、print() 面的 out_cb() 输出回调与
-// @zh: qos() 累积器，以及 info()/pub_example() 查询面的 rounds()/interval()/verbose() 累积器
-// @zh: （可选累积器次序不限），由 print()、info() 或 pub_example() 终结；其余 topic 子分面在后续迁移批次并入
+// @zh: qos() 累积器，以及 info()/pub_example()/sample_to_json() 查询面的 rounds()/interval()/verbose() 累积器
+// @zh: （可选累积器次序不限），由 print()、info()、pub_example() 或 sample_to_json() 终结；
+// @zh: 其余 topic 子分面在后续迁移批次并入
 class DdsDebugTopicBuilder
 {
     std::string m_topicName;
@@ -553,6 +554,32 @@ public:
         return yomk::server().url(yomk::url::ddsDebugTopicExample)
             .msg(yomk::msgs::DDSDebugTopicExample::shared(
                 yomk::payload::DDSDebugTopicExample{std::move(m_topicName), m_stableRounds, m_intervalMs}))
+            .request();
+    }
+    /**
+     * @brief Query the topic's message description: type name + compact default-value JSON sample
+     * @return Response carrying a StringArray packet of exactly two lines: d[0] is the raw
+     *         DDS type name, d[1] the compact (single-line) JSON sample of default values,
+     *         which is itself a valid publish payload; Invalid when YomkServer is not
+     *         initialized
+     * @note Independent convergence query (rounds()/interval(), 0 clamped to 5 rounds /
+     *       200ms); fails when the topic has not been discovered. Writing the sample to a
+     *       file is a caller-side concern: no output path travels in the request
+     */
+    // @zh: 查询主题的消息描述：类型名 + 紧凑默认值 JSON 样本（请求终结）
+    // @zh: return Response 携带 StringArray 恰两行：d[0] 原始 DDS 类型名，d[1] 紧凑（单行）默认值
+    // @zh: JSON 样本，本身即合法发布载荷；未初始化返回 Invalid
+    // @zh: note 独立收敛查询（rounds()/interval()，0 钳制为 5 次/200ms）；未发现主题返回错误；
+    // @zh: 是否落盘由调用方决定，请求负载不携带输出路径
+    yomk::payload::Response sample_to_json()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsDebugTopicMsg)
+            .msg(yomk::msgs::DDSDebugTopicMsg::shared(
+                yomk::payload::DDSDebugTopicMsg{std::move(m_topicName), m_stableRounds, m_intervalMs}))
             .request();
     }
 };
@@ -990,7 +1017,8 @@ inline detail::DdsBuilder dds()
  * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info(), and the
  * reverse lookup as yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics(),
  * the publish example as
- * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].pub_example(), and the
+ * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].pub_example(), the JSON sample as
+ * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].sample_to_json(), and the
  * IDL struct dump as
  * yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show(), and the
  * type-name list as yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces().
@@ -1005,22 +1033,13 @@ inline detail::DdsBuilder dds()
 // @zh: yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print()，主题清单为
 // @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()，单主题详情为
 // @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info()，发布示例为
-// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].pub_example()，类型反查为
+// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].pub_example()，JSON 样本为
+// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].sample_to_json()，类型反查为
 // @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics()，类型内省为
 // @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show()，类型清单为
 // @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()；
 // @zh: list/info/find 组共用收敛语义：
 // @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
-
-/**
- * @brief Query a topic's message description: type name + compact msg JSON
- */
-// @zh: 按主题名查询消息描述两要素：类型名 + 紧凑 msg JSON
-
-#define YOMKDDS_DEBUG_TOPIC_MSG(topicName, stableRounds, intervalMs)        \
-    ::yomk::server().url(\
-        ::yomk::url::ddsDebugTopicMsg).msg(\
-        ::yomk::msgs::DDSDebugTopicMsg::shared(yomk::payload::DDSDebugTopicMsg{topicName, stableRounds, intervalMs})).request()
 
 /**
  * @brief Publish a JSON payload to a topic with full first-shot validation

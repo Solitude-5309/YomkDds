@@ -76,7 +76,7 @@
 | `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()` | 按类型名输出 IDL 结构 |
 | `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()` | 列出全部类型名 |
 | `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()` | 查询主题发布示例 |
-| `YOMKDDS_DEBUG_TOPIC_MSG(topicName, stableRounds, intervalMs)` | 查询消息描述两要素 |
+| `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()` | 查询消息描述两要素（类型名 + JSON 样本） |
 | `YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, ...)` | 发布 JSON 载荷消息（支持持续发布/条数上限/QoS 尾参） |
 | `yomk::dds().debug().quit()` | 退出调试（删除调试节点） |
 

@@ -1382,7 +1382,7 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
     }
     else
     {
-        resp = YOMKDDS_DEBUG_TOPIC_INFO(topicName, waitRounds, 200);
+        resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).info();
     }
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
@@ -1434,7 +1434,7 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
     }
 
     // 2. 独立收敛查询单主题详情（非 verbose 三行），仅消费首行类型名
-    resp = YOMKDDS_DEBUG_TOPIC_INFO(topicName, waitRounds, 200);
+    resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).info();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("topic type failed: ", resp.msg);

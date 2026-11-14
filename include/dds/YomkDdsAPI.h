@@ -451,13 +451,13 @@ public:
 
 /**
  * @brief Debug facet: carries the optional domain()/udp_ds()/tcp_ds() creation
- *        accumulators and rounds()/interval() convergence accumulators
+ *        accumulators plus the rounds()/interval()/with_type() query accumulators
  *        (order-free), terminated by create()/quit() or by the query terminator
  *        topics(), or hands over to the topic() sub-facet; the remaining
  *        query/type/node sub-facets join it in later rounds
  */
-// @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器与 rounds()/interval()
-// @zh: 收敛累积器（次序不限），create()/quit() 或查询终结 topics() 收束，或交出 topic() 子分面；
+// @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器与 rounds()/interval()/with_type()
+// @zh: 查询累积器（次序不限），create()/quit() 或查询终结 topics() 收束，或交出 topic() 子分面；
 // @zh: 其余查询/type/node 子分面在后续迁移批次并入
 class DdsDebugBuilder
 {
@@ -466,6 +466,7 @@ class DdsDebugBuilder
     std::string m_tcpDiscoverServerLocator = yomk::payload::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
     uint32_t m_stableRounds = 0;                                                                 // 0 由节点层钳制为默认 5 次
     uint32_t m_intervalMs = 0;                                                                   // 0 由节点层钳制为默认 200ms
+    bool m_types = false;                                                                        // 查询分面 types 标志：with_type() 置真
 public:
     /**
      * @brief Accumulate the DDS domain id
@@ -535,6 +536,19 @@ public:
         return *this;
     }
     /**
+     * @brief Enable the type-name mode of the query terminator ("topic [type]" per line)
+     * @return Reference to self for chaining
+     * @note Boolean switch — no argument; the types flag of the discovery query
+     */
+    // @zh: 开启查询终结的类型名模式（每行 "主题名 [类型名]"）
+    // @zh: return 自身链式引用
+    // @zh: note 布尔开关，无参；对应发现查询的 types 标志
+    DdsDebugBuilder& with_type()
+    {
+        m_types = true;
+        return *this;
+    }
+    /**
      * @brief Create the debug node, one type-agnostic domain observer per process (request terminator)
      * @return Response; invalid locator input or out-of-range domainId fails with the reason echoed back
      * @note Single node model: at most one per process, delete it before re-creating.
@@ -586,15 +600,18 @@ public:
         return DdsDebugTopicBuilder(std::move(topicName));
     }
     /**
-     * @brief List discovered topics in the domain, names only and sorted (request terminator)
-     * @return Response carrying a StringArray packet, one topicName per line; names only,
-     *         remote writers and readers both recorded, the list may be empty
+     * @brief List discovered topics in the domain, sorted (request terminator)
+     * @return Response carrying a StringArray packet, one line per topic; names only
+     *         unless with_type() is accumulated, in which case each line is
+     *         "topicName [typeName]"; remote writers and readers both recorded, the
+     *         list may be empty
      * @note Convergence query: polls discovery snapshots every interval() until
      *       rounds() consecutive snapshots are unchanged; unset accumulators are
      *       clamped to 5 rounds / 200ms. Independent of the topic() sub-facet
      */
-    // @zh: 列出域内已发现的主题（仅主题名，按名排序，请求终结）
-    // @zh: return Response 携带 StringArray 包，每行一个 topicName；远端 writer 与 reader 均记录，列表可为空
+    // @zh: 列出域内已发现的主题（按名排序，请求终结）
+    // @zh: return Response 携带 StringArray 包，每行一个主题；未累积 with_type() 时仅主题名，
+    // @zh: 否则每行为 "主题名 [类型名]"；远端 writer 与 reader 均记录，列表可为空
     // @zh: note 收敛查询：每 interval() 轮询一次发现快照，连续 rounds() 次不变即返回；
     // @zh: 未累积时钳制为默认 5 次/200ms；与 topic() 子分面互不依赖
     yomk::payload::Response topics()
@@ -605,7 +622,7 @@ public:
         }
         return yomk::server().url(yomk::url::ddsDebugListTopics)
             .msg(yomk::msgs::DDSDebugList::shared(
-                yomk::payload::DDSDebugList{m_stableRounds, m_intervalMs}))
+                yomk::payload::DDSDebugList{m_stableRounds, m_intervalMs, m_types}))
             .request();
     }
 };
@@ -728,8 +745,8 @@ inline detail::DdsBuilder dds()
  * first via yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create(), deleted via
  * yomk::dds().debug().quit(); topic registration is chained as
  * yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print(), the topic list as
- * yomk::dds().debug()[.rounds(n)][.interval(ms)].topics(). list/info/find share
- * the convergence semantics: consecutive stableRounds unchanged snapshots,
+ * yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics(). list/info/find
+ * share the convergence semantics: consecutive stableRounds unchanged snapshots,
  * 0 clamped to defaults 5 rounds / 200ms. Full behavior:
  * docs/features/debug-service.md
  */
@@ -738,18 +755,8 @@ inline detail::DdsBuilder dds()
 // @zh: yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create() 创建调试节点，
 // @zh: 退出经 yomk::dds().debug().quit()；主题登记已链式化为
 // @zh: yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print()，主题清单为
-// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()；list/info/find 组共用收敛语义：
+// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()；list/info/find 组共用收敛语义：
 // @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
-
-/**
- * @brief List discovered topics with type names ("topic [type]" per line)
- */
-// @zh: 列出域内主题并附类型名（每行 "主题名 [类型名]"）
-
-#define YOMKDDS_DEBUG_TOPIC_LIST_T(stableRounds, intervalMs)                 \
-    ::yomk::server().url(\
-        ::yomk::url::ddsDebugListTopics).msg(\
-        ::yomk::msgs::DDSDebugList::shared(yomk::payload::DDSDebugList{stableRounds, intervalMs, true})).request()
 
 /**
  * @brief Query one topic's discovery details (type, publisher/subscriber counts)

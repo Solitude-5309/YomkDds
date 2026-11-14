@@ -28,7 +28,7 @@
 | 入口 | 能力 | 关键行为 |
 |---|---|---|
 | 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()` | 列出域内主题 | 返回 StringArray 每行一个 topicName（仅主题名，不含类型）按主题名排序；远端 DataWriter 与 DataReader 均记录（仅有订阅者而无发布者的主题同样列出）；列表可为空（域内无 writer/reader） |
-| 宏 `YOMKDDS_DEBUG_TOPIC_LIST_T(stableRounds, intervalMs)` | 列出域内主题与类型名 | 与 `topics()` 同端点同收敛语义，返回 StringArray 每行 `主题名 [类型名]`（单空格 + 方括号，类型名原样输出） |
+| 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].with_type().topics()` | 列出域内主题与类型名 | 与 `topics()` 同端点同收敛语义，`with_type()` 开启类型名模式；返回 StringArray 每行 `主题名 [类型名]`（单空格 + 方括号，类型名原样输出） |
 | 宏 `YOMKDDS_DEBUG_NODE_LIST(stableRounds, intervalMs)` | 列出域内节点 | 独立收敛查询域内已发现的命名参与者（不依赖 list_topics/topic_info）；participant_name 非空且非 "/" 才列出（空名与 ROS2 参与者默认占位名 "/" 跳过，不输出 GUID 串），按名称排序；调试节点自身不在自身发现回调中，天然不列出；列表可为空 |
 | CLI `yomkdds topic list` / `yomkdds topic list [-t]` | 列出域内全部已发现主题 | `-t`（`--types`）进入类型名模式，每行输出 `主题名 [类型名]`（对齐 `ros2 topic list -t` 形态） |
 | CLI `yomkdds node list` | 列出域内全部已发现的命名参与者 | 同域其他进程的调试节点与 bag 节点分别以唯一名 `yomkdds_debug_<uid>` / `yomkdds_bag_<uid>` 列出（uid 为 12 位随机 hex，多进程各自的调试/录制节点可区分） |
@@ -162,14 +162,15 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 | qos | reader QoS 描述 `DDSQosProfile`，全哨兵（默认）= BEST_EFFORT+VOLATILE depth 1；CLI 侧经 `--qos-ros`/`--qos-*`/`--qos-file` 指定 |
 | 重复登记 | 同一主题二次登记返回错误（`already registered`） |
 
-### 查询收敛参数（`yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()`）
+### 查询收敛参数（`yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()`）
 
 | 参数 | 约束 |
 |---|---|
-| 形参形态 | `rounds(n)` / `interval(ms)` 均为可选累积器、次序不限，`topics()` 终结；两者只影响查询类终结，不影响 `create()`/`quit()` 建点与退出的参数 |
+| 形参形态 | `rounds(n)` / `interval(ms)` / `with_type()` 均为可选累积器、次序不限，`topics()` 终结；只影响查询类终结，不影响 `create()`/`quit()` 建点与退出的参数 |
 | rounds | 连续多少次快照集合不变即认为收敛；缺省/0 由节点层钳制为默认 5 次 |
 | interval | 快照轮询间隔（毫秒）；缺省/0 钳制为默认 200ms；最长阻塞约 rounds*interval |
-| 返回值 | 命中返回 StringArray 包（每行一个 topicName，按名排序）；远端 writer 与 reader 均记录，列表可为空 |
+| with_type | 布尔开关（无参）：开启类型名模式，`topics()` 每行变为 `主题名 [类型名]`（对应 CLI `-t/--types`）；缺省关闭 |
+| 返回值 | 命中返回 StringArray 包（每行一个主题名；开启 with_type() 时为 `主题名 [类型名]`），列表可为空 |
 
 ### 收敛查询语义
 
@@ -177,8 +178,8 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 - 每 intervalMs（默认 200ms）轮询一次发现缓存快照，连续 stableRounds 次集合不变即返回；
 - 0 值钳制默认 5 次/200ms，最长阻塞约 stableRounds*intervalMs；
-- **宏侧**：stableRounds/intervalMs 为显式形参（如余存宏 `YOMKDDS_DEBUG_TOPIC_LIST_T(5, 200)`）；
-- **链式侧**：`rounds(n)` / `interval(ms)` 为调试分面的可选累积器（缺省不累积即 0，由节点层钳制为 5 次/200ms），`topics()` 终结（待并入的查询终结同此）；
+- **宏侧**：stableRounds/intervalMs 为显式形参（如余存宏 `YOMKDDS_DEBUG_TOPIC_INFO("hello_world", 5, 200)`）；
+- **链式侧**：`rounds(n)` / `interval(ms)` / `with_type()` 为调试分面的可选累积器（缺省不累积即 0/关，由节点层钳制为 5 次/200ms），`topics()` 终结（待并入的查询终结同此）；
 - **CLI 侧**：收敛判定次数经环境变量 `YOMKDDS_DDS_DISCOVER_ROUNDS` 配置（默认 5；值须为 >=1 的整数，非法报错退出；yomkdds 启动时无该变量则自动创建并默认 5，同时幂等写入 `~/.bashrc`）。生效命令：`topic list`、`topic info`、`topic type`、`topic find`、`interface show`、`interface list`、`topic pub -e`、`topic pub -ef`、`topic pub`、`node list` 与 `node info`；`topic print`/`topic hz` 为持续订阅/测量型不用。该环境变量为收敛次数唯一配置入口，详见[环境变量与公共配置参考](../manual/env-vars-reference.md)。
 
 ### `YOMKDDS_DEBUG_TOPIC_PUB` 专有参数

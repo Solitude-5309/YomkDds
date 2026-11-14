@@ -1308,7 +1308,7 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false)
     //    发现重放完成即立即输出，无需固定等待窗口；types 模式（-t）每行 "主题名 [类型名]"
     if (types)
     {
-        resp = YOMKDDS_DEBUG_TOPIC_LIST_T(waitRounds, 200);
+        resp = yomk::dds().debug().rounds(waitRounds).interval(200).with_type().topics();
     }
     else
     {

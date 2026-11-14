@@ -52,7 +52,7 @@ yomkdds topic list                 # 观察域 5；另开终端需重新 export 
 ### YOMKDDS_DDS_DISCOVER_ROUNDS：查询类命令收敛次数
 
 - **作用**：收敛判定次数——查询类命令内部每 ~200ms 轮询一次发现缓存快照，连续 N 次集合不变即认为发现收敛、立即输出（默认 5）。
-- **作用域**：CLI 侧。该环境变量为收敛次数**唯一配置入口**；库侧以显式参数指定收敛次数（链式 `yomk::dds().debug().rounds(n).interval(ms).topics()`，余存宏如 `YOMKDDS_DEBUG_TOPIC_LIST_T(stableRounds, intervalMs)` 同），不经该变量。
+- **作用域**：CLI 侧。该环境变量为收敛次数**唯一配置入口**；库侧以显式参数指定收敛次数（链式 `yomk::dds().debug().rounds(n).interval(ms).topics()`，余存宏如 `YOMKDDS_DEBUG_TOPIC_INFO(stableRounds, intervalMs)` 同），不经该变量。
 - **默认值**：`5`。
 - **取值约束**：值须为 >=1 的整数，非法报错退出。
 - **生效命令清单**：`topic list`、`topic info`、`topic type`、`topic find`、`interface show`、`interface list`、`topic pub -e`、`topic pub -ef`、`topic pub`、`node list` 与 `node info` 生效；`topic print`/`topic hz` 为持续订阅/测量型不用。

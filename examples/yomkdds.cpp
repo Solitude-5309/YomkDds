@@ -1312,7 +1312,7 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false)
     }
     else
     {
-        resp = YOMKDDS_DEBUG_TOPIC_LIST(waitRounds, 200);
+        resp = yomk::dds().debug().rounds(waitRounds).interval(200).topics();
     }
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {

@@ -114,7 +114,7 @@ hello_world [YomkDdsStd::MString]
 ```
 
 域内无任何已发布主题时输出 `no topics discovered on domain N`（types 模式同）。
-- **等价宏名**：`YOMKDDS_DEBUG_TOPIC_LIST(5, 200)`；`-t` 模式对应 `YOMKDDS_DEBUG_TOPIC_LIST_T(收敛次数, 间隔ms)`（输出内容与 CLI 一致）。
+- **等价库调用**：`yomk::dds().debug().rounds(5).interval(200).topics()`；`-t` 模式对应余存宏 `YOMKDDS_DEBUG_TOPIC_LIST_T(收敛次数, 间隔ms)`（输出内容与 CLI 一致）。
 
 建议先启动发布端再执行 `topic list`——工具创建调试节点入域后内部自适应收敛查询，无需固定等待窗口。
 

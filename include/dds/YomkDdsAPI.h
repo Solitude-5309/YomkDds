@@ -631,12 +631,12 @@ public:
 /**
  * @brief Debug facet: carries the optional domain()/udp_ds()/tcp_ds() creation
  *        accumulators plus the rounds()/interval()/with_type() query accumulators
- *        (order-free), terminated by create()/quit() or by the query terminator
- *        topics(), or hands over to the topic()/type() sub-facets; the remaining
- *        query/node sub-facets join it in later rounds
+ *        (order-free), terminated by create()/quit() or by the query terminators
+ *        topics()/interfaces(), or hands over to the topic()/type() sub-facets; the
+ *        remaining query/node sub-facets join it in later rounds
  */
 // @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器与 rounds()/interval()/with_type()
-// @zh: 查询累积器（次序不限），create()/quit() 或查询终结 topics() 收束，或交出 topic()/type() 子分面；
+// @zh: 查询累积器（次序不限），create()/quit() 或查询终结 topics()/interfaces() 收束，或交出 topic()/type() 子分面；
 // @zh: 其余查询/node 子分面在后续迁移批次并入
 class DdsDebugBuilder
 {
@@ -816,6 +816,29 @@ public:
                 yomk::payload::DDSDebugList{m_stableRounds, m_intervalMs, m_types}))
             .request();
     }
+    /**
+     * @brief List all discovered data type names, deduplicated and sorted (request terminator)
+     * @return Response carrying a StringArray packet, one typeName per line; Invalid when
+     *         YomkServer is not initialized
+     * @note Independent convergence query (rounds()/interval(), 0 clamped to 5 rounds /
+     *       200ms), the navigation companion of type(name).interface_show(); fails when
+     *       the domain holds no type at all
+     */
+    // @zh: 列出发现缓存中出现的全部数据类型名（去重字典序，请求终结）
+    // @zh: return Response 携带 StringArray 包，每行一个类型名；未初始化返回 Invalid
+    // @zh: note 独立收敛查询（rounds()/interval()，0 钳制为 5 次/200ms），
+    // @zh: 是 type(name).interface_show() 的导航配套；域内无任何类型返回错误
+    yomk::payload::Response interfaces()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsDebugInterfaceList)
+            .msg(yomk::msgs::DDSDebugInterfaceList::shared(
+                yomk::payload::DDSDebugInterfaceList{m_stableRounds, m_intervalMs}))
+            .request();
+    }
 };
 
 /**
@@ -941,7 +964,8 @@ inline detail::DdsBuilder dds()
  * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info(), and the
  * reverse lookup as yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics(),
  * and the IDL struct dump as
- * yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show().
+ * yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show(), and the
+ * type-name list as yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces().
  * list/info/find share the convergence semantics: consecutive stableRounds
  * unchanged snapshots, 0 clamped to defaults 5 rounds / 200ms. Full behavior:
  * docs/features/debug-service.md
@@ -954,19 +978,10 @@ inline detail::DdsBuilder dds()
 // @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()，单主题详情为
 // @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info()，类型反查为
 // @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics()，类型内省为
-// @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show()；
+// @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show()，类型清单为
+// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()；
 // @zh: list/info/find 组共用收敛语义：
 // @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
-
-/**
- * @brief List all discovered data type names (deduplicated, sorted)
- */
-// @zh: 列出发现缓存中出现的全部数据类型名（去重字典序）
-
-#define YOMKDDS_DEBUG_INTERFACE_LIST(stableRounds, intervalMs)              \
-    ::yomk::server().url(\
-        ::yomk::url::ddsDebugInterfaceList).msg(\
-        ::yomk::msgs::DDSDebugInterfaceList::shared(yomk::payload::DDSDebugInterfaceList{stableRounds, intervalMs})).request()
 
 /**
  * @brief Query a copy-pastable publish example for a topic (Type/IDL/example)

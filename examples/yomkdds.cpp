@@ -1594,7 +1594,7 @@ static int runInterfaceList(uint32_t domainId, uint32_t waitRounds)
     }
 
     // 2. 独立收敛收集发现缓存中的全部类型名
-    resp = YOMKDDS_DEBUG_INTERFACE_LIST(waitRounds, 200);
+    resp = yomk::dds().debug().rounds(waitRounds).interval(200).interfaces();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("interface list failed: ", resp.msg);

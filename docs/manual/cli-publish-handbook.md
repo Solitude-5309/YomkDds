@@ -251,7 +251,7 @@ YomkDdsStd::MString
 ```
 
 - **要点**：域内无任何类型报错退出（find 族语义）。
-- **等价宏名**：`YOMKDDS_DEBUG_INTERFACE_LIST(stableRounds, intervalMs)`。
+- **等价库调用**：`yomk::dds().debug().rounds(5).interval(200).interfaces()`。
 
 ### 典型工作流串联
 

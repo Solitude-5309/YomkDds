@@ -8,7 +8,7 @@
 
 两个入口，能力对齐：
 
-- **库 API**：调试节点经链式 `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` 创建、`yomk::dds().debug().quit()` 退出，主题登记经 `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()`，主题清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()`，单主题详情经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()`，类型反查经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()`，类型内省经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()`，其余端点仍为 `YOMKDDS_DEBUG_*` 宏（均定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
+- **库 API**：调试节点经链式 `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` 创建、`yomk::dds().debug().quit()` 退出，主题登记经 `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()`，主题清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()`，单主题详情经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()`，类型反查经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()`，类型内省经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()`，类型清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()`，其余端点仍为 `YOMKDDS_DEBUG_*` 宏（均定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
 - **CLI**：`yomkdds topic/node/interface` 命令经 `YomkDdsDebugService` 实现，各命令小节附等价库调用。
 
 ## 能力清单
@@ -55,7 +55,7 @@
 | 入口 | 能力 | 关键行为 |
 |---|---|---|
 | 链式 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()` | 按类型名输出 IDL 结构 | 经 TypeInformation → TypeObject → DynamicType 纯类型内省（不建订阅），命中返回 StringArray 多行 IDL 源语法（struct 头 + 字段行 + 结尾）；仅支持顶层为 struct 的类型 |
-| 宏 `YOMKDDS_DEBUG_INTERFACE_LIST(stableRounds, intervalMs)` | 列出全部类型名 | 返回发现缓存中出现的全部类型名（去重字典序排序，每行一个，interface show 配套导航）；域内无任何类型返回错误 |
+| 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()` | 列出全部类型名 | 返回发现缓存中出现的全部类型名（去重字典序排序，每行一个，`type(name).interface_show()` 配套导航）；域内无任何类型返回错误 |
 | CLI `yomkdds interface show <类型名>` / `yomkdds interface list` | 同上 | 输出内容与库侧一致 |
 
 ### 组 6：发布辅助与 JSON 发布
@@ -193,7 +193,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 | 参数 | 约束 |
 |---|---|
-| 形参形态 | `rounds(n)` / `interval(ms)` / `with_type()` 均为可选累积器、次序不限，`topics()` 终结；只影响查询类终结，不影响 `create()`/`quit()` 建点与退出的参数 |
+| 形参形态 | `rounds(n)` / `interval(ms)` / `with_type()` 均为可选累积器、次序不限，`topics()` 终结；只影响查询类终结，不影响 `create()`/`quit()` 建点与退出的参数（`interfaces()` 同分面：不看 `with_type()`，`rounds(n)`/`interval(ms)` 语义一致） |
 | rounds | 连续多少次快照集合不变即认为收敛；缺省/0 由节点层钳制为默认 5 次 |
 | interval | 快照轮询间隔（毫秒）；缺省/0 钳制为默认 200ms；最长阻塞约 rounds*interval |
 | with_type | 布尔开关（无参）：开启类型名模式，`topics()` 每行变为 `主题名 [类型名]`（对应 CLI `-t/--types`）；缺省关闭 |
@@ -206,7 +206,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 - 每 intervalMs（默认 200ms）轮询一次发现缓存快照，连续 stableRounds 次集合不变即返回；
 - 0 值钳制默认 5 次/200ms，最长阻塞约 stableRounds*intervalMs；
 - **宏侧**：stableRounds/intervalMs 为显式形参（如余存宏 `YOMKDDS_DEBUG_NODE_LIST(5, 200)`）；
-- **链式侧**：`rounds(n)` / `interval(ms)` / `with_type()` / `verbose(true)` 为调试分面、`topic(name)` 或 `type(name)` 子分面的可选累积器（缺省不累积即 0/关，由节点层钳制为 5 次/200ms），`topics()` / `topic(name)…info()` / `type(name)…find_topics()`/`interface_show()` 终结（待并入的查询终结同此）；
+- **链式侧**：`rounds(n)` / `interval(ms)` / `with_type()` / `verbose(true)` 为调试分面、`topic(name)` 或 `type(name)` 子分面的可选累积器（缺省不累积即 0/关，由节点层钳制为 5 次/200ms），`topics()` / `interfaces()` / `topic(name)…info()` / `type(name)…find_topics()`/`interface_show()` 终结（待并入的查询终结同此）；
 - **CLI 侧**：收敛判定次数经环境变量 `YOMKDDS_DDS_DISCOVER_ROUNDS` 配置（默认 5；值须为 >=1 的整数，非法报错退出；yomkdds 启动时无该变量则自动创建并默认 5，同时幂等写入 `~/.bashrc`）。生效命令：`topic list`、`topic info`、`topic type`、`topic find`、`interface show`、`interface list`、`topic pub -e`、`topic pub -ef`、`topic pub`、`node list` 与 `node info`；`topic print`/`topic hz` 为持续订阅/测量型不用。该环境变量为收敛次数唯一配置入口，详见[环境变量与公共配置参考](../manual/env-vars-reference.md)。
 
 ### `YOMKDDS_DEBUG_TOPIC_PUB` 专有参数

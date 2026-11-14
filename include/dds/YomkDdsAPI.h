@@ -12,9 +12,9 @@
 // Maintainer notes: this header is migrating from the macro-form Api to the
 // chained Api (per-suite, see tmp/链式api改造-调试套件.md). The core
 // communication suite is fully chained (yomk::dds()); the debug suite is
-// mid-migration (debug-node creation is chained, the remaining endpoints are
-// still macros); the bag suite is still macros. Each unit — chained terminator
-// or macro — wraps one unified request:
+// mid-migration (the debug-node lifecycle create()/quit() is chained, the
+// remaining endpoints are still macros); the bag suite is still macros. Each
+// unit — chained terminator or macro — wraps one unified request:
 // yomk::server().url(<yomk::url constant>).msg(<yomk::msgs message>).request().
 // URLs come from YomkDdsUrl.h, payload structures from YomkDdsPayload.h,
 // message declarations from YomkDdsMsg.h.
@@ -375,10 +375,10 @@ public:
 
 /**
  * @brief Debug facet: carries the optional domain()/udp_ds()/tcp_ds() accumulators
- *        (order-free), terminated by create(); query/topic/type/node sub-facets
- *        join it in later migration rounds
+ *        (order-free), terminated by create() or quit(); query/topic/type/node
+ *        sub-facets join it in later migration rounds
  */
-// @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 累积器（次序不限），create() 终结；
+// @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 累积器（次序不限），create()/quit() 终结；
 // @zh: 查询/topic/type/node 子分面在后续迁移批次并入
 class DdsDebugBuilder
 {
@@ -445,6 +445,25 @@ public:
                 yomk::payload::DDSDebugNode{m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
             .request();
     }
+    /**
+     * @brief Delete the debug node and destroy all its DDS entities (request terminator)
+     * @return Response; fails when the debug node was not created
+     * @note Destroy counterpart of create() on the same facet; named quit() rather
+     *       than remove() because the debug node carries no name, which keeps the
+     *       entry clear of the core suite's node(nodeName).remove() facet
+     */
+    // @zh: 删除调试节点并销毁其全部 DDS 实体（请求终结）
+    // @zh: return Response；未创建时返回错误
+    // @zh: note 与 create() 同分面的销毁对；命名 quit() 而非 remove()——调试节点无名，
+    // @zh: 避免与核心套件 node(nodeName).remove() 入口混同
+    yomk::payload::Response quit()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsDebugDeleteNode).msg(nullptr).request();
+    }
 };
 
 /**
@@ -469,12 +488,12 @@ public:
 
     /**
      * @brief Switch into the debug facet (type-agnostic domain observer)
-     * @return Debug facet, terminated by create()
+     * @return Debug facet, terminated by create() or quit()
      * @note The debug node itself carries no name — node(name) on that facet
      *       refers to remote participants of the domain in later rounds
      */
     // @zh: 切入调试分面（类型无关域观察者）
-    // @zh: return 调试分面，经 create() 终结
+    // @zh: return 调试分面，经 create() 或 quit() 终结
     // @zh: note 调试节点自身无名——该分面上的 node(name) 指域内远端参与者（后续批次并入）
     DdsDebugBuilder debug()
     {
@@ -562,16 +581,16 @@ inline detail::DdsBuilder dds()
  * @brief Debugging macros (YomkDdsDebugService endpoints); equal CLI: yomkdds
  *
  * Every macro returns yomk::payload::Response and requires a debug node created
- * first via yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create(). list/info/
- * find share the convergence semantics: consecutive stableRounds unchanged
- * snapshots, 0 clamped to defaults 5 rounds / 200ms. Full behavior:
- * docs/features/debug-service.md
+ * first via yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create(), deleted via
+ * yomk::dds().debug().quit(). list/info/find share the convergence semantics:
+ * consecutive stableRounds unchanged snapshots, 0 clamped to defaults 5 rounds /
+ * 200ms. Full behavior: docs/features/debug-service.md
  */
 // @zh: 调试宏（YomkDdsDebugService 端点，等价 CLI：yomkdds）
 // @zh: 均返回 yomk::payload::Response，且须先经
-// @zh: yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create() 创建调试节点；
-// @zh: list/info/find 组共用收敛语义：连续 stableRounds 次快照不变即返回，
-// @zh: 0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
+// @zh: yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create() 创建调试节点，
+// @zh: 退出经 yomk::dds().debug().quit()；list/info/find 组共用收敛语义：
+// @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
 
 /**
  * @brief Register a topic-print observer; JSON texts are delivered per message
@@ -730,15 +749,6 @@ inline detail::DdsBuilder dds()
     ::yomk::server().url(\
         ::yomk::url::ddsDebugNodeInfo).msg(\
         ::yomk::msgs::DDSNodeInfo::shared(yomk::payload::DDSNodeInfo{nodeName, stableRounds, intervalMs})).request()
-
-/**
- * @brief Quit debugging: delete the debug node and its DDS entities
- * @note Fails when the debug node was not created
- */
-// @zh: 退出调试：删除调试节点及其全部 DDS 实体
-// @zh: note 未创建时返回错误
-
-#define YOMKDDS_DEBUG_QUIT() ::yomk::server().url(::yomk::url::ddsDebugDeleteNode).msg(nullptr).request()
 
 
 // ===== YomkDdsBagService — mcap bag record/replay =====

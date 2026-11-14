@@ -41,7 +41,7 @@
 
 ## 3 API 速览
 
-用户经 `yomk::dds()` 链式 API（核心通信与调试建点）与 `YOMKDDS_DEBUG_*`/`YOMKDDS_BAG_*` 宏（调试查询/登记与 Bag，定义于 `include/dds/YomkDdsAPI.h`）调用三个服务域，完整参数与约束见对应功能文档。
+用户经 `yomk::dds()` 链式 API（核心通信与调试节点建/删）与 `YOMKDDS_DEBUG_*`/`YOMKDDS_BAG_*` 宏（调试查询/登记与 Bag，定义于 `include/dds/YomkDdsAPI.h`）调用三个服务域，完整参数与约束见对应功能文档。
 
 对外头文件按标准扩展四件套组织（安装后统一 `<yomk/dds/...>` 引用）：`YomkDdsUrl.h`（`yomk::url` 命名空间 URL 常量，请求链一律引用常量不裸写字面量）、`YomkDdsPayload.h`（扩展专属载荷 `yomk::payload`：请求/响应结构、回调类型、QoS 描述与公共配置辅助）、`YomkDdsMsg.h`（消息包：全部 `YOMK_DEFINE_MSG` 集中声明，生成 `yomk::msgs::Xxx`；用户 DDS 载荷为 IDL 生成类型，独立入口 `<yomk/dds/YomkDdsStdMsgs.hpp>`）、`YomkDdsAPI.h`（链式 Api 与宏 Api 入口，本节内容）。
 
@@ -75,7 +75,7 @@
 | `YOMKDDS_DEBUG_INTERFACE_SHOW/LIST(...)` | 按类型名输出 IDL 结构 / 列出全部类型名 |
 | `YOMKDDS_DEBUG_TOPIC_EXAMPLE/MSG(...)` | 查询主题发布示例 / 消息描述两要素 |
 | `YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, ...)` | 发布 JSON 载荷消息（支持持续发布/条数上限/QoS 尾参） |
-| `YOMKDDS_DEBUG_QUIT()` | 退出调试（删除调试节点） |
+| `yomk::dds().debug().quit()` | 退出调试（删除调试节点） |
 
 **Bag 服务（YomkDdsBagService）** — 详见 [功能文档：Bag 录制/回放](docs/features/bag-service.md)：
 

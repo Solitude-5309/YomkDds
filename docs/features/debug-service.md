@@ -72,9 +72,9 @@
 
 ### 退出
 
-| 宏 | 能力 |
+| 入口 | 能力 |
 |---|---|
-| `YOMKDDS_DEBUG_QUIT()` | 无参宏（载荷 nullptr）；删除调试节点并销毁其全部 DDS 实体，未创建时返回错误 |
+| `yomk::dds().debug().quit()` | 链式终结（载荷 nullptr，无累积器）；删除调试节点并销毁其全部 DDS 实体，未创建时返回错误 |
 
 ## 使用方式概述
 
@@ -110,12 +110,12 @@ int main(int argc, char *argv[])
     if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("DebugExample").error("register debug topic failed: ", resp.m_msg);
-        YOMKDDS_DEBUG_QUIT();
+        yomk::dds().debug().quit();
         return 1;
     }
 
     // 3. 业务逻辑后退出前显式清理（规避 FastDDS 静态析构期段错误）
-    resp = YOMKDDS_DEBUG_QUIT();
+    resp = yomk::dds().debug().quit();
     if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("DebugExample").error("debug quit failed: ", resp.m_msg);
@@ -137,7 +137,7 @@ if (arr != nullptr)
 {
     for (const auto &line : arr->d) { std::cout << line << "\n"; }
 }
-resp = YOMKDDS_DEBUG_QUIT();                // 3. 退出前显式清理
+resp = yomk::dds().debug().quit();                // 3. 退出前显式清理
 ```
 
 CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全程（如 `yomkdds topic list`、`yomkdds topic print hello_world`）。
@@ -175,7 +175,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 ## 错误与边界行为
 
-- **前置约束**：查询/登记/发布类宏须先创建调试节点，失败时 `m_msg` 携具体拒绝原因；`YOMKDDS_DEBUG_QUIT()` 未创建时返回错误；
+- **前置约束**：查询/登记/发布类宏须先经 `yomk::dds().debug()...create()` 创建调试节点，失败时 `m_msg` 携具体拒绝原因；`yomk::dds().debug().quit()` 未创建时返回错误；
 - **登记被拒**（`YOMKDDS_DEBUG_TOPIC_PRINT` 失败原因枚举）：`debug node not created` / `subscriber not created` / `empty topic name` / `already registered`；CLI 侧输出形态为 `register debug topic failed: subscribeTopic [<主题名>] failed: <具体原因>`（重复登记为 `topic [<主题名>] already registered`）；
 - **延迟登记语义**：登记为发现驱动的延迟行为，主题尚未被发布者上线时仍返回成功（登记约 3s 后仍无发布者则打一次性等待提示 `[FastDDSDebugNode] topic [<主题名>] not discovered yet, waiting for publisher...`——仅提示，不阻塞不改返回码，发布者上线后自动建订）；
 - **类型不可重建告警**：主题已发现但类型不可重建（典型为 ROS2 rmw_fastrtps 端点：编译期类型映射，不提供 XTypes TypeObject）时打 `warning: TypeObject not ready, keep pending. topic=... type=... -- the remote endpoint does not publish XTypes TypeInformation/TypeObject ...`——首次立即打印、之后按 5s 节流；同类告警覆盖 DynamicType 构建失败 / `create_topic` 失败 / `create_datareader` 失败 / 建订异常四类；

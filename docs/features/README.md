@@ -53,7 +53,7 @@ flowchart LR
 | 发现 | 发现服务器 UDP/TCP 直配 | `yomk::dds().node(...)`/`.debug()` 直配累积器 / `YOMKDDS_BAG_NODE` 定位串尾参 | 发现服务器三环境变量 | [discovery-server.md](./discovery-server.md) |
 | 发现 | XML profiles 三级提取链 | `yomk::dds().xml(xmlPath).load_cfg()` | — | [xml-profiles.md](./xml-profiles.md) |
 | 互通 | 与 ROS2 收发同类型消息 | set_name 类型名直改（编程约定） | — | [ros2-interop.md](./ros2-interop.md) |
-| 调试 | 创建/删除调试节点 | `yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create()` / `YOMKDDS_DEBUG_QUIT()` | — | [debug-service.md](./debug-service.md) |
+| 调试 | 创建/删除调试节点 | `yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create()` / `yomk::dds().debug().quit()` | — | [debug-service.md](./debug-service.md) |
 | 调试 | 主题消息观察 / 频率测量 | `YOMKDDS_DEBUG_TOPIC_PRINT()` | `topic print` / `topic hz` | [debug-service.md](./debug-service.md) |
 | 调试 | 列出主题与节点 | `YOMKDDS_DEBUG_TOPIC_LIST(_T)` / `YOMKDDS_DEBUG_NODE_LIST()` | `topic list` / `node list` | [debug-service.md](./debug-service.md) |
 | 调试 | 主题/节点详情（端点、GUID、QoS） | `YOMKDDS_DEBUG_TOPIC_INFO(_V)` / `YOMKDDS_DEBUG_NODE_INFO()` | `topic info` / `node info` | [debug-service.md](./debug-service.md) |

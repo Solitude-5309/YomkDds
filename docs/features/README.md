@@ -59,7 +59,7 @@ flowchart LR
 | 调试 | 主题/节点详情（端点、GUID、QoS） | `yomk::dds().debug().topic(name)[.verbose(true)].info()` / `YOMKDDS_DEBUG_NODE_INFO()` | `topic info` / `node info` | [debug-service.md](./debug-service.md) |
 | 调试 | 按类型反查主题 | `yomk::dds().debug().type(name).find_topics()` | `topic type` / `topic find` | [debug-service.md](./debug-service.md) |
 | 调试 | 类型内省（IDL 结构） | `yomk::dds().debug().type(name).interface_show()` / `yomk::dds().debug().interfaces()` | `interface show` / `interface list` | [debug-service.md](./debug-service.md) |
-| 调试 | 发布示例与 JSON 载荷发布 | `YOMKDDS_DEBUG_TOPIC_EXAMPLE/MSG/PUB()` | `topic pub` | [debug-service.md](./debug-service.md) |
+| 调试 | 发布示例与 JSON 载荷发布 | `yomk::dds().debug().topic(name).pub_example()` / `YOMKDDS_DEBUG_TOPIC_MSG/PUB()` | `topic pub` | [debug-service.md](./debug-service.md) |
 | Bag | 录制到 mcap（分片/缓存/暂停/通配） | `YOMKDDS_BAG_RECORD()` | `bag record` | [bag-service.md](./bag-service.md) |
 | Bag | 查看 bag 元信息 | `YOMKDDS_BAG_INFO()` | `bag info` | [bag-service.md](./bag-service.md) |
 | Bag | 重建 bag 元信息 | `YOMKDDS_BAG_REINDEX()` | `bag reindex` | [bag-service.md](./bag-service.md) |

@@ -60,7 +60,7 @@ yomkdds topic pub hello_world '{"data":""}'
 | `type rebuild failed for [<类型名>]` | 步骤 3：DynamicType 构建失败 |
 | `example generation failed for [<类型名>]: create_data` / `: json_serialize` | 步骤 3：默认值样本创建或 JSON 序列化失败 |
 
-- **等价宏名**：`YOMKDDS_DEBUG_TOPIC_EXAMPLE(topicName, stableRounds, intervalMs)`。
+- **等价库调用**：`yomk::dds().debug().topic(topicName).rounds(5).interval(200).pub_example()`。
 
 ### topic pub -ef：导出消息描述 JSON 文件
 

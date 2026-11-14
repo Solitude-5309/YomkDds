@@ -1806,7 +1806,7 @@ static int runTopicPubExample(uint32_t domainId, const std::string &topicName, u
     }
 
     // 2. 独立收敛查询发布示例三段行集
-    resp = YOMKDDS_DEBUG_TOPIC_EXAMPLE(topicName, waitRounds, 200);
+    resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).pub_example();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("topic example failed: ", resp.msg);

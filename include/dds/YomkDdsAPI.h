@@ -532,15 +532,84 @@ public:
 };
 
 /**
+ * @brief Debug type facet: carries the typeName opened by debug().type() and the
+ *        rounds()/interval() convergence accumulators (order-free), terminated by
+ *        find_topics(); the remaining type sub-facets join it in later migration rounds
+ */
+// @zh: 调试类型分面：承载 debug().type() 起始的类型名与 rounds()/interval() 收敛累积器
+// @zh: （次序不限），find_topics() 终结；其余 type 子分面在后续迁移批次并入
+class DdsDebugTypeBuilder
+{
+    std::string m_typeName;
+    uint32_t m_stableRounds = 0;  // 0 由节点层钳制为默认 5 次
+    uint32_t m_intervalMs = 0;    // 0 由节点层钳制为默认 200ms
+public:
+    explicit DdsDebugTypeBuilder(std::string typeName)
+        : m_typeName(std::move(typeName))
+    {
+    }
+    /**
+     * @brief Accumulate the convergence round count
+     * @param[in] rounds Consecutive unchanged discovery snapshots required; 0 is
+     *            clamped by the node layer to the default 5
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积收敛轮数
+    // @zh: rounds 连续多少次快照不变即认为收敛；0 由节点层钳制为默认 5 次
+    // @zh: return 自身链式引用
+    DdsDebugTypeBuilder& rounds(uint32_t rounds)
+    {
+        m_stableRounds = rounds;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the discovery snapshot polling interval
+     * @param[in] intervalMs Polling interval in milliseconds; 0 is clamped by the
+     *            node layer to the default 200ms
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积发现快照轮询间隔
+    // @zh: intervalMs 轮询间隔（毫秒）；0 由节点层钳制为默认 200ms
+    // @zh: return 自身链式引用
+    DdsDebugTypeBuilder& interval(uint32_t intervalMs)
+    {
+        m_intervalMs = intervalMs;
+        return *this;
+    }
+    /**
+     * @brief Reverse-lookup topics by data type name, exact match (request terminator)
+     * @return Response carrying a StringArray packet, one topicName per line sorted by
+     *         name; Invalid when YomkServer is not initialized
+     * @note Independent convergence query (rounds()/interval(), 0 clamped to 5 rounds /
+     *       200ms); fails when no topic matches the type, which surfaces type-name typos
+     */
+    // @zh: 按数据类型名反查主题列表，精确匹配（请求终结）
+    // @zh: return Response 携带 StringArray 包，每行一个主题名（按名排序）；未初始化返回 Invalid
+    // @zh: note 独立收敛查询（rounds()/interval()，0 钳制为 5 次/200ms）；
+    // @zh: 无匹配主题返回错误，可据此发现类型名拼写错误
+    yomk::payload::Response find_topics()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsDebugTopicFind)
+            .msg(yomk::msgs::DDSDebugFind::shared(
+                yomk::payload::DDSDebugFind{std::move(m_typeName), m_stableRounds, m_intervalMs}))
+            .request();
+    }
+};
+
+/**
  * @brief Debug facet: carries the optional domain()/udp_ds()/tcp_ds() creation
  *        accumulators plus the rounds()/interval()/with_type() query accumulators
  *        (order-free), terminated by create()/quit() or by the query terminator
- *        topics(), or hands over to the topic() sub-facet; the remaining
- *        query/type/node sub-facets join it in later rounds
+ *        topics(), or hands over to the topic()/type() sub-facets; the remaining
+ *        query/node sub-facets join it in later rounds
  */
 // @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器与 rounds()/interval()/with_type()
-// @zh: 查询累积器（次序不限），create()/quit() 或查询终结 topics() 收束，或交出 topic() 子分面；
-// @zh: 其余查询/type/node 子分面在后续迁移批次并入
+// @zh: 查询累积器（次序不限），create()/quit() 或查询终结 topics() 收束，或交出 topic()/type() 子分面；
+// @zh: 其余查询/node 子分面在后续迁移批次并入
 class DdsDebugBuilder
 {
     uint32_t m_domainId = yomk::payload::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
@@ -680,6 +749,18 @@ public:
     DdsDebugTopicBuilder topic(std::string topicName)
     {
         return DdsDebugTopicBuilder(std::move(topicName));
+    }
+    /**
+     * @brief Switch into the type facet with the queried data type name
+     * @param[in] typeName Data type name to reverse-look up, exact match
+     * @return Type facet, terminated by find_topics()
+     */
+    // @zh: 切入类型分面并累积被反查的数据类型名
+    // @zh: typeName 反查用数据类型名，精确匹配
+    // @zh: return 类型分面，经 find_topics() 终结
+    DdsDebugTypeBuilder type(std::string typeName)
+    {
+        return DdsDebugTypeBuilder(std::move(typeName));
     }
     /**
      * @brief List discovered topics in the domain, sorted (request terminator)
@@ -829,7 +910,8 @@ inline detail::DdsBuilder dds()
  * yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print(), the topic list as
  * yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics(), and the
  * single-topic details as
- * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info().
+ * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info(), and the
+ * reverse lookup as yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics().
  * list/info/find share the convergence semantics: consecutive stableRounds
  * unchanged snapshots, 0 clamped to defaults 5 rounds / 200ms. Full behavior:
  * docs/features/debug-service.md
@@ -840,21 +922,10 @@ inline detail::DdsBuilder dds()
 // @zh: 退出经 yomk::dds().debug().quit()；主题登记已链式化为
 // @zh: yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print()，主题清单为
 // @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()，单主题详情为
-// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info()；
+// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info()，类型反查为
+// @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics()；
 // @zh: list/info/find 组共用收敛语义：
 // @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
-
-/**
- * @brief Reverse-lookup topics by data type name (exact match)
- * @note Fails when no topic matches the type
- */
-// @zh: 按数据类型名反查主题列表（精确匹配）
-// @zh: note 无匹配主题返回错误
-
-#define YOMKDDS_DEBUG_TOPIC_FIND(typeName, stableRounds, intervalMs)         \
-    ::yomk::server().url(\
-        ::yomk::url::ddsDebugTopicFind).msg(\
-        ::yomk::msgs::DDSDebugFind::shared(yomk::payload::DDSDebugFind{typeName, stableRounds, intervalMs})).request()
 
 /**
  * @brief Dump the IDL struct description of a data type

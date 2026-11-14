@@ -192,7 +192,7 @@ yomkdds topic find YomkDdsStd::MString       # 输出：hello_world
 ```
 
 - **关键选项**：无；类型名精确匹配（可发现类型名拼写错误），域内无该类型主题时报错退出（`type [<类型名>] not found`）。
-- **等价宏名**：`YOMKDDS_DEBUG_TOPIC_FIND(typeName, stableRounds, intervalMs)`。
+- **等价库调用**：`yomk::dds().debug().type(typeName).rounds(5).interval(200).find_topics()`。
 
 ### node list：列出域内节点
 

@@ -1491,7 +1491,7 @@ static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t
     }
 
     // 2. 独立收敛按类型名反查主题列表
-    resp = YOMKDDS_DEBUG_TOPIC_FIND(typeName, waitRounds, 200);
+    resp = yomk::dds().debug().type(typeName).rounds(waitRounds).interval(200).find_topics();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("topic find failed: ", resp.msg);

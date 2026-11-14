@@ -13,7 +13,7 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 | 创建 bag 节点 | 链式 `yomk::dds().bag()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` | —（CLI 内部自动建删） | — |
 | 删除 bag 节点 | 链式 `yomk::dds().bag().quit()` | —（CLI 内部自动建删） | — |
 | 录制主题列表为 mcap bag | 链式 `yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()` | `bag record` | **须**（库侧先 `yomk::dds().bag()...create()`） |
-| 查看 bag 元信息 | `YOMKDDS_BAG_INFO(bagDir)` | `bag info` | 不须（纯文件读，无须 create_node） |
+| 查看 bag 元信息 | 链式 `yomk::dds().bag().dir(bagDir).info()` | `bag info` | 不须（纯文件读，无须 create_node） |
 | 重建 bag 元信息 | `YOMKDDS_BAG_REINDEX(bagDir)` | `bag reindex` | 不须（纯文件操作，无须 create_node） |
 | 转换 bag（过滤/裁剪/归并） | `YOMKDDS_BAG_CONVERT(inputs, cfgPath)` | `bag convert` | 不须（纯文件操作，无须 create_node） |
 | 回放 bag | `YOMKDDS_BAG_PLAY(...)`（库形态见 README「3 API 速览」，须先自建 bag 节点） | `bag play` | CLI 自动创建并在退出前删除 bag 节点 |
@@ -107,6 +107,8 @@ int main()
 
 ### 纯文件操作（无须 bag 节点）
 
+`yomk::dds().bag().dir(bagDir)` 交出该目录的子分面，`info()` 已链式化（`reindex()` 与回放累积器在后续迁移批次并入）：
+
 ```bash
 yomkdds bag info bag_2026-10-02_19-37-33_726     # 查看 bag 元信息（输出对齐 ros2 bag info 的多行文本）
 yomkdds bag reindex bag_2026-10-02_19-37-33_726  # 重建被删/损坏的 metadata.json（无条件覆盖写出）
@@ -114,7 +116,7 @@ yomkdds bag convert -i bag_in -o convert.json              # 单输入全缺省�
 yomkdds bag convert -i bag_a -i bag_b -o convert.json      # 多输入按 logTime 全局归并
 ```
 
-- **`YOMKDDS_BAG_INFO(bagDir)`**：读 metadata.json 与目录递归总大小输出多行元信息文本（首行空行）；纯文件读不经 bag 节点（无须 create_node）；成功返回 StringArray（每项一行，首项为空行）；
+- **`yomk::dds().bag().dir(bagDir).info()`**：读 metadata.json 与目录递归总大小输出多行元信息文本（首行空行）；纯文件读不经 bag 节点（无须 create_node）；成功返回 StringArray（每项一行，首项为空行）；
 - **`YOMKDDS_BAG_REINDEX(bagDir)`**：从 mcap 分片（`<前缀>_<编号>.mcap` 编号升序）重建 metadata.json 并**无条件覆盖**写出（缺失/损坏均可重建；缺 summary 的中断残片回退 mcap 库级 `AllowFallbackScan` 线性扫描）；纯文件操作不经 bag 节点；成功返回 eOk（`m_msg == "ok"`，无数据载荷）；
 - **`YOMKDDS_BAG_CONVERT(inputs, cfgPath)`**：读输入 bag 目录集与输出配置文件，把输入消息按配置过滤/裁剪/归并写为新 bag（多输入按 logTime 全局归并；转换透传原始 CDR 字节与消息时间戳/序号，不反序列化）；纯文件操作不经 bag 节点；成功返回 StringArray 每条目一行 `converted <uri>: N messages / M bytes / K topics` 统计。
 

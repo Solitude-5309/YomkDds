@@ -14,8 +14,8 @@
 // chained Api (per-suite, see tmp/链式api改造-bag套件.md). The core
 // communication suite and the debug suite are fully chained (yomk::dds() and
 // yomk::dds().debug()); the bag suite is mid-migration (create()/quit()/
-// record() are chained, info/reindex/convert/play are still macros). Each
-// unit — chained terminator or macro — wraps one unified request:
+// record()/dir(bagDir).info() are chained, reindex/convert/play are still
+// macros). Each unit — chained terminator or macro — wraps one unified request:
 // yomk::server().url(<yomk::url constant>).msg(<yomk::msgs message>).request().
 // URLs come from YomkDdsUrl.h, payload structures from YomkDdsPayload.h,
 // message declarations from YomkDdsMsg.h.
@@ -1121,15 +1121,58 @@ public:
 };
 
 /**
+ * @brief Bag directory facet: carries the bag directory opened by bag().dir(),
+ *        terminated by info(); reindex() and the play accumulators join it in later
+ *        migration rounds
+ * @note Pure file operations: no terminator here needs the bag node, so this facet
+ *       stays independent of create()
+ */
+// @zh: Bag 目录分面：承载 bag().dir() 起始的 bag 目录，info() 终结；
+// @zh: reindex() 与回放累积器在后续迁移批次并入
+// @zh: note 纯文件操作：终结均不经 bag 节点，与 create() 互不依赖
+class DdsBagDirBuilder
+{
+    std::string m_bagDir;
+public:
+    explicit DdsBagDirBuilder(std::string bagDir)
+        : m_bagDir(std::move(bagDir))
+    {
+    }
+    /**
+     * @brief Show the bag metadata (pure file read, request terminator)
+     * @return Response carrying a StringArray of metadata lines, the first one empty
+     *         and the rest aligned with ros2 bag info; Invalid when YomkServer is not
+     *         initialized
+     * @note Does not need the bag node; fails when the path has no readable
+     *       metadata.json
+     */
+    // @zh: 查看 bag 元信息（纯文件读的请求终结）
+    // @zh: return Response 携带 StringArray 元信息行集（首行为空行，与 ros2 bag info 对齐）；
+    // @zh: 未初始化返回 Invalid
+    // @zh: note 不经 bag 节点（无须 create()）；路径无 metadata.json/解析失败返回错误
+    yomk::payload::Response info()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsBagInfo)
+            .msg(yomk::msgs::DDSBagInfo::shared(yomk::payload::DDSBagInfo{std::move(m_bagDir)}))
+            .request();
+    }
+};
+
+/**
  * @brief Bag facet: carries the optional domain()/udp_ds()/tcp_ds() creation
  *        accumulators plus the topics()/out_dir()/max_size()/max_duration()/cache()
  *        record accumulators (order-free), terminated by create()/quit()/record();
- *        the convert() terminator and the dir() sub-facet join it in later
- *        migration rounds
+ *        the convert() terminator joins it in a later migration round, and dir()
+ *        hands out the bag-directory sub-facet
  */
 // @zh: Bag 分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器，以及
 // @zh: topics()/out_dir()/max_size()/max_duration()/cache() 录制累积器（次序不限），
-// @zh: create()/quit()/record() 收束；转换 convert() 终结与目录 dir() 子分面在后续迁移批次并入
+// @zh: create()/quit()/record() 收束；转换 convert() 终结在后续迁移批次并入，
+// @zh: dir() 交出 bag 目录子分面
 class DdsBagBuilder
 {
     uint32_t m_domainId = yomk::payload::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
@@ -1223,6 +1266,22 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsBagDeleteNode).msg(nullptr).request();
+    }
+    /**
+     * @brief Open the bag-directory sub-facet for the given existing bag
+     * @param[in] bagDir Bag directory to read/replay; must contain a readable
+     *            metadata.json for info()/reindex(); empty is rejected by the node
+     * @return Sub-facet carrying the directory, terminated by info() (reindex() and
+     *         play() join it in later migration rounds)
+     * @note Pure file operations on that directory: no bag node needed
+     */
+    // @zh: 以既有 bag 目录切入 bag 目录子分面（info/reindex/play 共用）
+    // @zh: bagDir 待读取/回放的 bag 目录；info()/reindex() 须有可读 metadata.json，空串由节点层拒绝
+    // @zh: return 承载该目录的子分面，info() 终结（reindex()/play() 在后续迁移批次并入）
+    // @zh: note 针对该目录的纯文件操作，不经 bag 节点
+    DdsBagDirBuilder dir(std::string bagDir)
+    {
+        return DdsBagDirBuilder(std::move(bagDir));
     }
     /**
      * @brief Accumulate the topic list to record (required before record())
@@ -1504,26 +1563,17 @@ inline detail::DdsBuilder dds()
  * The bag node lifecycle is chained as
  * yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit(),
  * and recording as yomk::dds().bag().topics({...})[.out_dir/.max_size/
- * .max_duration/.cache()].record(). Every remaining macro returns
- * yomk::payload::Response; bag_play blocks the calling thread until finished or
- * stopped via the yomk::bag* flags. Full behavior: docs/features/bag-service.md
+ * .max_duration/.cache()].record(), inspection as yomk::dds().bag().dir(bagDir).info().
+ * Every remaining macro returns yomk::payload::Response; bag_play blocks the calling
+ * thread until finished or stopped via the yomk::bag* flags.
+ * Full behavior: docs/features/bag-service.md
  */
 // @zh: Bag 宏（YomkDdsBagService 端点）
 // @zh: bag 节点生命周期已链式化为 yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() /
 // @zh: yomk::dds().bag().quit()，录制为 yomk::dds().bag().topics({...})[.out_dir/.max_size/
-// @zh: .max_duration/.cache()].record()；其余宏均返回 yomk::payload::Response，
-// @zh: bag_play 阻塞调用线程至收尾或经 yomk::bag* 标志停止；
-// @zh: 详见 docs/features/bag-service.md
-
-/**
- * @brief Show bag metadata (pure file read, no bag node needed)
- * @note Fails when the path has no readable metadata.json
- */
-// @zh: 查看 bag 元信息（纯文件读，不经 bag 节点）
-// @zh: note 路径无 metadata.json/解析失败返回错误
-
-#define YOMKDDS_BAG_INFO(bagDir) \
-    ::yomk::server().url(::yomk::url::ddsBagInfo).msg(::yomk::msgs::DDSBagInfo::shared(yomk::payload::DDSBagInfo{(bagDir)})).request()
+// @zh: .max_duration/.cache()].record()，元信息为 yomk::dds().bag().dir(bagDir).info()；
+// @zh: 其余宏均返回 yomk::payload::Response，bag_play 阻塞调用线程至收尾或经 yomk::bag*
+// @zh: 标志停止；详见 docs/features/bag-service.md
 
 /**
  * @brief Rebuild metadata.json from the bag's mcap files (pure file op)

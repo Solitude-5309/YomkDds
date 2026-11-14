@@ -1117,7 +1117,7 @@ static int runBagInfo(const std::string &bagDir)
     ::yomk::server().init();
     ::yomk::server().srv<YomkDdsBagService>().create();
 
-    auto resp = YOMKDDS_BAG_INFO(bagDir);
+    auto resp = yomk::dds().bag().dir(bagDir).info();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("bag info failed: ", resp.msg);

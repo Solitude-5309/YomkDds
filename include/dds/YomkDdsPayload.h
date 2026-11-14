@@ -360,7 +360,7 @@ struct DDSLoan
  */
 // @zh: loan 成功响应负载
 // @zh: warning 借出样本属 writer 池：填值后经链式 data()...pub() 发布，每次 write 后指针失效
-struct DDSLoanResult
+struct LoanSample
 {
     void* sample = nullptr;
 };

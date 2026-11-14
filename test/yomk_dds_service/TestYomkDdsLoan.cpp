@@ -29,7 +29,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-// 引服务头：DDSLoan/DDSLoanResult/DDSTopic/DDSSubRequest/DDSPublish + String + YOMK_* 宏
+// 引服务头：DDSLoan/LoanSample/DDSTopic/DDSSubRequest/DDSPublish + String + YOMK_* 宏
 #include "YomkDdsService.h"
 #include "YomkDdsMsg.h"
 
@@ -66,10 +66,10 @@ namespace
                       .status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic loan_plain(MInt32,plain) → eOk");
 
-        // plain 类型借出：eOk + 解包 DDSLoanResult 取 sample（writer 池指针，中间件所有权）
+        // plain 类型借出：eOk + 解包 LoanSample 取 sample（writer 池指针，中间件所有权）
         auto r = testInvoke(svc, "/loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"loan_node", "loan_plain", nullptr}));
         check(r.status == yomk::payload::ResStatus::Succeeded, "loan plain MInt32 → eOk");
-        auto lr = ::yomk::msgs::unpack<::yomk::msgs::DDSLoanResult>(r.data);;
+        auto lr = ::yomk::msgs::unpack<::yomk::msgs::LoanSample>(r.data);;
         void *s = (lr != nullptr) ? lr->msg.sample : nullptr;
         check(s != nullptr, "loan 返回 sample 非空（writer 池借出，中间件所有权）");
         if (s != nullptr)
@@ -126,7 +126,7 @@ namespace
         for (int i = 0; i < N; ++i)
         {
             auto lresp = testInvoke(svc, "/loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"e2e_loan_node", "loan_e2e", nullptr}));
-            auto lres = ::yomk::msgs::unpack<::yomk::msgs::DDSLoanResult>(lresp.data);;
+            auto lres = ::yomk::msgs::unpack<::yomk::msgs::LoanSample>(lresp.data);;
             void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
             if (lresp.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
             {

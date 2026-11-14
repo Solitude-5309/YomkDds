@@ -42,7 +42,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 // 引服务头：YomkDdsService + DDSNode/DDSTopic/DDSSubRequest/DDSPublish/DDSLoan/
-// DDSLoanResult/String + YOMK_* 宏
+// LoanSample/String + YOMK_* 宏
 #include "YomkDdsService.h"
 #include "YomkDdsMsg.h"
 
@@ -192,7 +192,7 @@ namespace
                     }
                     // loan(MInt32,alignof=4)→池内填值→discard：并发借出各得独立池样本，复用的 happens-before 由 mtx_ 建立
                     auto lresp = testInvoke(svc, "/loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{"a3_node", topic, nullptr}));
-                    auto lres = ::yomk::msgs::unpack<::yomk::msgs::DDSLoanResult>(lresp.data);;
+                    auto lres = ::yomk::msgs::unpack<::yomk::msgs::LoanSample>(lresp.data);;
                     void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
                     if (lresp.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
                     {

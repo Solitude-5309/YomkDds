@@ -42,7 +42,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 // 引服务头：YomkDdsService + DDSNode/DDSTopic/DDSSubRequest/DDSPublish/DDSLoan/
-// DDSLoanResult/String + YOMK_* 宏
+// LoanSample/String + YOMK_* 宏
 #include "YomkDdsService.h"
 #include "YomkDdsMsg.h"
 
@@ -220,7 +220,7 @@ namespace
                     const std::string topic = "c1_topic_" + std::to_string(tidx);
                     loanAttempts.fetch_add(1, std::memory_order_relaxed);
                     auto lr = testInvoke(svc, "/loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{node, topic, nullptr}));
-                    auto lres = ::yomk::msgs::unpack<::yomk::msgs::DDSLoanResult>(lr.data);;
+                    auto lres = ::yomk::msgs::unpack<::yomk::msgs::LoanSample>(lr.data);;
                     void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
                     if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
                     {
@@ -308,7 +308,7 @@ namespace
                 for (int i = 0; i < 3; ++i)
                 {
                     auto lr = testInvoke(svc, "/loan", ::yomk::msgs::DDSLoan::shared(DDSLoan{name, "c2_topic", nullptr}));
-                    auto lres = ::yomk::msgs::unpack<::yomk::msgs::DDSLoanResult>(lr.data);;
+                    auto lres = ::yomk::msgs::unpack<::yomk::msgs::LoanSample>(lr.data);;
                     void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
                     if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
                     {

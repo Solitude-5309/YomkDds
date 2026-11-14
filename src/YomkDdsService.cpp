@@ -1,7 +1,7 @@
 // 内存所有权协议（贯穿全部 handler，无法从签名推导）：
 //   type（DDSTopic/DDSSubRequest.type）caller new、服务端全路径接管，无论成败均由本服务 delete；
 //   data（DDSPublish.data）借用（非所有权），publish 同步写入后归 caller 管理；
-//   sample（DDSLoan/DDSLoanResult.sample）从 writer 池借出，经 write（发布）或 discard（归还）交回中间件。
+//   sample（DDSLoan/LoanSample.sample）从 writer 池借出，经 write（发布）或 discard（归还）交回中间件。
 #include "YomkDdsService.h"
 #include "YomkDdsMsg.h"
 
@@ -314,7 +314,7 @@ yomk::payload::Response YomkDdsService::loan(YomkMsgPtr pkg)
     }
     // 构造抛异常（如 bad_alloc）时守卫栈展开归还池，避免样本滞留致池耗尽
     LoanGuard loanGuard{it->second.get(), &p->msg.topicName, sample};
-    yomk::payload::Response resp(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::DDSLoanResult::shared(DDSLoanResult{sample}));
+    yomk::payload::Response resp(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::LoanSample::shared(LoanSample{sample}));
     loanGuard.sample = nullptr;  // 响应已持有 sample，解除守卫
     return resp;
 }

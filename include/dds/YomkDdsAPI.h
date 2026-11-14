@@ -227,7 +227,7 @@ public:
         {
             return nullptr;
         }
-        auto loan = yomk::msgs::unpack<yomk::msgs::DDSLoanResult>(resp.data);
+        auto loan = yomk::msgs::unpack<yomk::msgs::LoanSample>(resp.data);
         return loan ? loan->msg.sample : nullptr;
     }
     /**

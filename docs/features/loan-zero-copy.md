@@ -10,7 +10,7 @@
 
 | 能力 | 链式 API | URL 端点 | 说明 |
 |---|---|---|---|
-| 借出发送缓冲 | `yomk::dds().node(nodeName).topic(topicName).loan()` | `/YomkDdsService/loan` | 返回值即 `DDSLoanResult{sample}` 池内样本指针，失败为 nullptr（判空即失败判定）；仅 plain 类型支持 |
+| 借出发送缓冲 | `yomk::dds().node(nodeName).topic(topicName).loan()` | `/YomkDdsService/loan` | 返回值即 `LoanSample{sample}` 池内样本指针，失败为 nullptr（判空即失败判定）；仅 plain 类型支持 |
 | 归还未发布的借出缓冲 | `yomk::dds().node(nodeName).topic(topicName).sample(sample).return_loan()` | `/YomkDdsService/discard_loan` | 归还未发布样本避免池泄漏；sample 须为 loan() 借出的指针 |
 | 订阅端零拷贝接收 | —（自动，无需调用） | — | `FastDDSNode` 内部自动使用 reader loan 接收，回调接口与指针语义不变 |
 
@@ -86,7 +86,7 @@ int main(int argc, char *argv[])
 
 ## 参数与约束
 
-- **返回值即样本指针**：成功指向 `DDSLoanResult{sample}` 池内样本、失败为 nullptr；调用后必须判空再使用。
+- **返回值即样本指针**：成功指向 `LoanSample{sample}` 池内样本、失败为 nullptr；调用后必须判空再使用。
 - **plain 类型判定**：仅 plain 类型可借出——纯基础类型成员 + FINAL 可扩展性（如 MInt32、MColorRGBA）；含 string/sequence 的类型 loan 失败返回 nullptr。
 - **池语义**：样本来自 writer 池；loan 失败（非 plain 或池耗尽）时自动回退普通发布路径，业务代码以判空分支承载两条路径。
 - **发布路径复用**：借出样本仍经 `...data(...).pub()` 链发布，data 借用、同步写入语义不变。

@@ -23,7 +23,7 @@ YOMK_DEFINE_MSG(yomk::payload::DDSTopic, DDSTopic, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSSubRequest, DDSSubRequest, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSPublish, DDSPublish, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSLoan, DDSLoan, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSLoanResult, DDSLoanResult, msg)
+YOMK_DEFINE_MSG(yomk::payload::LoanSample, LoanSample, msg)
 
 // ===== YomkDdsDebugService =====
 YOMK_DEFINE_MSG(yomk::payload::DDSDebugNode, DDSDebugNode, msg)

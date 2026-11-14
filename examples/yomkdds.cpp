@@ -1543,7 +1543,7 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
     }
 
     // 2. 独立收敛按类型名查询 IDL 结构行集
-    resp = YOMKDDS_DEBUG_INTERFACE_SHOW(typeName, waitRounds, 200);
+    resp = yomk::dds().debug().type(typeName).rounds(waitRounds).interval(200).interface_show();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("interface show failed: ", resp.msg);

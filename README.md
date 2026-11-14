@@ -73,7 +73,8 @@
 | `YOMKDDS_DEBUG_NODE_LIST(stableRounds, intervalMs)` | 列出域内节点 |
 | `YOMKDDS_DEBUG_NODE_INFO(nodeName, stableRounds, intervalMs)` | 查询节点发布/订阅清单 |
 | `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()` | 按数据类型反查主题 |
-| `YOMKDDS_DEBUG_INTERFACE_SHOW/LIST(...)` | 按类型名输出 IDL 结构 / 列出全部类型名 |
+| `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()` | 按类型名输出 IDL 结构 |
+| `YOMKDDS_DEBUG_INTERFACE_LIST(stableRounds, intervalMs)` | 列出全部类型名 |
 | `YOMKDDS_DEBUG_TOPIC_EXAMPLE/MSG(...)` | 查询主题发布示例 / 消息描述两要素 |
 | `YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, ...)` | 发布 JSON 载荷消息（支持持续发布/条数上限/QoS 尾参） |
 | `yomk::dds().debug().quit()` | 退出调试（删除调试节点） |

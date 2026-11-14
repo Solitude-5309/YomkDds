@@ -534,10 +534,11 @@ public:
 /**
  * @brief Debug type facet: carries the typeName opened by debug().type() and the
  *        rounds()/interval() convergence accumulators (order-free), terminated by
- *        find_topics(); the remaining type sub-facets join it in later migration rounds
+ *        find_topics() or interface_show(); the remaining type sub-facets join it
+ *        in later migration rounds
  */
 // @zh: 调试类型分面：承载 debug().type() 起始的类型名与 rounds()/interval() 收敛累积器
-// @zh: （次序不限），find_topics() 终结；其余 type 子分面在后续迁移批次并入
+// @zh: （次序不限），find_topics() 或 interface_show() 终结；其余 type 子分面在后续迁移批次并入
 class DdsDebugTypeBuilder
 {
     std::string m_typeName;
@@ -596,6 +597,33 @@ public:
         return yomk::server().url(yomk::url::ddsDebugTopicFind)
             .msg(yomk::msgs::DDSDebugFind::shared(
                 yomk::payload::DDSDebugFind{std::move(m_typeName), m_stableRounds, m_intervalMs}))
+            .request();
+    }
+    /**
+     * @brief Dump the IDL struct description of the accumulated data type (request terminator)
+     * @return Response carrying a StringArray packet of IDL source lines (struct header,
+     *         one line per field, closing brace); Invalid when YomkServer is not
+     *         initialized
+     * @note Pure type introspection through TypeInformation -> TypeObject ->
+     *       DynamicType, no subscription is created; only top-level struct types are
+     *       supported, and the peer must publish XTypes TypeObject data (ROS2
+     *       rmw_fastrtps endpoints do not). Same convergence semantics as
+     *       find_topics(): rounds()/interval(), 0 clamped to 5 rounds / 200ms
+     */
+    // @zh: 按累积的类型名输出其 IDL 结构描述（请求终结）
+    // @zh: return Response 携带 StringArray 包，多行 IDL 源语法（struct 头 + 字段行 + 结尾）；未初始化返回 Invalid
+    // @zh: note 经 TypeInformation → TypeObject → DynamicType 纯类型内省，不建订阅；
+    // @zh: 仅支持顶层为 struct 的类型，且需对端提供 XTypes TypeObject（ROS2 rmw_fastrtps 端点不提供）；
+    // @zh: 收敛语义同 find_topics()：rounds()/interval()，0 钳制为 5 次/200ms
+    yomk::payload::Response interface_show()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsDebugInterfaceShow)
+            .msg(yomk::msgs::DDSDebugInterfaceShow::shared(
+                yomk::payload::DDSDebugInterfaceShow{std::move(m_typeName), m_stableRounds, m_intervalMs}))
             .request();
     }
 };
@@ -911,7 +939,9 @@ inline detail::DdsBuilder dds()
  * yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics(), and the
  * single-topic details as
  * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info(), and the
- * reverse lookup as yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics().
+ * reverse lookup as yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics(),
+ * and the IDL struct dump as
+ * yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show().
  * list/info/find share the convergence semantics: consecutive stableRounds
  * unchanged snapshots, 0 clamped to defaults 5 rounds / 200ms. Full behavior:
  * docs/features/debug-service.md
@@ -923,22 +953,10 @@ inline detail::DdsBuilder dds()
 // @zh: yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print()，主题清单为
 // @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()，单主题详情为
 // @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info()，类型反查为
-// @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics()；
+// @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics()，类型内省为
+// @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show()；
 // @zh: list/info/find 组共用收敛语义：
 // @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
-
-/**
- * @brief Dump the IDL struct description of a data type
- * @note Requires the peer to provide XTypes TypeObject (ROS2 rmw_fastrtps
- *       endpoints do not)
- */
-// @zh: 按数据类型名输出 IDL 结构描述
-// @zh: note 需对端提供 XTypes TypeObject（ROS2 rmw_fastrtps 端点不提供）
-
-#define YOMKDDS_DEBUG_INTERFACE_SHOW(typeName, stableRounds, intervalMs)     \
-    ::yomk::server().url(\
-        ::yomk::url::ddsDebugInterfaceShow).msg(\
-        ::yomk::msgs::DDSDebugInterfaceShow::shared(yomk::payload::DDSDebugInterfaceShow{typeName, stableRounds, intervalMs})).request()
 
 /**
  * @brief List all discovered data type names (deduplicated, sorted)

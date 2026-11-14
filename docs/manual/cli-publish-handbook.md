@@ -233,7 +233,7 @@ struct YomkDdsStd::MString {
 | `type [<类型名>] is not a struct, interface display unsupported` | 顶层为 enum/alias 等非 struct 类型 |
 | `interface introspection failed for [<类型名>]` | DynamicType 成员枚举失败 |
 
-- **等价宏名**：`YOMKDDS_DEBUG_INTERFACE_SHOW(typeName, stableRounds, intervalMs)`。
+- **等价库调用**：`yomk::dds().debug().type(typeName).rounds(5).interval(200).interface_show()`。
 
 ### interface list：列出全部已发现类型
 

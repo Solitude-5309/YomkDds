@@ -834,7 +834,8 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
     }).detach();
 
     // 4. 长驻阻塞：启动校验、订阅与录制、收尾落盘都在服务端完成，返回即录制结束
-    resp = YOMKDDS_BAG_RECORD(topics, outputDir, maxBagSize, maxBagDurationSec, maxCacheSize);
+    resp = yomk::dds().bag().topics(topics).out_dir(outputDir)
+               .max_size(maxBagSize).max_duration(maxBagDurationSec).cache(maxCacheSize).record();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("bag record failed: ", resp.msg);

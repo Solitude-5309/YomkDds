@@ -24,15 +24,15 @@
 
 ### 五个子命令总览
 
-| 子命令 | 职责 | 是否需要 bag 节点 | 等价宏 |
+| 子命令 | 职责 | 是否需要 bag 节点 | 库形态 |
 |---|---|---|---|
-| `yomkdds bag record` | 录制主题列表为 mcap bag（长驻阻塞至 Ctrl+C 收尾） | 经 bag 节点实现（CLI 自动建删） | `YOMKDDS_BAG_RECORD`（库形态须先 `yomk::dds().bag()...create()` 自建 bag 节点） |
+| `yomkdds bag record` | 录制主题列表为 mcap bag（长驻阻塞至 Ctrl+C 收尾） | 经 bag 节点实现（CLI 自动建删） | `yomk::dds().bag().topics({...})….record()`（须先 `yomk::dds().bag()...create()` 自建 bag 节点） |
 | `yomkdds bag info` | 查看 bag 元信息（输出对齐 `ros2 bag info`） | 纯文件操作，无须节点 | `YOMKDDS_BAG_INFO` |
 | `yomkdds bag play` | 按录制时间轴回放为真实 DDS 流量 | CLI 自动建删 bag 节点 | `YOMKDDS_BAG_PLAY`（库形态须先 `yomk::dds().bag()...create()` 自建 bag 节点） |
 | `yomkdds bag convert` | 按输出配置文件把一个或多个输入 bag 过滤/裁剪/合并写为新 bag | 纯文件操作，无须节点 | `YOMKDDS_BAG_CONVERT` |
 | `yomkdds bag reindex` | 从 mcap 分片重建被删/损坏的 `metadata.json` | 纯文件操作，无须节点 | `YOMKDDS_BAG_REINDEX` |
 
-info/reindex/convert 为纯本地文件操作——不经 bag 节点、不创建任何 DDS 实体、不依赖域内状态，未建 bag 节点亦可调用。等价宏 `YOMKDDS_BAG_*` 定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`；本文以 CLI 为主线，宏等价形态见 [../features/bag-service.md](../features/bag-service.md)。
+info/reindex/convert 为纯本地文件操作——不经 bag 节点、不创建任何 DDS 实体、不依赖域内状态，未建 bag 节点亦可调用。库形态入口 `yomk::dds().bag()` 分面与剩余 `YOMKDDS_BAG_*` 宏均定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`；本文以 CLI 为主线，库形态见 [../features/bag-service.md](../features/bag-service.md)。
 
 ### 第 1 步：录制主题到 bag（bag record）
 
@@ -422,7 +422,7 @@ reindexing complete
 
 ## 延伸阅读
 
-- [../features/bag-service.md](../features/bag-service.md)——bag 功能能力清单、参数总表与 `YOMKDDS_BAG_*` 宏等价调用（含 `yomk::bagRecordStop/Pause/Resume`、`yomk::bagPlaySetRate` 库侧接口）
+- [../features/bag-service.md](../features/bag-service.md)——bag 功能能力清单、参数总表与链式 `yomk::dds().bag()` 等价调用（含 `yomk::bagRecordStop/Pause/Resume`、`yomk::bagPlaySetRate` 库侧接口）
 - [cli-observe-handbook.md](./cli-observe-handbook.md)——`topic print`/`topic list`/`topic info` 等观察命令，与回放验证配合使用
 - [cli-publish-handbook.md](./cli-publish-handbook.md)——`topic pub` 手工发布消息，演练中可替代 `ExampleYomkDdsPub` 作发布端
 - [env-vars-reference.md](./env-vars-reference.md)——域号等公共环境变量（bag 命令域号经 `YOMKDDS_DDS_DOMAIN_ID` 选择）

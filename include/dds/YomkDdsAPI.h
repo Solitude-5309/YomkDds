@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/dds/YomkDdsBagService.h>
@@ -10,10 +11,10 @@
 #include <yomk/dds/YomkDdsUrl.h>
 
 // Maintainer notes: this header is migrating from the macro-form Api to the
-// chained Api (per-suite, see tmp/链式api改造-调试套件.md). The core
-// communication suite is fully chained (yomk::dds()); the debug suite is
-// mid-migration (the debug-node lifecycle create()/quit() is chained, the
-// remaining endpoints are still macros); the bag suite is still macros. Each
+// chained Api (per-suite, see tmp/链式api改造-bag套件.md). The core
+// communication suite and the debug suite are fully chained (yomk::dds() and
+// yomk::dds().debug()); the bag suite is mid-migration (create()/quit()/
+// record() are chained, info/reindex/convert/play are still macros). Each
 // unit — chained terminator or macro — wraps one unified request:
 // yomk::server().url(<yomk::url constant>).msg(<yomk::msgs message>).request().
 // URLs come from YomkDdsUrl.h, payload structures from YomkDdsPayload.h,
@@ -1121,16 +1122,26 @@ public:
 
 /**
  * @brief Bag facet: carries the optional domain()/udp_ds()/tcp_ds() creation
- *        accumulators (order-free), terminated by create()/quit(); the record()/convert()
- *        terminators and the dir() sub-facet join it in later migration rounds
+ *        accumulators plus the topics()/out_dir()/max_size()/max_duration()/cache()
+ *        record accumulators (order-free), terminated by create()/quit()/record();
+ *        the convert() terminator and the dir() sub-facet join it in later
+ *        migration rounds
  */
-// @zh: Bag 分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器（次序不限），create()/quit() 收束；
-// @zh: 录制 record()/转换 convert() 终结与目录 dir() 子分面在后续迁移批次并入
+// @zh: Bag 分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器，以及
+// @zh: topics()/out_dir()/max_size()/max_duration()/cache() 录制累积器（次序不限），
+// @zh: create()/quit()/record() 收束；转换 convert() 终结与目录 dir() 子分面在后续迁移批次并入
 class DdsBagBuilder
 {
     uint32_t m_domainId = yomk::payload::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
     std::string m_udpDiscoverServerLocator = yomk::payload::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
     std::string m_tcpDiscoverServerLocator = yomk::payload::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
+
+    std::vector<std::string> m_recordTopics;
+    bool m_hasRecordTopics = false;        // topics() 必填标记：未累积即终结返回错误
+    std::string m_recordOutDir;            // 空 = 缺省时间戳目录名
+    uint64_t m_recordMaxSize = 0;          // 单分片字节上限，0=不分片
+    uint64_t m_recordMaxDurationSec = 0;   // 单分片时长上限秒，0=不分片
+    uint64_t m_recordCacheSize = 0;        // 写缓存双缓冲字节，0=直写
 public:
     /**
      * @brief Accumulate the DDS domain id
@@ -1212,6 +1223,107 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsBagDeleteNode).msg(nullptr).request();
+    }
+    /**
+     * @brief Accumulate the topic list to record (required before record())
+     * @param[in] topics At least 1; one '*' wildcard item expands over the discovery
+     *            snapshot; unmatched/wildcard-less-no-publisher items fail wholesale
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积待录制主题清单（终结前必填）
+    // @zh: topics 至少 1 个；恰含一个 '*' 的通配项按发现快照展开；未命中/无效项整体报错
+    // @zh: return 自身链式引用
+    DdsBagBuilder& topics(std::vector<std::string> topics)
+    {
+        m_recordTopics = std::move(topics);
+        m_hasRecordTopics = true;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the output bag directory
+     * @param[in] dir Relative or absolute path; empty = timestamped default
+     *            bag_<...>; an existing directory fails
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积录制输出 bag 目录（落盘目录，区别于读取既有 bag 的 dir() 子分面）
+    // @zh: dir 相对/绝对均可，空 = 缺省时间戳名 bag_<...>，已存在报错
+    // @zh: return 自身链式引用
+    DdsBagBuilder& out_dir(std::string dir)
+    {
+        m_recordOutDir = std::move(dir);
+        return *this;
+    }
+    /**
+     * @brief Accumulate the per-shard size threshold in bytes
+     * @param[in] bytes >0 rolls bag_N.mcap once the shard reaches it; 0 = no split;
+     *            below 1024 bytes fails (checked by the node)
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积单分片字节上限（写满滚动 bag_N.mcap）；0=不分片，过小由节点层校验报错
+    // @zh: bytes 单分片最大字节数
+    // @zh: return 自身链式引用
+    DdsBagBuilder& max_size(uint64_t bytes)
+    {
+        m_recordMaxSize = bytes;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the per-shard duration threshold in seconds
+     * @param[in] sec >0 rolls bag_N.mcap once the shard spans longer; 0 = no split;
+     *            whichever of max_size()/max_duration() hits first wins
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积单分片时长上限秒数（自本分片首条消息起算）；0=不分片
+    // @zh: sec 单分片最大时长秒；与 max_size() 同用时先到先分
+    // @zh: return 自身链式引用
+    DdsBagBuilder& max_duration(uint64_t sec)
+    {
+        m_recordMaxDurationSec = sec;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the write-cache double-buffer size in bytes
+     * @param[in] bytes >0 copies each callback payload into a queue drained by a
+     *            writer thread (full cache drops new messages); 0 = direct write
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积写缓存双缓冲字节数；>0 回调拷贝入队由独立线程写盘（满则丢新并计数），0=每条直写
+    // @zh: bytes 写缓存字节数
+    // @zh: return 自身链式引用
+    DdsBagBuilder& cache(uint64_t bytes)
+    {
+        m_recordCacheSize = bytes;
+        return *this;
+    }
+    /**
+     * @brief Record the accumulated topics into an mcap bag (blocking request terminator)
+     * @return Response; success carries a StringArray whose first line is the bag directory
+     *         and then one "topic: N messages / M bytes" line per topic; Invalid when
+     *         YomkServer is not initialized or topics() was not accumulated
+     * @note Blocks the calling thread until recording finishes or stops through
+     *       yomk::bagRecordStop (async-signal-safe); call yomk::bagRecordReset()
+     *       before reuse; requires the bag node created by create()
+     */
+    // @zh: 按累积的主题清单与阈值录制到 mcap bag（阻塞至录制收尾的请求终结）
+    // @zh: return Response；成功载荷为 StringArray（首行 bag 目录，其后每主题一行 "topic: N 条 / M 字节"）；
+    // @zh: 未初始化或未累积 topics() 返回 Invalid
+    // @zh: note 阻塞调用线程至录制收尾或经 yomk::bagRecordStop 停止（async-signal-safe）；
+    // @zh: 复用前先 bagRecordReset() 复位；须先经 create() 建 bag 节点
+    yomk::payload::Response record()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        if (!m_hasRecordTopics)
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "topics are required");
+        }
+        return yomk::server().url(yomk::url::ddsBagRecord)
+            .msg(yomk::msgs::DDSBagRecord::shared(
+                yomk::payload::DDSBagRecord{std::move(m_recordTopics), std::move(m_recordOutDir),
+                    m_recordMaxSize, m_recordMaxDurationSec, m_recordCacheSize}))
+            .request();
     }
 };
 
@@ -1387,37 +1499,21 @@ inline detail::DdsBuilder dds()
 
 // ===== YomkDdsBagService — mcap bag record/replay =====
 /**
- * @brief Bag record/replay macros (YomkDdsBagService endpoints)
+ * @brief Bag macros (YomkDdsBagService endpoints)
  *
  * The bag node lifecycle is chained as
- * yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit().
- * Every remaining macro returns yomk::payload::Response. bag_record/bag_play block
- * the calling thread until finished or stopped via the yomk::bag* flags.
- * Full behavior: docs/features/bag-service.md
+ * yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit(),
+ * and recording as yomk::dds().bag().topics({...})[.out_dir/.max_size/
+ * .max_duration/.cache()].record(). Every remaining macro returns
+ * yomk::payload::Response; bag_play blocks the calling thread until finished or
+ * stopped via the yomk::bag* flags. Full behavior: docs/features/bag-service.md
  */
-// @zh: Bag 录制回放宏（YomkDdsBagService 端点）
+// @zh: Bag 宏（YomkDdsBagService 端点）
 // @zh: bag 节点生命周期已链式化为 yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() /
-// @zh: yomk::dds().bag().quit()；其余宏均返回 yomk::payload::Response，
-// @zh: bag_record/bag_play 阻塞调用线程至收尾或经 yomk::bag* 标志停止；
+// @zh: yomk::dds().bag().quit()，录制为 yomk::dds().bag().topics({...})[.out_dir/.max_size/
+// @zh: .max_duration/.cache()].record()；其余宏均返回 yomk::payload::Response，
+// @zh: bag_play 阻塞调用线程至收尾或经 yomk::bag* 标志停止；
 // @zh: 详见 docs/features/bag-service.md
-
-/**
- * @brief Record topics into an mcap bag (blocks the calling thread until done)
- * @param[in] topics At least 1; one '*' wildcard item expands over the
- *            discovery snapshot; unmatched/wildcard-less-no-publisher items fail wholesale
- * @param[in] outputDir Empty = timestamped default bag_<...>; existing dir fails
- * @param[in] maxBagSize,maxBagDurationSec Per-file split thresholds (0 = no split)
- * @param[in] maxCacheSize Write cache double-buffer bytes; 0 = direct write
- * @note Stop via yomk::bagRecordStop (async-signal-safe); reset before reuse
- */
-// @zh: 录制主题到 mcap bag（阻塞调用线程至录制收尾）
-// @zh: topics 至少 1 个；恰含一个 '*' 的通配项按发现快照展开；未命中/无效项整体报错
-// @zh: outputDir 空 = 缺省时间戳名；已存在报错
-// @zh: maxBagSize/maxBagDurationSec 单分片阈值（0=不分片）；maxCacheSize 写缓存字节数（0=直写）
-// @zh: note 经 yomk::bagRecordStop 停止（async-signal-safe）；复用前先 bagRecordReset 复位
-
-#define YOMKDDS_BAG_RECORD(topics, outputDir, maxBagSize, maxBagDurationSec, maxCacheSize) \
-    ::yomk::server().url(::yomk::url::ddsBagRecord).msg(::yomk::msgs::DDSBagRecord::shared(yomk::payload::DDSBagRecord{(topics), (outputDir), (maxBagSize), (maxBagDurationSec), (maxCacheSize)})).request()
 
 /**
  * @brief Show bag metadata (pure file read, no bag node needed)

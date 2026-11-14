@@ -12,11 +12,11 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 |---|---|---|---|
 | 创建 bag 节点 | 链式 `yomk::dds().bag()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` | —（CLI 内部自动建删） | — |
 | 删除 bag 节点 | 链式 `yomk::dds().bag().quit()` | —（CLI 内部自动建删） | — |
-| 录制主题列表为 mcap bag | `YOMKDDS_BAG_RECORD(topics, outputDir, maxBagSize, maxBagDurationSec, maxCacheSize)` | `bag record` | **须**（库侧先 `yomk::dds().bag()...create()`） |
+| 录制主题列表为 mcap bag | 链式 `yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()` | `bag record` | **须**（库侧先 `yomk::dds().bag()...create()`） |
 | 查看 bag 元信息 | `YOMKDDS_BAG_INFO(bagDir)` | `bag info` | 不须（纯文件读，无须 create_node） |
 | 重建 bag 元信息 | `YOMKDDS_BAG_REINDEX(bagDir)` | `bag reindex` | 不须（纯文件操作，无须 create_node） |
 | 转换 bag（过滤/裁剪/归并） | `YOMKDDS_BAG_CONVERT(inputs, cfgPath)` | `bag convert` | 不须（纯文件操作，无须 create_node） |
-| 回放 bag | `YOMKDDS_BAG_PLAY(...)`（等价宏见 README 6.11，须先自建 bag 节点） | `bag play` | CLI 自动创建并在退出前删除 bag 节点 |
+| 回放 bag | `YOMKDDS_BAG_PLAY(...)`（库形态见 README「3 API 速览」，须先自建 bag 节点） | `bag play` | CLI 自动创建并在退出前删除 bag 节点 |
 
 > 核心通信套件除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
@@ -30,9 +30,9 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 - 三个累积器均可选、次序不限：未累积项回退类内缺省初始化器（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`，两 locator 按 5.7 开关门控读 `YOMKDDS_UDP/TCP_DISCOVER_SERVERS`，语义同 `yomk::dds().node(...)` 缺省项）；全缺省形态即 `yomk::dds().bag().create()`；
 - domainId 合法范围 [0,232]，仅同域端点可被发现与录制；`udp_ds()/tcp_ds()` 为 UDP/TCP 发现服务器直配聚合串，语义同 `yomk::dds().node(...)` 的 udp_ds()/tcp_ds() 直配（CLIENT 协议强制，非法串创建失败回显），详见 [discovery-server.md](./discovery-server.md)。
 
-### 录制（`YOMKDDS_BAG_RECORD` / `bag record`）
+### 录制（`yomk::dds().bag()...record()` / `bag record`）
 
-`YOMKDDS_BAG_RECORD(topics, outputDir, maxBagSize, maxBagDurationSec, maxCacheSize)`（端点 `/YomkDdsBagService/bag_record`）**长驻阻塞至 Ctrl+C**（SIGINT 经 `yomk::bagRecordStop` 无锁置位）收尾返回。CLI 形态：
+`yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()`（端点 `/YomkDdsBagService/bag_record`）**长驻阻塞至 Ctrl+C**（SIGINT 经 `yomk::bagRecordStop` 无锁置位）收尾返回。`topics()` 必填（缺失时终结直接返回 `topics are required`），其余四个累积器可选、次序不限；`out_dir()` 空 = 缺省时间戳目录名，`max_size()`/`max_duration()` 为单分片阈值（两条件同用时先到先分），`cache()` 为写缓存双缓冲字节数。CLI 形态：
 
 ```bash
 yomkdds bag record hello_world           # 录制单主题（默认域 0）
@@ -45,7 +45,7 @@ yomkdds bag record -c 8388608 hello_world     # 写缓存双缓冲 8MB（-c/--ma
 yomkdds bag record --start-paused hello_world  # 暂停态启动（订阅照常、消息丢弃不写入，按 SPACE 开始录制）
 ```
 
-等价宏调用（完整用户代码，`YOMKDDS_BAG_*` 宏定义于 `YomkDdsAPI.h`，SIGINT 处理与暂停控制声明于 `YomkDdsBagService.h`）：
+等价链式调用（完整用户代码，`yomk::dds().bag()` 分面定义于 `YomkDdsAPI.h`，SIGINT 处理与暂停控制声明于 `YomkDdsBagService.h`）：
 
 ```cpp
 #include <yomk/server/YomkServerApi.h>
@@ -80,10 +80,9 @@ int main()
 
     // 3. 长驻阻塞：启动校验、订阅与录制、收尾落盘都在服务端完成，返回即录制结束
     std::vector<std::string> topics{"hello_world", "hello_*"};
-    resp = YOMKDDS_BAG_RECORD(topics, "my_bag", 0, 0, 0);  // 第二参 bag 目录名（空串=缺省时间戳名），
-    //                                                      第三参单分片最大字节数（0=不分片，>0 写满滚动 bag_N.mcap），
-    //                                                      第四参单分片最大时长秒（0=不分片，>0 时长达限滚动；与字节上限同用时先到先分），
-    //                                                      第五参写缓存双缓冲字节数（0=每条直写；>0 回调拷贝入队独立线程写盘，缓存满丢新并计数）
+    resp = yomk::dds().bag().topics(topics).out_dir("my_bag").record();  // out_dir 空串=缺省时间戳目录名
+    // max_size(bytes) / max_duration(sec) 单分片阈值（0=不分片，同用时先到先分），
+    // cache(bytes) 写缓存双缓冲字节数（0=每条直写，>0 回调拷贝入队独立线程写盘，缓存满丢新并计数）
     if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         // m_msg 为逐项原因（校验类多行）；失败路径同样须删除已建 bag 节点
@@ -152,15 +151,15 @@ yomkdds bag play bag_in --qos-profile-overrides-path qos.json   # 按主题覆�
 
 ## 参数与约束
 
-### `YOMKDDS_BAG_RECORD` 五参数
+### 录制五参数（`topics()` / `out_dir()` / `max_size()` / `max_duration()` / `cache()`）
 
 | 参数 | 约束 |
 |---|---|
-| `topics` | 主题清单（`std::vector<std::string>`）；清单项支持通配模式（见下表）；模式项启动校验时按发现缓存展开为实际主题集合（去重升序、与精确项合并） |
-| `outputDir` | bag 目录名/路径（相对/绝对均可，父目录自动多级创建，已存在报错；空串=缺省当前路径下 `bag_<YYYY-MM-DD_HH-MM-SS_mmm>`） |
-| `maxBagSize` | 单分片最大字节数（>0 写满滚动 `bag_N.mcap` 分片，下限 1024 字节过小报错；0=不分片；受存储层 chunk 缓冲影响，实际分片粒度不小于 chunk 落盘边界——默认 786432 字节） |
-| `maxBagDurationSec` | 单分片最大时长秒（0=不分片，无下限校验，与 maxBagSize 同用先到先分；暂停期不计入分片时长） |
-| `maxCacheSize` | 写缓存双缓冲字节数（0=每条直写，>0 回调拷贝入队、独立消费线程写盘，缓存满丢弃新消息并按主题计数；CLI 缺省 100 MiB，最坏占 2 倍内存） |
+| `topics({...})` | 必填，主题清单（`std::vector<std::string>`）；清单项支持通配模式（见下表）；模式项启动校验时按发现缓存展开为实际主题集合（去重升序、与精确项合并）；未累积即 `record()` 返回 `topics are required` |
+| `out_dir(dir)` | bag 目录名/路径（相对/绝对均可，父目录自动多级创建，已存在报错；空串=缺省当前路径下 `bag_<YYYY-MM-DD_HH-MM-SS_mmm>`） |
+| `max_size(bytes)` | 单分片最大字节数（>0 写满滚动 `bag_N.mcap` 分片，下限 1024 字节过小报错；0=不分片；受存储层 chunk 缓冲影响，实际分片粒度不小于 chunk 落盘边界——默认 786432 字节） |
+| `max_duration(sec)` | 单分片最大时长秒（0=不分片，无下限校验，与 max_size 同用先到先分；暂停期不计入分片时长） |
+| `cache(bytes)` | 写缓存双缓冲字节数（0=每条直写，>0 回调拷贝入队、独立消费线程写盘，缓存满丢弃新消息并按主题计数；CLI 缺省 100 MiB，最坏占 2 倍内存） |
 
 录制为透传设计：每主题一个 reader（QoS 的 Reliability/Durability 跟随远端 writer offered 值，requested ≤ offered 恒成立）直写原始 CDR 字节到 mcap。仅有订阅者的主题同样通过校验（先建订阅，发布者上线匹配后自动开始录流）。
 

@@ -41,7 +41,7 @@
 
 ## 3 API 速览
 
-用户经 `yomk::dds()` 链式 API（核心通信、调试与 Bag 节点生命周期）与 `YOMKDDS_BAG_*` 宏（Bag 录制/回放/文件操作，定义于 `include/dds/YomkDdsAPI.h`）调用三个服务域，完整参数与约束见对应功能文档。
+用户经 `yomk::dds()` 链式 API（核心通信、调试与 Bag 节点生命周期及录制）与 `YOMKDDS_BAG_*` 宏（Bag 回放/文件操作，定义于 `include/dds/YomkDdsAPI.h`）调用三个服务域，完整参数与约束见对应功能文档。
 
 对外头文件按标准扩展四件套组织（安装后统一 `<yomk/dds/...>` 引用）：`YomkDdsUrl.h`（`yomk::url` 命名空间 URL 常量，请求链一律引用常量不裸写字面量）、`YomkDdsPayload.h`（扩展专属载荷 `yomk::payload`：请求/响应结构、回调类型、QoS 描述与公共配置辅助）、`YomkDdsMsg.h`（消息包：全部 `YOMK_DEFINE_MSG` 集中声明，生成 `yomk::msgs::Xxx`；用户 DDS 载荷为 IDL 生成类型，独立入口 `<yomk/dds/YomkDdsStdMsgs.hpp>`）、`YomkDdsAPI.h`（链式 Api 与宏 Api 入口，本节内容）。
 
@@ -86,7 +86,7 @@
 |---|---|
 | `yomk::dds().bag()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` | 创建 bag 节点（单节点模型） |
 | `yomk::dds().bag().quit()` | 删除 bag 节点并销毁其全部 DDS 实体 |
-| `YOMKDDS_BAG_RECORD(topics, outputDir, maxBagSize, maxBagDurationSec, maxCacheSize)` | 录制主题列表为 mcap bag（长驻阻塞至 Ctrl+C） |
+| `yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()` | 录制主题列表为 mcap bag（长驻阻塞至 Ctrl+C） |
 | `YOMKDDS_BAG_INFO(bagDir)` | 查看 bag 元信息（纯文件操作，无须 bag 节点） |
 | `YOMKDDS_BAG_REINDEX(bagDir)` | 从 mcap 分片重建 metadata.json（纯文件操作） |
 | `YOMKDDS_BAG_CONVERT(inputs, cfgPath)` | 按配置过滤/裁剪/归并转换 bag（纯文件操作） |

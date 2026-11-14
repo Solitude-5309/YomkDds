@@ -43,7 +43,7 @@ private:
 };
 
 /**
- * @brief Stop/pause flags for YOMKDDS_BAG_RECORD (async-signal-safe)
+ * @brief Stop/pause flags for bag recording (chain: yomk::dds().bag()...record(), async-signal-safe)
  *
  * The record loop polls the stop flag every 100ms and the subscriber write
  * path checks the pause flag per message. SIGINT handlers write stop through
@@ -53,7 +53,7 @@ private:
  *       record handler resets stop only, never paused — pausing is caller
  *       intent and clearing it silently would look like "records nothing"
  */
-// @zh: YOMKDDS_BAG_RECORD 的停止/暂停标志（async-signal-safe）
+// @zh: bag 录制（链式 yomk::dds().bag()...record()）的停止/暂停标志 （async-signal-safe）
 // @zh: 录制循环每 100ms 轮询 stop，订阅写路径逐条检查 paused。SIGINT handler 经
 // @zh: bagRecordStop 写入——atomic 无锁 store；不可经 yomk 请求链停止（handler 内禁锁与分配）
 // @zh: note 发起录制前先 bagRecordReset() 复位；录制 handler 只复位 stop 不动 paused

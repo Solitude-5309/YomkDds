@@ -82,7 +82,8 @@ inline void bagRecordReset()
 }  // namespace yomk
 
 /**
- * @brief Stop/pause/rate controls for YOMKDDS_BAG_PLAY (async-signal-safe)
+ * @brief Stop/pause/rate controls for bag playback (chain: bag().dir(bagDir)…play(),
+ *        async-signal-safe)
  *
  * Playback threads read the flags at every blocking point. Pause freezes the
  * timeline (the reader thread back-pressures on the full queue) and resume
@@ -94,7 +95,7 @@ inline void bagRecordReset()
  * @note bagPlaySetRate rejects rate <= 0 and keeps the previous value;
  *       call bagPlayReset() before starting a new playback session
  */
-// @zh: YOMKDDS_BAG_PLAY 的停止/暂停/速率控制（async-signal-safe）
+// @zh: bag 回放（链式 yomk::dds().bag().dir(bagDir)…play()）的停止/暂停/速率控制（async-signal-safe）
 // @zh: 播放线程在各阻塞处读标志。暂停冻结时间轴（读线程被队列满反压自然停住），恢复后
 // @zh: 重锚时间基准；速率缩放消息间调度间隔（2.0 两倍速、0.5 半倍速，对齐 ros2 PlayerClock
 // @zh: set_rate 语义）。暂停/恢复/速率由 CLI 键盘交互或库调用方设置；不经 DDSBagPlay 协议

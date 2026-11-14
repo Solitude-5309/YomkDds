@@ -12,7 +12,7 @@
  * 创建并幂等写入 ~/.bashrc，使新开终端可查看继承）、discovery-server-tutorial 与
  * xml-profiles-tutorial；--help 输出为即用速查。
  *
- * 实现经 YomkDdsDebugService（yomk::dds().debug() 链式面）与 YomkDdsBagService（YOMKDDS_BAG_*）
+ * 实现经 YomkDdsDebugService（yomk::dds().debug() 链式面）与 YomkDdsBagService（yomk::dds().bag() 链式面）
  * 驱动内部调试/录制节点；各子命令退出前 yomk::dds().debug().quit() 显式清理，规避
  * FastDDS 静态析构期段错误（同 ExampleYomkDdsSub 退出前 remove() 模式）。
  */
@@ -875,7 +875,7 @@ static std::string formatRate(double rate)
 // 长驻阻塞至全部消息播毕或 SIGINT 停止；playbackRate 回放速率倍率（>0，对齐 ros2 --rate：
 // 倍率缩放消息间调度间隔，<=0 由主解析层报错退出）；topics 只回放清单内主题（空=全部，
 // 对齐 ros2 --topics 缺省语义；精确项须在 bag 清单否则报错，通配项经服务端按 bag 清单
-// 展开，语义同 YOMKDDS_BAG_PLAY 注释）；startPaused 暂停态启动（对齐 ros2
+// 展开，语义同 yomk::dds().bag().dir(bagDir)…play() 注释）；startPaused 暂停态启动（对齐 ros2
 // --start-paused 与 record 同名选项：读线程照常预读、播放挂起零发出，SPACE 开始）；
 // loop 循环回放（对齐 ros2 -l/--loop "starts back at the beginning on reaching the end
 // and plays indefinitely"：到尾即回开头无限播放，回显附 ", looping" 后缀，收尾统计为
@@ -1074,13 +1074,19 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
 
     // 4. 长驻阻塞：预扫、读播解耦与收尾实体清理都在服务端完成，返回即回放结束；
     //    开播回显（replaying topic=... 逐主题行与 bag 元信息行）由节点层直接输出；
-    //    哨兵换算：-1（未显式传参）归一为缺省 1000 后透传宏第九参，QoS 覆盖路径直透
-    //    宏第十参（空串=缺省不加载恒等现行为）
+    //    哨兵换算：-1（未显式传参）归一为缺省 1000 后累积 read_ahead()，QoS 覆盖路径
+    //    直透 qos_file()（空串=不加载恒等现行为）；loop 为无参开关，仅在显式开启时累积
     const size_t queueSizeArg = playReadAheadQueueSize >= 0
         ? static_cast<size_t>(playReadAheadQueueSize) : 1000;
-    resp = YOMKDDS_BAG_PLAY(bagDir, playbackRate, topics, loop, startOffsetSec,
-                            playDelaySec, playWaitAckedMs, playTopicRemaps, queueSizeArg,
-                            playQosOverridesPath);
+    auto play = yomk::dds().bag().dir(bagDir);
+    play.rate(playbackRate).topics(topics).offset(startOffsetSec).delay(playDelaySec)
+        .wait_acked(playWaitAckedMs).remaps(playTopicRemaps).read_ahead(queueSizeArg)
+        .qos_file(playQosOverridesPath);
+    if (loop)
+    {
+        play.loop();
+    }
+    resp = play.play();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("bag play failed: ", resp.msg);

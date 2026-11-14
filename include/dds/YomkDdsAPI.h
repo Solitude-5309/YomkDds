@@ -10,12 +10,11 @@
 #include <yomk/dds/YomkDdsService.h>
 #include <yomk/dds/YomkDdsUrl.h>
 
-// Maintainer notes: this header is migrating from the macro-form Api to the
-// chained Api (per-suite, see tmp/链式api改造-bag套件.md). The core
-// communication suite and the debug suite are fully chained (yomk::dds() and
-// yomk::dds().debug()); the bag suite is mid-migration (create()/quit()/
-// record()/dir(bagDir).info()/reindex()/convert() are chained, play is still a
-// macro). Each unit — chained terminator or macro — wraps one unified request:
+// Maintainer notes: this header exposes the chained Api only (the macro form is
+// fully retired; migration history lives in tmp/链式api改造-bag套件.md). The core
+// communication suite, the debug suite and the bag suite are all chained
+// (yomk::dds(), yomk::dds().debug(), yomk::dds().bag()). Each terminator wraps one
+// unified request:
 // yomk::server().url(<yomk::url constant>).msg(<yomk::msgs message>).request().
 // URLs come from YomkDdsUrl.h, payload structures from YomkDdsPayload.h,
 // message declarations from YomkDdsMsg.h.
@@ -1122,17 +1121,30 @@ public:
 
 /**
  * @brief Bag directory facet: carries the bag directory opened by bag().dir(),
- *        terminated by info()/reindex(); the play accumulators join it in a later
- *        migration round
- * @note Pure file operations: no terminator here needs the bag node, so this facet
- *       stays independent of create()
+ *        terminated by info()/reindex(); reopening it for playback accumulates the
+ *        optional rate()/topics()/loop()/offset()/delay()/wait_acked()/remaps()/
+ *        read_ahead()/qos_file() playback parameters (order-free) and terminates
+ *        with the blocking play()
+ * @note info()/reindex() are pure file operations needing no bag node; play()
+ *       requires the bag node created by create()
  */
 // @zh: Bag 目录分面：承载 bag().dir() 起始的 bag 目录，info()/reindex() 终结；
-// @zh: 回放累积器在后续迁移批次并入
-// @zh: note 纯文件操作：终结均不经 bag 节点，与 create() 互不依赖
+// @zh: 回放则在同一分面累积可选的 rate()/topics()/loop()/offset()/delay()/wait_acked()/
+// @zh: remaps()/read_ahead()/qos_file() 参数（次序不限），play() 阻塞终结
+// @zh: note info()/reindex() 为纯文件操作不经 bag 节点；play() 须先经 create() 建 bag 节点
 class DdsBagDirBuilder
 {
     std::string m_bagDir;
+
+    double m_playRate = 1.0;                                                // 缺省 1.0，须 >0
+    std::vector<std::string> m_playTopics;                                  // 空 = 全部主题
+    bool m_playLoop = false;                                                // true = 到尾回开头无限播放
+    double m_playOffsetSec = 0.0;                                           // 相对 bag 起点的跳过秒数
+    double m_playDelaySec = 0.0;                                            // 每轮开播延迟秒，须 >0
+    int64_t m_playWaitAckedMs = -1;                                         // -1 不等确认 / 0 永等 / >0 每主题超时
+    std::vector<std::string> m_playRemaps;                                  // "old:=new" 重映射规则
+    size_t m_playReadAhead = yomk::payload::kBagPlayReadAheadQueueSize;     // 预读队列深度，须 >=1
+    std::string m_playQosFile;                                              // 空 = 不加载 QoS 覆盖文件
 public:
     explicit DdsBagDirBuilder(std::string bagDir)
         : m_bagDir(std::move(bagDir))
@@ -1179,6 +1191,159 @@ public:
         }
         return yomk::server().url(yomk::url::ddsBagReindex)
             .msg(yomk::msgs::DDSBagReindex::shared(yomk::payload::DDSBagReindex{std::move(m_bagDir)}))
+            .request();
+    }
+    /**
+     * @brief Accumulate the playback speed multiplier
+     * @param[in] value >0 (2.0 = double speed, 0.5 = half speed); <=0 is rejected
+     *            by the node
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积回放速率倍率
+    // @zh: value 须 >0（2.0 两倍速、0.5 半倍速）；<=0 由节点层拒绝
+    // @zh: return 自身链式引用
+    DdsBagDirBuilder& rate(double value)
+    {
+        m_playRate = value;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the topic filter of the playback
+     * @param[in] topics Empty = all bag topics; exact names must exist in the bag and
+     *            one '*' wildcard item expands over the bag topic list
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积回放主题过滤清单
+    // @zh: topics 空 = 全部；精确项须在 bag 清单否则报错，恰含一个 '*' 的通配项按 bag 清单展开
+    // @zh: return 自身链式引用
+    DdsBagDirBuilder& topics(std::vector<std::string> topics)
+    {
+        m_playTopics = std::move(topics);
+        return *this;
+    }
+    /**
+     * @brief Replay from the beginning on reaching the end, forever
+     * @return Reference to self for chaining
+     */
+    // @zh: 到尾即回开头无限播放（无参布尔开关）
+    // @zh: return 自身链式引用
+    DdsBagDirBuilder& loop()
+    {
+        m_playLoop = true;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the seconds to skip from the bag start
+     * @param[in] sec Skipped on the read side (messages never enqueued, excluded from
+     *            the closing statistics); negative is rejected by the node
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积从 bag 起点跳过的秒数
+    // @zh: sec 在读侧跳过（不入队不计收尾统计）；负值由节点层拒绝
+    // @zh: return 自身链式引用
+    DdsBagDirBuilder& offset(double sec)
+    {
+        m_playOffsetSec = sec;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the start delay applied at the beginning of each loop
+     * @param[in] sec >0; gives subscribers a matching window before the first message
+     *            of every round
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积每轮开播延迟秒
+    // @zh: sec 须 >0；每轮首条前先睡该秒数，为订阅端留匹配窗口
+    // @zh: return 自身链式引用
+    DdsBagDirBuilder& delay(double sec)
+    {
+        m_playDelaySec = sec;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the RELIABLE ack wait before exiting
+     * @param[in] ms -1 = do not wait (default), 0 = wait forever (Ctrl+C interruptible),
+     *            >0 = per-topic timeout; BEST_EFFORT topics are skipped
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积退出前等 RELIABLE 订阅端确认的毫秒数
+    // @zh: ms -1 不等（缺省）/ 0 永远等（可 Ctrl+C 中断）/ >0 每主题超时；BEST_EFFORT 主题跳过
+    // @zh: return 自身链式引用
+    DdsBagDirBuilder& wait_acked(int64_t ms)
+    {
+        m_playWaitAckedMs = ms;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the topic remap rules
+     * @param[in] remaps "old:=new" rules; an old name absent from the bag is silently
+     *            ignored
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积主题重映射规则
+    // @zh: remaps 为 "old:=new" 规则清单；old 不在 bag 中时静默无效
+    // @zh: return 自身链式引用
+    DdsBagDirBuilder& remaps(std::vector<std::string> remaps)
+    {
+        m_playRemaps = std::move(remaps);
+        return *this;
+    }
+    /**
+     * @brief Accumulate the pre-read queue depth
+     * @param[in] depth >=1; absorbs disk IO jitter on the read side, defaulting to
+     *            kBagPlayReadAheadQueueSize (1000) when not accumulated
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积预读内存队列深度
+    // @zh: depth 须 >=1，用于吸收磁盘 IO 抖动；未累积时用缺省 kBagPlayReadAheadQueueSize（1000）
+    // @zh: return 自身链式引用
+    DdsBagDirBuilder& read_ahead(size_t depth)
+    {
+        m_playReadAhead = depth;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the per-topic QoS override file
+     * @param[in] path JSON keyed by bag topic name; precedence is file > bag snapshot >
+     *            fallback; empty = no override file
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积按主题覆盖发布 QoS 的文件
+    // @zh: path JSON，键 = bag 原主题名，值 = {reliability, durability}；优先级 文件 > bag 快照 > 回退；空 = 不加载
+    // @zh: return 自身链式引用
+    DdsBagDirBuilder& qos_file(std::string path)
+    {
+        m_playQosFile = std::move(path);
+        return *this;
+    }
+    /**
+     * @brief Replay the bag on its recorded timeline (blocking request terminator)
+     * @return Response; success carries a StringArray whose first line is the bag
+     *         directory and then one "topic: N messages / M bytes" line per topic;
+     *         Invalid when YomkServer is not initialized
+     * @note Blocks the calling thread until all messages are played or stops through
+     *       yomk::bagPlayStop (async-signal-safe); pause/resume/rate at runtime via
+     *       yomk::bagPlayPause/Resume/SetRate, call yomk::bagPlayReset() before reuse;
+     *       requires the bag node created by create(), and legacy bags without type
+     *       metadata are rejected
+     */
+    // @zh: 按录制时间轴回放该 bag（阻塞至播毕或停止的请求终结）
+    // @zh: return Response；成功载荷为 StringArray（首行 bag 目录，其后每主题一行 "topic: N 条 / M 字节"）；
+    // @zh: 未初始化返回 Invalid
+    // @zh: note 阻塞调用线程至全部播毕或经 yomk::bagPlayStop 停止（async-signal-safe）；
+    // @zh: 运行时经 bagPlayPause/Resume/SetRate 控制，复用前先 bagPlayReset()；
+    // @zh: 须先经 create() 建 bag 节点；旧格式 bag（type 空串）拒播
+    yomk::payload::Response play()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsBagPlay)
+            .msg(yomk::msgs::DDSBagPlay::shared(
+                yomk::payload::DDSBagPlay{std::move(m_bagDir), m_playRate, std::move(m_playTopics),
+                    m_playLoop, m_playOffsetSec, m_playDelaySec, m_playWaitAckedMs,
+                    std::move(m_playRemaps), m_playReadAhead, std::move(m_playQosFile)}))
             .request();
     }
 };
@@ -1297,14 +1462,15 @@ public:
      * @brief Open the bag-directory sub-facet for the given existing bag
      * @param[in] bagDir Bag directory to read/replay; must contain a readable
      *            metadata.json for info()/reindex(); empty is rejected by the node
-     * @return Sub-facet carrying the directory, terminated by info()/reindex() (the
- *         play accumulators join it in a later migration round)
-     * @note Pure file operations on that directory: no bag node needed
+     * @return Sub-facet carrying the directory, terminated by info()/reindex(),
+     *         or reopened with the playback accumulators and terminated by play()
+     * @note info()/reindex() are pure file operations on that directory needing no bag
+     *       node; play() requires the bag node
      */
     // @zh: 以既有 bag 目录切入 bag 目录子分面（info/reindex/play 共用）
     // @zh: bagDir 待读取/回放的 bag 目录；info()/reindex() 须有可读 metadata.json，空串由节点层拒绝
-    // @zh: return 承载该目录的子分面，info()/reindex() 终结（回放累积器在后续迁移批次并入）
-    // @zh: note 针对该目录的纯文件操作，不经 bag 节点
+    // @zh: return 承载该目录的子分面，info()/reindex() 终结；或累积回放参数后由 play() 终结
+    // @zh: note info()/reindex() 为纯文件操作不经 bag 节点；play() 须先建 bag 节点
     DdsBagDirBuilder dir(std::string bagDir)
     {
         return DdsBagDirBuilder(std::move(bagDir));
@@ -1651,47 +1817,26 @@ inline detail::DdsBuilder dds()
 
 // ===== YomkDdsBagService — mcap bag record/replay =====
 /**
- * @brief Bag macros (YomkDdsBagService endpoints)
+ * @brief Bag API (YomkDdsBagService endpoints, chain-only); equal CLI: yomkdds bag
  *
- * The bag node lifecycle is chained as
+ * yomk::dds().bag() covers the whole bag domain: the node lifecycle as
  * yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit(),
- * and recording as yomk::dds().bag().topics({...})[.out_dir/.max_size/
- * .max_duration/.cache()].record() and conversion as
- * yomk::dds().bag().in_bags({...}).out_cfg(path).convert(); the bag directory facet
- * is chained as yomk::dds().bag().dir(bagDir).info() / .reindex(). The remaining
- * macro returns yomk::payload::Response; bag_play blocks the calling thread until
- * finished or stopped via the yomk::bag* flags.
+ * recording as yomk::dds().bag().topics({...})[.out_dir/.max_size/.max_duration/
+ * .cache()].record(), conversion as
+ * yomk::dds().bag().in_bags({...}).out_cfg(path).convert(), and the bag directory
+ * facet as yomk::dds().bag().dir(bagDir) for info() / reindex() /
+ * [.rate/.topics/.loop/.offset/.delay/.wait_acked/.remaps/.read_ahead/.qos_file()]
+ * .play(). Every terminator returns yomk::payload::Response; record()/play() block
+ * the calling thread until finished or stopped via the yomk::bag* flags, and the
+ * bag node created by create() is required by record()/play().
  * Full behavior: docs/features/bag-service.md
  */
-// @zh: Bag 宏（YomkDdsBagService 端点）
-// @zh: bag 节点生命周期已链式化为 yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() /
-// @zh: yomk::dds().bag().quit()，录制为 yomk::dds().bag().topics({...})[.out_dir/.max_size/
-// @zh: .max_duration/.cache()].record()，转换为 yomk::dds().bag().in_bags({...}).out_cfg(path).convert()；
-// @zh: bag 目录分面为 yomk::dds().bag().dir(bagDir).info() / .reindex()；剩余宏返回
-// @zh: yomk::payload::Response，bag_play 阻塞调用线程至收尾或经 yomk::bag* 标志停止；
-// @zh: 详见 docs/features/bag-service.md
-
-/**
- * @brief Replay an mcap bag on its recorded timeline (blocks until done)
- * @param[in] playbackRate >0 speed multiplier
- * @param[in] topics Empty = all; one '*' wildcard supported
- * @param[in] loop Endless replay; startOffset skips seconds from bag start;
- *            delay adds per-loop start latency
- * @param[in] waitForAllAckedMs RELIABLE ack wait before exit (-1/0/>0)
- * @param[in] topicRemaps "old:=new" rules; readAheadQueueSize pre-read queue
- *            depth; qosOverridesPath JSON QoS overrides (file > bag snapshot > fallback)
- * @note Pause/resume/rate at runtime via yomk::bagPlayPause/Resume/SetRate;
- *       stop via yomk::bagPlayStop (async-signal-safe); legacy bags without
- *       type metadata are rejected
- */
-// @zh: 回放 mcap bag（阻塞至全部消息播毕或停止置位）
-// @zh: playbackRate >0 倍率；topics 空=全部（支持恰一个 '*' 通配）；loop 循环回放；
-// @zh: startOffset 起始偏移秒；delay 每轮开播延迟；waitForAllAckedMs 退出前等确认（-1/0/>0）；
-// @zh: topicRemaps "old:=new" 重映射；readAheadQueueSize 预读队列深度；
-// @zh: qosOverridesPath QoS 覆盖文件（文件 > bag 快照 > 回退三档）
-// @zh: note 运行时经 yomk::bagPlayPause/Resume/SetRate 控制；经 yomk::bagPlayStop 停止
-// @zh: （async-signal-safe）；旧格式 bag（type 空串）拒播
-
-#define YOMKDDS_BAG_PLAY(bagDir, playbackRate, topics, loop, startOffset, delay, waitForAllAckedMs, topicRemaps, readAheadQueueSize, qosOverridesPath) \
-    ::yomk::server().url(::yomk::url::ddsBagPlay).msg(\
-        ::yomk::msgs::DDSBagPlay::shared(yomk::payload::DDSBagPlay{(bagDir), (playbackRate), (topics), (loop), (startOffset), (delay), (waitForAllAckedMs), (topicRemaps), (readAheadQueueSize), (qosOverridesPath)})).request()
+// @zh: Bag API（YomkDdsBagService 端点，已全链式化，等价 CLI：yomkdds bag）
+// @zh: yomk::dds().bag() 覆盖整个 bag 域：节点生命周期为
+// @zh: yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit()，
+// @zh: 录制为 yomk::dds().bag().topics({...})[.out_dir/.max_size/.max_duration/.cache()].record()，
+// @zh: 转换为 yomk::dds().bag().in_bags({...}).out_cfg(path).convert()，bag 目录分面为
+// @zh: yomk::dds().bag().dir(bagDir)，终结于 info() / reindex() /
+// @zh: [.rate/.topics/.loop/.offset/.delay/.wait_acked/.remaps/.read_ahead/.qos_file()].play()；
+// @zh: 终结均返回 yomk::payload::Response，record()/play() 阻塞至收尾或经 yomk::bag* 标志停止，
+// @zh: 且须先经 create() 建 bag 节点；详见 docs/features/bag-service.md

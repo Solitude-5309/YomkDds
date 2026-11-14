@@ -41,9 +41,9 @@
 
 ## 3 API 速览
 
-用户经 `yomk::dds()` 链式 API（核心通信、调试与 Bag 节点生命周期、录制、元信息/重建索引与转换）与 `YOMKDDS_BAG_*` 宏（仅余 Bag 回放，定义于 `include/dds/YomkDdsAPI.h`）调用三个服务域，完整参数与约束见对应功能文档。
+用户经 `yomk::dds()` 链式 API 调用三个服务域：核心通信、调试与 Bag（节点生命周期、录制、转换、元信息/重建索引与回放），全部入口定义于 `include/dds/YomkDdsAPI.h`，完整参数与约束见对应功能文档。
 
-对外头文件按标准扩展四件套组织（安装后统一 `<yomk/dds/...>` 引用）：`YomkDdsUrl.h`（`yomk::url` 命名空间 URL 常量，请求链一律引用常量不裸写字面量）、`YomkDdsPayload.h`（扩展专属载荷 `yomk::payload`：请求/响应结构、回调类型、QoS 描述与公共配置辅助）、`YomkDdsMsg.h`（消息包：全部 `YOMK_DEFINE_MSG` 集中声明，生成 `yomk::msgs::Xxx`；用户 DDS 载荷为 IDL 生成类型，独立入口 `<yomk/dds/YomkDdsStdMsgs.hpp>`）、`YomkDdsAPI.h`（链式 Api 与宏 Api 入口，本节内容）。
+对外头文件按标准扩展四件套组织（安装后统一 `<yomk/dds/...>` 引用）：`YomkDdsUrl.h`（`yomk::url` 命名空间 URL 常量，请求链一律引用常量不裸写字面量）、`YomkDdsPayload.h`（扩展专属载荷 `yomk::payload`：请求/响应结构、回调类型、QoS 描述与公共配置辅助）、`YomkDdsMsg.h`（消息包：全部 `YOMK_DEFINE_MSG` 集中声明，生成 `yomk::msgs::Xxx`；用户 DDS 载荷为 IDL 生成类型，独立入口 `<yomk/dds/YomkDdsStdMsgs.hpp>`）、`YomkDdsAPI.h`（链式 Api 入口，本节内容）。
 
 > 除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
@@ -90,7 +90,7 @@
 | `yomk::dds().bag().dir(bagDir).info()` | 查看 bag 元信息（纯文件操作，无须 bag 节点） |
 | `yomk::dds().bag().dir(bagDir).reindex()` | 从 mcap 分片重建 metadata.json（纯文件操作） |
 | `yomk::dds().bag().in_bags({...}).out_cfg(path).convert()` | 按配置过滤/裁剪/归并转换 bag（纯文件操作） |
-| `YOMKDDS_BAG_PLAY(bagDir, ...)` | 按录制时间轴回放 bag（须先自建 bag 节点；CLI `bag play` 自动建删） |
+| `yomk::dds().bag().dir(bagDir)[.rate(r)][.topics({...})][.loop()][.offset(sec)][.delay(sec)][.wait_acked(ms)][.remaps({...})][.read_ahead(n)][.qos_file(path)].play()` | 按录制时间轴回放 bag（须先自建 bag 节点；CLI `bag play` 自动建删） |
 
 安装后可直接运行的 CLI 工具 **`yomkdds`**（位于 `<安装路径>/bin`）：`topic print/list/info/type/find/hz/pub`、`interface show/list`、`node list/info`、`bag record/info/reindex/convert/play`，用法见 [yomkdds 观察手册](docs/manual/cli-observe-handbook.md) 与 [yomkdds 发布与内省手册](docs/manual/cli-publish-handbook.md)。
 

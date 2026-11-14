@@ -36,12 +36,12 @@
 - **发现服务器**：UDP/TCP 双通道直配（CLIENT 协议），支持跨域互通与 XML profiles 叠加
 - **XML profiles**：`yomk::dds().load_cfg()` 三级提取链（节点名精确匹配 → 默认档兜底 → 默认底座）
 - **ROS2 互通**：set_name 类型名直改，与 ROS2 节点就同名类型互相收发
-- **类型无关调试**：`yomkdds` CLI 与 `YOMKDDS_DEBUG_*` 宏观察任意 DDS 域（无需 IDL 生成代码）：主题观察/频率测量、主题与节点详情、类型内省、JSON 载荷发布
+- **类型无关调试**：`yomkdds` CLI 与 `yomk::dds().debug()` 链式 API 观察任意 DDS 域（无需 IDL 生成代码）：主题观察/频率测量、主题与节点详情、类型内省、JSON 载荷发布
 - **Bag 录制回放**：mcap 格式录制（分片/缓存/暂停/通配）、元信息、重建索引、转换、按时间轴回放
 
 ## 3 API 速览
 
-用户经 `yomk::dds()` 链式 API（核心通信与调试节点建/删）与 `YOMKDDS_DEBUG_*`/`YOMKDDS_BAG_*` 宏（调试查询/登记与 Bag，定义于 `include/dds/YomkDdsAPI.h`）调用三个服务域，完整参数与约束见对应功能文档。
+用户经 `yomk::dds()` 链式 API（核心通信与调试全部能力）与 `YOMKDDS_BAG_*` 宏（Bag，定义于 `include/dds/YomkDdsAPI.h`）调用三个服务域，完整参数与约束见对应功能文档。
 
 对外头文件按标准扩展四件套组织（安装后统一 `<yomk/dds/...>` 引用）：`YomkDdsUrl.h`（`yomk::url` 命名空间 URL 常量，请求链一律引用常量不裸写字面量）、`YomkDdsPayload.h`（扩展专属载荷 `yomk::payload`：请求/响应结构、回调类型、QoS 描述与公共配置辅助）、`YomkDdsMsg.h`（消息包：全部 `YOMK_DEFINE_MSG` 集中声明，生成 `yomk::msgs::Xxx`；用户 DDS 载荷为 IDL 生成类型，独立入口 `<yomk/dds/YomkDdsStdMsgs.hpp>`）、`YomkDdsAPI.h`（链式 Api 与宏 Api 入口，本节内容）。
 
@@ -71,7 +71,7 @@
 | `yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()` | 列出域内主题（with_type() 附类型名） |
 | `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)][.verbose(true)].info()` | 查询主题详情（verbose(true) 含逐端点 GUID/QoS） |
 | `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()` | 列出域内节点 |
-| `YOMKDDS_DEBUG_NODE_INFO(nodeName, stableRounds, intervalMs)` | 查询节点发布/订阅清单 |
+| `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()` | 查询节点发布/订阅清单 |
 | `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()` | 按数据类型反查主题 |
 | `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()` | 按类型名输出 IDL 结构 |
 | `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()` | 列出全部类型名 |

@@ -1,7 +1,7 @@
 /**
  * @file ExampleYomkDdsPub.cpp
  * @brief 最小发布端示例：pub_node 注册发布主题 hello_world（MString），1Hz 持续发布直至
- *       Ctrl+C 退出（退出前 DEL_NODE 清理）；与 ExampleYomkDdsSub 或 yomkdds topic print
+ *       Ctrl+C 退出（退出前 remove() 清理）；与 ExampleYomkDdsSub 或 yomkdds topic print
  *       配对验证。
  */
 #include <yomk/dds/YomkDdsAPI.h>

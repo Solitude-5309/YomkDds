@@ -10,15 +10,15 @@ QoS（Quality of Service）决定 DDS 端点的可靠性、持久化、历史深
 
 | 能力 | 入口 | 说明 |
 |---|---|---|
-| 8 项 QoS 独立设置 | `DDSQosProfile`（宏 qos 尾参）；CLI `--qos-KEY VAL` | history/depth/reliability/durability/liveliness/deadline/lifespan/liveliness lease；未设置项为哨兵保持底座值 |
+| 8 项 QoS 独立设置 | `DDSQosProfile`（`qos()` 累积器入参）；CLI `--qos-KEY VAL` | history/depth/reliability/durability/liveliness/deadline/lifespan/liveliness lease；未设置项为哨兵保持底座值 |
 | ROS2 预置底座 | `DDSQosProfile::ros2DefaultPublisher()` / `ros2DefaultSubscriber()` / `ros2SensorData()`；CLI `--qos-ros` | 整包切换底座，可在其上逐项覆盖 |
 | JSON 文件逐项覆盖 | CLI `--qos-file FILE` | 扁平对象，键为 8 项 |
 
 ## 使用方式概述
 
-### 宏侧（编程）
+### 库侧（编程）
 
-qos 为主题注册链式 `qos()` 累积器（create_pub()/create_sub() 共用，替代原宏尾参）与调试发布链 `topic(name).payload(json)…qos(qos).publish()` 的 qos() 累积器，传入 `DDSQosProfile` 实例即可。摘自 README 5.6 的发布端用法（ROS2 互通场景使用 ROS2 发布端默认底座）：
+qos 为主题注册链式 `qos()` 累积器（create_pub()/create_sub() 共用）与调试发布链 `topic(name).payload(json)…qos(qos).publish()` 的 qos() 累积器，传入 `DDSQosProfile` 实例即可。摘自 README 5.6 的发布端用法（ROS2 互通场景使用 ROS2 发布端默认底座）：
 
 ```cpp
 // DDS 层话题名带 rt/ 前缀（rmw_fastrtps 对语义名 /chatter 的实际 DDS 名），QoS 用 ROS2 发布端默认底座
@@ -65,9 +65,9 @@ yomkdds topic pub --qos-file qos.json <主题名> <JSON数据>
 
 ### 8 项参数表
 
-逐项覆盖的值大小写不敏感，ros2 小写与 DDS 大写均收。宏侧字段名为公共头 `include/dds/YomkDdsService.h` 中 `DDSQosProfile` 的成员（未设置哨兵为 `Unset` / `-1`）：
+逐项覆盖的值大小写不敏感，ros2 小写与 DDS 大写均收。库侧字段名为公共头 `include/dds/YomkDdsService.h` 中 `DDSQosProfile` 的成员（未设置哨兵为 `Unset` / `-1`）：
 
-| 配置项 | 宏侧字段 | CLI 选项 | 取值（CLI） | 说明 |
+| 配置项 | 库侧字段 | CLI 选项 | 取值（CLI） | 说明 |
 |---|---|---|---|---|
 | history | `historyKind` | `--qos-history HIST` | keep_last \| keep_all | 历史种类 |
 | depth | `depth` | `--qos-depth N` | 须 >=1 整数 | history depth；keep_all 时忽略；未设 `--qos-history` 时底座即 keep_last，直接生效 |
@@ -78,7 +78,7 @@ yomkdds topic pub --qos-file qos.json <主题名> <JSON数据>
 | lifespan | `lifespanNs` | `--qos-lifespan SEC` | 非负小数，0=∞ | lifespan 秒（writer 侧策略，print/hz 订阅端忽略） |
 | liveliness lease | `livelinessLeaseNs` | `--qos-liveliness-lease-duration SEC` | 非负小数，0=∞ | liveliness 租约秒 |
 
-### 宏侧约束
+### 库侧约束
 
 - qos 为可选累积器：`yomk::dds().node(nodeName).topic(topicName).type(type)[.qos(qos)].create_pub()`、`yomk::dds().node(nodeName).topic(topicName).type(type).sub_cb(callback)[.qos(qos)].create_sub()`、`yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`。
 - 调试发布链 `publish()` 的 qos：临时发布 writer 的 QoS 描述 `DDSQosProfile`，全哨兵=既有固定值 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL，ROS2 底座建议 `ros2DefaultPublisher()`。

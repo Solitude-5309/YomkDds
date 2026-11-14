@@ -235,7 +235,7 @@ pub_node
     hello_world: YomkDdsStd::MString
 ```
 
-- **等价宏名**：`YOMKDDS_DEBUG_NODE_INFO("pub_node", 5, 200)`。
+- **等价库调用**：`yomk::dds().debug().node("pub_node").rounds(5).interval(200).info()`。
 
 ### 观察命令的 QoS 参数（仅 topic print / topic hz 生效）
 

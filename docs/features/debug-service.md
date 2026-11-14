@@ -8,12 +8,12 @@
 
 两个入口，能力对齐：
 
-- **库 API**：调试节点经链式 `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` 创建、`yomk::dds().debug().quit()` 退出，主题登记经 `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()`，主题清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()`，单主题详情经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()`，单主题发布示例经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()`，消息样本经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()`，发布经 `yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`，类型反查经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()`，类型内省经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()`，类型清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()`，节点清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()`，其余端点仍为 `YOMKDDS_DEBUG_*` 宏（均定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
+- **库 API**：调试节点经链式 `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` 创建、`yomk::dds().debug().quit()` 退出，主题登记经 `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()`，主题清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()`，单主题详情经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()`，单主题发布示例经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()`，消息样本经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()`，发布经 `yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`，类型反查经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()`，类型内省经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()`，类型清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()`，节点清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()`，节点详情经 `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()`（全部定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
 - **CLI**：`yomkdds topic/node/interface` 命令经 `YomkDdsDebugService` 实现，各命令小节附等价库调用。
 
 ## 能力清单
 
-按能力分组，每组给出库入口（链式或宏）与 CLI 的对照（CLI 命令形态与第 1 章 API 表均为权威口径）：
+按能力分组，每组给出库入口（链式）与 CLI 的对照（CLI 命令形态与第 1 章 API 表均为权威口径）：
 
 ### 组 1：主题观察
 
@@ -38,7 +38,7 @@
 | 入口 | 能力 | 关键行为 |
 |---|---|---|
 | 链式 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)][.verbose(true)].info()` | 查询主题详情 / 端点详情 | 独立收敛查询单个主题的发现详情（不依赖查询分面的 `topics()`）；命中返回 StringArray 三行：`Type: 原始 DDS 类型名`（不做任何风格转换）、`Publisher count: N`、`Subscription count: N`；`verbose(true)` 时在计数外逐端点输出 Node name（归属参与者名）/ Endpoint type（PUBLISHER/SUBSCRIPTION）/ GUID（FastDDS 原生格式）/ QoS profile 详情段（count 为 0 的端点类型无清单段） |
-| 宏 `YOMKDDS_DEBUG_NODE_INFO(nodeName, stableRounds, intervalMs)` | 查询节点详情 | 独立收敛查询指定节点名参与者的发布/订阅主题清单（归属判定基于 RTPS 规范保证的"端点 GUID 前缀 == 所属参与者 GUID 前缀"）；返回节点名行 + `Subscribers:`/`Publishers:` 两段（每行 `    <主题名>: <类型名>`，类型名原样输出，空段仅打段头，同名多参与者端点合并） |
+| 链式 `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()` | 查询节点详情 | 独立收敛查询指定节点名参与者的发布/订阅主题清单（归属判定基于 RTPS 规范保证的"端点 GUID 前缀 == 所属参与者 GUID 前缀"）；返回节点名行 + `Subscribers:`/`Publishers:` 两段（每行 `    <主题名>: <类型名>`，类型名原样输出，空段仅打段头，同名多参与者端点合并） |
 | CLI `yomkdds topic info <主题名>` / `yomkdds topic info -v <主题名>` | 查询单个主题详情 | `-v`（`--verbose`）端点详情模式：逐端点列出 Node name/GUID/QoS profile（ROS2 风格键值行） |
 | CLI `yomkdds node info <节点名>` | 查询指定节点的发布/订阅主题清单 | 形态对齐 `ros2 node info` |
 
@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
 }
 ```
 
-收敛查询类宏的等价调用序列（以 `yomkdds topic list` 为例，流程同构）：
+收敛查询链式调用的等价序列（以 `yomkdds topic list` 为例，流程同构）：
 
 ```cpp
 ::yomk::server().init();
@@ -222,8 +222,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 - 每 intervalMs（默认 200ms）轮询一次发现缓存快照，连续 stableRounds 次集合不变即返回；
 - 0 值钳制默认 5 次/200ms，最长阻塞约 stableRounds*intervalMs；
-- **宏侧**：stableRounds/intervalMs 为显式形参（如余存宏 `YOMKDDS_DEBUG_NODE_INFO(nodeName, stableRounds, intervalMs)`）；
-- **链式侧**：`rounds(n)` / `interval(ms)` / `with_type()` / `verbose(true)` 为调试分面、`topic(name)` 或 `type(name)` 子分面的可选累积器（缺省不累积即 0/关，由节点层钳制为 5 次/200ms），`topics()` / `interfaces()` / `nodes()` / `topic(name)…info()`/`pub_example()`/`sample_to_json()`/`publish()` / `type(name)…find_topics()`/`interface_show()` 终结（待并入的查询终结同此）；
+- **链式侧**：`rounds(n)` / `interval(ms)` / `with_type()` / `verbose(true)` 为调试分面、`topic(name)`/`type(name)`/`node(name)` 子分面的可选累积器（缺省不累积即 0/关，由节点层钳制为 5 次/200ms），`topics()` / `interfaces()` / `nodes()` / `topic(name)…info()`/`pub_example()`/`sample_to_json()`/`publish()` / `type(name)…find_topics()`/`interface_show()` / `node(name)…info()` 终结；
 - **CLI 侧**：收敛判定次数经环境变量 `YOMKDDS_DDS_DISCOVER_ROUNDS` 配置（默认 5；值须为 >=1 的整数，非法报错退出；yomkdds 启动时无该变量则自动创建并默认 5，同时幂等写入 `~/.bashrc`）。生效命令：`topic list`、`topic info`、`topic type`、`topic find`、`interface show`、`interface list`、`topic pub -e`、`topic pub -ef`、`topic pub`、`node list` 与 `node info`；`topic print`/`topic hz` 为持续订阅/测量型不用。该环境变量为收敛次数唯一配置入口，详见[环境变量与公共配置参考](../manual/env-vars-reference.md)。
 
 ### 发布参数（`yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`）
@@ -241,7 +240,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 ## 错误与边界行为
 
-- **前置约束**：查询/发布类宏与主题登记链式入口须先经 `yomk::dds().debug()...create()` 创建调试节点，失败时 `m_msg` 携具体拒绝原因；`yomk::dds().debug().quit()` 未创建时返回错误；
+- **前置约束**：查询/发布终结与主题登记链式入口须先经 `yomk::dds().debug()...create()` 创建调试节点，失败时 `m_msg` 携具体拒绝原因；`yomk::dds().debug().quit()` 未创建时返回错误；
 - **登记被拒**（主题登记 `yomk::dds().debug().topic(...).print()` 失败原因枚举）：`out_cb() callback is required`（未累积回调）/ `debug node not created` / `subscriber not created` / `empty topic name` / `already registered`；CLI 侧输出形态为 `register debug topic failed: subscribeTopic [<主题名>] failed: <具体原因>`（重复登记为 `topic [<主题名>] already registered`）；
 - **延迟登记语义**：登记为发现驱动的延迟行为，主题尚未被发布者上线时仍返回成功（登记约 3s 后仍无发布者则打一次性等待提示 `[FastDDSDebugNode] topic [<主题名>] not discovered yet, waiting for publisher...`——仅提示，不阻塞不改返回码，发布者上线后自动建订）；
 - **类型不可重建告警**：主题已发现但类型不可重建（典型为 ROS2 rmw_fastrtps 端点：编译期类型映射，不提供 XTypes TypeObject）时打 `warning: TypeObject not ready, keep pending. topic=... type=... -- the remote endpoint does not publish XTypes TypeInformation/TypeObject ...`——首次立即打印、之后按 5s 节流；同类告警覆盖 DynamicType 构建失败 / `create_topic` 失败 / `create_datareader` 失败 / 建订异常四类；

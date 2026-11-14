@@ -332,7 +332,7 @@ yomkdds topic pub -t 5 hello_world '{"data":"hello yomkdds"}'
 
 ## 延伸阅读
 
-- [../features/debug-service.md](../features/debug-service.md)——调试服务能力全貌：调试节点模型、`YOMKDDS_DEBUG_*` 宏全集与 CLI 双入口对照
-- [../features/qos-profiles.md](../features/qos-profiles.md)——QoS 配置能力全貌：DDSQosProfile 8 项、ROS2 预置底座与宏侧/CLI 侧优先级链
+- [../features/debug-service.md](../features/debug-service.md)——调试服务能力全貌：调试节点模型、`yomk::dds().debug()` 链式面全集与 CLI 双入口对照
+- [../features/qos-profiles.md](../features/qos-profiles.md)——QoS 配置能力全貌：DDSQosProfile 8 项、ROS2 预置底座与库侧/CLI 侧优先级链
 - [cli-observe-handbook.md](./cli-observe-handbook.md)——观察类命令（print/list/info/hz/node），与本文档构成调试闭环
 - [env-vars-reference.md](./env-vars-reference.md)——`YOMKDDS_DDS_DOMAIN_ID`、`YOMKDDS_DDS_DISCOVER_ROUNDS` 等环境变量的作用域、默认值与优先级

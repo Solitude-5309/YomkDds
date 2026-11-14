@@ -12,9 +12,9 @@
  * 创建并幂等写入 ~/.bashrc，使新开终端可查看继承）、discovery-server-tutorial 与
  * xml-profiles-tutorial；--help 输出为即用速查。
  *
- * 实现经 YomkDdsDebugService（YOMKDDS_DEBUG_*）与 YomkDdsBagService（YOMKDDS_BAG_*）
+ * 实现经 YomkDdsDebugService（yomk::dds().debug() 链式面）与 YomkDdsBagService（YOMKDDS_BAG_*）
  * 驱动内部调试/录制节点；各子命令退出前 yomk::dds().debug().quit() 显式清理，规避
- * FastDDS 静态析构期段错误（同 ExampleYomkDdsSub 退出前 DEL_NODE 模式）。
+ * FastDDS 静态析构期段错误（同 ExampleYomkDdsSub 退出前 remove() 模式）。
  */
 
 #include <yomk/dds/YomkDdsAPI.h>
@@ -2057,7 +2057,7 @@ static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t 
     // 2. 独立收敛查询单节点清单（与 list 查询完全分开的路径）：命中返回 StringArray 多行，
     //    行文案由服务层拼装（节点名 + Subscribers/Publishers 段），原样直出；
     //    未发现节点名（含收敛窗口内始终不可见）返回 eNo
-    resp = YOMKDDS_DEBUG_NODE_INFO(nodeName, waitRounds, 200);
+    resp = yomk::dds().debug().node(nodeName).rounds(waitRounds).interval(200).info();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("node info failed: ", resp.msg);

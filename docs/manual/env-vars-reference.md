@@ -15,7 +15,7 @@
 
 - 已安装 yomkdds 命令行工具（见 [setup-and-build.md](./setup-and-build.md)）；库侧宏使用见 [quick-start.md](./quick-start.md)；
 - `.bashrc` 幂等写入是 **yomkdds CLI 侧**行为：`yomkdds` 启动时无某变量则自动创建并设默认值，同时幂等写入 `~/.bashrc`（仅当其中无该变量时，带 `# added by yomkdds` 注释便于识别）——新开任意终端可直接 `echo $<变量名>` 查看并自动继承；**已打开的终端须 `source ~/.bashrc` 或重开才生效**；
-- 库侧建点 API（`yomk::dds().node(...).create()` 与 `YOMKDDS_DEBUG_NODE`/`YOMKDDS_BAG_NODE` 宏）经类内缺省初始化器读环境变量，**不写 `.bashrc`**；
+- 库侧建点 API（`yomk::dds().node(...).create()`、`yomk::dds().debug()...create()` 与 `YOMKDDS_BAG_NODE` 宏）经类内缺省初始化器读环境变量，**不写 `.bashrc`**；
 - 另有一组 XML profiles 双环境变量（`YOMKDDS_USE_XML_PROFILE`/`YOMKDDS_XML_PROFILE_PATH`）属于 XML 集中配置通道，机制同本文（开关+路径、幂等写入），详见 [../features/xml-profiles.md](../features/xml-profiles.md)。
 
 ## 分步操作
@@ -24,18 +24,18 @@
 
 | 环境变量 | 作用域 | 默认值 | 缺省（未设置）行为 |
 |---|---|---|---|
-| `YOMKDDS_DDS_DOMAIN_ID` | 两侧（库侧宏缺省实参 + yomkdds CLI 域号） | `0` | 域号取 0；yomkdds 启动时自动创建默认 0 并幂等写入 `~/.bashrc` |
+| `YOMKDDS_DDS_DOMAIN_ID` | 两侧（库侧链式建点缺省累积值 + yomkdds CLI 域号） | `0` | 域号取 0；yomkdds 启动时自动创建默认 0 并幂等写入 `~/.bashrc` |
 | `YOMKDDS_DDS_DISCOVER_ROUNDS` | CLI 侧（查询类命令收敛次数） | `5` | 收敛判定 5 次；yomkdds 启动时自动创建默认 5 并幂等写入 `~/.bashrc` |
-| `YOMKDDS_USE_DISCOVER_SERVER` | 两侧（`yomk::dds().node(...)` 缺省直配 + `YOMKDDS_DEBUG_NODE/BAG_NODE` + yomkdds CLI 同机制） | `false` | 开关关闭；未设置/空/`false`/`0`/其余任意值均关闭 |
-| `YOMKDDS_UDP_DISCOVER_SERVERS` | 两侧（同上三宏的 UDP 通道缺省直配 + CLI 同机制） | 空 | 开关关闭时被忽略恒空（=不直配，行为同未设置，回落多播发现） |
-| `YOMKDDS_TCP_DISCOVER_SERVERS` | 两侧（同上三宏的 TCP 通道缺省直配 + CLI 同机制） | 空 | 同上 |
+| `YOMKDDS_USE_DISCOVER_SERVER` | 两侧（`yomk::dds().node(...)`/`.debug()` 缺省直配 + `YOMKDDS_BAG_NODE` + yomkdds CLI 同机制） | `false` | 开关关闭；未设置/空/`false`/`0`/其余任意值均关闭 |
+| `YOMKDDS_UDP_DISCOVER_SERVERS` | 两侧（同上建点入口的 UDP 通道缺省直配 + CLI 同机制） | 空 | 开关关闭时被忽略恒空（=不直配，行为同未设置，回落多播发现） |
+| `YOMKDDS_TCP_DISCOVER_SERVERS` | 两侧（同上建点入口的 TCP 通道缺省直配 + CLI 同机制） | 空 | 同上 |
 
 三个发现服务器变量的 `.bashrc` 写入机制与 `YOMKDDS_DDS_DOMAIN_ID` 同机制对齐：yomkdds 启动时无该变量则自动创建并设默认值（`false`/空/空），幂等写入 `~/.bashrc`；**默认值与未设置行为完全一致（开关关闭/串空回落多播发现），仅保证可见性**；接发现服务器时 `export YOMKDDS_USE_DISCOVER_SERVER=true` 并填对应通道 server 串即可。
 
 ### YOMKDDS_DDS_DOMAIN_ID：DDS 域号
 
-- **作用**：指定 DDS 域号（domainId）。仅同域端点可相互发现/收发——库侧 `yomk::dds().node(...).create()` 建的发布订阅节点、`YOMKDDS_DEBUG_NODE` 调试节点、`YOMKDDS_BAG_NODE` bag 节点，以及 yomkdds 各命令均经它选择域。
-- **作用域**：两侧。库侧——`yomk::dds().node(nodeName)` 的 domain()/udp_ds()/tcp_ds() 均可选累积器，未累积项经类内缺省初始化器读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0）；`YOMKDDS_DEBUG_NODE`/`YOMKDDS_BAG_NODE` 全可变参，无参形态 domainId 同样读该变量。CLI 侧——`yomkdds` 各命令的域号经该环境变量选择；亦可用显式选项 `-D/--domain <N>` 单次指定（合法范围 [0,232]，**显式选项优先于环境变量**，缺参数/非法值报错退出码 2）。
+- **作用**：指定 DDS 域号（domainId）。仅同域端点可相互发现/收发——库侧 `yomk::dds().node(...).create()` 建的发布订阅节点、`yomk::dds().debug()...create()` 调试节点、`YOMKDDS_BAG_NODE` bag 节点，以及 yomkdds 各命令均经它选择域。
+- **作用域**：两侧。库侧——`yomk::dds().node(nodeName)` 与 `yomk::dds().debug()` 的 domain()/udp_ds()/tcp_ds() 均可选累积器，未累积项经类内缺省初始化器读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0）；`YOMKDDS_BAG_NODE` 全可变参，无参形态 domainId 同样读该变量。CLI 侧——`yomkdds` 各命令的域号经该环境变量选择；亦可用显式选项 `-D/--domain <N>` 单次指定（合法范围 [0,232]，**显式选项优先于环境变量**，缺参数/非法值报错退出码 2）。
 - **默认值**：`0`。
 - **取值约束**：合法范围 [0,232]。
 - **`.bashrc` 幂等写入**：yomkdds 启动时无该变量则自动创建并默认 0，同时幂等写入 `~/.bashrc`（仅当其中无该变量时，带 `# added by yomkdds` 注释便于识别）——新开任意终端可直接 `echo $YOMKDDS_DDS_DOMAIN_ID` 查看并自动继承；已打开的终端须 `source ~/.bashrc` 或重开才生效。
@@ -68,8 +68,8 @@ yomkdds node list                       # 连续 10 次快照不变才输出
 
 ### YOMKDDS_USE_DISCOVER_SERVER：发现服务器直配总开关
 
-- **作用**：发现服务器直配三环境变量的总开关——开启后，节点创建时缺省（省略）的 serverLocator 尾参自动取对应通道环境变量值，participant 以 CLIENT 发现协议直配（禁用多播 PDP，发现流量单播直送 server）。
-- **作用域**：两侧。库侧——`yomk::dds().node(...).create()` 未累积的 udp_ds()/tcp_ds() 自动取对应环境变量值；`YOMKDDS_DEBUG_NODE`/`YOMKDDS_BAG_NODE` 同款支持全缺省（无参）形态——三字段（含 domainId）一并经缺省初始化器读 env（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`）。CLI 侧——yomkdds 各命令创建调试/bag 节点同机制受其门控。
+- **作用**：发现服务器直配三环境变量的总开关——开启后，节点创建时未累积的 udp_ds()/tcp_ds() 自动取对应通道环境变量值，participant 以 CLIENT 发现协议直配（禁用多播 PDP，发现流量单播直送 server）。
+- **作用域**：两侧。库侧——`yomk::dds().node(...).create()`/`yomk::dds().debug().create()` 未累积的 udp_ds()/tcp_ds() 自动取对应环境变量值；`YOMKDDS_BAG_NODE` 同款支持全缺省（无参）形态——三字段（含 domainId）一并经缺省初始化器读 env（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`）。CLI 侧——yomkdds 各命令创建调试/bag 节点同机制受其门控。
 - **默认值**：`false`。
 - **取值约束**：`true`/`1` 视为开启，大小写不敏感；未设置/空/`false`/`0`/其余任意值关闭。
 - **`.bashrc` 幂等写入**：yomkdds 启动时无该变量则自动创建并设默认值 `false`，幂等写入 `~/.bashrc`（带 `# added by yomkdds` 注释）；默认值与未设置行为完全一致，仅保证可见性。

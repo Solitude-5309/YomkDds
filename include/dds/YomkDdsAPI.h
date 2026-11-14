@@ -10,9 +10,11 @@
 #include <yomk/dds/YomkDdsUrl.h>
 
 // Maintainer notes: this header is migrating from the macro-form Api to the
-// chained Api (per-suite, see tmp/链式api改造.md). The core communication
-// suite is fully chained (yomk::dds()); the debug/bag suites are still
-// macros. Each unit — chained terminator or macro — wraps one unified request:
+// chained Api (per-suite, see tmp/链式api改造-调试套件.md). The core
+// communication suite is fully chained (yomk::dds()); the debug suite is
+// mid-migration (debug-node creation is chained, the remaining endpoints are
+// still macros); the bag suite is still macros. Each unit — chained terminator
+// or macro — wraps one unified request:
 // yomk::server().url(<yomk::url constant>).msg(<yomk::msgs message>).request().
 // URLs come from YomkDdsUrl.h, payload structures from YomkDdsPayload.h,
 // message declarations from YomkDdsMsg.h.
@@ -372,9 +374,83 @@ public:
 };
 
 /**
- * @brief Core communication chained builder: chained endpoints live here during the macro-to-chain migration
+ * @brief Debug facet: carries the optional domain()/udp_ds()/tcp_ds() accumulators
+ *        (order-free), terminated by create(); query/topic/type/node sub-facets
+ *        join it in later migration rounds
  */
-// @zh: 核心通信链式 Builder：宏链迁移期内的链式端点挂载于此
+// @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 累积器（次序不限），create() 终结；
+// @zh: 查询/topic/type/node 子分面在后续迁移批次并入
+class DdsDebugBuilder
+{
+    uint32_t m_domainId = yomk::payload::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
+    std::string m_udpDiscoverServerLocator = yomk::payload::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
+    std::string m_tcpDiscoverServerLocator = yomk::payload::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
+public:
+    /**
+     * @brief Accumulate the DDS domain id
+     * @param[in] domainId DDS domain id [0,232]
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积 DDS 域号（调试节点仅可观察同域端点）
+    // @zh: domainId DDS 域号 [0,232]
+    // @zh: return 自身链式引用
+    DdsDebugBuilder& domain(uint32_t domainId)
+    {
+        m_domainId = domainId;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the UDP channel discovery-server locator aggregate
+     * @param[in] locator "ip[:port]" aggregate, semicolon-separated for multiple servers
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积 UDP 通道发现服务器直配聚合串（语义同核心套件建点分面）
+    // @zh: locator "ip[:port]" 聚合串，多 server 分号分隔
+    // @zh: return 自身链式引用
+    DdsDebugBuilder& udp_ds(std::string locator)
+    {
+        m_udpDiscoverServerLocator = std::move(locator);
+        return *this;
+    }
+    /**
+     * @brief Accumulate the TCP channel discovery-server locator aggregate
+     * @param[in] locator Same form as udp_ds()
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积 TCP 通道发现服务器直配聚合串
+    // @zh: locator 形式同 udp_ds()
+    // @zh: return 自身链式引用
+    DdsDebugBuilder& tcp_ds(std::string locator)
+    {
+        m_tcpDiscoverServerLocator = std::move(locator);
+        return *this;
+    }
+    /**
+     * @brief Create the debug node, one type-agnostic domain observer per process (request terminator)
+     * @return Response; invalid locator input or out-of-range domainId fails with the reason echoed back
+     * @note Single node model: at most one per process, delete it before re-creating.
+     *       Unset accumulators keep the environment-variable defaults
+     */
+    // @zh: 创建调试节点（类型无关域观察者，请求终结）
+    // @zh: return Response；domainId 越界 [0,232] 或直配串非法创建失败并回显原因
+    // @zh: note 单节点模型：一个进程至多一个，重复创建须先删除；未累积项保持环境变量缺省
+    yomk::payload::Response create()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsDebugCreateNode)
+            .msg(yomk::msgs::DDSDebugNode::shared(
+                yomk::payload::DDSDebugNode{m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
+            .request();
+    }
+};
+
+/**
+ * @brief Domain entry builder: core communication and debug facets live here during the macro-to-chain migration
+ */
+// @zh: 域入口 Builder：宏链迁移期内核心通信与调试分面挂载于此
 class DdsBuilder
 {
 public:
@@ -389,6 +465,20 @@ public:
     DdsNodeBuilder node(std::string nodeName)
     {
         return DdsNodeBuilder(std::move(nodeName));
+    }
+
+    /**
+     * @brief Switch into the debug facet (type-agnostic domain observer)
+     * @return Debug facet, terminated by create()
+     * @note The debug node itself carries no name — node(name) on that facet
+     *       refers to remote participants of the domain in later rounds
+     */
+    // @zh: 切入调试分面（类型无关域观察者）
+    // @zh: return 调试分面，经 create() 终结
+    // @zh: note 调试节点自身无名——该分面上的 node(name) 指域内远端参与者（后续批次并入）
+    DdsDebugBuilder debug()
+    {
+        return DdsDebugBuilder{};
     }
 
     /**
@@ -471,26 +561,17 @@ inline detail::DdsBuilder dds()
 /**
  * @brief Debugging macros (YomkDdsDebugService endpoints); equal CLI: yomkdds
  *
- * Every macro returns yomk::payload::Response and requires a created debug
- * node (YOMKDDS_DEBUG_NODE) first. list/info/find share the convergence
- * semantics: consecutive stableRounds unchanged snapshots, 0 clamped to
- * defaults 5 rounds / 200ms. Full behavior: docs/features/debug-service.md
+ * Every macro returns yomk::payload::Response and requires a debug node created
+ * first via yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create(). list/info/
+ * find share the convergence semantics: consecutive stableRounds unchanged
+ * snapshots, 0 clamped to defaults 5 rounds / 200ms. Full behavior:
+ * docs/features/debug-service.md
  */
 // @zh: 调试宏（YomkDdsDebugService 端点，等价 CLI：yomkdds）
-// @zh: 均返回 yomk::payload::Response，且须先创建调试节点；list/info/find 组共用收敛语义：
-// @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
-
-/**
- * @brief Create the debug node (type-agnostic domain observer)
- * @param[in] ... variadic tails, all optional: same form as yomk::dds().node(...).create()
- * @note Single node per process; delete it before re-creating
- */
-// @zh: 创建调试节点（类型无关域观察者）
-// @zh: 可变尾参语义同 yomk::dds().node(...).create()
-// @zh: note 单节点模型：一个进程至多一个，重复创建须先删除
-
-#define YOMKDDS_DEBUG_NODE(...) \
-    ::yomk::server().url(::yomk::url::ddsDebugCreateNode).msg(::yomk::msgs::DDSDebugNode::shared(yomk::payload::DDSDebugNode{__VA_ARGS__})).request()
+// @zh: 均返回 yomk::payload::Response，且须先经
+// @zh: yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create() 创建调试节点；
+// @zh: list/info/find 组共用收敛语义：连续 stableRounds 次快照不变即返回，
+// @zh: 0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
 
 /**
  * @brief Register a topic-print observer; JSON texts are delivered per message

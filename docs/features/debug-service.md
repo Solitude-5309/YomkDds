@@ -8,7 +8,7 @@
 
 两个入口，能力对齐：
 
-- **宏 API**：`YOMKDDS_DEBUG_*` 宏（定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
+- **库 API**：调试节点经链式 `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` 创建，其余端点仍为 `YOMKDDS_DEBUG_*` 宏（均定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
 - **CLI**：`yomkdds topic/node/interface` 命令经 `YomkDdsDebugService` 实现，各命令小节附等价宏调用。
 
 ## 能力清单
@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
     ::yomk::server().srv<YomkDdsDebugService>().create();
 
     // 1. 创建调试节点（单节点模型：一个进程至多一个，重复创建须先删除）
-    auto resp = YOMKDDS_DEBUG_NODE(0);
+    auto resp = yomk::dds().debug().domain(0).create();
     if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("DebugExample").error("create debug node failed: ", resp.m_msg);
@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
 ```cpp
 ::yomk::server().init();
 ::yomk::server().srv<YomkDdsDebugService>().create();
-auto resp = YOMKDDS_DEBUG_NODE(0);          // 1. 创建调试节点
+auto resp = yomk::dds().debug().domain(0).create();          // 1. 创建调试节点
 resp = YOMKDDS_DEBUG_TOPIC_LIST(5, 200);          // 2. 收敛查询：连续 5 次 200ms 快照不变即返回 StringArray 包
 auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
 if (arr != nullptr)
@@ -144,13 +144,13 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 ## 参数与约束
 
-### 调试节点参数（`YOMKDDS_DEBUG_NODE`）
+### 调试节点参数（`yomk::dds().debug()...create()`）
 
 | 参数 | 约束 |
 |---|---|
-| 形参形态 | 全可变参 `[domainId[, udpDiscoverServerLocator[, tcpDiscoverServerLocator]]]`；显式实参完全兼容旧调用 |
+| 形参形态 | 链式累积器 `domain(domainId)` / `udp_ds(locator)` / `tcp_ds(locator)` 均可选、次序不限，`create()` 终结 |
 | 单节点模型 | 一个进程至多一个，重复创建须先删除 |
-| domainId | 合法范围 [0,232]；仅同域节点的主题可被调试；缺省（无参形态）读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0） |
+| domainId | 合法范围 [0,232]；仅同域节点的主题可被调试；缺省（未累积）读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0） |
 | 两 serverLocator | UDP/TCP 发现服务器直配聚合串，语义同 `yomk::dds().node(...)` 的 udp_ds()/tcp_ds() 直配（CLIENT 协议强制，非法串创建失败回显），详见 [discovery-server.md](./discovery-server.md) |
 
 ### 收敛查询语义
@@ -208,10 +208,10 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 ## 与其他功能的关系
 
 - **核心通信**：调试服务是独立服务域（`YomkDdsDebugService`），与业务节点互不干扰；节点名经 `yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds/.tcp_ds(serverLocator)].create()` 下沉到 DDS 参与者（随 SPDP 发现传播给同域对端），`node list`/`node info` 查到的即这些参与者，见 [core-communication.md](./core-communication.md)；
-- **发现服务器**：调试节点支持 UDP/TCP 直配尾参（同域才可调试，跨网段调试须经 server），见 [discovery-server.md](./discovery-server.md)；
+- **发现服务器**：调试节点支持 UDP/TCP 直配累积器（同域才可调试，跨网段调试须经 server），见 [discovery-server.md](./discovery-server.md)；
 - **QoS**：`topic print`/`topic hz`/`topic pub` 的 QoS 参数族（`--qos-ros`/`--qos-*`/`--qos-file` 优先级链）与宏侧 `DDSQosProfile` 语义见 [qos-profiles.md](./qos-profiles.md)；
 - **ROS2 互通**：ROS2 rmw_fastrtps 端点不提供 XTypes TypeObject，观察其主题会触发类型不可重建告警、`interface show` 报 `type object for [...] not available`（互通判定以数据到达为准），见 [ros2-interop.md](./ros2-interop.md)；
-- **Bag 服务**：bag 节点（`YOMKDDS_BAG_NODE`）模型与调试节点同构（单节点、全可变参、直配尾参），见 [bag-service.md](./bag-service.md)。
+- **Bag 服务**：bag 节点（`YOMKDDS_BAG_NODE`）模型与调试节点同构（单节点、域号与 UDP/TCP 直配参数、重复创建须先删除），见 [bag-service.md](./bag-service.md)。
 
 ## 教程链接
 

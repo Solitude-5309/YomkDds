@@ -680,7 +680,7 @@ static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQo
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
@@ -1199,7 +1199,7 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
@@ -1297,7 +1297,7 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false)
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
@@ -1366,7 +1366,7 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
@@ -1426,7 +1426,7 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
@@ -1483,7 +1483,7 @@ static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
@@ -1535,7 +1535,7 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
@@ -1586,7 +1586,7 @@ static int runInterfaceList(uint32_t domainId, uint32_t waitRounds)
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
@@ -1709,7 +1709,7 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
@@ -1798,7 +1798,7 @@ static int runTopicPubExample(uint32_t domainId, const std::string &topicName, u
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
@@ -1865,7 +1865,7 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
@@ -1986,7 +1986,7 @@ static int runNodeList(uint32_t domainId, uint32_t waitRounds)
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
@@ -2047,7 +2047,7 @@ static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t 
     {
         return 1;
     }
-    auto resp = YOMKDDS_DEBUG_NODE(domainId);
+    auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);

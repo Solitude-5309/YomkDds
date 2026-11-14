@@ -315,7 +315,7 @@ yomkdds bag play bag_in --qos-profile-overrides-path qos.json   # 按主题覆�
 ## 与其他功能的关系
 
 - **核心通信/bag 节点定位串**：bag 节点的 domainId 与 UDP/TCP 直配尾参语义同 `yomk::dds().node(...)` 的 udp_ds()/tcp_ds()（每节点一个独立 DDS 参与者），见 [core-communication.md](./core-communication.md) 与 [discovery-server.md](./discovery-server.md)；
-- **调试服务**：调试节点与 bag 节点同为单节点全可变参模型（`YOMKDDS_DEBUG_NODE` 同款），见 [debug-service.md](./debug-service.md)；
+- **调试服务**：调试节点与 bag 节点同为单节点模型（一个进程至多一个、重复创建须先删除），调试节点经链式 `yomk::dds().debug()...create()` 创建，见 [debug-service.md](./debug-service.md)；
 - **ROS2 互通**：bag 录制/回放为透传设计（按发现名动态建类型、payload 字节搬运），与类型名无关——互通话题可直接录制/回放，见 [ros2-interop.md](./ros2-interop.md)；
 - **环境变量**：域号 `YOMKDDS_DDS_DOMAIN_ID`、发现服务器直配三环境变量详见[环境变量与公共配置参考](../manual/env-vars-reference.md)。
 

@@ -41,7 +41,7 @@
 
 ## 3 API 速览
 
-用户经 `yomk::dds()` 链式 API（核心通信）与 `YOMKDDS_DEBUG_*`/`YOMKDDS_BAG_*` 宏（调试/Bag，定义于 `include/dds/YomkDdsAPI.h`）调用三个服务域，完整参数与约束见对应功能文档。
+用户经 `yomk::dds()` 链式 API（核心通信与调试建点）与 `YOMKDDS_DEBUG_*`/`YOMKDDS_BAG_*` 宏（调试查询/登记与 Bag，定义于 `include/dds/YomkDdsAPI.h`）调用三个服务域，完整参数与约束见对应功能文档。
 
 对外头文件按标准扩展四件套组织（安装后统一 `<yomk/dds/...>` 引用）：`YomkDdsUrl.h`（`yomk::url` 命名空间 URL 常量，请求链一律引用常量不裸写字面量）、`YomkDdsPayload.h`（扩展专属载荷 `yomk::payload`：请求/响应结构、回调类型、QoS 描述与公共配置辅助）、`YomkDdsMsg.h`（消息包：全部 `YOMK_DEFINE_MSG` 集中声明，生成 `yomk::msgs::Xxx`；用户 DDS 载荷为 IDL 生成类型，独立入口 `<yomk/dds/YomkDdsStdMsgs.hpp>`）、`YomkDdsAPI.h`（链式 Api 与宏 Api 入口，本节内容）。
 
@@ -63,9 +63,9 @@
 
 **调试服务（YomkDdsDebugService）** — 详见 [功能文档：调试服务](docs/features/debug-service.md)，等价 CLI 见 `yomkdds` 命令：
 
-| 宏 | 简述 |
+| 入口 | 简述 |
 |---|---|
-| `YOMKDDS_DEBUG_NODE([domainId[, udp/tcp serverLocator]])` | 创建调试节点（单节点模型） |
+| `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` | 创建调试节点（单节点模型） |
 | `YOMKDDS_DEBUG_TOPIC_PRINT(topicName, output)` | 登记调试主题（消息文本逐条投递回调） |
 | `YOMKDDS_DEBUG_TOPIC_LIST(_T)(stableRounds, intervalMs)` | 列出域内主题（_T 附类型名） |
 | `YOMKDDS_DEBUG_TOPIC_INFO(_V)(topicName, stableRounds, intervalMs)` | 查询主题详情（_V 含逐端点 GUID/QoS） |

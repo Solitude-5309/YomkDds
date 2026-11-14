@@ -1378,7 +1378,7 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
     //    未发现主题（含收敛窗口内始终不可见）返回 eNo
     if (verbose)
     {
-        resp = YOMKDDS_DEBUG_TOPIC_INFO_V(topicName, waitRounds, 200);
+        resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).verbose(true).info();
     }
     else
     {

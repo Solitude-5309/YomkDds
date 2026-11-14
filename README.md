@@ -69,8 +69,7 @@
 | `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()` | 登记调试主题（消息文本逐条投递回调） |
 | `yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()` | 列出域内主题 |
 | `yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()` | 列出域内主题（with_type() 附类型名） |
-| `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()` | 查询主题详情 |
-| `YOMKDDS_DEBUG_TOPIC_INFO_V(topicName, stableRounds, intervalMs)` | 查询主题端点详情（含逐端点 GUID/QoS） |
+| `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)][.verbose(true)].info()` | 查询主题详情（verbose(true) 含逐端点 GUID/QoS） |
 | `YOMKDDS_DEBUG_NODE_LIST(stableRounds, intervalMs)` | 列出域内节点 |
 | `YOMKDDS_DEBUG_NODE_INFO(nodeName, stableRounds, intervalMs)` | 查询节点发布/订阅清单 |
 | `YOMKDDS_DEBUG_TOPIC_FIND(typeName, stableRounds, intervalMs)` | 按数据类型反查主题 |

@@ -168,7 +168,7 @@ Subscription count: 0
 QoS 键值行分两组：**ROS2 对齐组**恒输出前 8 行（History/Depth/Reliability/Durability/Deadline/Lifespan/Liveliness/Liveliness lease duration，发现数据未携带时输出 `not advertised` 兜底行——writer 端点在 RTPS 发现协议中不携带 history 字段，属协议层 optional 字段缺席，非「无 QoS」）；**DDS 扩展组**紧随其后（Latency Budget/Ownership/Ownership Strength/Time Based Filter/Destination Order/Partition 等，optional 项仅当发现数据携带时追加）。输出的全部是对端随发现数据（SPDP/SEDP）声明的 QoS，即「对端宣称值」而非本地配置。GUID 为 FastDDS 原生格式直出（12 字节前缀 | 4 字节实体 ID 点分十六进制）。
 
 目标主题在收敛窗口内始终未被发现时报错退出（`topic [<主题名>] not found`，verbose 模式同）。
-- **等价库调用**：`yomk::dds().debug().topic("hello_world").rounds(5).interval(200).info()`；`-v` 模式对应 `YOMKDDS_DEBUG_TOPIC_INFO_V(主题名, 收敛次数, 间隔ms)`。
+- **等价库调用**：`yomk::dds().debug().topic("hello_world").rounds(5).interval(200).info()`；`-v` 模式对应 `yomk::dds().debug().topic("hello_world").rounds(5).interval(200).verbose(true).info()`。
 
 ### topic type：单主题类型名快捷查询
 

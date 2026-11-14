@@ -1166,7 +1166,7 @@ static int runBagConvert(const std::vector<std::string> &inputs, const std::stri
     ::yomk::server().init();
     ::yomk::server().srv<YomkDdsBagService>().create();
 
-    auto resp = YOMKDDS_BAG_CONVERT(inputs, cfgPath);
+    auto resp = yomk::dds().bag().in_bags(inputs).out_cfg(cfgPath).convert();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("bag convert failed: ", resp.msg);

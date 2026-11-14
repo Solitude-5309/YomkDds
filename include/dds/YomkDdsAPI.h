@@ -14,8 +14,8 @@
 // chained Api (per-suite, see tmp/链式api改造-bag套件.md). The core
 // communication suite and the debug suite are fully chained (yomk::dds() and
 // yomk::dds().debug()); the bag suite is mid-migration (create()/quit()/
-// record()/dir(bagDir).info()/reindex() are chained, convert/play are still
-// macros). Each unit — chained terminator or macro — wraps one unified request:
+// record()/dir(bagDir).info()/reindex()/convert() are chained, play is still a
+// macro). Each unit — chained terminator or macro — wraps one unified request:
 // yomk::server().url(<yomk::url constant>).msg(<yomk::msgs message>).request().
 // URLs come from YomkDdsUrl.h, payload structures from YomkDdsPayload.h,
 // message declarations from YomkDdsMsg.h.
@@ -1185,15 +1185,15 @@ public:
 
 /**
  * @brief Bag facet: carries the optional domain()/udp_ds()/tcp_ds() creation
- *        accumulators plus the topics()/out_dir()/max_size()/max_duration()/cache()
- *        record accumulators (order-free), terminated by create()/quit()/record();
- *        the convert() terminator joins it in a later migration round, and dir()
- *        hands out the bag-directory sub-facet
+ *        accumulators, the topics()/out_dir()/max_size()/max_duration()/cache()
+ *        record accumulators and the in_bags()/out_cfg() convert accumulators
+ *        (order-free), terminated by create()/quit()/record()/convert();
+ *        dir() hands out the bag-directory sub-facet
  */
-// @zh: Bag 分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器，以及
-// @zh: topics()/out_dir()/max_size()/max_duration()/cache() 录制累积器（次序不限），
-// @zh: create()/quit()/record() 收束；转换 convert() 终结在后续迁移批次并入，
-// @zh: dir() 交出 bag 目录子分面
+// @zh: Bag 分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器，
+// @zh: topics()/out_dir()/max_size()/max_duration()/cache() 录制累积器，
+// @zh: 以及 in_bags()/out_cfg() 转换累积器（次序不限），
+// @zh: create()/quit()/record()/convert() 收束；dir() 交出 bag 目录子分面
 class DdsBagBuilder
 {
     uint32_t m_domainId = yomk::payload::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
@@ -1206,6 +1206,11 @@ class DdsBagBuilder
     uint64_t m_recordMaxSize = 0;          // 单分片字节上限，0=不分片
     uint64_t m_recordMaxDurationSec = 0;   // 单分片时长上限秒，0=不分片
     uint64_t m_recordCacheSize = 0;        // 写缓存双缓冲字节，0=直写
+
+    std::vector<std::string> m_convertInBags;
+    bool m_hasConvertInBags = false;       // in_bags() 必填标记：未累积即终结返回错误
+    std::string m_convertOutCfg;
+    bool m_hasConvertOutCfg = false;       // out_cfg() 必填标记：未累积即终结返回错误
 public:
     /**
      * @brief Accumulate the DDS domain id
@@ -1405,6 +1410,73 @@ public:
                     m_recordMaxSize, m_recordMaxDurationSec, m_recordCacheSize}))
             .request();
     }
+    /**
+     * @brief Accumulate the input bag directories to convert (required before convert())
+     * @param[in] bagDirs At least 1 existing bag directory; duplicates are rejected by
+     *            the node (re-merging the same directory would double-write messages)
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积待转换的输入 bag 目录清单（convert() 前必填）
+    // @zh: bagDirs 至少 1 个已存在的 bag 目录；重复目录由节点层拒绝（同名目录重复归并会双写消息）
+    // @zh: return 自身链式引用
+    DdsBagBuilder& in_bags(std::vector<std::string> bagDirs)
+    {
+        m_convertInBags = std::move(bagDirs);
+        m_hasConvertInBags = true;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the output configuration file to convert with (required before
+     *        convert())
+     * @param[in] path JSON file whose top-level output_bags array holds one entry per
+     *            output bag (each entry needs a non-empty "uri")
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积转换使用的输出配置文件（convert() 前必填）
+    // @zh: path JSON 文件，顶层 output_bags 数组每条目描述一个输出 bag（须含非空 "uri"）
+    // @zh: return 自身链式引用
+    DdsBagBuilder& out_cfg(std::string path)
+    {
+        m_convertOutCfg = std::move(path);
+        m_hasConvertOutCfg = true;
+        return *this;
+    }
+    /**
+     * @brief Filter/trim/merge the accumulated input bags into new bags per the
+     *        accumulated config (request terminator)
+     * @return Response carrying a StringArray with one
+     *         "converted <uri>: N messages / M bytes / K topics" line per output entry;
+     *         Invalid when YomkServer is not initialized or in_bags()/out_cfg() were not
+     *         accumulated
+     * @note Pure file operation: no bag node needed; multi-input merge is globally
+     *       ordered by logTime, CDR bytes and timestamps are passed through untouched,
+     *       a cross-input type mismatch on the same topic fails, and already produced
+     *       outputs are kept on failure
+     */
+    // @zh: 按累积的输入清单与输出配置过滤/裁剪/归并输入为新 bag（请求终结）
+    // @zh: return Response 携带 StringArray，每个输出条目一行 "converted <uri>: N messages / M bytes / K topics"；
+    // @zh: 未初始化或未累积 in_bags()/out_cfg() 返回 Invalid
+    // @zh: note 纯文件操作不经 bag 节点（无须 create()）；多输入按 logTime 全局归并，
+    // @zh: 透传原始 CDR 字节与时间戳不反序列化；同主题跨输入类型不一致报错，失败不回滚已产生输出
+    yomk::payload::Response convert()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        if (!m_hasConvertInBags)
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "in_bags are required");
+        }
+        if (!m_hasConvertOutCfg)
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "out_cfg(path) is required");
+        }
+        return yomk::server().url(yomk::url::ddsBagConvert)
+            .msg(yomk::msgs::DDSBagConvert::shared(
+                yomk::payload::DDSBagConvert{std::move(m_convertInBags), std::move(m_convertOutCfg)}))
+            .request();
+    }
 };
 
 /**
@@ -1584,33 +1656,20 @@ inline detail::DdsBuilder dds()
  * The bag node lifecycle is chained as
  * yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit(),
  * and recording as yomk::dds().bag().topics({...})[.out_dir/.max_size/
- * .max_duration/.cache()].record(); the bag directory facet is chained as
- * yomk::dds().bag().dir(bagDir).info() / .reindex(). Every remaining macro returns
- * yomk::payload::Response; bag_play blocks the calling thread until finished or
- * stopped via the yomk::bag* flags.
+ * .max_duration/.cache()].record() and conversion as
+ * yomk::dds().bag().in_bags({...}).out_cfg(path).convert(); the bag directory facet
+ * is chained as yomk::dds().bag().dir(bagDir).info() / .reindex(). The remaining
+ * macro returns yomk::payload::Response; bag_play blocks the calling thread until
+ * finished or stopped via the yomk::bag* flags.
  * Full behavior: docs/features/bag-service.md
  */
 // @zh: Bag 宏（YomkDdsBagService 端点）
 // @zh: bag 节点生命周期已链式化为 yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() /
 // @zh: yomk::dds().bag().quit()，录制为 yomk::dds().bag().topics({...})[.out_dir/.max_size/
-// @zh: .max_duration/.cache()].record()，bag 目录分面为 yomk::dds().bag().dir(bagDir).info() /
-// @zh: .reindex()；其余宏均返回 yomk::payload::Response，bag_play 阻塞调用线程至收尾或经
-// @zh: yomk::bag* 标志停止；详见 docs/features/bag-service.md
-
-/**
- * @brief Filter/merge input bags into new bags per a JSON config file
- * @param[in] inputs At least 1, duplicates rejected
- * @param[in] cfgPath JSON, top-level output_bags array with per-entry params
- * @note Multi-input merge is globally ordered by logTime; cross-input type
- *       mismatch of the same topic fails; produced outputs are kept on failure
- */
-// @zh: 转换 bag（按 JSON 配置过滤合并输入为新 bag）
-// @zh: inputs 至少 1 个，重复目录拒绝
-// @zh: cfgPath JSON，顶层 output_bags 键为对象序列，每条目独立一组输出参数
-// @zh: note 多输入按 logTime 全局归并；同主题跨输入类型不一致报错；失败不回滚已产生输出
-
-#define YOMKDDS_BAG_CONVERT(inputs, cfgPath) \
-    ::yomk::server().url(::yomk::url::ddsBagConvert).msg(::yomk::msgs::DDSBagConvert::shared(yomk::payload::DDSBagConvert{(inputs), (cfgPath)})).request()
+// @zh: .max_duration/.cache()].record()，转换为 yomk::dds().bag().in_bags({...}).out_cfg(path).convert()；
+// @zh: bag 目录分面为 yomk::dds().bag().dir(bagDir).info() / .reindex()；剩余宏返回
+// @zh: yomk::payload::Response，bag_play 阻塞调用线程至收尾或经 yomk::bag* 标志停止；
+// @zh: 详见 docs/features/bag-service.md
 
 /**
  * @brief Replay an mcap bag on its recorded timeline (blocks until done)

@@ -375,24 +375,32 @@ public:
 
 /**
  * @brief Debug topic facet: carries the topicName opened by debug().topic(), the
- *        out_cb() output callback and qos() accumulator of the print() surface, and
- *        the rounds()/interval()/verbose() accumulators of the info()/pub_example()/
- *        sample_to_json() query surfaces (all optional accumulators are order-free);
- *        terminated by print(), info(), pub_example() or sample_to_json(), the remaining
- *        topic sub-facets join it in later migration rounds
+ *        out_cb() output callback and qos() accumulator of the print() surface, the
+ *        rounds()/interval()/verbose() accumulators of the info()/pub_example()/
+ *        sample_to_json() query surfaces, and the payload()/rounds()/interval()/
+ *        repeat()/required()/max_times()/qos() accumulators of the publish() surface
+ *        (all optional accumulators are order-free); terminated by print(), info(),
+ *        pub_example(), sample_to_json() or publish(), the remaining topic sub-facets
+ *        join it in later migration rounds
  */
 // @zh: 调试主题分面：承载 debug().topic() 起始的主题名、print() 面的 out_cb() 输出回调与
-// @zh: qos() 累积器，以及 info()/pub_example()/sample_to_json() 查询面的 rounds()/interval()/verbose() 累积器
-// @zh: （可选累积器次序不限），由 print()、info()、pub_example() 或 sample_to_json() 终结；
+// @zh: qos() 累积器，info()/pub_example()/sample_to_json() 查询面的 rounds()/interval()/verbose() 累积器，
+// @zh: 以及 publish() 面的 payload()/rounds()/interval()/repeat()/required()/max_times()/qos() 累积器
+// @zh: （可选累积器次序不限），由 print()、info()、pub_example()、sample_to_json() 或 publish() 终结；
 // @zh: 其余 topic 子分面在后续迁移批次并入
 class DdsDebugTopicBuilder
 {
     std::string m_topicName;
     yomk::payload::DDSDebugOutputFunc m_output;
     yomk::payload::DDSQosProfile m_qos;
-    uint32_t m_stableRounds = 0;  // info() 收敛次数；0 由节点层钳制为默认 5 次
-    uint32_t m_intervalMs = 0;    // info() 轮询间隔；0 由节点层钳制为默认 200ms
+    uint32_t m_stableRounds = 0;  // info() 等查询首轮收敛次数；0 由节点层钳制为默认 5 次
+    uint32_t m_intervalMs = 0;    // info() 等查询轮询间隔；0 由节点层钳制为默认 200ms
     bool m_verbose = false;       // info() 端点详情模式：verbose() 置真
+    std::string m_payload;        // publish() 载荷：payload() 置位
+    bool m_hasPayload = false;    // publish() 必填载荷是否已累积
+    uint32_t m_repeatMs = 0;      // publish() 持续发布周期；0 = 单次发布
+    uint32_t m_requiredSubs = 0;  // publish() 订阅端门槛；0 = 自动收敛
+    uint32_t m_maxTimes = 0;      // publish() 条数上限（含首发）；0 = 不限
 public:
     explicit DdsDebugTopicBuilder(std::string topicName)
         : m_topicName(std::move(topicName))
@@ -415,13 +423,15 @@ public:
         return *this;
     }
     /**
-     * @brief Accumulate the dynamic subscription reader QoS
-     * @param[in] qos Reader QoS DDSQosProfile; all-sentinel default keeps
-     *            BEST_EFFORT+VOLATILE depth 1
+     * @brief Accumulate the QoS profile of the dynamic subscription reader or publish writer
+     * @param[in] qos DDSQosProfile; for print() all-sentinel keeps BEST_EFFORT+VOLATILE
+     *            depth 1, for publish() all-sentinel keeps KEEP_LAST(1)+RELIABLE+
+     *            TRANSIENT_LOCAL
      * @return Reference to self for chaining
      */
-    // @zh: 累积动态订阅 reader QoS
-    // @zh: qos reader QoS DDSQosProfile；全哨兵缺省保持 BEST_EFFORT+VOLATILE depth 1
+    // @zh: 累积动态订阅 reader 或发布 writer 的 QoS
+    // @zh: qos DDSQosProfile；print() 全哨兵保持 BEST_EFFORT+VOLATILE depth 1，
+    // @zh: publish() 全哨兵保持 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL
     // @zh: return 自身链式引用
     DdsDebugTopicBuilder& qos(yomk::payload::DDSQosProfile qos)
     {
@@ -429,36 +439,107 @@ public:
         return *this;
     }
     /**
-     * @brief Accumulate the convergence round count of info()
+     * @brief Accumulate the convergence round count of the query/publish terminators
      * @param[in] rounds Consecutive unchanged discovery snapshots required; 0 is
      *            clamped by the node layer to the default 5
      * @return Reference to self for chaining
-     * @note Applies to info() only; print() is a continuous subscription and
+     * @note Applies to the discovery-driven terminators (info()/pub_example()/
+     *       sample_to_json()/publish()); print() is a continuous subscription and
      *       ignores the convergence accumulators
      */
-    // @zh: 累积 info() 的收敛轮数
+    // @zh: 累积查询/发布终结的收敛轮数
     // @zh: rounds 连续多少次快照不变即认为收敛；0 由节点层钳制为默认 5 次
     // @zh: return 自身链式引用
-    // @zh: note 仅作用于 info()；print() 为持续订阅，不看收敛累积器
+    // @zh: note 作用于发现驱动的终结（info()/pub_example()/sample_to_json()/publish()）；
+    // @zh: print() 为持续订阅，不看收敛累积器
     DdsDebugTopicBuilder& rounds(uint32_t rounds)
     {
         m_stableRounds = rounds;
         return *this;
     }
     /**
-     * @brief Accumulate the discovery snapshot polling interval of info()
+     * @brief Accumulate the discovery snapshot polling interval of the query/publish terminators
      * @param[in] intervalMs Polling interval in milliseconds; 0 is clamped by the
      *            node layer to the default 200ms
      * @return Reference to self for chaining
-     * @note Applies to info() only, same as rounds()
+     * @note Applies to the discovery-driven terminators, same as rounds()
      */
-    // @zh: 累积 info() 的发现快照轮询间隔
+    // @zh: 累积查询/发布终结的发现快照轮询间隔
     // @zh: intervalMs 轮询间隔（毫秒）；0 由节点层钳制为默认 200ms
     // @zh: return 自身链式引用
-    // @zh: note 仅作用于 info()，同 rounds()
+    // @zh: note 作用于发现驱动的终结，同 rounds()
     DdsDebugTopicBuilder& interval(uint32_t intervalMs)
     {
         m_intervalMs = intervalMs;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the JSON payload published by publish() (required by publish())
+     * @param[in] json Payload text, same shape as the pub_example()/sample_to_json()
+     *            template
+     * @return Reference to self for chaining
+     * @note Mandatory for publish() (validated on the first shot); the other terminators
+     *       ignore it
+     */
+    // @zh: 累积 publish() 待发布的 JSON 载荷（publish() 必填）
+    // @zh: json 载荷文本，形态同 pub_example()/sample_to_json() 模板
+    // @zh: return 自身链式引用
+    // @zh: note publish() 必填（首轮强校验）；其余终结不看它
+    DdsDebugTopicBuilder& payload(std::string json)
+    {
+        m_payload = std::move(json);
+        m_hasPayload = true;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the repeat interval of publish()
+     * @param[in] repeatMs >0 keeps the publish chain alive and repeats every repeatMs
+     *            until the stop flag or max_times() is reached; 0 = publish once
+     * @return Reference to self for chaining
+     * @note Applies to publish() only; stop a repeating publish through
+     *       yomk::debugPubStop (async-signal-safe) and reset it with
+     *       yomk::debugPubReset() before a new session
+     */
+    // @zh: 累积 publish() 的持续发布周期
+    // @zh: repeatMs >0 为持续发布（直到停止标志置位或发满 max_times() 条）；0 = 单次发布
+    // @zh: return 自身链式引用
+    // @zh: note 仅作用于 publish()；持续发布经 yomk::debugPubStop 停止（async-signal-safe），
+    // @zh: 再次发起前宜先 yomk::debugPubReset() 复位
+    DdsDebugTopicBuilder& repeat(uint32_t repeatMs)
+    {
+        m_repeatMs = repeatMs;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the matched-subscriber gate of publish()
+     * @param[in] requiredSubscribers Publish only after that many matched subscribers;
+     *            0 = auto convergence
+     * @return Reference to self for chaining
+     * @note Applies to publish() only
+     */
+    // @zh: 累积 publish() 的订阅端门槛
+    // @zh: requiredSubscribers 期望建匹配订阅端数：>0 达标才发布，0 = 自动收敛
+    // @zh: return 自身链式引用
+    // @zh: note 仅作用于 publish()
+    DdsDebugTopicBuilder& required(uint32_t requiredSubscribers)
+    {
+        m_requiredSubs = requiredSubscribers;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the publish count cap of publish()
+     * @param[in] maxTimes >0 caps the published messages including the first shot, then
+     *            returns after a 200ms drain; 0 = no cap
+     * @return Reference to self for chaining
+     * @note Applies to publish() only
+     */
+    // @zh: 累积 publish() 的条数上限
+    // @zh: maxTimes >0 发满该条数（含首轮）排空 200ms 后返回；0 = 不限
+    // @zh: return 自身链式引用
+    // @zh: note 仅作用于 publish()
+    DdsDebugTopicBuilder& max_times(uint32_t maxTimes)
+    {
+        m_maxTimes = maxTimes;
         return *this;
     }
     /**
@@ -580,6 +661,39 @@ public:
         return yomk::server().url(yomk::url::ddsDebugTopicMsg)
             .msg(yomk::msgs::DDSDebugTopicMsg::shared(
                 yomk::payload::DDSDebugTopicMsg{std::move(m_topicName), m_stableRounds, m_intervalMs}))
+            .request();
+    }
+    /**
+     * @brief Publish the accumulated JSON payload to the topic (request terminator)
+     * @return Response; on a repeating publish it carries a StringArray {"total=N",
+     *         "failed=M"}; Invalid when YomkServer is not initialized or payload() was
+     *         not accumulated
+     * @note Blocking until the first-round convergence and, for RELIABLE peers, until
+     *       acknowledgment; repeat() keeps the chain alive until the stop flag or
+     *       max_times(). Stop a repeating publish through yomk::debugPubStop
+     *       (async-signal-safe) and reset it with yomk::debugPubReset() before a new
+     *       session
+     */
+    // @zh: 按累积的 JSON 载荷发布到目标主题（请求终结）；持续发布时载荷为 {"total=N", "failed=M"}
+    // @zh: return Response；未初始化或未累积 payload() 载荷时返回 Invalid
+    // @zh: note 阻塞至首轮收敛完成（RELIABLE 订阅端还等送达确认）；repeat() 使其持续至停止标志
+    // @zh: 置位或发满 max_times()；持续发布经 yomk::debugPubStop 停止（async-signal-safe），
+    // @zh: 再次发起前宜先 yomk::debugPubReset() 复位
+    yomk::payload::Response publish()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        if (!m_hasPayload)
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "payload(json) is required");
+        }
+        return yomk::server().url(yomk::url::ddsDebugTopicPub)
+            .msg(yomk::msgs::DDSDebugTopicPub::shared(
+                yomk::payload::DDSDebugTopicPub{std::move(m_topicName), std::move(m_payload),
+                    m_stableRounds, m_intervalMs, m_repeatMs, m_requiredSubs, m_maxTimes,
+                    std::move(m_qos)}))
             .request();
     }
 };
@@ -1018,8 +1132,9 @@ inline detail::DdsBuilder dds()
  * reverse lookup as yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics(),
  * the publish example as
  * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].pub_example(), the JSON sample as
- * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].sample_to_json(), and the
- * IDL struct dump as
+ * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].sample_to_json(), the publish as
+ * yomk::dds().debug().topic(name).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)]
+ * [.required(n)][.max_times(n)][.qos(qos)].publish(), and the IDL struct dump as
  * yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show(), and the
  * type-name list as yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces().
  * list/info/find share the convergence semantics: consecutive stableRounds
@@ -1034,32 +1149,14 @@ inline detail::DdsBuilder dds()
 // @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()，单主题详情为
 // @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info()，发布示例为
 // @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].pub_example()，JSON 样本为
-// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].sample_to_json()，类型反查为
+// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].sample_to_json()，发布为
+// @zh: yomk::dds().debug().topic(name).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()，
+// @zh: 类型反查为
 // @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics()，类型内省为
 // @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show()，类型清单为
 // @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()；
 // @zh: list/info/find 组共用收敛语义：
 // @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
-
-/**
- * @brief Publish a JSON payload to a topic with full first-shot validation
- * @param[in] requiredSubscribers Delivery gate: publish only after that many
- *            matched subscribers (0 = auto convergence)
- * @param[in] repeatIntervalMs >0 keeps the publish chain alive and repeats
- *            until the stop flag or maxTimes is reached
- * @note Blocking until convergence and (for RELIABLE peers) acknowledgment
- * @warning Stop a repeating publish via yomk::debugPubStop (async-signal-safe)
- */
-// @zh: 按主题名发布 JSON 载荷消息（首轮完整强校验）
-// @zh: requiredSubscribers 期望建匹配订阅端数门槛（0=自动收敛）
-// @zh: repeatIntervalMs >0 为持续发布模式，直至停止标志置位或发满 maxTimes 条
-// @zh: note 阻塞至收敛完成（RELIABLE 订阅端还等送达确认）
-// @zh: warning 持续发布经 yomk::debugPubStop 停止（async-signal-safe）
-
-#define YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes, ...)  \
-    ::yomk::server().url(\
-        ::yomk::url::ddsDebugTopicPub).msg(\
-        ::yomk::msgs::DDSDebugTopicPub::shared(yomk::payload::DDSDebugTopicPub{topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes, ##__VA_ARGS__})).request()
 
 /**
  * @brief List named participants in the domain (sorted, empty names skipped)

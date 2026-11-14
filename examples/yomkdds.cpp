@@ -1888,8 +1888,8 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
     }
     const auto repeatIntervalMs =
         std::max<uint32_t>(1, static_cast<uint32_t>(std::lround(1000.0 / rateHz)));
-    resp = YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, waitRounds, 200, repeatIntervalMs, requiredSubs,
-            maxTimes, qos);
+    resp = yomk::dds().debug().topic(topicName).payload(json).rounds(waitRounds).interval(200)
+            .repeat(repeatIntervalMs).required(requiredSubs).max_times(maxTimes).qos(qos).publish();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("topic pub failed: ", resp.msg);

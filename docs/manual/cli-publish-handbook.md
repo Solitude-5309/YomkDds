@@ -115,7 +115,7 @@ publishing #2 to topic hello_world
 ```
 
 逐条回执附带消息 JSON 内容（从实际待发数据转出，与 `topic print` 输出同源），发布期间可看到每条载荷。
-- **等价宏名**：`YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes[, qos])`。
+- **等价库调用**：`yomk::dds().debug().topic(topicName).payload(json).rounds(5).interval(200)[.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`（`-w`/`-r`/`-t` 分别对应 `required(n)`/`repeat(ms)`/`max_times(n)`）。
 
 ### topic pub -f：从文件读取载荷发布
 

@@ -49,16 +49,18 @@ private:
 };
 
 /**
- * @brief Stop flag for a repeating YOMKDDS_DEBUG_TOPIC_PUB publish (async-signal-safe)
+ * @brief Stop flag for a repeating debug publish
+ *        (yomk::dds().debug().topic(name).payload(json)[.repeat(ms)].publish())
  *
- * The publish loop (repeatIntervalMs > 0) only reads the flag; SIGINT handlers
+ * The publish loop (repeat(ms) > 0) only reads the flag; SIGINT handlers
  * write it through debugPubStop — an atomic lock-free store. Never stop a
  * publish through the yomk request chain: it takes locks and allocates, both
  * banned in a signal handler.
  * @note Call debugPubReset() before starting a new publish session
  */
-// @zh: YOMKDDS_DEBUG_TOPIC_PUB 持续发布的停止标志（async-signal-safe）
-// @zh: 发布循环（repeatIntervalMs > 0）只读；SIGINT handler 经 debugPubStop 写入——
+// @zh: 调试持续发布（yomk::dds().debug().topic(name).payload(json)[.repeat(ms)].publish()）的停止标志
+// @zh: （async-signal-safe）
+// @zh: 发布循环（repeat(ms) > 0）只读；SIGINT handler 经 debugPubStop 写入——
 // @zh: atomic 无锁 store。不可经 yomk 请求链停止：请求链含锁与内存分配，handler 内禁用
 // @zh: note 发起持续发布前先 debugPubReset() 复位，避免上次会话残留置位导致循环秒退
 namespace yomk

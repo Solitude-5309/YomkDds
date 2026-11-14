@@ -8,7 +8,7 @@
 
 两个入口，能力对齐：
 
-- **库 API**：调试节点经链式 `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` 创建、`yomk::dds().debug().quit()` 退出，主题登记经 `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()`，主题清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()`，单主题详情经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()`，单主题发布示例经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()`，消息样本经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()`，类型反查经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()`，类型内省经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()`，类型清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()`，其余端点仍为 `YOMKDDS_DEBUG_*` 宏（均定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
+- **库 API**：调试节点经链式 `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` 创建、`yomk::dds().debug().quit()` 退出，主题登记经 `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()`，主题清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()`，单主题详情经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()`，单主题发布示例经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()`，消息样本经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()`，发布经 `yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`，类型反查经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()`，类型内省经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()`，类型清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()`，其余端点仍为 `YOMKDDS_DEBUG_*` 宏（均定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
 - **CLI**：`yomkdds topic/node/interface` 命令经 `YomkDdsDebugService` 实现，各命令小节附等价库调用。
 
 ## 能力清单
@@ -64,10 +64,10 @@
 |---|---|---|
 | 链式 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()` | 查询主题发布示例 | 返回三段行集：`Type: <类型名>`、`IDL:` + IDL 行集、`example:` + 可复制发布命令（JSON 默认值模板整体包单引号，改字段值即可发布） |
 | 链式 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()` | 查询消息描述两要素 | 返回 StringArray 恰 2 行：d[0]=类型名、d[1]=紧凑 msg JSON（单行，可直接作为发布载荷模板，`topic pub -ef` 导出文件的数据源；落盘属调用方职责，请求负载不携带输出路径） |
-| 宏 `YOMKDDS_DEBUG_TOPIC_PUB(topicName, json, stableRounds, intervalMs, repeatIntervalMs, requiredSubscribers, maxTimes[, qos])` | 发布 JSON 载荷消息 | 发布链路：首轮发现收敛 → 类型重建 + `json_deserialize` 解析载荷 → 临时 writer（QoS 按 qos 尾参，缺省 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL）匹配收敛 → write → 存在 RELIABLE 订阅者时 `wait_for_acknowledgments` 确认送达（未全部确认返回错误，全 BEST_EFFORT 或无订阅者退化尽力而为） |
+| 链式 `yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()` | 发布 JSON 载荷消息 | 发布链路：首轮发现收敛 → 类型重建 + `json_deserialize` 解析载荷 → 临时 writer（QoS 按 `qos()`，缺省 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL）匹配收敛 → write → 存在 RELIABLE 订阅者时 `wait_for_acknowledgments` 确认送达（未全部确认返回错误，全 BEST_EFFORT 或无订阅者退化尽力而为） |
 | CLI `yomkdds topic pub -e <主题名>` | 按主题名输出发布示例三段行集 | 类型名 / IDL / JSON 发布载荷模板 |
 | CLI `yomkdds topic pub -ef <主题名> [-o 目录]` | 按主题名导出消息描述 JSON 文件 | 内容即默认值模板 JSON 本身，多行缩进可直接 `$(cat)` 填进发布命令；仅发描述不发布 |
-| CLI `yomkdds topic pub [--qos-ros \| --qos-KEY VAL ... \| --qos-file FILE] <主题名> <JSON数据>` / `yomkdds topic pub [...] <主题名> -f <文件>` | 发布 JSON 载荷消息（文件形态整体作为载荷） | 缺省 1Hz 持续发送，Ctrl+C 停止并输出统计；`-w N` 期望建匹配订阅端数、`-r N` 持续发布频率、`-t N` 条数上限（三者独立识别、顺序任意叠加），分别对应宏侧 requiredSubscribers/repeatIntervalMs/maxTimes；CLI 侧 qos 尾参经 `--qos-ros`/`--qos-*`/`--qos-file` 指定 |
+| CLI `yomkdds topic pub [--qos-ros \| --qos-KEY VAL ... \| --qos-file FILE] <主题名> <JSON数据>` / `yomkdds topic pub [...] <主题名> -f <文件>` | 发布 JSON 载荷消息（文件形态整体作为载荷） | 缺省 1Hz 持续发送，Ctrl+C 停止并输出统计；`-w N` 期望建匹配订阅端数、`-r N` 持续发布频率、`-t N` 条数上限（三者独立识别、顺序任意叠加），分别对应链式侧 `required(n)`/`repeat(ms)`/`max_times(n)`；CLI 侧 qos 尾参经 `--qos-ros`/`--qos-*`/`--qos-file` 指定 |
 
 ### 退出
 
@@ -218,22 +218,24 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 ### 收敛查询语义
 
-查询类能力（列表/详情/反查/内省/示例/描述，及 `YOMKDDS_DEBUG_TOPIC_PUB` 的首轮发现收敛）共用同一收敛模型：
+查询类能力（列表/详情/反查/内省/示例/描述，及 `publish()` 的首轮发现收敛）共用同一收敛模型：
 
 - 每 intervalMs（默认 200ms）轮询一次发现缓存快照，连续 stableRounds 次集合不变即返回；
 - 0 值钳制默认 5 次/200ms，最长阻塞约 stableRounds*intervalMs；
 - **宏侧**：stableRounds/intervalMs 为显式形参（如余存宏 `YOMKDDS_DEBUG_NODE_LIST(5, 200)`）；
-- **链式侧**：`rounds(n)` / `interval(ms)` / `with_type()` / `verbose(true)` 为调试分面、`topic(name)` 或 `type(name)` 子分面的可选累积器（缺省不累积即 0/关，由节点层钳制为 5 次/200ms），`topics()` / `interfaces()` / `topic(name)…info()`/`pub_example()`/`sample_to_json()` / `type(name)…find_topics()`/`interface_show()` 终结（待并入的查询终结同此）；
+- **链式侧**：`rounds(n)` / `interval(ms)` / `with_type()` / `verbose(true)` 为调试分面、`topic(name)` 或 `type(name)` 子分面的可选累积器（缺省不累积即 0/关，由节点层钳制为 5 次/200ms），`topics()` / `interfaces()` / `topic(name)…info()`/`pub_example()`/`sample_to_json()`/`publish()` / `type(name)…find_topics()`/`interface_show()` 终结（待并入的查询终结同此）；
 - **CLI 侧**：收敛判定次数经环境变量 `YOMKDDS_DDS_DISCOVER_ROUNDS` 配置（默认 5；值须为 >=1 的整数，非法报错退出；yomkdds 启动时无该变量则自动创建并默认 5，同时幂等写入 `~/.bashrc`）。生效命令：`topic list`、`topic info`、`topic type`、`topic find`、`interface show`、`interface list`、`topic pub -e`、`topic pub -ef`、`topic pub`、`node list` 与 `node info`；`topic print`/`topic hz` 为持续订阅/测量型不用。该环境变量为收敛次数唯一配置入口，详见[环境变量与公共配置参考](../manual/env-vars-reference.md)。
 
-### `YOMKDDS_DEBUG_TOPIC_PUB` 专有参数
+### 发布参数（`yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`）
 
 | 参数 | 语义 |
 |---|---|
-| `requiredSubscribers` | >0 为期望建匹配订阅端数门槛（matched 达标才发布否则一直等待，0=自动收敛；对应 CLI `-w/--wait N`） |
-| `repeatIntervalMs` | >0 进入持续发布模式（首轮校验后按该周期重复 write 尽力而为，经 `yomk::debugPubStop` 无锁置位退出，再次发起持续发布前宜先 `yomk::debugPubReset()` 复位停止标志（防上次会话残留置位导致循环秒退）），对应 CLI `-r/--rate N`（CLI 侧频率换算：发送间隔 = round(1000/rate) ms，下限 1ms） |
-| `maxTimes` | >0 为条数上限（发满排空 200ms 后返回；对应 CLI `-t/--times N`，含首轮） |
-| `qos`（可缺省尾参） | 临时发布 writer 的 QoS 描述 `DDSQosProfile`，全哨兵=既有固定值 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL，ROS2 底座建议 `ros2DefaultPublisher()`；CLI 侧经 `--qos-ros`/`--qos-*`/`--qos-file` 指定 |
+| `payload(json)` | **必填**载荷（形态同 `pub_example()`/`sample_to_json()` 模板）；未累积时 `publish()` 返回 `payload(json) is required`，首轮另做完整强校验 |
+| `required(n)` | >0 为期望建匹配订阅端数门槛（matched 达标才发布否则一直等待，0=自动收敛；对应 CLI `-w/--wait N`） |
+| `repeat(ms)` | >0 进入持续发布模式（首轮校验后按该周期重复 write 尽力而为，经 `yomk::debugPubStop` 无锁置位退出，再次发起持续发布前宜先 `yomk::debugPubReset()` 复位停止标志（防上次会话残留置位导致循环秒退）），对应 CLI `-r/--rate N`（CLI 侧频率换算：发送间隔 = round(1000/rate) ms，下限 1ms） |
+| `max_times(n)` | >0 为条数上限（发满排空 200ms 后返回；对应 CLI `-t/--times N`，含首轮） |
+| `qos(qos)` | 临时发布 writer 的 QoS 描述 `DDSQosProfile`，全哨兵=既有固定值 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL，ROS2 底座建议 `ros2DefaultPublisher()`；CLI 侧经 `--qos-ros`/`--qos-*`/`--qos-file` 指定 |
+| `rounds(n)` / `interval(ms)` | 首轮发现收敛次数/轮询间隔，缺省/0 钳制为 5 次/200ms；与同分面查询终结共用累积器 |
 
 持续模式成功返回 StringArray {"total=N","failed=M"}。
 

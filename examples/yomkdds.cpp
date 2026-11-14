@@ -742,7 +742,7 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
     {
         return 1;
     }
-    auto resp = YOMKDDS_BAG_NODE(domainId);
+    auto resp = yomk::dds().bag().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create bag node failed: ", resp.msg);
@@ -932,7 +932,7 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
     {
         return 1;
     }
-    auto resp = YOMKDDS_BAG_NODE(domainId);
+    auto resp = yomk::dds().bag().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("create bag node failed: ", resp.msg);

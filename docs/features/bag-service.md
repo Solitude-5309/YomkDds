@@ -8,10 +8,11 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 
 ## 能力清单
 
-| 能力 | 宏 API | yomkdds CLI | 是否须 bag 节点 |
+| 能力 | 库 API（链式/宏） | yomkdds CLI | 是否须 bag 节点 |
 |---|---|---|---|
-| 创建/删除 bag 节点 | `YOMKDDS_BAG_NODE(...)` / `YOMKDDS_BAG_DEL_NODE()` | —（CLI 内部自动建删） | — |
-| 录制主题列表为 mcap bag | `YOMKDDS_BAG_RECORD(topics, outputDir, maxBagSize, maxBagDurationSec, maxCacheSize)` | `bag record` | **须**（宏侧先 `YOMKDDS_BAG_NODE`） |
+| 创建 bag 节点 | 链式 `yomk::dds().bag()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` | —（CLI 内部自动建删） | — |
+| 删除 bag 节点 | 宏 `YOMKDDS_BAG_DEL_NODE()`（链式 `yomk::dds().bag().quit()` 待并入） | —（CLI 内部自动建删） | — |
+| 录制主题列表为 mcap bag | `YOMKDDS_BAG_RECORD(topics, outputDir, maxBagSize, maxBagDurationSec, maxCacheSize)` | `bag record` | **须**（库侧先 `yomk::dds().bag()...create()`） |
 | 查看 bag 元信息 | `YOMKDDS_BAG_INFO(bagDir)` | `bag info` | 不须（纯文件读，无须 create_node） |
 | 重建 bag 元信息 | `YOMKDDS_BAG_REINDEX(bagDir)` | `bag reindex` | 不须（纯文件操作，无须 create_node） |
 | 转换 bag（过滤/裁剪/归并） | `YOMKDDS_BAG_CONVERT(inputs, cfgPath)` | `bag convert` | 不须（纯文件操作，无须 create_node） |
@@ -21,13 +22,13 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 
 ## 使用方式概述
 
-### bag 节点（`YOMKDDS_BAG_NODE`）
+### bag 节点（`yomk::dds().bag()[...].create()`）
 
-`YOMKDDS_BAG_NODE([domainId[, udpDiscoverServerLocator[, tcpDiscoverServerLocator]]])`（端点 `/YomkDdsBagService/create_node`）：
+`yomk::dds().bag()[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()`（端点 `/YomkDdsBagService/create_node`）：
 
-- 单节点模型（一个进程至多一个，重复创建须先删除）；`YOMKDDS_BAG_DEL_NODE()` 删除 bag 节点并销毁其全部 DDS 实体，未创建时返回错误；
-- 全可变参——无参形态三字段均经 DDSBagNode 类内缺省初始化器读环境变量（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`，两 serverLocator 按 5.7 开关门控读 `YOMKDDS_UDP/TCP_DISCOVER_SERVERS`，语义同 `yomk::dds().node(...)` 缺省项）；显式实参完全兼容旧调用；
-- domainId 合法范围 [0,232]，仅同域端点可被发现与录制；两 serverLocator 为 UDP/TCP 发现服务器直配聚合串，语义同 `yomk::dds().node(...)` 的 udp_ds()/tcp_ds() 直配（CLIENT 协议强制，非法串创建失败回显），详见 [discovery-server.md](./discovery-server.md)。
+- 单节点模型（一个进程至多一个，重复创建须先删除）；`YOMKDDS_BAG_DEL_NODE()` 删除 bag 节点并销毁其全部 DDS 实体，未创建时返回错误（链式 `bag().quit()` 在后续批次并入）；
+- 三个累积器均可选、次序不限：未累积项回退类内缺省初始化器（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`，两 locator 按 5.7 开关门控读 `YOMKDDS_UDP/TCP_DISCOVER_SERVERS`，语义同 `yomk::dds().node(...)` 缺省项）；全缺省形态即 `yomk::dds().bag().create()`；
+- domainId 合法范围 [0,232]，仅同域端点可被发现与录制；`udp_ds()/tcp_ds()` 为 UDP/TCP 发现服务器直配聚合串，语义同 `yomk::dds().node(...)` 的 udp_ds()/tcp_ds() 直配（CLIENT 协议强制，非法串创建失败回显），详见 [discovery-server.md](./discovery-server.md)。
 
 ### 录制（`YOMKDDS_BAG_RECORD` / `bag record`）
 
@@ -67,7 +68,7 @@ int main()
 
     // 1. 复位残留停止标志（防上次会话置位导致秒退）后创建 bag 节点（单节点模型）
     bagRecordReset();
-    auto resp = YOMKDDS_BAG_NODE(0);
+    auto resp = yomk::dds().bag().domain(0).create();
     if (resp.m_status != yomk::payload::ResStatus::Succeeded)
     {
         return 1;
@@ -295,7 +296,7 @@ yomkdds bag play bag_in --qos-profile-overrides-path qos.json   # 按主题覆�
 | `invalid playback rate` | 速率倍率 ≤0（CLI 侧报 `not in the valid range (> 0.0)`） |
 | `invalid start offset` | 起始偏移 <0（CLI 侧报 `not in the valid range (>= 0.0)`） |
 | `invalid delay` | 开播延迟 <0（CLI 侧报 `not in the valid range (> 0.0)`，0 也拒） |
-| `bag node not created` | 未建 bag 节点（CLI 自动建删；宏直调须先 `YOMKDDS_BAG_NODE`） |
+| `bag node not created` | 未建 bag 节点（CLI 自动建删；链式直调须先 `yomk::dds().bag()...create()`） |
 | `bag path [x] does not exist` / `must specify a bag directory` | 路径不存在 / 路径是文件非目录 |
 | `could not find metadata.json in bag directory [x]` | 目录缺元信息文件 |
 | `parse metadata.json failed: ...` / `invalid metadata.json: ...` | 元信息非 JSON / 必需键缺失或形态错误 |

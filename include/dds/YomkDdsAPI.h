@@ -1120,9 +1120,87 @@ public:
 };
 
 /**
- * @brief Domain entry builder: core communication and debug facets live here during the macro-to-chain migration
+ * @brief Bag facet: carries the optional domain()/udp_ds()/tcp_ds() creation
+ *        accumulators (order-free), terminated by create(); the record()/convert()
+ *        terminators and the dir() sub-facet join it in later migration rounds
  */
-// @zh: 域入口 Builder：宏链迁移期内核心通信与调试分面挂载于此
+// @zh: Bag 分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器（次序不限），create() 收束；
+// @zh: 录制 record()/转换 convert() 终结与目录 dir() 子分面在后续迁移批次并入
+class DdsBagBuilder
+{
+    uint32_t m_domainId = yomk::payload::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
+    std::string m_udpDiscoverServerLocator = yomk::payload::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
+    std::string m_tcpDiscoverServerLocator = yomk::payload::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
+public:
+    /**
+     * @brief Accumulate the DDS domain id
+     * @param[in] domainId DDS domain id [0,232]; only same-domain endpoints are recorded
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积 DDS 域号（bag 节点仅可录制同域端点）
+    // @zh: domainId DDS 域号 [0,232]
+    // @zh: return 自身链式引用
+    DdsBagBuilder& domain(uint32_t domainId)
+    {
+        m_domainId = domainId;
+        return *this;
+    }
+    /**
+     * @brief Accumulate the UDP channel discovery-server locator aggregate
+     * @param[in] locator "ip[:port]" aggregate, semicolon-separated for multiple servers
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积 UDP 通道发现服务器直配聚合串（语义同核心套件建点分面）
+    // @zh: locator "ip[:port]" 聚合串，多 server 分号分隔
+    // @zh: return 自身链式引用
+    DdsBagBuilder& udp_ds(std::string locator)
+    {
+        m_udpDiscoverServerLocator = std::move(locator);
+        return *this;
+    }
+    /**
+     * @brief Accumulate the TCP channel discovery-server locator aggregate
+     * @param[in] locator Same form as udp_ds()
+     * @return Reference to self for chaining
+     */
+    // @zh: 累积 TCP 通道发现服务器直配聚合串
+    // @zh: locator 形式同 udp_ds()
+    // @zh: return 自身链式引用
+    DdsBagBuilder& tcp_ds(std::string locator)
+    {
+        m_tcpDiscoverServerLocator = std::move(locator);
+        return *this;
+    }
+    /**
+     * @brief Create the bag node (mcap record/replay), one per process (request terminator)
+     * @return Response; invalid locator input or out-of-range domainId fails with the
+     *         reason echoed back
+     * @note Single node model: at most one per process, delete it before re-creating.
+     *       Unset accumulators fall back to the class defaults, which read
+     *       YOMKDDS_DDS_DOMAIN_ID and the gated YOMKDDS_UDP/TCP_DISCOVER_SERVERS
+     */
+    // @zh: 创建 bag 节点（mcap 录制回放），单进程至多一个（请求终结）
+    // @zh: return Response；直配串非法或 domainId 越界创建失败并回显原因
+    // @zh: note 单节点模型：重复创建须先删除；未累积项回退类内缺省（读 YOMKDDS_DDS_DOMAIN_ID
+    // @zh: 与开关门控的 YOMKDDS_UDP/TCP_DISCOVER_SERVERS）
+    yomk::payload::Response create()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsBagCreateNode)
+            .msg(yomk::msgs::DDSBagNode::shared(
+                yomk::payload::DDSBagNode{m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
+            .request();
+    }
+};
+
+/**
+ * @brief Domain entry builder: core communication, debug and bag facets live here during
+ *        the macro-to-chain migration
+ */
+// @zh: 域入口 Builder：宏链迁移期内核心通信、调试与 Bag 分面挂载于此
 class DdsBuilder
 {
 public:
@@ -1147,10 +1225,24 @@ public:
      */
     // @zh: 切入调试分面（类型无关域观察者）
     // @zh: return 调试分面，经 create()/quit() 或查询终结 topics() 收束
-    // @zh: note 调试节点自身无名——该分面上的 node(name) 指域内远端参与者（后续批次并入）
+    // @zh: note 调试节点自身无名——该分面上的 node(name) 指域内远端参与者
     DdsDebugBuilder debug()
     {
         return DdsDebugBuilder{};
+    }
+
+    /**
+     * @brief Switch into the bag facet (mcap record/replay)
+     * @return Bag facet, terminated by create() (quit() joins it in a later round)
+     * @note The bag node itself carries no name; the facet accumulators keep the
+     *       same defaults as the former variadic macro
+     */
+    // @zh: 切入 Bag 分面（mcap 录制回放）
+    // @zh: return Bag 分面，经 create() 终结（quit() 在后续批次并入）
+    // @zh: note bag 节点自身无名；分面累积器的缺省语义同原可变尾参宏
+    DdsBagBuilder bag()
+    {
+        return DdsBagBuilder{};
     }
 
     /**
@@ -1278,25 +1370,15 @@ inline detail::DdsBuilder dds()
 /**
  * @brief Bag record/replay macros (YomkDdsBagService endpoints)
  *
- * Every macro returns yomk::payload::Response. bag_record/bag_play block the
- * calling thread until finished or stopped via the yomk::bag* flags.
+ * The bag node itself is chained as yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create().
+ * Every remaining macro returns yomk::payload::Response. bag_record/bag_play block
+ * the calling thread until finished or stopped via the yomk::bag* flags.
  * Full behavior: docs/features/bag-service.md
  */
 // @zh: Bag 录制回放宏（YomkDdsBagService 端点）
-// @zh: 均返回 yomk::payload::Response；bag_record/bag_play 阻塞调用线程至收尾或经
-// @zh: yomk::bag* 标志停止；详见 docs/features/bag-service.md
-
-/**
- * @brief Create the bag node (mcap record/replay)
- * @param[in] ... variadic tails, all optional: same form as yomk::dds().node(...).create()
- * @note Single node per process; delete it before re-creating
- */
-// @zh: 创建 bag 节点（mcap 录制回放）
-// @zh: 可变尾参语义同 yomk::dds().node(...).create()
-// @zh: note 单节点模型：一个进程至多一个，重复创建须先删除
-
-#define YOMKDDS_BAG_NODE(...) \
-    ::yomk::server().url(::yomk::url::ddsBagCreateNode).msg(::yomk::msgs::DDSBagNode::shared(yomk::payload::DDSBagNode{__VA_ARGS__})).request()
+// @zh: bag 节点创建已链式化为 yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create()；
+// @zh: 其余宏均返回 yomk::payload::Response，bag_record/bag_play 阻塞调用线程至收尾
+// @zh: 或经 yomk::bag* 标志停止；详见 docs/features/bag-service.md
 
 /**
  * @brief Record topics into an mcap bag (blocks the calling thread until done)

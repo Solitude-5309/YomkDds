@@ -35,7 +35,7 @@ flowchart LR
 |---|---|---|---|
 | YomkDdsService | 节点生命周期、主题注册、发布订阅、Loan、XML 加载 | `yomk::dds()` 链式 | 不覆盖（编程能力） |
 | YomkDdsDebugService | 类型无关的域内观察（主题/节点/类型/端点）与 JSON 载荷发布 | `yomk::dds().debug()` 链式面 | `yomkdds topic/node/interface` 全部覆盖 |
-| YomkDdsBagService | mcap 格式录制、元信息、重建索引、转换、回放 | `YOMKDDS_BAG_*` | `yomkdds bag` 全部覆盖（play 仅 CLI） |
+| YomkDdsBagService | mcap 格式录制、元信息、重建索引、转换、回放 | `YOMKDDS_BAG_*`（建点 `yomk::dds().bag()` 链式） | `yomkdds bag` 全部覆盖（play 仅 CLI） |
 
 > 除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
 
@@ -50,7 +50,7 @@ flowchart LR
 | 核心通信 | 发布消息 | `yomk::dds().node(...).topic(...).data(...).pub()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | Loan 借出零拷贝发布 | `yomk::dds().node(...).topic(...).loan()` / `...sample(...).return_loan()` | — | [loan-zero-copy.md](./loan-zero-copy.md) |
 | QoS | 端点 QoS 描述（8 项 + ROS2 底座） | `DDSQosProfile`（qos() 累积器） | `--qos-ros` / `--qos-*` / `--qos-file` | [qos-profiles.md](./qos-profiles.md) |
-| 发现 | 发现服务器 UDP/TCP 直配 | `yomk::dds().node(...)`/`.debug()` 直配累积器 / `YOMKDDS_BAG_NODE` 定位串尾参 | 发现服务器三环境变量 | [discovery-server.md](./discovery-server.md) |
+| 发现 | 发现服务器 UDP/TCP 直配 | `yomk::dds().node(...)`/`.debug()`/`.bag()` 直配累积器 | 发现服务器三环境变量 | [discovery-server.md](./discovery-server.md) |
 | 发现 | XML profiles 三级提取链 | `yomk::dds().xml(xmlPath).load_cfg()` | — | [xml-profiles.md](./xml-profiles.md) |
 | 互通 | 与 ROS2 收发同类型消息 | set_name 类型名直改（编程约定） | — | [ros2-interop.md](./ros2-interop.md) |
 | 调试 | 创建/删除调试节点 | `yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create()` / `yomk::dds().debug().quit()` | — | [debug-service.md](./debug-service.md) |
@@ -60,11 +60,12 @@ flowchart LR
 | 调试 | 按类型反查主题 | `yomk::dds().debug().type(name).find_topics()` | `topic type` / `topic find` | [debug-service.md](./debug-service.md) |
 | 调试 | 类型内省（IDL 结构） | `yomk::dds().debug().type(name).interface_show()` / `yomk::dds().debug().interfaces()` | `interface show` / `interface list` | [debug-service.md](./debug-service.md) |
 | 调试 | 发布示例与 JSON 载荷发布 | `yomk::dds().debug().topic(name).pub_example()` / `.sample_to_json()` / `.payload(json)….publish()` | `topic pub` | [debug-service.md](./debug-service.md) |
+| Bag | 创建 bag 节点 | `yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create()` | —（CLI 自动建删） | [bag-service.md](./bag-service.md) |
 | Bag | 录制到 mcap（分片/缓存/暂停/通配） | `YOMKDDS_BAG_RECORD()` | `bag record` | [bag-service.md](./bag-service.md) |
 | Bag | 查看 bag 元信息 | `YOMKDDS_BAG_INFO()` | `bag info` | [bag-service.md](./bag-service.md) |
 | Bag | 重建 bag 元信息 | `YOMKDDS_BAG_REINDEX()` | `bag reindex` | [bag-service.md](./bag-service.md) |
 | Bag | 转换 bag（过滤/裁剪/归并） | `YOMKDDS_BAG_CONVERT()` | `bag convert` | [bag-service.md](./bag-service.md) |
-| Bag | 回放 bag | `YOMKDDS_BAG_PLAY()`（须先自建 bag 节点） | `bag play`（CLI 自动建删 bag 节点） | [bag-service.md](./bag-service.md) |
+| Bag | 回放 bag | `YOMKDDS_BAG_PLAY()`（须先 `yomk::dds().bag()...create()`） | `bag play`（CLI 自动建删 bag 节点） | [bag-service.md](./bag-service.md) |
 
 ## 三、文档导航
 

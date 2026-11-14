@@ -276,7 +276,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 - **发现服务器**：调试节点支持 UDP/TCP 直配累积器（同域才可调试，跨网段调试须经 server），见 [discovery-server.md](./discovery-server.md)；
 - **QoS**：`topic print`/`topic hz`/`topic pub` 的 QoS 参数族（`--qos-ros`/`--qos-*`/`--qos-file` 优先级链）与库侧 `DDSQosProfile` 语义见 [qos-profiles.md](./qos-profiles.md)；
 - **ROS2 互通**：ROS2 rmw_fastrtps 端点不提供 XTypes TypeObject，观察其主题会触发类型不可重建告警、`interface show` 报 `type object for [...] not available`（互通判定以数据到达为准），见 [ros2-interop.md](./ros2-interop.md)；
-- **Bag 服务**：bag 节点（`YOMKDDS_BAG_NODE`）模型与调试节点同构（单节点、域号与 UDP/TCP 直配参数、重复创建须先删除），见 [bag-service.md](./bag-service.md)。
+- **Bag 服务**：bag 节点（`yomk::dds().bag()[...].create()`）模型与调试节点同构（单节点、域号与 UDP/TCP 直配参数、重复创建须先删除），见 [bag-service.md](./bag-service.md)。
 
 ## 教程链接
 

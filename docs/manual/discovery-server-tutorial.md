@@ -128,13 +128,13 @@ resp = yomk::dds().node("ds_sub_node").topic("ds_hello_world").type(new YomkDdsS
 
 ### 第 3 步：TCP 直配（显式直配写法）
 
-不依赖环境变量、在代码里写死直配串时用链式累积器（核心通信/调试节点）或 bag 宏尾参（UDP/TCP 通道格式一致：`"ip[:port]"` 分号分隔多 server，UDP port 缺省 11811，非法串创建失败回显）：
+不依赖环境变量、在代码里写死直配串时用链式累积器（核心通信/调试/bag 节点；UDP/TCP 通道格式一致：`"ip[:port]"` 分号分隔多 server，UDP port 缺省 11811，非法串创建失败回显）：
 
 ```cpp
-// client 侧：链式累积器直配（bag 节点仍为宏尾参）
+// client 侧：链式累积器直配
 yomk::dds().node("ds_node").domain(0).udp_ds("127.0.0.1:11811").create();            // 形态 3：仅 UDP 通道
 yomk::dds().debug().domain(0).udp_ds("127.0.0.1:11811").create();
-YOMKDDS_BAG_NODE(0, "127.0.0.1:11811");
+yomk::dds().bag().domain(0).udp_ds("127.0.0.1:11811").create();
 // 形态 4：UDP+TCP 双通道（TCP port 为 server 的 TCP 监听口；仅 TCP 直配时 UDP 传空串占位）
 yomk::dds().node("ds_dual_node").domain(0).udp_ds("127.0.0.1:11811").tcp_ds("127.0.0.1:42100").create();
 yomk::dds().node("ds_tcp_only_node").domain(0).udp_ds("").tcp_ds("10.0.0.2:42100").create();
@@ -173,7 +173,7 @@ export YOMKDDS_UDP_DISCOVER_SERVERS="192.168.1.10:11811;192.168.1.11:11811"  # T
 
 - 总开关 `YOMKDDS_USE_DISCOVER_SERVER`：`true`/`1` 视为开启（大小写不敏感）；未设置/空/`false`/`0`/其余任意值关闭；
 - 两通道 server 聚合串 `YOMKDDS_UDP_DISCOVER_SERVERS`/`YOMKDDS_TCP_DISCOVER_SERVERS` 格式同直配聚合串：`ip[:port]` 分号分隔多 server；
-- 开关开启时，`yomk::dds().node(...).create()`/`yomk::dds().debug().create()` 未累积的 udp_ds()/tcp_ds() 自动取对应环境变量值；`YOMKDDS_BAG_NODE` 同款支持全缺省（无参）形态——三字段（含 domainId）一并经缺省初始化器读 env（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`）；
+- 开关开启时，`yomk::dds().node(...).create()`/`yomk::dds().debug().create()`/`yomk::dds().bag().create()` 未累积的 udp_ds()/tcp_ds() 自动取对应环境变量值；bag 建点全缺省形态（`yomk::dds().bag().create()`）三字段（含 domainId）一并经缺省初始化器读 env（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`）；
 - 开关关闭时两串变量被忽略恒空（=不直配，行为同未设置）；
 - 非法串不静默回落——节点创建失败并回显，避免误配退化成多播发现而"看似正常实则不通"。
 

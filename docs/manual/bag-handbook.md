@@ -26,9 +26,9 @@
 
 | 子命令 | 职责 | 是否需要 bag 节点 | 等价宏 |
 |---|---|---|---|
-| `yomkdds bag record` | 录制主题列表为 mcap bag（长驻阻塞至 Ctrl+C 收尾） | 经 bag 节点实现（CLI 自动建删） | `YOMKDDS_BAG_RECORD`（宏形态须先 `YOMKDDS_BAG_NODE` 自建 bag 节点） |
+| `yomkdds bag record` | 录制主题列表为 mcap bag（长驻阻塞至 Ctrl+C 收尾） | 经 bag 节点实现（CLI 自动建删） | `YOMKDDS_BAG_RECORD`（库形态须先 `yomk::dds().bag()...create()` 自建 bag 节点） |
 | `yomkdds bag info` | 查看 bag 元信息（输出对齐 `ros2 bag info`） | 纯文件操作，无须节点 | `YOMKDDS_BAG_INFO` |
-| `yomkdds bag play` | 按录制时间轴回放为真实 DDS 流量 | CLI 自动建删 bag 节点 | `YOMKDDS_BAG_PLAY`（宏形态须先自建 bag 节点） |
+| `yomkdds bag play` | 按录制时间轴回放为真实 DDS 流量 | CLI 自动建删 bag 节点 | `YOMKDDS_BAG_PLAY`（库形态须先 `yomk::dds().bag()...create()` 自建 bag 节点） |
 | `yomkdds bag convert` | 按输出配置文件把一个或多个输入 bag 过滤/裁剪/合并写为新 bag | 纯文件操作，无须节点 | `YOMKDDS_BAG_CONVERT` |
 | `yomkdds bag reindex` | 从 mcap 分片重建被删/损坏的 `metadata.json` | 纯文件操作，无须节点 | `YOMKDDS_BAG_REINDEX` |
 

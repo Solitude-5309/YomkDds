@@ -208,14 +208,14 @@ yomkdds topic pub --qos-file qos.json hello_world '{"data":"hi"}'    # 文件逐
 
 ### interface show：查看类型的 IDL 结构
 
-- **用途**：按数据类型名输出该类型的 IDL 结构描述（struct 头 + 字段行 + 结尾）——类型名精确匹配（同 `topic find` 的匹配语义），复用发现链路 TypeInformation → TypeObject → DynamicType 做纯类型内省（**不建订阅**），输出可直接粘回 .idl 文件复用（对齐 Protobuf DebugString、grpcurl describe、ros2 interface show 同族 schema 形态）。
+- **用途**：按数据类型名输出该类型的 IDL 结构描述（struct 头 + 字段行 + 结尾）——类型名精确匹配（同 `topic find` 的匹配语义），复用发现链路 TypeInformation → TypeObject → DynamicType 做纯类型内省（**不建订阅**）。服务端只回成员表与 struct 依赖闭包（`InterfaceInfo`：`root` + 拓扑序 `dependencies`），IDL 语法与缩进由 CLI 渲染（对齐 Protobuf DebugString、grpcurl describe、ros2 interface show 同族 schema 形态）。
 - **完整命令行**：
 
 ```bash
 yomkdds interface show <类型名>
 ```
 
-- **示例输出**：
+- **示例输出**（无依赖类型时单块）：
 
 ```
 struct YomkDdsStd::MString {
@@ -223,7 +223,27 @@ struct YomkDdsStd::MString {
 };
 ```
 
-- **要点**：字段类型名为 ROS2/IDL4 风格映射（bool/int32/uint32/float32/string 等；有界 `string<N>`；`sequence<T>`/`sequence<T, N>`；数组 `T[N]`；嵌套 struct/enum/alias 显示成员子类型名不递归展开）；仅支持顶层为 struct 的类型。
+- **示例输出**（含嵌套 struct 依赖时，依赖定义按拓扑序前置平铺，块间空行）：
+
+```
+struct YomkDdsStd::MultiArrayDimension {
+    string label;
+    uint32 size;
+    uint32 stride;
+};
+
+struct YomkDdsStd::MultiArrayLayout {
+    sequence<YomkDdsStd::MultiArrayDimension> dim;
+    uint32 data_offset;
+};
+
+struct YomkDdsStd::MUCharMultiArray {
+    YomkDdsStd::MultiArrayLayout layout;
+    sequence<octet> data;
+};
+```
+
+- **要点**：字段类型名为 ROS2/IDL4 风格映射（bool/int32/uint32/float32/string 等；有界 `string<N>`；`sequence<T>`/`sequence<T, N>`；数组 `T[N]`）。嵌套 struct 定义按拓扑序（被依赖者在前）前置展开，`sequence<Struct>` / `Struct[N]` 的元素 struct 同样穿透收集，因此嵌套 struct 场景可直接粘回 .idl 编译复用；但 enum/union/bitset/alias 成员仍只给引用名，这类片段需自行补齐定义后才可编译（Fast DDS `DynamicType` 只暴露 struct 成员，未提供枚举值/判别式反射）。仅支持顶层为 struct 的类型。
 - **失败报错**（可直接判定问题在哪一层）：
 
 | 错误文本 | 卡点 |

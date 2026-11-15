@@ -37,6 +37,10 @@
  *   主题详情 同命名 peer 端点 → topicInfo 结构化载荷填充端点详情：归属节点名（GUID
  *         前缀归属）、FastDDS 原生 prefix|entity GUID、结构化 QoS 字段（核心组
  *         reliability/durability 等枚举名）；未发现主题 → false 且清单为空。
+ *   接口反射 interfaceShow(类型名) → 结构化 InterfaceInfo：root 成员表（声明序，每项
+ *         id/name/typeName）+ struct 依赖闭包（类型名去重、拓扑序）；嵌套类型
+ *         MUCharMultiArray → MultiArrayLayout → sequence<MultiArrayDimension> 覆盖序列元素
+ *         类型中的 struct 穿透；无依赖类型 dependencies 为空。
  *   未命中  interfaceShow(Not::Exist) / topicExample / topicMsgJson 对不存在目标 → false，
  *         error 出参分别为 "type [...] not found" / "topic [...] not found"（第一层文本逐字不变）。
  *   裸类型端点 自建不携带 XTypes TypeObject 的 TopicDataType（模拟 ROS2 rmw_fastrtps）发布：
@@ -105,6 +109,8 @@ namespace
     constexpr const char *NODEINFO_PUB_TOPIC = "t_nodeinfo_pub";
     constexpr const char *NODEINFO_SUB_TOPIC = "t_nodeinfo_sub";
     constexpr const char *NODEINFO_ANON_TOPIC = "t_nodeinfo_anon";
+    // 嵌套 struct 依赖用例主题：MUCharMultiArray → MultiArrayLayout → sequence<MultiArrayDimension>
+    constexpr const char *NODEINFO_NESTED_TOPIC = "t_nodeinfo_nested";
 
     // topicPub 用例接收监听器：仅置位收到标志（送达实证），其余回调默认空实现
     class PubTestListener : public eprosima::fastdds::dds::DataReaderListener
@@ -323,7 +329,7 @@ int main()
               "未 setDomainId 时 nodeList → false（participant 未创建）");
         check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 nodeList 的 error 含 debug node not created");
-        std::vector<std::string> ifaceGuard;
+        yomk::payload::InterfaceInfo ifaceGuard;
         guardErr.clear();
         check(!dbg.interfaceShow("Any::Type", ifaceGuard, 5, 200, &guardErr),
               "未 setDomainId 时 interfaceShow → false（participant 未创建）");
@@ -703,6 +709,9 @@ int main()
         check(peer.registerSubTopic(NODEINFO_SUB_TOPIC, new YomkDdsStd::MStringPubSubType(),
                   [](const void *) {}),
               "命名 peer registerSubTopic(t_nodeinfo_sub, MString) → true（空回调，本用例无流量）");
+        check(peer.registerPubTopic(NODEINFO_NESTED_TOPIC,
+                  new YomkDdsStd::MUCharMultiArrayPubSubType()),
+              "命名 peer registerPubTopic(t_nodeinfo_nested, MUCharMultiArray) → true（嵌套依赖用例）");
         // 匿名 peer（显式 qos.name("")）带一个发布端点：验证其他参与者的端点不串入命名 peer 清单
         dds::DomainParticipantQos anonQos = dds::PARTICIPANT_QOS_DEFAULT;
         anonQos.name(std::string());
@@ -820,31 +829,67 @@ int main()
         check(missInfo.publishers.empty() && missInfo.subscriptions.empty(),
             "未发现主题时端点清单保持为空");
 
-        // interface show：按类型名输出 IDL 结构（TypeObject→DynamicType 纯类型内省，
-        // 不建订阅；peer 的 MString writer 在场，TypeInformation 经 TypeLookup 已就绪）
-        std::vector<std::string> iface;
+        // interface show：按类型名输出反射成员表 + struct 依赖闭包（TypeObject→DynamicType
+        // 纯类型内省，不建订阅；peer 的 MString writer 在场，TypeInformation 经 TypeLookup 已就绪）
+        yomk::payload::InterfaceInfo iface;
         check(dbg.interfaceShow("YomkDdsStd::MString", iface, 5, 100),
               "interfaceShow(YomkDdsStd::MString,5,100ms) → true（writer 在场类型命中）");
-        check(iface.size() == 3, "IDL 行集恰好 3 行（struct 头/字段行/结尾）");
-        bool ifaceOk = iface.size() == 3 &&
-            iface[0] == "struct YomkDdsStd::MString {" &&
-            iface[1] == "    string data;" &&
-            iface[2] == "};";
-        check(ifaceOk, "IDL 行集形态正确（struct 头/四空格缩进字段行/结尾 };）");
-        for (const auto& line : iface)
-        {
-            std::cout << "[OBSERVE] iface |" << line << "|" << std::endl;
-        }
-        // 未发现类型：单次快照快速路径 → false 且输出保持为空，error 回填"类型名未出现"
+        check(iface.root.typeName == "YomkDdsStd::MString",
+              "root.typeName 为查询类型名（不做风格转换）");
+        check(iface.root.members.size() == 1, "root 成员表恰 1 个成员（data）");
+        bool ifaceOk = iface.root.members.size() == 1 &&
+            iface.root.members[0].name == "data" &&
+            iface.root.members[0].typeName == "string";
+        check(ifaceOk, "root 成员 name/typeName 为 data/string（IDL 类型表达式）");
+        check(iface.dependencies.empty(), "MString 无 struct 依赖 → dependencies 为空");
+        std::cout << "[OBSERVE] iface root=" << iface.root.typeName
+                  << " members=" << iface.root.members.size()
+                  << " deps=" << iface.dependencies.size() << std::endl;
+        // 未发现类型：单次快照快速路径 → false 且载荷保持为空，error 回填"类型名未出现"
         // 归类文本（不是 TypeObject 不可得，后者需裸类型端点才能触发）
-        std::vector<std::string> ifaceMiss;
+        yomk::payload::InterfaceInfo ifaceMiss;
         std::string ifaceMissErr;
         check(!dbg.interfaceShow("Not::Exist", ifaceMiss, 1, 50, &ifaceMissErr),
               "interfaceShow(Not::Exist,1,50ms) → false（未发现类型）");
-        check(ifaceMiss.empty(), "未发现类型时输出保持为空");
+        check(ifaceMiss.root.typeName.empty() && ifaceMiss.root.members.empty() &&
+                  ifaceMiss.dependencies.empty(),
+              "未发现类型时载荷保持为空");
         check(ifaceMissErr.find("type [Not::Exist] not found") != std::string::npos,
               "未发现类型的 error 为 type [...] not found（第一层语义不变）");
         std::cout << "[OBSERVE] iface miss error |" << ifaceMissErr << "|" << std::endl;
+
+        // 嵌套 struct 依赖闭包：MUCharMultiArray → MultiArrayLayout → sequence<MultiArrayDimension>
+        // （dim 是序列元素类型中的 struct：验证容器穿透 + 去重 + 拓扑序）
+        yomk::payload::InterfaceInfo nested;
+        check(dbg.interfaceShow("YomkDdsStd::MUCharMultiArray", nested, 5, 100),
+              "interfaceShow(MUCharMultiArray) → true（嵌套 struct 类型命中）");
+        check(nested.root.members.size() == 2 && nested.root.members[0].name == "layout",
+              "root 成员表按声明序（layout / data）");
+        check(nested.dependencies.size() == 2,
+              "dependencies 含两层 struct（MultiArrayDimension / MultiArrayLayout）");
+        bool depOrderOk = nested.dependencies.size() == 2 &&
+            nested.dependencies[0].typeName.find("MultiArrayDimension") != std::string::npos &&
+            nested.dependencies[1].typeName.find("MultiArrayLayout") != std::string::npos;
+        check(depOrderOk, "dependencies 为拓扑序（被依赖的 MultiArrayDimension 在前）");
+        bool seqMemberOk = false;
+        if (nested.dependencies.size() == 2)
+        {
+            for (const auto &member : nested.dependencies[1].members)
+            {
+                if (member.name == "dim" &&
+                        member.typeName.find("sequence<") != std::string::npos &&
+                        member.typeName.find("MultiArrayDimension") != std::string::npos)
+                {
+                    seqMemberOk = true;
+                }
+            }
+        }
+        check(seqMemberOk, "MultiArrayLayout.dim 类型为 sequence<...MultiArrayDimension...>");
+        for (const auto &dep : nested.dependencies)
+        {
+            std::cout << "[OBSERVE] nested dep |" << dep.typeName
+                      << "| members=" << dep.members.size() << std::endl;
+        }
 
         // topicExample / topicMsgJson 未发现主题：error 回填步骤 1 的 topic [...] not found
         // （第一层文本逐字不变，与 topicPub 既有措辞一致）
@@ -1420,7 +1465,7 @@ int main()
 
                 // ② 类型重建层：TypeObject 不可得 → interfaceShow / topicExample / topicMsgJson
                 // 均归类为 not available，且不得包含 not found（区分第一层"未发现"）
-                std::vector<std::string> plainIface;
+                yomk::payload::InterfaceInfo plainIface;
                 std::string plainErr;
                 check(!dbg.interfaceShow("Plain::NoTypeObject", plainIface, 5, 100, &plainErr),
                       "interfaceShow(裸类型) → false（TypeObject 不可得）");
@@ -1863,16 +1908,12 @@ int main()
               "set_name 用例 listTopics 主题类型名 == std_msgs::msg::dds_::String_（发现名即新名）");
     
         // 3. interfaceShow(新名) 收敛成功——"tid 恒定"机制实证：TypeObjectRegistry 按 tid
-        //    查型与名字无关，TypeObject 结构元数据完整 → IDL 行集拼装
-        std::vector<std::string> idlLines;
-        check(dbg.interfaceShow(kRosTypeName, idlLines),
+        //    查型与名字无关，TypeObject 结构元数据完整 → 成员表 + 依赖闭包
+        yomk::payload::InterfaceInfo snIface;
+        check(dbg.interfaceShow(kRosTypeName, snIface),
               "set_name 用例 interfaceShow(新名) → true（TypeObject 按 tid 可查，名字无关）");
-        bool structLine = false;
-        for (const auto &line : idlLines)
-        {
-            if (line.find("struct") != std::string::npos) { structLine = true; }
-        }
-        check(structLine, "set_name 用例 interfaceShow 行集含 struct 头（TypeObject 元数据完整）");
+        check(snIface.root.typeName == kRosTypeName && !snIface.root.members.empty(),
+              "set_name 用例 root 为查询名且成员表非空（TypeObject 元数据完整）");
     
         // 4. topicPub：按发现名重建动态类型 + 临时 writer 发布成功（复用阶段②③设施）
         std::string snPubErr;

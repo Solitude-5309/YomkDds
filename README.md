@@ -72,7 +72,7 @@
 | `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()` | 列出域内节点 |
 | `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()` | 查询节点发布/订阅清单 |
 | `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()` | 按数据类型反查主题 |
-| `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()` | 按类型名输出 IDL 结构 |
+| `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()` | 按类型名查询类型结构（返回结构化 `InterfaceInfo`：root 成员表 + struct 依赖闭包，拓扑序） |
 | `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()` | 列出全部类型名 |
 | `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()` | 查询主题发布示例 |
 | `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()` | 查询消息描述两要素（类型名 + JSON 样本） |

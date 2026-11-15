@@ -58,7 +58,7 @@ flowchart LR
 | 调试 | 列出主题与节点 | `yomk::dds().debug().topics()`（结构化 `TopicInfoArray`）/ `yomk::dds().debug().nodes()` | `topic list [-t] [-v]` / `node list` | [debug-service.md](./debug-service.md) |
 | 调试 | 主题详情（类型、计数、端点、GUID、QoS） | `yomk::dds().debug().topic(name).info()`（结构化 `TopicInfo`） | `topic info [-v]` | [debug-service.md](./debug-service.md) |
 | 调试 | 按类型反查主题 | `yomk::dds().debug().type(name).find_topics()` | `topic type` / `topic find` | [debug-service.md](./debug-service.md) |
-| 调试 | 类型内省（IDL 结构） | `yomk::dds().debug().type(name).interface_show()` / `yomk::dds().debug().interfaces()` | `interface show` / `interface list` | [debug-service.md](./debug-service.md) |
+| 调试 | 类型内省（成员表与依赖闭包） | `yomk::dds().debug().type(name).interface_show()`（结构化 `InterfaceInfo`）/ `yomk::dds().debug().interfaces()` | `interface show` / `interface list` | [debug-service.md](./debug-service.md) |
 | 调试 | 发布示例与 JSON 载荷发布 | `yomk::dds().debug().topic(name).pub_example()` / `.sample_to_json()` / `.payload(json)….publish()` | `topic pub` | [debug-service.md](./debug-service.md) |
 | Bag | 创建/删除 bag 节点 | `yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create()` / `yomk::dds().bag().quit()` | —（CLI 自动建删） | [bag-service.md](./bag-service.md) |
 | Bag | 录制到 mcap（分片/缓存/暂停/通配） | `yomk::dds().bag().topics({...})….record()` | `bag record` | [bag-service.md](./bag-service.md) |

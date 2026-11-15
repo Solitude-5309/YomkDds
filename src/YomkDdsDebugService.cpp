@@ -230,11 +230,11 @@ yomk::payload::Response YomkDdsDebugService::interfaceShow(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::interfaceShow").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    // 失败原因由节点层归类透传：类型名未出现 / TypeObject 不可得 / 顶层非 struct / IDL 拼装失败；
+    // 失败原因由节点层归类透传：类型名未出现 / TypeObject 不可得 / 顶层非 struct / 反射采集失败；
     // 未发现该类型按查询失败处理（find 族语义），便于暴露类型名拼写错误
-    std::vector<std::string> lines;
+    yomk::payload::InterfaceInfo info;
     std::string error;
-    if (!node_->interfaceShow(p->msg.typeName, lines, p->msg.stableRounds, p->msg.intervalMs, &error))
+    if (!node_->interfaceShow(p->msg.typeName, info, p->msg.stableRounds, p->msg.intervalMs, &error))
     {
         if (error.empty())
         {
@@ -243,7 +243,8 @@ yomk::payload::Response YomkDdsDebugService::interfaceShow(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::interfaceShow").error(error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
-    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
+            ::yomk::msgs::InterfaceInfo::shared(std::move(info)));
 }
 
 yomk::payload::Response YomkDdsDebugService::interfaceList(YomkMsgPtr pkg)

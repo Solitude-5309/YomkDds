@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <thread>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
 
 #include <fastdds/dds/core/policy/QosPolicies.hpp>
@@ -806,7 +807,7 @@ bool FastDDSDebugNode::nodeInfo(const std::string& nodeName,
 }
 
 bool FastDDSDebugNode::interfaceShow(const std::string& typeName,
-        std::vector<std::string>& lines,
+        yomk::payload::InterfaceInfo& info,
         uint32_t stableRounds, uint32_t intervalMs, std::string* error)
 {
     if (stableRounds == 0)
@@ -828,7 +829,7 @@ bool FastDDSDebugNode::interfaceShow(const std::string& typeName,
             return false;
         }
     }
-    return waitForInterfaceStable(typeName, lines, stableRounds, intervalMs, error);
+    return waitForInterfaceStable(typeName, info, stableRounds, intervalMs, error);
 }
 
 bool FastDDSDebugNode::topicExample(const std::string& topicName,
@@ -863,8 +864,8 @@ bool FastDDSDebugNode::topicExample(const std::string& topicName,
         }
         return false;
     }
-    std::vector<std::string> idl;
-    if (!waitForInterfaceStable(info.typeName, idl, stableRounds, intervalMs, error))
+    yomk::payload::InterfaceInfo iface;
+    if (!waitForInterfaceStable(info.typeName, iface, stableRounds, intervalMs, error))
     {
         return false;
     }
@@ -875,6 +876,8 @@ bool FastDDSDebugNode::topicExample(const std::string& topicName,
     {
         return false;
     }
+    std::vector<std::string> idl;
+    appendIdlLines(iface.root, idl);  // 只渲染 root，不展开依赖（输出与改造前逐字一致）
     lines.clear();
     lines.push_back("Type: " + info.typeName);
     lines.push_back("IDL:");
@@ -1298,8 +1301,152 @@ bool idlTypeNameOf(const traits<DynamicType>::ref_type& type, std::string& out)
     }
 }
 
+// 剥离 sequence/array 包装（递归 element_type），返回底层命名 struct 的 DynamicType；非 struct
+// 或类型名为空返回 nullptr。依赖闭包采集用：sequence<Struct> / Struct[N] 成员必须穿透，
+// 否则被引用的 struct 漏出闭包；层数上限仅防畸形类型无限制解包
+constexpr uint32_t kMaxContainerDepth = 32;
+
+traits<DynamicType>::ref_type peekStructType(const traits<DynamicType>::ref_type& type)
+{
+    auto cur = type;
+    for (uint32_t depth = 0; cur != nullptr && depth < kMaxContainerDepth; ++depth)
+    {
+        const auto kind = cur->get_kind();
+        if (xtypes::TK_SEQUENCE != kind && xtypes::TK_ARRAY != kind)
+        {
+            break;
+        }
+        auto desc = traits<TypeDescriptor>::make_shared();
+        if (RETCODE_OK != cur->get_descriptor(desc) || desc == nullptr)
+        {
+            return nullptr;
+        }
+        cur = desc->element_type();
+    }
+    if (cur == nullptr || xtypes::TK_STRUCTURE != cur->get_kind())
+    {
+        return nullptr;
+    }
+    auto desc = traits<TypeDescriptor>::make_shared();
+    if (RETCODE_OK != cur->get_descriptor(desc) || desc == nullptr || desc->name().to_string().empty())
+    {
+        return nullptr;
+    }
+    return cur;
+}
+
+// DynamicType → InterfaceType：成员按 MemberId 升序（== 声明序）逐个填 id/name/typeName；
+// 仅支持顶层为 struct，否则经 error 回填 "type [...] is not a struct, ..."。只读入参，不触及节点状态
+bool buildInterfaceType(const traits<DynamicType>::ref_type& dyn_type, const std::string& typeName,
+        yomk::payload::InterfaceType& out, std::string* error)
+{
+    if (dyn_type == nullptr || xtypes::TK_STRUCTURE != dyn_type->get_kind())
+    {
+        if (error != nullptr)
+        {
+            *error = "type [" + typeName + "] is not a struct, interface display unsupported";
+        }
+        return false;
+    }
+    const uint32_t count = dyn_type->get_member_count();
+    DynamicTypeMembersById members;
+    if (RETCODE_OK != dyn_type->get_all_members(members) || members.size() != count)
+    {
+        if (error != nullptr)
+        {
+            *error = "interface introspection failed for [" + typeName + "]";
+        }
+        return false;
+    }
+    out.typeName = typeName;
+    out.members.clear();
+    out.members.reserve(count);
+    for (const auto& pair : members)  // map 按 MemberId 升序 == struct 成员声明序
+    {
+        auto desc = traits<MemberDescriptor>::make_shared();
+        std::string type_text;
+        if (RETCODE_OK != pair.second->get_descriptor(desc) || desc == nullptr
+                || !idlTypeNameOf(desc->type(), type_text))
+        {
+            if (error != nullptr)
+            {
+                *error = "interface introspection failed for [" + typeName + "]";
+            }
+            return false;
+        }
+        yomk::payload::InterfaceMember member;
+        member.id = static_cast<uint32_t>(pair.second->get_id());
+        member.name = desc->name().to_string();
+        member.typeName = std::move(type_text);
+        out.members.push_back(std::move(member));
+    }
+    return true;
+}
+
+// DFS 收集 struct 依赖闭包：path 内视为环、visited 内视为已收集，均跳过；否则先递归后入
+// ordered，故 ordered 为拓扑序（被依赖者在前）；序列/数组元素类型中的 struct 同样穿透。
+// 环与重复类型不报错（成员处保留引用名）
+bool collectInterfaceDependencies(const traits<DynamicType>::ref_type& dyn_type,
+        const std::string& typeName, std::unordered_set<std::string>& visited,
+        std::vector<std::string>& path, std::vector<yomk::payload::InterfaceType>& ordered,
+        std::string* error)
+{
+    const uint32_t count = dyn_type->get_member_count();
+    DynamicTypeMembersById members;
+    if (RETCODE_OK != dyn_type->get_all_members(members) || members.size() != count)
+    {
+        if (error != nullptr)
+        {
+            *error = "interface introspection failed for [" + typeName + "]";
+        }
+        return false;
+    }
+    for (const auto& pair : members)
+    {
+        auto desc = traits<MemberDescriptor>::make_shared();
+        if (RETCODE_OK != pair.second->get_descriptor(desc) || desc == nullptr)
+        {
+            if (error != nullptr)
+            {
+                *error = "interface introspection failed for [" + typeName + "]";
+            }
+            return false;
+        }
+        auto dep_type = peekStructType(desc->type());
+        if (dep_type == nullptr)
+        {
+            continue;  // 标量 / string / enum 等无 struct 依赖
+        }
+        auto dep_desc = traits<TypeDescriptor>::make_shared();
+        if (RETCODE_OK != dep_type->get_descriptor(dep_desc) || dep_desc == nullptr)
+        {
+            continue;
+        }
+        const std::string dep_name = dep_desc->name().to_string();
+        if (dep_name.empty() || std::find(path.begin(), path.end(), dep_name) != path.end()
+                || visited.count(dep_name) > 0)
+        {
+            continue;
+        }
+        path.push_back(dep_name);
+        if (!collectInterfaceDependencies(dep_type, dep_name, visited, path, ordered, error))
+        {
+            return false;
+        }
+        path.pop_back();
+        yomk::payload::InterfaceType dep;
+        if (!buildInterfaceType(dep_type, dep_name, dep, error))
+        {
+            return false;
+        }
+        visited.insert(dep_name);
+        ordered.push_back(std::move(dep));
+    }
+    return true;
+}
+
 bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
-        std::vector<std::string>& lines,
+        yomk::payload::InterfaceInfo& info,
         uint32_t stableRounds, uint32_t intervalMs, std::string* error)
 {
     // 失败原因归类仅用于收敛后回填 error，不参与快照相等性；每轮开头重置，端点离线使类型名
@@ -1307,16 +1454,16 @@ bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
     int lastReason = 0;
     std::string lastDetail;
     // 快照仅拿 seenMtx_ 叶子锁，registry 查询与类型拼装不持锁；TypeObject 未就绪（TypeLookup
-    // 尚未取回）视为本轮未命中继续等待
+    // 尚未取回）视为本轮未命中继续等待；相等性含 root 与整份依赖闭包
     auto snapshot = [this, &typeName, &lastReason, &lastDetail]()
-            -> std::pair<bool, std::vector<std::string>>
+            -> std::pair<bool, yomk::payload::InterfaceInfo>
     {
         lastReason = 0;
         std::lock_guard<std::mutex> lock(seenMtx_);
-        auto buildFromInfo = [this, &typeName, &lastReason, &lastDetail](const auto& info,
-                std::vector<std::string>& out) -> bool
+        auto buildFromInfo = [this, &typeName, &lastReason, &lastDetail](const auto& seen_info,
+                yomk::payload::InterfaceInfo& out) -> bool
         {
-            const auto& ti = info.type_information.type_information;
+            const auto& ti = seen_info.type_information.type_information;
             const auto& tid =
                     (xtypes::TK_NONE != ti.complete().typeid_with_size().type_id()._d())
                     ? ti.complete().typeid_with_size().type_id()
@@ -1328,7 +1475,27 @@ bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
                 lastReason = 1;
                 return false;
             }
-            if (!buildInterfaceLines(type_object, typeName, out, &lastDetail))
+            // TypeObject → DynamicType（shared_ptr 持有；不注册类型不建订阅，纯类型内省）
+            auto dyn_type = DynamicTypeBuilderFactory::get_instance()
+                    ->create_type_w_type_object(type_object)->build();
+            out = yomk::payload::InterfaceInfo{};
+            if (!buildInterfaceType(dyn_type, typeName, out.root, &lastDetail))
+            {
+                lastReason = 2;
+                return false;
+            }
+            // 环检测种子：查询名 + 描述符名（ROS2 等对端两者可能不同，只放其一自引用会漏检）
+            std::string rootName = typeName;
+            auto rootDesc = traits<TypeDescriptor>::make_shared();
+            if (RETCODE_OK == dyn_type->get_descriptor(rootDesc) && rootDesc != nullptr
+                    && !rootDesc->name().to_string().empty())
+            {
+                rootName = rootDesc->name().to_string();
+            }
+            std::unordered_set<std::string> visited;
+            std::vector<std::string> path{typeName, rootName};
+            if (!collectInterfaceDependencies(dyn_type, typeName, visited, path, out.dependencies,
+                        &lastDetail))
             {
                 lastReason = 2;
                 return false;
@@ -1341,7 +1508,7 @@ bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
             {
                 if (info.type_name.to_string() == typeName)
                 {
-                    std::vector<std::string> out;
+                    yomk::payload::InterfaceInfo out;
                     if (buildFromInfo(info, out))
                     {
                         return {true, std::move(out)};
@@ -1357,7 +1524,7 @@ bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
             {
                 if (info.type_name.to_string() == typeName)
                 {
-                    std::vector<std::string> out;
+                    yomk::payload::InterfaceInfo out;
                     if (buildFromInfo(info, out))
                     {
                         return {true, std::move(out)};
@@ -1405,52 +1572,21 @@ bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
         }
         return false;
     }
-    lines = std::move(prev.second);
+    info = std::move(prev.second);
     return true;
 }
 
-bool FastDDSDebugNode::buildInterfaceLines(const xtypes::TypeObject& type_object,
-        const std::string& typeName, std::vector<std::string>& lines, std::string* error)
+void FastDDSDebugNode::appendIdlLines(const yomk::payload::InterfaceType& type,
+        std::vector<std::string>& lines)
 {
-    // TypeObject → DynamicType（shared_ptr 持有；不注册类型不建订阅，纯类型内省）
-    auto dyn_type = DynamicTypeBuilderFactory::get_instance()->create_type_w_type_object(
-                type_object)->build();
-    if (dyn_type == nullptr || xtypes::TK_STRUCTURE != dyn_type->get_kind())
+    // topicExample 仍需 IDL 行集：此处只渲染 root 成员表（不展开 dependencies），输出与改造前
+    // 逐字一致；topic_example 迁移到结构化载荷后删除本函数
+    lines.push_back("struct " + type.typeName + " {");
+    for (const auto& member : type.members)
     {
-        if (error != nullptr)
-        {
-            *error = "type [" + typeName + "] is not a struct, interface display unsupported";
-        }
-        return false;
-    }
-    lines.clear();
-    lines.push_back("struct " + typeName + " {");
-    const uint32_t count = dyn_type->get_member_count();
-    DynamicTypeMembersById members;
-    if (RETCODE_OK != dyn_type->get_all_members(members) || members.size() != count)
-    {
-        if (error != nullptr)
-        {
-            *error = "interface introspection failed for [" + typeName + "]";
-        }
-        return false;
-    }
-    for (const auto& pair : members)  // map 按 MemberId 升序 == struct 成员声明序
-    {
-        auto desc = traits<MemberDescriptor>::make_shared();
-        if (RETCODE_OK != pair.second->get_descriptor(desc) || desc == nullptr)
-        {
-            return false;
-        }
-        std::string field;
-        if (!idlTypeNameOf(desc->type(), field))
-        {
-            return false;
-        }
-        lines.push_back("    " + field + " " + desc->name().to_string() + ";");
+        lines.push_back("    " + member.typeName + " " + member.name + ";");
     }
     lines.push_back("};");
-    return true;
 }
 
 bool FastDDSDebugNode::fetchTypeObject(const std::string& typeName,

@@ -525,6 +525,74 @@ struct TopicInfoArray
     std::vector<TopicInfo> d;
 };
 
+/**
+ * @brief Reflected member of one IDL struct
+ * @note id is the MemberId carried by the type object and only serves as the
+ *       declaration-order sort key; MemberIds are sparse and discontinuous, so
+ *       they must never be used as an index into members
+ */
+// @zh: 单个 IDL struct 的反射成员
+// @zh: note id 即类型对象携带的 MemberId，只作声明序排序键；MemberId 稀疏且不连续，
+// @zh: 严禁当作 members 的下标使用
+struct InterfaceMember
+{
+    uint32_t id = 0;       // MemberId from the type object; sparse sort key, never an index
+    std::string name;      // member identifier
+    std::string typeName;  // bool / int32 / string / sequence<T[, N]> / T[N] / named type
+
+    std::tuple<const uint32_t&, const std::string&, const std::string&> tie() const
+    {
+        return std::tie(id, name, typeName);
+    }
+
+    bool operator==(const InterfaceMember& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const InterfaceMember& rhs) const { return !(*this == rhs); }
+};
+
+/**
+ * @brief Reflected definition of one IDL type (root or dependency)
+ * @note members keeps declaration order; an empty vector means a struct without
+ *       member and is only reachable on the successful resolution path, a failed
+ *       build never yields a partially filled type
+ */
+// @zh: 单个 IDL 类型的反射定义（root 或依赖）
+// @zh: note members 保持声明序；空 vector 表示无成员 struct，且只出现在解析成功路径上，
+// @zh: 构建失败不会产出半成品类型
+struct InterfaceType
+{
+    std::string typeName;                  // fully qualified name, e.g. YomkDdsStd::MultiArrayLayout
+    std::vector<InterfaceMember> members;  // declaration order, empty for a member-less struct
+
+    std::tuple<const std::string&, const std::vector<InterfaceMember>&> tie() const
+    {
+        return std::tie(typeName, members);
+    }
+
+    bool operator==(const InterfaceType& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const InterfaceType& rhs) const { return !(*this == rhs); }
+};
+
+/**
+ * @brief interface_show response: the root type plus the closure of its struct dependencies
+ * @note dependencies is flattened and deduplicated in topological order (a type
+ *       comes before the types that reference it) and never contains root
+ */
+// @zh: interface_show 响应：root 类型及其 struct 依赖闭包
+// @zh: note dependencies 平铺去重、拓扑序（被依赖者在前），且不含 root
+struct InterfaceInfo
+{
+    InterfaceType root;                       // queried type
+    std::vector<InterfaceType> dependencies;  // topological order, root excluded
+
+    std::tuple<const InterfaceType&, const std::vector<InterfaceType>&> tie() const
+    {
+        return std::tie(root, dependencies);
+    }
+
+    bool operator==(const InterfaceInfo& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const InterfaceInfo& rhs) const { return !(*this == rhs); }
+};
+
 /** @brief list_nodes request (independent convergence parameters) */
 // @zh: list_nodes 请求负载（独立收敛参数）
 struct DDSNodeList

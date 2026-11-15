@@ -53,7 +53,7 @@
 
 | 入口 | 能力 | 关键行为 |
 |---|---|---|
-| 链式 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()` | 按类型名输出 IDL 结构 | 经 TypeInformation → TypeObject → DynamicType 纯类型内省（不建订阅），命中返回 StringArray 多行 IDL 源语法（struct 头 + 字段行 + 结尾）；仅支持顶层为 struct 的类型 |
+| 链式 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()` | 按类型名查询类型结构（返回结构化 `InterfaceInfo`） | 经 TypeInformation → TypeObject → DynamicType 纯类型内省（不建订阅），命中返回 `InterfaceInfo`（`root` 成员表 + struct 依赖闭包，拓扑序）；IDL 文本由 CLI 渲染；仅支持顶层为 struct 的类型 |
 | 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()` | 列出全部类型名 | 返回发现缓存中出现的全部类型名（去重字典序排序，每行一个，`type(name).interface_show()` 配套导航）；域内无任何类型返回错误 |
 | CLI `yomkdds interface show <类型名>` / `yomkdds interface list` | 同上 | 输出内容与库侧一致 |
 
@@ -204,7 +204,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 | 形参形态 | 与 `find_topics()` 同分面：`type(typeName)` 必填起始，`rounds(n)` / `interval(ms)` 可选累积器、次序不限，`interface_show()` 终结 |
 | rounds / interval | 收敛语义同 `find_topics()`：缺省/0 钳制为 5 次/200ms；最长阻塞约 rounds*interval |
 | 前提条件 | 仅支持顶层为 struct 的类型；需对端提供 XTypes TypeObject（ROS2 rmw_fastrtps 端点不提供） |
-| 返回值 | 命中返回 StringArray 多行 IDL 源语法（struct 头 + 字段行 + 结尾）；未发现类型/未拿到 TypeObject 等失败原因见 `cli-publish-handbook.md` 错误枚举 |
+| 返回值 | 命中返回 `InterfaceInfo`：`root`（查询类型，成员按声明序，每项 `id`/`name`/`typeName`）+ `dependencies`（struct 依赖闭包，按类型名去重、拓扑序（被依赖者在前）、不含 root，含序列/数组元素类型中的 struct）；IDL 文本由 `yomkdds` 渲染，enum/union/bitset/alias 成员不展开；未发现类型/未拿到 TypeObject 等失败原因见 `cli-publish-handbook.md` 错误枚举 |
 
 ### 查询收敛参数（`yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()`）
 

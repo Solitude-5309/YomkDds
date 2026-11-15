@@ -15,7 +15,7 @@
  *       （topicName/typeName/收发计数/逐端点 nodeName+GUID+结构化 QoS 字段）→
  *       list_topics 结构化 TopicInfoArray 断言（topicName/typeName/计数）→
  *       topic_find 按类型名反查命中唯一行与未匹配类型 eNo → interface_show 按类型名输出
- *       IDL 结构（三行逐行断言 struct 头/四空格缩进字段行/结尾）与未发现类型 eNo →
+ *       结构化 InterfaceInfo（root 成员表 data/string + 空依赖）与未发现类型 eNo →
  *       interface_list 类型名去重清单命中唯一行与空域未发现 eNo → topic_example 按主题名
  *       输出发布示例三段行集（Type/IDL/example 可复制命令逐段断言）与未发现主题 eNo →
  *       topic_pub 发布一次消息（eOk delivered，ack 确认送达）与非法 JSON eNo →
@@ -373,20 +373,26 @@ int main()
                           findMiss.msg.find("type [Not::Exist] not found") != std::string::npos,
                       "topic_find 未匹配类型 → eNo type [Not::Exist] not found（info 族语义）");
 
-                // interface show：按类型名输出 IDL 结构（域 200 纯净唯一类型，TypeObject
-                // 经 TypeLookup 已就绪）→ 恰好三行且逐行符合 IDL 源语法；未发现类型报错（find 族语义）
+                // interface show：按类型名输出反射成员表 + struct 依赖闭包（域 200 纯净唯一类型，
+                // TypeObject 经 TypeLookup 已就绪）→ root 成员恰一个 data/string 且无依赖；
+                // 未发现类型报错（find 族语义）
                 auto ifaceHit = testInvoke(svc, "/interface_show", ::yomk::msgs::DDSDebugInterfaceShow::shared(DDSDebugInterfaceShow{"YomkDdsStd::MString", 5, 100}));
                 check(ifaceHit.status == yomk::payload::ResStatus::Succeeded,
                       "interface_show(YomkDdsStd::MString,5,100ms) → eOk（按类型名命中）");
-                auto ifaceArr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(ifaceHit.data);;
-                check(ifaceArr != nullptr && ifaceArr->d.size() == 3 &&
-                          ifaceArr->d[0] == "struct YomkDdsStd::MString {" &&
-                          ifaceArr->d[1] == "    string data;" &&
-                          ifaceArr->d[2] == "};",
-                      "interface_show 三行逐行符合 IDL 源语法（struct 头/四空格缩进字段行/结尾 };）");
-                for (const auto &line : ifaceArr->d)
+                auto ifacePkg = ::yomk::msgs::unpack<::yomk::msgs::InterfaceInfo>(ifaceHit.data);
+                check(ifacePkg != nullptr && ifacePkg->msg.root.typeName == "YomkDdsStd::MString",
+                      "interface_show 载荷为 InterfaceInfo 且 root.typeName 为查询类型名");
+                check(ifacePkg != nullptr && ifacePkg->msg.root.members.size() == 1 &&
+                          ifacePkg->msg.root.members[0].name == "data" &&
+                          ifacePkg->msg.root.members[0].typeName == "string",
+                      "interface_show root 成员表恰一项 data/string（声明序 + IDL 类型表达式）");
+                check(ifacePkg != nullptr && ifacePkg->msg.dependencies.empty(),
+                      "interface_show MString 无 struct 依赖 → dependencies 为空");
+                if (ifacePkg != nullptr)
                 {
-                    std::cout << "[OBSERVE] iface |" << line << "|" << std::endl;
+                    std::cout << "[OBSERVE] iface root=" << ifacePkg->msg.root.typeName
+                              << " members=" << ifacePkg->msg.root.members.size()
+                              << " deps=" << ifacePkg->msg.dependencies.size() << std::endl;
                 }
                 auto ifaceMiss = testInvoke(svc, "/interface_show", ::yomk::msgs::DDSDebugInterfaceShow::shared(DDSDebugInterfaceShow{"Not::Exist", 1, 50}));
                 check(ifaceMiss.status == yomk::payload::ResStatus::Failed &&

@@ -123,18 +123,21 @@ public:
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
-    // 收敛查询类型 IDL 结构描述（与 listTopics/topicInfo 互不影响；仅支持顶层为 struct 的类型）。
+    // 收敛查询类型反射结构（与 listTopics/topicInfo 互不影响；仅支持顶层为 struct 的类型）。
+    // info.root 为查询类型本身，info.dependencies 为 struct 依赖闭包（按类型名去重、DFS
+    // 后序拓扑序，被依赖者在前，不含 root；含序列/数组元素类型中的 struct）。
     // error 三态回填：未入域 "debug node not created"、类型未出现 "type [...] not found"、
     // TypeObject 不可得 "type object for [...] not available"（ROS2 rmw_fastrtps 等不参与 XTypes
     // 类型发现的端点即此情形）、顶层非 struct "type [...] is not a struct, ..."。
     bool interfaceShow(const std::string& typeName,
-            std::vector<std::string>& lines,
+            yomk::payload::InterfaceInfo& info,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
     // 收敛查询指定主题的发布示例三段行集（Type / IDL / example，与 listTopics/topicInfo/
-    // interfaceShow 互不影响）：依次拿类型名 → IDL 行集 → JSON 发布示例（与 json_deserialize
-    // 输入格式对称，可直接作为发布载荷模板）。失败按步骤各自归类回填 error，不统一报 not found。
+    // interfaceShow 互不影响）：依次拿类型名 → IDL 行集（由 interfaceShow 的 root 成员表渲染，
+    // 不展开依赖的过渡实现）→ JSON 发布示例（与 json_deserialize 输入格式对称，可直接作为
+    // 发布载荷模板）。失败按步骤各自归类回填 error，不统一报 not found。
     // 最长阻塞约 2*stableRounds*intervalMs。
     bool topicExample(const std::string& topicName,
             std::vector<std::string>& lines,
@@ -196,16 +199,16 @@ private:
             std::vector<std::pair<std::string, std::string>>& subscribers,
             uint32_t stableRounds, uint32_t intervalMs);
     // Precondition: 调用方已完成入域检查；失败按收敛末轮实际原因归类写 error
-    // （类型名未出现 / TypeObject 不可得 / IDL 拼装失败三态）。
+    // （类型名未出现 / TypeObject 不可得 / 反射采集失败三态）。
     bool waitForInterfaceStable(const std::string& typeName,
-            std::vector<std::string>& lines,
+            yomk::payload::InterfaceInfo& info,
             uint32_t stableRounds, uint32_t intervalMs,
             std::string* error = nullptr);
-    // TypeObject → DynamicType → IDL 行集拼装；仅支持顶层为 struct，否则 false 并经 error
-    // 回填 "type [...] is not a struct, interface display unsupported"。仅读取入参，不触及节点状态。
-    bool buildInterfaceLines(const eprosima::fastdds::dds::xtypes::TypeObject& type_object,
-            const std::string& typeName, std::vector<std::string>& lines,
-            std::string* error = nullptr);
+    // DynamicType → 成员表（成员按 MemberId 升序 == 声明序，idlTypeNameOf 产出类型文本）；
+    // 依赖闭包采集与类型重建均无节点状态，实现为 .cpp 内文件级函数（见 buildInterfaceType /
+    // collectInterfaceDependencies）。
+    // 将单个 InterfaceType 渲染为 IDL 行集（topicExample 尚未改造的过渡实现，届时删除）
+    void appendIdlLines(const yomk::payload::InterfaceType& type, std::vector<std::string>& lines);
     // 锁内仅查发现缓存与拷贝 TypeObject，锁外重建 DynamicType 取默认值样本序列化
     // （不注册类型不建订阅，纯类型内省）；失败分支各自经 error 回填具体原因。
     bool jsonExampleOfType(const std::string& typeName, std::string& out,

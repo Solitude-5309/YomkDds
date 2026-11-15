@@ -747,20 +747,27 @@ public:
             .request();
     }
     /**
-     * @brief Dump the IDL struct description of the accumulated data type (request terminator)
-     * @return Response carrying a StringArray packet of IDL source lines (struct header,
-     *         one line per field, closing brace); Invalid when YomkServer is not
-     *         initialized
+     * @brief Dump the reflected struct description of the accumulated data type (request terminator)
+     * @return Response carrying an InterfaceInfo packet: root (the queried type, members in
+     *         declaration order, each with id/name/typeName) plus dependencies (struct closure
+     *         flattened and deduplicated in topological order, dependencies before their users,
+     *         root excluded); Invalid when YomkServer is not initialized
      * @note Pure type introspection through TypeInformation -> TypeObject ->
      *       DynamicType, no subscription is created; only top-level struct types are
      *       supported, and the peer must publish XTypes TypeObject data (ROS2
-     *       rmw_fastrtps endpoints do not). Same convergence semantics as
-     *       find_topics(): rounds()/interval(), 0 clamped to 5 rounds / 200ms
+     *       rmw_fastrtps endpoints do not). Named struct members keep a reference name and
+     *       their definitions are expanded into dependencies (also through sequence/array
+     *       element types); enum/union/bitset/alias members are never expanded, and a cycle
+     *       stops the recursion. Same convergence semantics as find_topics(): rounds()/
+     *       interval(), 0 clamped to 5 rounds / 200ms
      */
-    // @zh: 按累积的类型名输出其 IDL 结构描述（请求终结）
-    // @zh: return Response 携带 StringArray 包，多行 IDL 源语法（struct 头 + 字段行 + 结尾）；未初始化返回 Invalid
+    // @zh: 按累积的类型名输出其 struct 反射描述（请求终结）
+    // @zh: return Response 携带 InterfaceInfo 包：root（查询类型，成员按声明序，每项 id/name/typeName）
+    // @zh: 与 dependencies（struct 依赖闭包，平铺去重、拓扑序（被依赖者在前）、不含 root）；未初始化返回 Invalid
     // @zh: note 经 TypeInformation → TypeObject → DynamicType 纯类型内省，不建订阅；
     // @zh: 仅支持顶层为 struct 的类型，且需对端提供 XTypes TypeObject（ROS2 rmw_fastrtps 端点不提供）；
+    // @zh: 命名 struct 成员保留引用名，其定义展开进 dependencies（含序列/数组元素类型中的 struct）；
+    // @zh: enum/union/bitset/alias 成员不展开，遇环停止递归
     // @zh: 收敛语义同 find_topics()：rounds()/interval()，0 钳制为 5 次/200ms
     yomk::payload::Response interface_show()
     {

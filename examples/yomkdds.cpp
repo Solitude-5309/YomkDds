@@ -1643,9 +1643,9 @@ static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t
 }
 
 // interface show 子命令：按数据类型名输出该类型的 IDL 结构描述（类型名精确匹配，FastDDS
-// 无原生类型文本化能力，自设计对齐主流 schema 源语法形态）：命中逐行输出（struct 头 +
-// 四空格缩进字段行 + 结尾 };）；未发现类型报错退出（可发现类型名拼写错误）。
-// 无 Ctrl+C 循环，查完即退
+// 无原生类型文本化能力，自设计对齐主流 schema 源语法形态）：服务端只回成员表与 struct 依赖
+// 闭包，此处按拓扑序先渲染依赖 struct 定义（块间空行）再渲染主 struct；无依赖时输出与旧版
+// 逐字相同；未发现类型报错退出（可发现类型名拼写错误）。无 Ctrl+C 循环，查完即退
 static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint32_t waitRounds)
 {
     ::yomk::server().init();
@@ -1663,7 +1663,7 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
         return 1;
     }
 
-    // 2. 独立收敛按类型名查询 IDL 结构行集
+    // 2. 独立收敛按类型名查询反射结构包
     resp = yomk::dds().debug().type(typeName).rounds(waitRounds).interval(200).interface_show();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
@@ -1671,17 +1671,28 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
-    if (arr == nullptr || arr->d.empty())
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::InterfaceInfo>(resp.data);
+    if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("interface show failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
-    for (const auto &line : arr->d)
+    // 依赖 struct 定义按拓扑序前置输出（被依赖者在前），块间空行；最后输出主 struct
+    auto printType = [](const ::yomk::payload::InterfaceType &type) {
+        std::cout << "struct " << type.typeName << " {\n";
+        for (const auto &member : type.members)
+        {
+            std::cout << "    " << member.typeName << " " << member.name << ";\n";
+        }
+        std::cout << "};\n";
+    };
+    for (const auto &dep : info->msg.dependencies)
     {
-        std::cout << line << "\n";
+        printType(dep);
+        std::cout << "\n";
     }
+    printType(info->msg.root);
     std::cout.flush();
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）

@@ -349,29 +349,29 @@ namespace
         check(testInvoke(svcDebug, "/create_node", ::yomk::msgs::DDSDebugNode::shared(DDSDebugNode{TEST_DOMAIN})).status == yomk::payload::ResStatus::Succeeded,
               "QoS-B4 创建调试节点（域 200）→ eOk");
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 调试参与者发现已在线端点
-        auto hitV = testInvoke(svcDebug, "/topic_info", ::yomk::msgs::DDSDebugInfo::shared(DDSDebugInfo{"t_be", 10, 200, true}));
+        auto hitV = testInvoke(svcDebug, "/topic_info", ::yomk::msgs::DDSDebugInfo::shared(DDSDebugInfo{"t_be", 10, 200}));
         check(hitV.status == yomk::payload::ResStatus::Succeeded && hitV.data != nullptr,
-              "QoS-B4 topic info -v t_be → eOk（发现缓存命中）");
-        auto infoArrV = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(hitV.data);;
-        check(infoArrV != nullptr, "QoS-B4 verbose 返回包可解包为 StringArray");
+              "QoS-B4 topic info t_be → eOk（发现缓存命中）");
+        auto infoV = ::yomk::msgs::unpack<::yomk::msgs::TopicInfo>(hitV.data);
+        check(infoV != nullptr, "QoS-B4 返回包可解包为 TopicInfo");
         bool hasBe = false;
         bool hasVol = false;
-        if (infoArrV != nullptr)
+        if (infoV != nullptr)
         {
-            for (const auto &line : infoArrV->d)
+            for (const auto &ep : infoV->msg.publishers)
             {
-                if (line == "  Reliability: BEST_EFFORT")
+                if (ep.qos.reliability == "BEST_EFFORT")
                 {
                     hasBe = true;
                 }
-                if (line == "  Durability: VOLATILE")
+                if (ep.qos.durability == "VOLATILE")
                 {
                     hasVol = true;
                 }
             }
         }
-        check(hasBe, "QoS-B4 writer QoS 读回 Reliability: BEST_EFFORT（底座 RELIABLE → profile 生效直证）");
-        check(hasVol, "QoS-B4 writer QoS 读回 Durability: VOLATILE（底座 TRANSIENT_LOCAL → profile 生效直证）");
+        check(hasBe, "QoS-B4 writer QoS 读回 reliability=BEST_EFFORT（底座 RELIABLE → profile 生效直证）");
+        check(hasVol, "QoS-B4 writer QoS 读回 durability=VOLATILE（底座 TRANSIENT_LOCAL → profile 生效直证）");
         check(testInvoke(svcDebug, "/delete_node", nullptr).status == yomk::payload::ResStatus::Succeeded,
               "删除调试节点 → eOk");
         check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("qos2_node")).status == yomk::payload::ResStatus::Succeeded,

@@ -253,13 +253,11 @@ namespace
         {
             FastDDSDebugNode dbg;
             check(dbg.setDomainId(TEST_DOMAIN), "S1 debug 节点 setDomainId(205) → true");
-            std::string typeName;
-            size_t pubCount = 0;
-            size_t subCount = 0;
-            check(dbg.topicInfo(SN_TOPIC, typeName, pubCount, subCount, 5, 200),
+            yomk::payload::TopicInfo info;
+            check(dbg.topicInfo(SN_TOPIC, info, 5, 200),
                   "S1 topicInfo(chatter_naming) 收敛命中 → true");
-            check(typeName == kRosTypeName,
-                  "S1 topicInfo 读回 Type == std_msgs::msg::dds_::String_（发现名即新名）");
+            check(info.typeName == kRosTypeName,
+                  "S1 topicInfo 读回 typeName == std_msgs::msg::dds_::String_（发现名即新名）");
         }
 
         check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("setname_pub")).status ==

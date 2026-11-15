@@ -8,7 +8,7 @@
 
 两个入口，能力对齐：
 
-- **库 API**：调试节点经链式 `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` 创建、`yomk::dds().debug().quit()` 退出，主题登记经 `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()`，主题清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()`，单主题详情经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()`，单主题发布示例经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()`，消息样本经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()`，发布经 `yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`，类型反查经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()`，类型内省经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()`，类型清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()`，节点清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()`，节点详情经 `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()`（全部定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
+- **库 API**：调试节点经链式 `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` 创建、`yomk::dds().debug().quit()` 退出，主题登记经 `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()`，主题清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()`（返回结构化载荷，三种展示形态由调用方自己拼），单主题详情经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()`，单主题发布示例经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()`，消息样本经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()`，发布经 `yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`，类型反查经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()`，类型内省经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()`，类型清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()`，节点清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()`，节点详情经 `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()`（全部定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
 - **CLI**：`yomkdds topic/node/interface` 命令经 `YomkDdsDebugService` 实现，各命令小节附等价库调用。
 
 ## 能力清单
@@ -27,19 +27,18 @@
 
 | 入口 | 能力 | 关键行为 |
 |---|---|---|
-| 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()` | 列出域内主题 | 返回 StringArray 每行一个 topicName（仅主题名，不含类型）按主题名排序；远端 DataWriter 与 DataReader 均记录（仅有订阅者而无发布者的主题同样列出）；列表可为空（域内无 writer/reader） |
-| 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].with_type().topics()` | 列出域内主题与类型名 | 与 `topics()` 同端点同收敛语义，`with_type()` 开启类型名模式；返回 StringArray 每行 `主题名 [类型名]`（单空格 + 方括号，类型名原样输出） |
+| 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()` | 列出域内主题（含类型名与端点详情） | 返回 `TopicInfoArray`，每项 `TopicInfo` 携带 `topicName` / `typeName`（原样输出）/ `publisherCount` / `subscriptionCount` / `publishers` / `subscriptions` 逐端点清单（归属节点名、FastDDS 原生 GUID、结构化 QoS 字段；端点类型由所在清单表达）；按主题名排序；远端 DataWriter 与 DataReader 均记录（仅有订阅者而无发布者的主题同样列出）；列表可为空（域内无 writer/reader）；终端文本由调用方渲染（CLI 缺省仅打主题名，`-t` 附类型名，`-v` 展开端点详情） |
 | 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()` | 列出域内节点 | 独立收敛查询域内已发现的命名参与者（不依赖 list_topics/topic_info）；participant_name 非空且非 "/" 才列出（空名与 ROS2 参与者默认占位名 "/" 跳过，不输出 GUID 串），按名称排序；调试节点自身不在自身发现回调中，天然不列出；列表可为空 |
-| CLI `yomkdds topic list` / `yomkdds topic list [-t]` | 列出域内全部已发现主题 | `-t`（`--types`）进入类型名模式，每行输出 `主题名 [类型名]`（对齐 `ros2 topic list -t` 形态） |
+| CLI `yomkdds topic list [-t \| --types] [-v \| --verbose]` | 列出域内全部已发现主题 | 缺省每行仅主题名；`-t` 每行 `主题名 [类型名]`（对齐 `ros2 topic list -t` 形态）；`-v` 逐主题输出 `主题名 [类型名]` 标题 + 与 `topic info -v` 同构的端点详情段；三种形态只是同一份结构化载荷的不同渲染 |
 | CLI `yomkdds node list` | 列出域内全部已发现的命名参与者 | 同域其他进程的调试节点与 bag 节点分别以唯一名 `yomkdds_debug_<uid>` / `yomkdds_bag_<uid>` 列出（uid 为 12 位随机 hex，多进程各自的调试/录制节点可区分） |
 
 ### 组 3：主题/节点详情
 
 | 入口 | 能力 | 关键行为 |
 |---|---|---|
-| 链式 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)][.verbose(true)].info()` | 查询主题详情 / 端点详情 | 独立收敛查询单个主题的发现详情（不依赖查询分面的 `topics()`）；命中返回 StringArray 三行：`Type: 原始 DDS 类型名`（不做任何风格转换）、`Publisher count: N`、`Subscription count: N`；`verbose(true)` 时在计数外逐端点输出 Node name（归属参与者名）/ Endpoint type（PUBLISHER/SUBSCRIPTION）/ GUID（FastDDS 原生格式）/ QoS profile 详情段（count 为 0 的端点类型无清单段） |
+| 链式 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()` | 查询主题详情 / 端点详情 | 独立收敛查询单个主题的发现详情（不依赖查询分面的 `topics()`）；命中返回单个结构化 `TopicInfo`（与 `topics()` 的单项完全同构）：`topicName` / `typeName`（原始 DDS 类型名，不做任何风格转换）/ 收发计数 / `publishers`+`subscriptions` 逐端点清单（归属节点名、GUID、结构化 QoS 字段；端点类型由所在清单表达）；三行计数文本与端点详情段均由调用方渲染 |
 | 链式 `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()` | 查询节点详情 | 独立收敛查询指定节点名参与者的发布/订阅主题清单（归属判定基于 RTPS 规范保证的"端点 GUID 前缀 == 所属参与者 GUID 前缀"）；返回节点名行 + `Subscribers:`/`Publishers:` 两段（每行 `    <主题名>: <类型名>`，类型名原样输出，空段仅打段头，同名多参与者端点合并） |
-| CLI `yomkdds topic info <主题名>` / `yomkdds topic info -v <主题名>` | 查询单个主题详情 | `-v`（`--verbose`）端点详情模式：逐端点列出 Node name/GUID/QoS profile（ROS2 风格键值行） |
+| CLI `yomkdds topic info [-v \| --verbose] <主题名>` | 查询单个主题详情 | 缺省三行：`Type: 原始类型名` / `Publisher count: N` / `Subscription count: N`；`-v`（`--verbose`）端点详情模式：在计数外逐端点追加 Node name / Endpoint type / GUID / QoS profile 段（count 为 0 的端点类型无清单段）；均属 CLI 侧渲染 |
 | CLI `yomkdds node info <节点名>` | 查询指定节点的发布/订阅主题清单 | 形态对齐 `ros2 node info` |
 
 ### 组 4：类型反查
@@ -129,12 +128,14 @@ int main(int argc, char *argv[])
 ```cpp
 ::yomk::server().init();
 ::yomk::server().srv<YomkDdsDebugService>().create();
-auto resp = yomk::dds().debug().domain(0).create();          // 1. 创建调试节点
-resp = yomk::dds().debug().rounds(5).interval(200).topics();          // 2. 收敛查询：连续 5 次 200ms 快照不变即返回 StringArray 包
-auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.m_data);;
+auto resp = yomk::dds().debug().domain(0).create();      // 1. 创建调试节点
+// 2. 收敛查询：连续 5 次 200ms 快照不变即返回结构化 TopicInfoArray 包
+resp = yomk::dds().debug().rounds(5).interval(200).topics();
+auto arr = ::yomk::msgs::unpack<::yomk::msgs::TopicInfoArray>(resp.data);
 if (arr != nullptr)
 {
-    for (const auto &line : arr->d) { std::cout << line << "\n"; }
+    // 终端形态由调用方决定：此处仅打主题名（附类型名同理，取 typeName）
+    for (const auto &info : arr->d.d) { std::cout << info.topicName << "\n"; }
 }
 resp = yomk::dds().debug().quit();                // 3. 退出前显式清理
 ```
@@ -161,21 +162,20 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 | qos | reader QoS 描述 `DDSQosProfile`，全哨兵（默认）= BEST_EFFORT+VOLATILE depth 1；CLI 侧经 `--qos-ros`/`--qos-*`/`--qos-file` 指定 |
 | 重复登记 | 同一主题二次登记返回错误（`already registered`） |
 
-### 主题详情参数（`yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)][.verbose(true)].info()`）
+### 主题详情参数（`yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()`）
 
 | 参数 | 约束 |
 |---|---|
-| 形参形态 | `topic(topicName)` 必填起始，`rounds(n)` / `interval(ms)` / `verbose(true)` 可选累积器、次序不限，`info()` 终结；只影响查询，不影响 `print()` 的登记行为 |
+| 形参形态 | `topic(topicName)` 必填起始，`rounds(n)` / `interval(ms)` 可选累积器、次序不限，`info()` 终结；只影响查询，不影响 `print()` 的登记行为 |
 | rounds | 连续多少次快照集合不变即认为收敛；缺省/0 由节点层钳制为默认 5 次 |
 | interval | 快照轮询间隔（毫秒）；缺省/0 钳制为默认 200ms；最长阻塞约 rounds*interval |
-| verbose | `verbose(true)` 开启端点详情模式（对应 CLI `topic info -v/--verbose`）；`verbose(false)`/缺省为三行形态 |
-| 返回值 | 非 verbose：StringArray 恰三行（Type / Publisher count / Subscription count）；verbose：另附逐端点 Node name/Endpoint type/GUID/QoS profile 段；未在收敛窗口内发现该主题返回错误 |
+| 返回值 | 单个 `TopicInfo` 结构化载荷（类型名 + 收发计数 + 逐端点 nodeName/guid/结构化 QoS），数据一次给全，展示多少由调用方决定（CLI 缺省仅三行，`-v` 追加端点段）；未在收敛窗口内发现该主题返回错误 |
 
 ### 主题发布示例参数（`yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()`）
 
 | 参数 | 约束 |
 |---|---|
-| 形参形态 | 与 `info()` 同分面：`topic(topicName)` 必填起始，`rounds(n)` / `interval(ms)` 可选累积器、次序不限，`pub_example()` 终结；不看 `verbose()` |
+| 形参形态 | 与 `info()` 同分面：`topic(topicName)` 必填起始，`rounds(n)` / `interval(ms)` 可选累积器、次序不限，`pub_example()` 终结 |
 | rounds / interval | 收敛语义同 `info()`：缺省/0 钳制为 5 次/200ms；最长阻塞约 rounds*interval |
 | 返回值 | StringArray 三段行集（`Type:` 类型名、`IDL:` + IDL 行集、`example:` + 可复制发布命令）；未在收敛窗口内发现该主题返回错误 |
 
@@ -183,7 +183,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 | 参数 | 约束 |
 |---|---|
-| 形参形态 | 与 `info()`/`pub_example()` 同分面：`topic(topicName)` 必填起始，`rounds(n)` / `interval(ms)` 可选累积器、次序不限，`sample_to_json()` 终结；不看 `verbose()` |
+| 形参形态 | 与 `info()`/`pub_example()` 同分面：`topic(topicName)` 必填起始，`rounds(n)` / `interval(ms)` 可选累积器、次序不限，`sample_to_json()` 终结 |
 | rounds / interval | 收敛语义同 `info()`：缺省/0 钳制为 5 次/200ms；最长阻塞约 rounds*interval |
 | 返回值 | StringArray 恰 2 行（d[0]=类型名、d[1]=紧凑默认值 JSON 样本）；未在收敛窗口内发现该主题返回错误 |
 | 落盘 | 请求负载无输出路径字段：库侧只返回两行，是否写文件及路径由调用方决定（CLI `topic pub -ef -o <目录>` 的写文件为 CLI 本地行为） |
@@ -206,15 +206,14 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 | 前提条件 | 仅支持顶层为 struct 的类型；需对端提供 XTypes TypeObject（ROS2 rmw_fastrtps 端点不提供） |
 | 返回值 | 命中返回 StringArray 多行 IDL 源语法（struct 头 + 字段行 + 结尾）；未发现类型/未拿到 TypeObject 等失败原因见 `cli-publish-handbook.md` 错误枚举 |
 
-### 查询收敛参数（`yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()`）
+### 查询收敛参数（`yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()`）
 
 | 参数 | 约束 |
 |---|---|
-| 形参形态 | `rounds(n)` / `interval(ms)` / `with_type()` 均为可选累积器、次序不限，`topics()` 终结；只影响查询类终结，不影响 `create()`/`quit()` 建点与退出的参数（`interfaces()` 同分面：不看 `with_type()`，`rounds(n)`/`interval(ms)` 语义一致） |
+| 形参形态 | `rounds(n)` / `interval(ms)` 均为可选累积器、次序不限，`topics()` 终结；只影响查询类终结，不影响 `create()`/`quit()` 建点与退出的参数（`interfaces()` 同分面：`rounds(n)`/`interval(ms)` 语义一致） |
 | rounds | 连续多少次快照集合不变即认为收敛；缺省/0 由节点层钳制为默认 5 次 |
 | interval | 快照轮询间隔（毫秒）；缺省/0 钳制为默认 200ms；最长阻塞约 rounds*interval |
-| with_type | 布尔开关（无参）：开启类型名模式，`topics()` 每行变为 `主题名 [类型名]`（对应 CLI `-t/--types`）；缺省关闭 |
-| 返回值 | 命中返回 StringArray 包（每行一个主题名；开启 with_type() 时为 `主题名 [类型名]`），列表可为空 |
+| 返回值 | 命中返回 `TopicInfoArray` 包（每项 `TopicInfo`：主题名/类型名/收发计数/逐端点清单），按主题名排序，列表可为空；只打主题名、附类型名还是展开端点详情属调用方决策（CLI `-t`/`-v` 选择） |
 
 ### 收敛查询语义
 
@@ -222,7 +221,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 - 每 intervalMs（默认 200ms）轮询一次发现缓存快照，连续 stableRounds 次集合不变即返回；
 - 0 值钳制默认 5 次/200ms，最长阻塞约 stableRounds*intervalMs；
-- **链式侧**：`rounds(n)` / `interval(ms)` / `with_type()` / `verbose(true)` 为调试分面、`topic(name)`/`type(name)`/`node(name)` 子分面的可选累积器（缺省不累积即 0/关，由节点层钳制为 5 次/200ms），`topics()` / `interfaces()` / `nodes()` / `topic(name)…info()`/`pub_example()`/`sample_to_json()`/`publish()` / `type(name)…find_topics()`/`interface_show()` / `node(name)…info()` 终结；
+- **链式侧**：`rounds(n)` / `interval(ms)` 为调试分面、`topic(name)`/`type(name)`/`node(name)` 子分面的可选累积器（缺省不累积即 0/关，由节点层钳制为 5 次/200ms），`topics()` / `interfaces()` / `nodes()` / `topic(name)…info()`/`pub_example()`/`sample_to_json()`/`publish()` / `type(name)…find_topics()`/`interface_show()` / `node(name)…info()` 终结；
 - **CLI 侧**：收敛判定次数经环境变量 `YOMKDDS_DDS_DISCOVER_ROUNDS` 配置（默认 5；值须为 >=1 的整数，非法报错退出；yomkdds 启动时无该变量则自动创建并默认 5，同时幂等写入 `~/.bashrc`）。生效命令：`topic list`、`topic info`、`topic type`、`topic find`、`interface show`、`interface list`、`topic pub -e`、`topic pub -ef`、`topic pub`、`node list` 与 `node info`；`topic print`/`topic hz` 为持续订阅/测量型不用。该环境变量为收敛次数唯一配置入口，详见[环境变量与公共配置参考](../manual/env-vars-reference.md)。
 
 ### 发布参数（`yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`）

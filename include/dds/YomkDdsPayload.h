@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
+#include <tuple>
 #include <vector>
 
 namespace yomk::payload
@@ -395,7 +396,6 @@ struct DDSDebugList
 {
     uint32_t stableRounds = 0;  // consecutive unchanged-snapshot rounds required
     uint32_t intervalMs = 0;    // snapshot polling interval in milliseconds
-    bool types = false;         // true: each line is "topic [type]"
 };
 
 /** @brief topic_info request (independent convergence parameters) */
@@ -405,7 +405,124 @@ struct DDSDebugInfo
     std::string topicName = "";  // topic to query
     uint32_t stableRounds = 0;
     uint32_t intervalMs = 0;
-    bool verbose = false;        // true: per-endpoint node name/GUID/QoS lines
+};
+
+// ===== YomkDdsDebugService response payloads =====
+
+/** @brief Sentinel of the duration fields: -1 = infinite, other values are nanoseconds */
+// @zh: 时长字段哨兵：-1=无限，其余值即纳秒
+constexpr int64_t kInfiniteDurationNs = -1;
+
+/**
+ * @brief Structured QoS of one discovered endpoint (writer or reader)
+ * @note Duration fields are nanoseconds (kInfiniteDurationNs = infinite); the
+ *       *Advertised flags tell whether the discovery sample carried that optional
+ *       policy at all, so a false flag means the related fields are meaningless
+ *       rather than zero-valued
+ */
+// @zh: 单个已发现端点（writer 或 reader）的结构化 QoS
+// @zh: note 时长字段为纳秒（kInfiniteDurationNs = 无限）；*Advertised 标记发现样本是否携带该可选
+// @zh: 策略——标志为 false 时相关字段不是"零值"而是"未公告"
+struct TopicEndpointQos
+{
+    bool historyAdvertised = false;  // false: history/depth not carried by the discovery sample
+    bool historyKeepAll = false;     // true: KEEP_ALL, false: KEEP_LAST
+    uint32_t depth = 0;              // KEEP_LAST depth as advertised
+    std::string reliability;         // RELIABLE / BEST_EFFORT / UNKNOWN
+    std::string durability;          // VOLATILE / TRANSIENT_LOCAL / TRANSIENT / PERSISTENT / UNKNOWN
+    int64_t deadlineNs = kInfiniteDurationNs;
+    int64_t lifespanNs = kInfiniteDurationNs;  // writer side
+    std::string liveliness;                    // AUTOMATIC / MANUAL_BY_PARTICIPANT / MANUAL_BY_TOPIC / UNKNOWN
+    int64_t livelinessLeaseNs = kInfiniteDurationNs;
+    int64_t latencyBudgetNs = 0;
+    std::string ownership;           // SHARED / EXCLUSIVE / UNKNOWN
+    int32_t ownershipStrength = 0;   // writer side
+    int64_t timeBasedFilterNs = 0;   // reader side
+    std::string destinationOrder;    // BY_RECEPTION_TIMESTAMP / BY_SOURCE_TIMESTAMP / UNKNOWN
+    std::vector<std::string> partition;  // partition names, empty when not announced
+    bool resourceLimitsAdvertised = false;
+    int32_t maxSamples = 0;
+    int32_t maxInstances = 0;
+    int32_t maxSamplesPerInstance = 0;
+    bool publishModeAdvertised = false;  // writer side
+    bool publishModeAsync = false;
+    bool transportPriorityAdvertised = false;
+    int32_t transportPriority = 0;
+    bool writerDataLifecycleAdvertised = false;
+    bool autodisposeUnregisteredInstances = false;
+
+    // 收敛轮询的快照相等性判定（逐字段覆盖，新增字段须同步入 tie）
+    std::tuple<const bool&, const bool&, const uint32_t&, const std::string&, const std::string&,
+            const int64_t&, const int64_t&, const std::string&, const int64_t&, const int64_t&,
+            const std::string&, const int32_t&, const int64_t&, const std::string&,
+            const std::vector<std::string>&, const bool&, const int32_t&, const int32_t&,
+            const int32_t&, const bool&, const bool&, const bool&, const int32_t&, const bool&,
+            const bool&>
+    tie() const
+    {
+        return std::tie(historyAdvertised, historyKeepAll, depth, reliability, durability,
+                deadlineNs, lifespanNs, liveliness, livelinessLeaseNs, latencyBudgetNs, ownership,
+                ownershipStrength, timeBasedFilterNs, destinationOrder, partition,
+                resourceLimitsAdvertised, maxSamples, maxInstances, maxSamplesPerInstance,
+                publishModeAdvertised, publishModeAsync, transportPriorityAdvertised,
+                transportPriority, writerDataLifecycleAdvertised,
+                autodisposeUnregisteredInstances);
+    }
+
+    bool operator==(const TopicEndpointQos& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const TopicEndpointQos& rhs) const { return !(*this == rhs); }
+};
+
+/**
+ * @brief One discovered endpoint of a topic
+ * @note The owning container (publishers / subscriptions) expresses the endpoint
+ *       kind, so no endpoint-type string is stored here
+ */
+// @zh: 主题的一个已发现端点
+// @zh: note 端点类型由所在容器（publishers / subscriptions）表达，不重复存字符串
+struct TopicEndpointInfo
+{
+    std::string nodeName;  // owning participant name; empty when the prefix is not matched
+    std::string guid;      // FastDDS native GUID text
+    TopicEndpointQos qos;
+
+    std::tuple<const std::string&, const std::string&, const TopicEndpointQos&> tie() const
+    {
+        return std::tie(nodeName, guid, qos);
+    }
+
+    bool operator==(const TopicEndpointInfo& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const TopicEndpointInfo& rhs) const { return !(*this == rhs); }
+};
+
+/** @brief Structured discovery details of one topic (superset of `topic info -v`) */
+// @zh: 单个主题的结构化发现详情（`topic info -v` 全部信息的超集）
+struct TopicInfo
+{
+    std::string topicName;
+    std::string typeName;  // raw DDS type name, never style-converted
+    uint32_t publisherCount = 0;
+    uint32_t subscriptionCount = 0;
+    std::vector<TopicEndpointInfo> publishers;     // writers, ordered as discovered
+    std::vector<TopicEndpointInfo> subscriptions;  // readers, ordered as discovered
+
+    std::tuple<const std::string&, const std::string&, const uint32_t&, const uint32_t&,
+            const std::vector<TopicEndpointInfo>&, const std::vector<TopicEndpointInfo>&>
+    tie() const
+    {
+        return std::tie(topicName, typeName, publisherCount, subscriptionCount, publishers,
+                subscriptions);
+    }
+
+    bool operator==(const TopicInfo& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const TopicInfo& rhs) const { return !(*this == rhs); }
+};
+
+/** @brief list_topics response: one TopicInfo per discovered topic (sorted by topic name) */
+// @zh: list_topics 响应：每个已发现主题一项 TopicInfo（按主题名排序）
+struct TopicInfoArray
+{
+    std::vector<TopicInfo> d;
 };
 
 /** @brief list_nodes request (independent convergence parameters) */

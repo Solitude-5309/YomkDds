@@ -89,31 +89,20 @@ public:
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
-    // topicInfo verbose 模式输出单元：nodeName 经 GUID 前缀归属匹配，未发现对应参与者时为空串；
-    // guid 为 FastDDS 原生格式；qosLines 为已缩进的 ROS2 风格键值行
-    struct EndpointDetail
-    {
-        std::string nodeName;
-        std::string guid;
-        std::vector<std::string> qosLines;
-
-        // 供收敛轮询的快照相等性判定（tuple/vector 比较要求元素可比较）
-        bool operator==(const EndpointDetail& rhs) const
-        {
-            return nodeName == rhs.nodeName && guid == rhs.guid && qosLines == rhs.qosLines;
-        }
-    };
     // 收敛查询单主题详情（与 listTopics 互不影响）：命中（任一 writer 或 reader 已发现）返回
-    // true 并填充 typeName（原始 DDS 类型名）与端点计数；publishers/subscribers 非 nullptr 时
-    // （verbose 模式）额外填充各端点详情，快照相等性含端点详情。0 值钳制默认 5 次/200ms；
-    // 最长阻塞约 stableRounds*intervalMs。未入域 error="debug node not created"，未发现
-    // error="topic [...] not found"。
-    bool topicInfo(const std::string& topicName, std::string& typeName,
-            size_t& publisherCount, size_t& subscriptionCount,
+    // true 并填充完整 TopicInfo（主题名/类型名/收发计数/逐端点名与结构化 QoS）；快照相等性含
+    // 端点详情。0 值钳制默认 5 次/200ms；最长阻塞约 stableRounds*intervalMs。未入域
+    // error="debug node not created"，未发现 error="topic [...] not found"。
+    bool topicInfo(const std::string& topicName, yomk::payload::TopicInfo& info,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
-            std::vector<EndpointDetail>* publishers = nullptr,
-            std::vector<EndpointDetail>* subscribers = nullptr,
+            std::string* error = nullptr);
+    // 收敛查询全部已发现主题的完整详情（与 listTopics/topicInfo 各自独立收敛）：取集规则同
+    // listTopics（writer ∪ reader），逐主题填 TopicInfo 后按主题名排序；域内无主题返回 true
+    // 且 topics 为空。0 值钳制默认 5 次/200ms。未入域 false（error="debug node not created"）。
+    bool listTopicInfos(std::vector<yomk::payload::TopicInfo>& topics,
+            uint32_t stableRounds = kDefaultStableRounds,
+            uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
     // 收敛查询域内命名参与者（与 listTopics/topicInfo 互不影响）：仅列出 participant_name 非空
     // 且非 "/" 者——"/" 是 ROS2 参与者默认占位名，rmw_fastrtps 统一置为根 enclave（rcl_init
@@ -186,15 +175,18 @@ public:
             const DDSQosProfile& qos = DDSQosProfile{});
 
 private:
+    // Precondition: 调用方须已持 seenMtx_；主题未发现返回 false，命中则填满 info（含主题名、
+    // 类型名、收发计数与逐端点结构化 QoS）。仅读发现缓存，不触及节点状态。
+    bool fillTopicInfoLocked(const std::string& topicName, yomk::payload::TopicInfo& info);
     // Precondition: 调用方已完成入域检查
     bool waitForTopicsStable(std::vector<std::pair<std::string, std::string>>& topics,
             uint32_t stableRounds, uint32_t intervalMs);
     // Precondition: 调用方已完成入域检查
-    bool waitForTopicInfoStable(const std::string& topicName, std::string& typeName,
-            size_t& publisherCount, size_t& subscriptionCount,
-            uint32_t stableRounds, uint32_t intervalMs,
-            std::vector<EndpointDetail>* publishers = nullptr,
-            std::vector<EndpointDetail>* subscribers = nullptr);
+    bool waitForTopicInfoStable(const std::string& topicName, yomk::payload::TopicInfo& info,
+            uint32_t stableRounds, uint32_t intervalMs);
+    // Precondition: 调用方已完成入域检查
+    bool waitForTopicInfosStable(std::vector<yomk::payload::TopicInfo>& topics,
+            uint32_t stableRounds, uint32_t intervalMs);
     // Precondition: 调用方已完成入域检查
     bool waitForNodesStable(std::vector<std::string>& names,
             uint32_t stableRounds, uint32_t intervalMs);

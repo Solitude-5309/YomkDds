@@ -163,17 +163,12 @@ yomk::payload::Response YomkDdsDebugService::listTopics(YomkMsgPtr pkg)
     }
     // 持锁阻塞收敛等待（最长约 stableRounds*intervalMs）：锁保护 node_ 生命周期不被并发
     // deleteNode 破坏，等待期间本服务其他端点被串行化（单用户 CLI 场景可接受）；
-    // node_ 非空即已入域，listTopics 必返回 true；0 值收敛参数由节点层钳制默认
-    std::vector<std::pair<std::string, std::string>> pairs;
-    node_->listTopics(pairs, p->msg.stableRounds, p->msg.intervalMs);
-    // 输出形态对齐 ros2 topic list -t；pairs 已按主题名排序
-    std::vector<std::string> lines;
-    lines.reserve(pairs.size());
-    for (const auto& entry : pairs)
-    {
-        lines.emplace_back(p->msg.types ? entry.first + " [" + entry.second + "]" : entry.first);
-    }
-    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
+    // node_ 非空即已入域，listTopicInfos 必返回 true；0 值收敛参数由节点层钳制默认
+    std::vector<yomk::payload::TopicInfo> infos;
+    node_->listTopicInfos(infos, p->msg.stableRounds, p->msg.intervalMs);
+    // 只回结构化数据：类型名恒在载荷内，行文本（含是否带类型名）由调用方决定
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
+            ::yomk::msgs::TopicInfoArray::shared(yomk::payload::TopicInfoArray{std::move(infos)}));
 }
 
 yomk::payload::Response YomkDdsDebugService::topicFind(YomkMsgPtr pkg)
@@ -428,53 +423,15 @@ yomk::payload::Response YomkDdsDebugService::topicInfo(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // node_ 非空即已入域；持锁阻塞收敛（锁保护 node_ 生命周期，同 listTopics）；0 值参数由
-    // 节点层钳制；verbose 模式同一次查询顺带取端点详情（避免二次收敛轮询）
-    std::string typeName;
-    size_t publisherCount = 0;
-    size_t subscriptionCount = 0;
-    std::vector<FastDDSDebugNode::EndpointDetail> pubDetails;
-    std::vector<FastDDSDebugNode::EndpointDetail> subDetails;
-    if (!node_->topicInfo(p->msg.topicName, typeName, publisherCount, subscriptionCount,
-                p->msg.stableRounds, p->msg.intervalMs,
-                p->msg.verbose ? &pubDetails : nullptr,
-                p->msg.verbose ? &subDetails : nullptr))
+    // 节点层钳制；端点详情恒采集——展示与否由调用方决定（服务层不出文本）
+    yomk::payload::TopicInfo info;
+    if (!node_->topicInfo(p->msg.topicName, info, p->msg.stableRounds, p->msg.intervalMs))
     {
         ::yomk::log().tag("YomkDdsDebugService::topicInfo").error("topic [", p->msg.topicName, "] not found");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "topic [" + p->msg.topicName + "] not found");
     }
-    std::vector<std::string> lines;
-    if (!p->msg.verbose)
-    {
-        lines.reserve(3);
-        lines.emplace_back("Type: " + typeName);
-        lines.emplace_back("Publisher count: " + std::to_string(publisherCount));
-        lines.emplace_back("Subscription count: " + std::to_string(subscriptionCount));
-        return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
-    }
-    lines.emplace_back("Type: " + typeName);
-    lines.emplace_back("");
-    lines.emplace_back("Publisher count: " + std::to_string(publisherCount));
-    for (const auto& detail : pubDetails)
-    {
-        lines.emplace_back("");
-        lines.emplace_back("Node name: " + detail.nodeName);
-        lines.emplace_back("Endpoint type: PUBLISHER");
-        lines.emplace_back("GUID: " + detail.guid);
-        lines.emplace_back("QoS profile:");
-        lines.insert(lines.end(), detail.qosLines.begin(), detail.qosLines.end());
-    }
-    lines.emplace_back("");
-    lines.emplace_back("Subscription count: " + std::to_string(subscriptionCount));
-    for (const auto& detail : subDetails)
-    {
-        lines.emplace_back("");
-        lines.emplace_back("Node name: " + detail.nodeName);
-        lines.emplace_back("Endpoint type: SUBSCRIPTION");
-        lines.emplace_back("GUID: " + detail.guid);
-        lines.emplace_back("QoS profile:");
-        lines.insert(lines.end(), detail.qosLines.begin(), detail.qosLines.end());
-    }
-    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
+            ::yomk::msgs::TopicInfo::shared(std::move(info)));
 }
 
 yomk::payload::Response YomkDdsDebugService::listNodes(YomkMsgPtr pkg)

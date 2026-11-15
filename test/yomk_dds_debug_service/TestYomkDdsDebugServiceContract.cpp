@@ -58,7 +58,7 @@ namespace
     }
 
     // T3：/create_node、/topic_print、/list_topics、/topic_info、/list_nodes、/node_info 的解包双守卫
-    // （nullptr / 异类包 / 改名伪造；DDSDebugInfo 加 verbose、DDSDebugList 加 types 字段后
+    // （nullptr / 异类包 / 改名伪造；DDSDebugInfo/DDSDebugList 只留 rounds/interval 后
     // 守卫包名不变，无需改断言）
     void testUnpackGuards(YomkDdsDebugService *svc)
     {
@@ -150,7 +150,7 @@ namespace
     void testTopicInfoNoNode(YomkDdsDebugService *svc)
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS；
-        // 3 字段聚合初始化在 DDSDebugInfo 加 verbose（默认 false）后仍兼容（编译级验证）
+        // 3 字段聚合初始化（topicName/stableRounds/intervalMs）即完整载荷（编译级验证）
         auto rValid = testInvoke(svc, "/topic_info", ::yomk::msgs::DDSDebugInfo::shared(DDSDebugInfo{"t_info", 1, 50}));
         check(rValid.status == yomk::payload::ResStatus::Failed &&
                   rValid.msg.find("debug node not created") != std::string::npos,

@@ -376,7 +376,7 @@ public:
 /**
  * @brief Debug topic facet: carries the topicName opened by debug().topic(), the
  *        out_cb() output callback and qos() accumulator of the print() surface, the
- *        rounds()/interval()/verbose() accumulators of the info()/pub_example()/
+ *        rounds()/interval() accumulators of the info()/pub_example()/
  *        sample_to_json() query surfaces, and the payload()/rounds()/interval()/
  *        repeat()/required()/max_times()/qos() accumulators of the publish() surface
  *        (all optional accumulators are order-free); terminated by print(), info(),
@@ -384,7 +384,7 @@ public:
  *        join it in later migration rounds
  */
 // @zh: 调试主题分面：承载 debug().topic() 起始的主题名、print() 面的 out_cb() 输出回调与
-// @zh: qos() 累积器，info()/pub_example()/sample_to_json() 查询面的 rounds()/interval()/verbose() 累积器，
+// @zh: qos() 累积器，info()/pub_example()/sample_to_json() 查询面的 rounds()/interval() 累积器，
 // @zh: 以及 publish() 面的 payload()/rounds()/interval()/repeat()/required()/max_times()/qos() 累积器
 // @zh: （可选累积器次序不限），由 print()、info()、pub_example()、sample_to_json() 或 publish() 终结；
 // @zh: 其余 topic 子分面在后续迁移批次并入
@@ -395,7 +395,6 @@ class DdsDebugTopicBuilder
     yomk::payload::DDSQosProfile m_qos;
     uint32_t m_stableRounds = 0;  // info() 等查询首轮收敛次数；0 由节点层钳制为默认 5 次
     uint32_t m_intervalMs = 0;    // info() 等查询轮询间隔；0 由节点层钳制为默认 200ms
-    bool m_verbose = false;       // info() 端点详情模式：verbose() 置真
     std::string m_payload;        // publish() 载荷：payload() 置位
     bool m_hasPayload = false;    // publish() 必填载荷是否已累积
     uint32_t m_repeatMs = 0;      // publish() 持续发布周期；0 = 单次发布
@@ -543,22 +542,6 @@ public:
         return *this;
     }
     /**
-     * @brief Accumulate the verbose mode of info()
-     * @param[in] verbose true: list per-endpoint details (node name / endpoint type /
-     *            GUID / QoS profile) on top of the counts; false: the three-line form
-     * @return Reference to self for chaining
-     * @note Applies to info() only, same as rounds()/interval(); default false
-     */
-    // @zh: 累积 info() 的 verbose 模式
-    // @zh: verbose true：在计数之外逐端点输出节点名/端点类型/GUID/QoS profile；false：三行形态
-    // @zh: return 自身链式引用
-    // @zh: note 仅作用于 info()，同 rounds()/interval()；缺省 false
-    DdsDebugTopicBuilder& verbose(bool verbose)
-    {
-        m_verbose = verbose;
-        return *this;
-    }
-    /**
      * @brief Register the topic-print observer, texts are delivered per message (request terminator)
      * @return Response; Invalid when YomkServer is not initialized or out_cb()
      *         was not accumulated
@@ -586,19 +569,16 @@ public:
     }
     /**
      * @brief Query one topic's discovery details (request terminator)
-     * @return Response carrying a StringArray packet; without verbose() it is exactly
-     *         three lines: "Type: <raw DDS type name>", "Publisher count: N",
-     *         "Subscription count: N"; with verbose(true) it adds per-endpoint lines
-     *         (node name / endpoint type / GUID / QoS profile), and an endpoint type
-     *         with count 0 contributes no section
+     * @return Response carrying a TopicInfo packet: topicName/typeName/publisherCount/
+     *         subscriptionCount plus the per-endpoint nodeName/GUID/structured QoS
+     *         lists; an endpoint type with count 0 carries an empty list
      * @note Independent convergence query (rounds()/interval(), 0 clamped to
      *       5 rounds / 200ms) that does not depend on the query facet topics();
      *       fails when the topic has not been discovered
      */
     // @zh: 查询单主题的发现详情（请求终结）
-    // @zh: return Response 携带 StringArray 包；未累积 verbose() 时恰三行：Type: 原始 DDS 类型名、
-    // @zh: Publisher count: N、Subscription count: N；verbose(true) 时在计数外追加逐端点行
-    // @zh: （节点名/端点类型/GUID/QoS profile），count 为 0 的端点类型无清单段
+    // @zh: return Response 携带 TopicInfo 包：主题名/类型名/收发计数与逐端点
+    // @zh: nodeName/GUID/结构化 QoS 清单；count 为 0 的端点类型清单为空
     // @zh: note 独立收敛查询（rounds()/interval()，0 钳制为 5 次/200ms），
     // @zh: 不依赖查询分面的 topics()；未发现主题返回错误
     yomk::payload::Response info()
@@ -609,7 +589,7 @@ public:
         }
         return yomk::server().url(yomk::url::ddsDebugTopicInfo)
             .msg(yomk::msgs::DDSDebugInfo::shared(
-                yomk::payload::DDSDebugInfo{std::move(m_topicName), m_stableRounds, m_intervalMs, m_verbose}))
+                yomk::payload::DDSDebugInfo{std::move(m_topicName), m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -872,12 +852,12 @@ public:
 
 /**
  * @brief Debug facet: carries the optional domain()/udp_ds()/tcp_ds() creation
- *        accumulators plus the rounds()/interval()/with_type() query accumulators
+ *        accumulators plus the rounds()/interval() query accumulators
  *        (order-free), terminated by create()/quit() or by the query terminators
  *        topics()/interfaces()/nodes(), or hands over to the topic()/type()/node()
  *        sub-facets
  */
-// @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器与 rounds()/interval()/with_type()
+// @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器与 rounds()/interval()
 // @zh: 查询累积器（次序不限），create()/quit() 或查询终结 topics()/interfaces()/nodes() 收束，
 // @zh: 或交出 topic()/type()/node() 子分面
 class DdsDebugBuilder
@@ -887,7 +867,6 @@ class DdsDebugBuilder
     std::string m_tcpDiscoverServerLocator = yomk::payload::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
     uint32_t m_stableRounds = 0;                                                                 // 0 由节点层钳制为默认 5 次
     uint32_t m_intervalMs = 0;                                                                   // 0 由节点层钳制为默认 200ms
-    bool m_types = false;                                                                        // 查询分面 types 标志：with_type() 置真
 public:
     /**
      * @brief Accumulate the DDS domain id
@@ -954,19 +933,6 @@ public:
     DdsDebugBuilder& interval(uint32_t intervalMs)
     {
         m_intervalMs = intervalMs;
-        return *this;
-    }
-    /**
-     * @brief Enable the type-name mode of the query terminator ("topic [type]" per line)
-     * @return Reference to self for chaining
-     * @note Boolean switch — no argument; the types flag of the discovery query
-     */
-    // @zh: 开启查询终结的类型名模式（每行 "主题名 [类型名]"）
-    // @zh: return 自身链式引用
-    // @zh: note 布尔开关，无参；对应发现查询的 types 标志
-    DdsDebugBuilder& with_type()
-    {
-        m_types = true;
         return *this;
     }
     /**
@@ -1045,18 +1011,18 @@ public:
         return DdsDebugNodeBuilder(std::move(nodeName));
     }
     /**
-     * @brief List discovered topics in the domain, sorted (request terminator)
-     * @return Response carrying a StringArray packet, one line per topic; names only
-     *         unless with_type() is accumulated, in which case each line is
-     *         "topicName [typeName]"; remote writers and readers both recorded, the
-     *         list may be empty
+     * @brief List discovered topics in the domain with their full details, sorted (request terminator)
+     * @return Response carrying a TopicInfoArray packet: one TopicInfo per topic with
+     *         topicName/typeName/publisherCount/subscriptionCount and the per-endpoint
+     *         nodeName/GUID/structured QoS lists; remote writers and readers both
+     *         recorded, the list may be empty
      * @note Convergence query: polls discovery snapshots every interval() until
      *       rounds() consecutive snapshots are unchanged; unset accumulators are
      *       clamped to 5 rounds / 200ms. Independent of the topic() sub-facet
      */
-    // @zh: 列出域内已发现的主题（按名排序，请求终结）
-    // @zh: return Response 携带 StringArray 包，每行一个主题；未累积 with_type() 时仅主题名，
-    // @zh: 否则每行为 "主题名 [类型名]"；远端 writer 与 reader 均记录，列表可为空
+    // @zh: 列出域内已发现主题及其完整详情（按名排序，请求终结）
+    // @zh: return Response 携带 TopicInfoArray 包：每项 TopicInfo 含主题名/类型名/收发计数与逐端点
+    // @zh: nodeName/GUID/结构化 QoS 清单；远端 writer 与 reader 均记录，列表可为空
     // @zh: note 收敛查询：每 interval() 轮询一次发现快照，连续 rounds() 次不变即返回；
     // @zh: 未累积时钳制为默认 5 次/200ms；与 topic() 子分面互不依赖
     yomk::payload::Response topics()
@@ -1067,7 +1033,7 @@ public:
         }
         return yomk::server().url(yomk::url::ddsDebugListTopics)
             .msg(yomk::msgs::DDSDebugList::shared(
-                yomk::payload::DDSDebugList{m_stableRounds, m_intervalMs, m_types}))
+                yomk::payload::DDSDebugList{m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -1105,7 +1071,7 @@ public:
     // @zh: 列出域内已发现的命名参与者（按名排序，请求终结）
     // @zh: return Response 携带 StringArray 包，每行一个参与者名；未初始化返回 Invalid
     // @zh: note 独立收敛查询（rounds()/interval()，0 钳制为 5 次/200ms）；空名与 ROS2 占位名 "/" 跳过，
-    // @zh: 调试节点自身不在自身发现回调中，天然不列出；列表可为空（不看 with_type()）
+    // @zh: 调试节点自身不在自身发现回调中，天然不列出；列表可为空
     yomk::payload::Response nodes()
     {
         if (!requireServer())
@@ -1778,9 +1744,9 @@ inline detail::DdsBuilder dds()
  * first via yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create(), deleted via
  * yomk::dds().debug().quit(); topic registration is chained as
  * yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print(), the topic list as
- * yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics(), and the
+ * yomk::dds().debug()[.rounds(n)][.interval(ms)].topics(), and the
  * single-topic details as
- * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info(), and the
+ * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].info(), and the
  * reverse lookup as yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics(),
  * the publish example as
  * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].pub_example(), the JSON sample as
@@ -1800,8 +1766,8 @@ inline detail::DdsBuilder dds()
 // @zh: yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create() 创建调试节点，
 // @zh: 退出经 yomk::dds().debug().quit()；主题登记已链式化为
 // @zh: yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print()，主题清单为
-// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)][.with_type()].topics()，单主题详情为
-// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)][.verbose(true)].info()，发布示例为
+// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()，单主题详情为
+// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].info()，发布示例为
 // @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].pub_example()，JSON 样本为
 // @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].sample_to_json()，发布为
 // @zh: yomk::dds().debug().topic(name).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()，

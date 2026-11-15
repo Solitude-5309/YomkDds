@@ -79,23 +79,19 @@ std::string makeUidSuffix()
     return os.str();
 }
 
-// ---- topic info verbose 的端点详情辅助（EndpointDetail.qosLines 的行来源） ----
-// 展示名对齐 ros2 topic info -v 的输出习惯（去 _QOS 后缀），枚举拼写对齐 FastDDS 3.6.1 QosPolicies.hpp
-std::string formatDuration(const Duration_t& duration)
+// ---- 端点详情（TopicEndpointInfo）的结构化 QoS 采集 ----
+// 服务层只返回结构化数据，行文本由调用方渲染；时长统一折算纳秒，无限期用
+// kInfiniteDurationNs 标记；枚举拼写对齐 FastDDS 3.6.1 QosPolicies.hpp（渲染侧再按
+// ros2 topic info -v 风格去 _QOS 后缀）
+constexpr int64_t kNsPerSec = 1000000000LL;
+
+int64_t durationToNs(const Duration_t& duration)
 {
     if (Time_t::is_infinite(duration))
     {
-        return "Infinite";
+        return yomk::payload::kInfiniteDurationNs;
     }
-    std::ostringstream os;
-    os << duration.seconds;
-    if (duration.nanosec != 0)
-    {
-        constexpr int kNanosDigits = 9;
-        os << '.' << std::setw(kNanosDigits) << std::setfill('0') << duration.nanosec;
-    }
-    os << " s";
-    return os.str();
+    return static_cast<int64_t>(duration.seconds) * kNsPerSec + duration.nanosec;
 }
 
 std::string guidString(const rtps::GUID_t& guid)
@@ -184,142 +180,103 @@ const char* destinationOrderKindName(DestinationOrderQosPolicyKind kind)
     }
 }
 
-// Partition_t 名字为长度前缀 + 非 NUL 结尾字符串，须以 (name, size) 追加
-std::string partitionNames(const PartitionQosPolicy& partition)
+// Partition_t 名字为长度前缀 + 非 NUL 结尾字符串，须以 (name, size) 逐项取出
+std::vector<std::string> partitionValues(const PartitionQosPolicy& partition)
 {
-    std::string out = "[";
-    bool first = true;
+    std::vector<std::string> names;
     for (auto it = partition.begin(); it != partition.end(); ++it)
     {
-        if (!first)
-        {
-            out += ", ";
-        }
-        out.append(it->name(), it->size());
-        first = false;
+        names.emplace_back(it->name(), it->size());
     }
-    out += "]";
-    return out;
+    return names;
 }
 
-// ROS2 对齐组：KEEP_ALL 时发现数据 Depth 为原值 0，照实输出；未携带时显式标 not advertised 而非静默跳过
-void appendHistoryDepthLines(std::vector<std::string>& lines,
-        const eprosima::fastcdr::optional<HistoryQosPolicy>& history)
+// 公共 QoS 组（writer/reader 共有的发现字段）：模板化避免两份逐字段拷贝；optional 项以
+// *Advertised 标记是否公告（未公告 ≠ 零值），KEEP_ALL 时 Depth 为原值 0，照实保留
+template <typename EndpointData>
+void fillCommonQos(const EndpointData& endpoint, yomk::payload::TopicEndpointQos& qos)
 {
-    if (history.has_value())
+    if (endpoint.history.has_value())
     {
-        lines.emplace_back(std::string("  History: ") +
-                (history->kind == KEEP_ALL_HISTORY_QOS ? "KEEP_ALL" : "KEEP_LAST"));
-        lines.emplace_back("  Depth: " + std::to_string(history->depth));
+        qos.historyAdvertised = true;
+        qos.historyKeepAll = endpoint.history->kind == KEEP_ALL_HISTORY_QOS;
+        qos.depth = static_cast<uint32_t>(endpoint.history->depth);
     }
-    else
+    qos.reliability = reliabilityKindName(endpoint.reliability.kind);
+    qos.durability = durabilityKindName(endpoint.durability.kind);
+    qos.deadlineNs = durationToNs(endpoint.deadline.period);
+    qos.lifespanNs = durationToNs(endpoint.lifespan.duration);
+    qos.liveliness = livelinessKindName(endpoint.liveliness.kind);
+    qos.livelinessLeaseNs = durationToNs(endpoint.liveliness.lease_duration);
+    qos.latencyBudgetNs = durationToNs(endpoint.latency_budget.duration);
+    qos.ownership = ownershipKindName(endpoint.ownership.kind);
+    qos.destinationOrder = destinationOrderKindName(endpoint.destination_order.kind);
+    qos.partition = partitionValues(endpoint.partition);
+    if (endpoint.resource_limits.has_value())
     {
-        lines.emplace_back("  History: not advertised");
-        lines.emplace_back("  Depth: not advertised");
+        qos.resourceLimitsAdvertised = true;
+        qos.maxSamples = endpoint.resource_limits->max_samples;
+        qos.maxInstances = endpoint.resource_limits->max_instances;
+        qos.maxSamplesPerInstance = endpoint.resource_limits->max_samples_per_instance;
     }
 }
 
-void appendResourceLimitsLine(std::vector<std::string>& lines,
-        const ResourceLimitsQosPolicy& limits)
+// writer 端点：公共组 + writer 专属组（Ownership Strength 恒公告，其余 optional 按携带标记）
+yomk::payload::TopicEndpointQos writerQosDetail(const rtps::PublicationBuiltinTopicData& writer)
 {
-    lines.push_back("  Resource Limits: max_samples=" + std::to_string(limits.max_samples) +
-            ", max_instances=" + std::to_string(limits.max_instances) +
-            ", max_samples_per_instance=" + std::to_string(limits.max_samples_per_instance));
-}
-
-// writer 端点 QoS 行集：ROS2 对齐组 8 行恒前置，DDS 扩展组按发现数据携带情况追加（optional 一行不删）
-std::vector<std::string> writerQosLines(const rtps::PublicationBuiltinTopicData& writer)
-{
-    std::vector<std::string> lines;
-    appendHistoryDepthLines(lines, writer.history);
-    lines.emplace_back(std::string("  Reliability: ") +
-            reliabilityKindName(writer.reliability.kind));
-    lines.emplace_back(std::string("  Durability: ") + durabilityKindName(writer.durability.kind));
-    lines.emplace_back("  Deadline: " + formatDuration(writer.deadline.period));
-    lines.emplace_back("  Lifespan: " + formatDuration(writer.lifespan.duration));
-    lines.emplace_back(std::string("  Liveliness: ") + livelinessKindName(writer.liveliness.kind));
-    lines.emplace_back(
-        "  Liveliness lease duration: " + formatDuration(writer.liveliness.lease_duration));
-    lines.emplace_back("  Latency Budget: " + formatDuration(writer.latency_budget.duration));
-    lines.emplace_back(std::string("  Ownership: ") + ownershipKindName(writer.ownership.kind));
-    lines.emplace_back("  Ownership Strength: " + std::to_string(writer.ownership_strength.value));
-    lines.emplace_back(std::string("  Destination Order: ") +
-            destinationOrderKindName(writer.destination_order.kind));
-    lines.emplace_back("  Partition: " + partitionNames(writer.partition));
-    if (writer.resource_limits.has_value())
-    {
-        appendResourceLimitsLine(lines, *writer.resource_limits);
-    }
+    yomk::payload::TopicEndpointQos qos;
+    fillCommonQos(writer, qos);
+    qos.ownershipStrength = static_cast<int32_t>(writer.ownership_strength.value);
     if (writer.publish_mode.has_value())
     {
-        lines.emplace_back(std::string("  Publish Mode: ") +
-                (writer.publish_mode->kind == ASYNCHRONOUS_PUBLISH_MODE ?
-                "ASYNCHRONOUS" : "SYNCHRONOUS"));
+        qos.publishModeAdvertised = true;
+        qos.publishModeAsync = writer.publish_mode->kind == ASYNCHRONOUS_PUBLISH_MODE;
     }
     if (writer.transport_priority.has_value())
     {
-        lines.emplace_back(
-            "  Transport Priority: " + std::to_string(writer.transport_priority->value));
+        qos.transportPriorityAdvertised = true;
+        qos.transportPriority = writer.transport_priority->value;
     }
     if (writer.writer_data_lifecycle.has_value())
     {
-        lines.emplace_back(
-            std::string("  Writer Data Lifecycle: autodispose_unregistered_instances=") +
-            (writer.writer_data_lifecycle->autodispose_unregistered_instances ? "true" : "false"));
+        qos.writerDataLifecycleAdvertised = true;
+        qos.autodisposeUnregisteredInstances =
+                writer.writer_data_lifecycle->autodispose_unregistered_instances;
     }
-    return lines;
+    return qos;
 }
 
-// reader 端点 QoS 行集：同 writer 构成同序（无 Ownership Strength、多 Time Based Filter），optional 一行不删
-std::vector<std::string> readerQosLines(const rtps::SubscriptionBuiltinTopicData& reader)
+// reader 端点：公共组 + reader 专属组（Time Based Filter）
+yomk::payload::TopicEndpointQos readerQosDetail(const rtps::SubscriptionBuiltinTopicData& reader)
 {
-    std::vector<std::string> lines;
-    appendHistoryDepthLines(lines, reader.history);
-    lines.emplace_back(std::string("  Reliability: ") +
-            reliabilityKindName(reader.reliability.kind));
-    lines.emplace_back(std::string("  Durability: ") + durabilityKindName(reader.durability.kind));
-    lines.emplace_back("  Deadline: " + formatDuration(reader.deadline.period));
-    lines.emplace_back("  Lifespan: " + formatDuration(reader.lifespan.duration));
-    lines.emplace_back(std::string("  Liveliness: ") + livelinessKindName(reader.liveliness.kind));
-    lines.emplace_back(
-        "  Liveliness lease duration: " + formatDuration(reader.liveliness.lease_duration));
-    lines.emplace_back("  Latency Budget: " + formatDuration(reader.latency_budget.duration));
-    lines.emplace_back(std::string("  Ownership: ") + ownershipKindName(reader.ownership.kind));
-    lines.emplace_back(
-        "  Time Based Filter: " + formatDuration(reader.time_based_filter.minimum_separation));
-    lines.emplace_back(std::string("  Destination Order: ") +
-            destinationOrderKindName(reader.destination_order.kind));
-    lines.emplace_back("  Partition: " + partitionNames(reader.partition));
-    if (reader.resource_limits.has_value())
-    {
-        appendResourceLimitsLine(lines, *reader.resource_limits);
-    }
-    return lines;
+    yomk::payload::TopicEndpointQos qos;
+    fillCommonQos(reader, qos);
+    qos.timeBasedFilterNs = durationToNs(reader.time_based_filter.minimum_separation);
+    return qos;
 }
 
-FastDDSDebugNode::EndpointDetail makeWriterDetail(
+// nodeName 经 GUID 前缀归属匹配（未发现对应参与者时为空串）；guid 为 FastDDS 原生格式
+yomk::payload::TopicEndpointInfo makeWriterDetail(
         const rtps::PublicationBuiltinTopicData& writer, const std::string& nodeName)
 {
-    FastDDSDebugNode::EndpointDetail detail;
+    yomk::payload::TopicEndpointInfo detail;
     detail.nodeName = nodeName;
     detail.guid = guidString(writer.guid);
-    detail.qosLines = writerQosLines(writer);
+    detail.qos = writerQosDetail(writer);
     return detail;
 }
 
-FastDDSDebugNode::EndpointDetail makeReaderDetail(
+yomk::payload::TopicEndpointInfo makeReaderDetail(
         const rtps::SubscriptionBuiltinTopicData& reader, const std::string& nodeName)
 {
-    FastDDSDebugNode::EndpointDetail detail;
+    yomk::payload::TopicEndpointInfo detail;
     detail.nodeName = nodeName;
     detail.guid = guidString(reader.guid);
-    detail.qosLines = readerQosLines(reader);
+    detail.qos = readerQosDetail(reader);
     return detail;
 }
 
 // ===== DDSQosProfile 翻译（与 FastDDSNode.cpp 版本同构，独立持有不跨 cpp 共享） =====
-
-constexpr int64_t kNsPerSec = 1000000000LL;
 
 // Precondition: ns >= 0
 Duration_t toDuration(int64_t ns)
@@ -730,11 +687,8 @@ bool FastDDSDebugNode::listTopics(std::vector<std::pair<std::string, std::string
     return waitForTopicsStable(topics, stableRounds, intervalMs);
 }
 
-bool FastDDSDebugNode::topicInfo(const std::string& topicName, std::string& typeName,
-        size_t& publisherCount, size_t& subscriptionCount,
-        uint32_t stableRounds, uint32_t intervalMs,
-        std::vector<EndpointDetail>* publishers, std::vector<EndpointDetail>* subscribers,
-        std::string* error)
+bool FastDDSDebugNode::topicInfo(const std::string& topicName, yomk::payload::TopicInfo& info,
+        uint32_t stableRounds, uint32_t intervalMs, std::string* error)
 {
     if (stableRounds == 0)
     {
@@ -755,9 +709,7 @@ bool FastDDSDebugNode::topicInfo(const std::string& topicName, std::string& type
             return false;
         }
     }
-    if (!waitForTopicInfoStable(
-            topicName, typeName, publisherCount, subscriptionCount, stableRounds, intervalMs,
-            publishers, subscribers))
+    if (!waitForTopicInfoStable(topicName, info, stableRounds, intervalMs))
     {
         if (error != nullptr)
         {
@@ -766,6 +718,31 @@ bool FastDDSDebugNode::topicInfo(const std::string& topicName, std::string& type
         return false;
     }
     return true;
+}
+
+bool FastDDSDebugNode::listTopicInfos(std::vector<yomk::payload::TopicInfo>& topics,
+        uint32_t stableRounds, uint32_t intervalMs, std::string* error)
+{
+    if (stableRounds == 0)
+    {
+        stableRounds = kDefaultStableRounds;
+    }
+    if (intervalMs == 0)
+    {
+        intervalMs = kDefaultIntervalMs;
+    }
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        if (participant_ == nullptr)
+        {
+            if (error != nullptr)
+            {
+                *error = "debug node not created";
+            }
+            return false;
+        }
+    }
+    return waitForTopicInfosStable(topics, stableRounds, intervalMs);
 }
 
 bool FastDDSDebugNode::nodeList(std::vector<std::string>& names,
@@ -877,11 +854,8 @@ bool FastDDSDebugNode::topicExample(const std::string& topicName,
             return false;
         }
     }
-    std::string typeName;
-    size_t publisherCount = 0;
-    size_t subscriptionCount = 0;
-    if (!waitForTopicInfoStable(topicName, typeName, publisherCount, subscriptionCount,
-                stableRounds, intervalMs))
+    yomk::payload::TopicInfo info;
+    if (!waitForTopicInfoStable(topicName, info, stableRounds, intervalMs))
     {
         if (error != nullptr)
         {
@@ -890,19 +864,19 @@ bool FastDDSDebugNode::topicExample(const std::string& topicName,
         return false;
     }
     std::vector<std::string> idl;
-    if (!waitForInterfaceStable(typeName, idl, stableRounds, intervalMs, error))
+    if (!waitForInterfaceStable(info.typeName, idl, stableRounds, intervalMs, error))
     {
         return false;
     }
     // 默认值模板与 json_deserialize 输入格式对称；example 命令的 JSON 整体包单引号，防 shell
     // 剥内层双引号（裸传会被剥成 {data:123} 解析失败）
     std::string json;
-    if (!jsonExampleOfType(typeName, json, error))
+    if (!jsonExampleOfType(info.typeName, json, error))
     {
         return false;
     }
     lines.clear();
-    lines.push_back("Type: " + typeName);
+    lines.push_back("Type: " + info.typeName);
     lines.push_back("IDL:");
     lines.insert(lines.end(), std::make_move_iterator(idl.begin()),
             std::make_move_iterator(idl.end()));
@@ -935,10 +909,8 @@ bool FastDDSDebugNode::topicMsgJson(const std::string& topicName,
             return false;
         }
     }
-    size_t publisherCount = 0;
-    size_t subscriptionCount = 0;
-    if (!waitForTopicInfoStable(topicName, typeName, publisherCount, subscriptionCount,
-                stableRounds, intervalMs))
+    yomk::payload::TopicInfo info;
+    if (!waitForTopicInfoStable(topicName, info, stableRounds, intervalMs))
     {
         if (error != nullptr)
         {
@@ -946,6 +918,7 @@ bool FastDDSDebugNode::topicMsgJson(const std::string& topicName,
         }
         return false;
     }
+    typeName = std::move(info.typeName);
     return jsonExampleOfType(typeName, json, error);
 }
 
@@ -992,57 +965,17 @@ bool FastDDSDebugNode::waitForTopicsStable(std::vector<std::pair<std::string, st
     return true;
 }
 
-bool FastDDSDebugNode::waitForTopicInfoStable(const std::string& topicName, std::string& typeName,
-        size_t& publisherCount, size_t& subscriptionCount,
-        uint32_t stableRounds, uint32_t intervalMs,
-        std::vector<EndpointDetail>* publishers, std::vector<EndpointDetail>* subscribers)
+bool FastDDSDebugNode::waitForTopicInfoStable(const std::string& topicName,
+        yomk::payload::TopicInfo& info, uint32_t stableRounds, uint32_t intervalMs)
 {
     // 快照仅拿 seenMtx_ 叶子锁（不持锁睡眠，发现事件线程可并行写入）；端点详情纳入快照
     // 相等性：等待期间远端端点新增（含 QoS 重发）会重置不变计数
-    auto snapshot = [this, &topicName, publishers, subscribers]()
+    auto snapshot = [this, &topicName]()
     {
         std::lock_guard<std::mutex> lock(seenMtx_);
-        auto w = seen_.find(topicName);
-        auto r = seenReaders_.find(topicName);
-        if (w == seen_.end() && r == seenReaders_.end())
-        {
-            return std::make_tuple(false, std::string(), size_t{0}, size_t{0},
-                std::vector<EndpointDetail>(), std::vector<EndpointDetail>());
-        }
-        // else-if 守卫：消除 cppcheck 对 r 迭代器有效性的路径分析盲区
-        std::string name;
-        if (w != seen_.end())
-        {
-            name = w->second.front().type_name.to_string();
-        }
-        else if (r != seenReaders_.end())
-        {
-            name = r->second.front().type_name.to_string();
-        }
-        const size_t pubCount = (w != seen_.end()) ? w->second.size() : size_t{0};
-        const size_t subCount = (r != seenReaders_.end()) ? r->second.size() : size_t{0};
-        std::vector<EndpointDetail> pubDetails;
-        if (publishers != nullptr && w != seen_.end())
-        {
-            pubDetails.reserve(w->second.size());
-            for (const auto& writer : w->second)
-            {
-                pubDetails.push_back(makeWriterDetail(writer,
-                    participantNameOf(seenParticipants_, writer.guid)));
-            }
-        }
-        std::vector<EndpointDetail> subDetails;
-        if (subscribers != nullptr && r != seenReaders_.end())
-        {
-            subDetails.reserve(r->second.size());
-            for (const auto& reader : r->second)
-            {
-                subDetails.push_back(makeReaderDetail(reader,
-                    participantNameOf(seenParticipants_, reader.guid)));
-            }
-        }
-        return std::make_tuple(true, name, pubCount, subCount, std::move(pubDetails),
-            std::move(subDetails));
+        yomk::payload::TopicInfo items;
+        const bool found = fillTopicInfoLocked(topicName, items);
+        return std::make_pair(found, std::move(items));
     };
     auto prev = snapshot();
     uint32_t unchanged = 1;
@@ -1060,23 +993,103 @@ bool FastDDSDebugNode::waitForTopicInfoStable(const std::string& topicName, std:
             unchanged = 1;
         }
     }
-    const bool found = std::get<0>(prev);
-    if (found)
+    if (!prev.first)
     {
-        constexpr size_t kSubDetailsIdx = 5;
-        typeName = std::get<1>(prev);
-        publisherCount = std::get<2>(prev);
-        subscriptionCount = std::get<3>(prev);
-        if (publishers != nullptr)
+        return false;
+    }
+    info = std::move(prev.second);
+    return true;
+}
+
+bool FastDDSDebugNode::waitForTopicInfosStable(std::vector<yomk::payload::TopicInfo>& topics,
+        uint32_t stableRounds, uint32_t intervalMs)
+{
+    // 快照仅拿 seenMtx_ 叶子锁；取集规则同 waitForTopicsStable（writer ∪ reader，仅有订阅者的
+    // 主题同样列出），逐主题填完整详情后按主题名排序，相等性比较整份 vector（含端点 QoS）
+    auto snapshot = [this]()
+    {
+        std::lock_guard<std::mutex> lock(seenMtx_);
+        std::vector<yomk::payload::TopicInfo> items;
+        items.reserve(seen_.size() + seenReaders_.size());
+        for (const auto& kv : seen_)
         {
-            *publishers = std::move(std::get<4>(prev));
+            yomk::payload::TopicInfo info;
+            fillTopicInfoLocked(kv.first, info);
+            items.push_back(std::move(info));
         }
-        if (subscribers != nullptr)
+        for (const auto& kv : seenReaders_)
         {
-            *subscribers = std::move(std::get<kSubDetailsIdx>(prev));
+            if (seen_.count(kv.first) == 0)
+            {
+                yomk::payload::TopicInfo info;
+                fillTopicInfoLocked(kv.first, info);
+                items.push_back(std::move(info));
+            }
+        }
+        std::sort(items.begin(), items.end(),
+                [](const yomk::payload::TopicInfo& lhs, const yomk::payload::TopicInfo& rhs)
+                { return lhs.topicName < rhs.topicName; });
+        return items;
+    };
+    std::vector<yomk::payload::TopicInfo> prev = snapshot();
+    uint32_t unchanged = 1;
+    while (unchanged < stableRounds)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(intervalMs));
+        std::vector<yomk::payload::TopicInfo> cur = snapshot();
+        if (cur == prev)
+        {
+            ++unchanged;
+        }
+        else
+        {
+            prev = std::move(cur);
+            unchanged = 1;
         }
     }
-    return found;
+    topics = std::move(prev);
+    return true;
+}
+
+bool FastDDSDebugNode::fillTopicInfoLocked(
+        const std::string& topicName, yomk::payload::TopicInfo& info)
+{
+    auto w = seen_.find(topicName);
+    auto r = seenReaders_.find(topicName);
+    if (w == seen_.end() && r == seenReaders_.end())
+    {
+        return false;
+    }
+    info = yomk::payload::TopicInfo{};
+    info.topicName = topicName;
+    // 类型名优先取自 writer（与列表查询同源），无 writer 时回落 reader；else-if 守卫消除
+    // cppcheck 对 r 迭代器有效性的路径分析盲区
+    if (w != seen_.end())
+    {
+        info.typeName = w->second.front().type_name.to_string();
+        info.publisherCount = static_cast<uint32_t>(w->second.size());
+        info.publishers.reserve(w->second.size());
+        for (const auto& writer : w->second)
+        {
+            info.publishers.push_back(makeWriterDetail(writer,
+                participantNameOf(seenParticipants_, writer.guid)));
+        }
+    }
+    else if (r != seenReaders_.end())
+    {
+        info.typeName = r->second.front().type_name.to_string();
+    }
+    if (r != seenReaders_.end())
+    {
+        info.subscriptionCount = static_cast<uint32_t>(r->second.size());
+        info.subscriptions.reserve(r->second.size());
+        for (const auto& reader : r->second)
+        {
+            info.subscriptions.push_back(makeReaderDetail(reader,
+                participantNameOf(seenParticipants_, reader.guid)));
+        }
+    }
+    return true;
 }
 
 bool FastDDSDebugNode::waitForNodesStable(std::vector<std::string>& names,
@@ -1587,15 +1600,13 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         }
     }
     // ① 发现收敛
-    std::string typeName;
-    size_t publisherCount = 0;
-    size_t subscriptionCount = 0;
-    if (!waitForTopicInfoStable(topicName, typeName, publisherCount, subscriptionCount,
-                stableRounds, intervalMs))
+    yomk::payload::TopicInfo info;
+    if (!waitForTopicInfoStable(topicName, info, stableRounds, intervalMs))
     {
         error = "topic [" + topicName + "] not found";
         return false;
     }
+    const std::string& typeName = info.typeName;
     // ② 类型重建 + JSON 解析（失败不建任何发布实体）
     xtypes::TypeObject type_object;
     if (!fetchTypeObject(typeName, type_object))

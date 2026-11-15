@@ -34,9 +34,9 @@
  *         不串入（GUID 前缀归属隔离）；未发现名 → false（单次快照快速路径）；"/" 名可查
  *         且清单为空（名称过滤不在节点层）；重复调用结果一致（收敛一致性）；
  *         未 setDomainId 时 nodeInfo → false。
- *   主题详情 verbose 同命名 peer 端点 → topicInfo verbose 模式（指针非空）填充端点详情：
- *         归属节点名（GUID 前缀归属）、FastDDS 原生 prefix|entity GUID、QoS 行集（核心组
- *         Reliability/Durability 等键行）；未发现主题 verbose 指针传入 → false 且列表为空。
+ *   主题详情 同命名 peer 端点 → topicInfo 结构化载荷填充端点详情：归属节点名（GUID
+ *         前缀归属）、FastDDS 原生 prefix|entity GUID、结构化 QoS 字段（核心组
+ *         reliability/durability 等枚举名）；未发现主题 → false 且清单为空。
  *   未命中  interfaceShow(Not::Exist) / topicExample / topicMsgJson 对不存在目标 → false，
  *         error 出参分别为 "type [...] not found" / "topic [...] not found"（第一层文本逐字不变）。
  *   裸类型端点 自建不携带 XTypes TypeObject 的 TopicDataType（模拟 ROS2 rmw_fastrtps）发布：
@@ -55,7 +55,7 @@
  *         （与 reader 底座 BEST_EFFORT 双差异）+ 匹配收数据；requested>offered 反证：
  *         offered BEST_EFFORT vs requested RELIABLE 收 0 条且 reader 仍建立读回
  *         RELIABLE（翻译落端点直证）。writer/reader 均不外露，断言经二号调试节点
- *         topicInfo verbose 的发现 QoS 行读回（发现数据是唯一观察面）。
+ *         topicInfo 的结构化端点 QoS 字段读回（发现数据是唯一观察面）。
  *
  * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  *       不经 YomkDdsService/YOMK_INIT，直接 RAII 使用 FastDDSNode 与 FastDDSDebugNode
@@ -336,12 +336,9 @@ int main()
               "未入域 subscribeTopic 的 error 含 debug node not created");
         // 补齐剩余 4 个入口的未入域守卫（topicInfo / nodeInfo / topicExample / topicMsgJson），
         // 使节点层 7 处 participant_ == nullptr 分支全覆盖
-        std::string guardTypeName;
-        size_t guardPub = 0;
-        size_t guardSub = 0;
+        yomk::payload::TopicInfo guardInfo;
         guardErr.clear();
-        check(!dbg.topicInfo(TEST_TOPIC, guardTypeName, guardPub, guardSub, 5, 200,
-                  nullptr, nullptr, &guardErr),
+        check(!dbg.topicInfo(TEST_TOPIC, guardInfo, 5, 200, &guardErr),
               "未 setDomainId 时 topicInfo → false（participant 未创建）");
         check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 topicInfo 的 error 含 debug node not created");
@@ -578,24 +575,27 @@ int main()
                 // topicInfo 不依赖 listTopics，此调用仅为本用例的时序前置
                 std::vector<std::pair<std::string, std::string>> listed;
                 check(dbg.listTopics(listed, 5, 100), "listTopics(5,100ms) → true（计数场景收敛）");
-                std::string typeName;
-                size_t pubCount = 0;
-                size_t subCount = 0;
-                check(dbg.topicInfo(COUNT_TOPIC, typeName, pubCount, subCount, 5, 100),
+                yomk::payload::TopicInfo info;
+                check(dbg.topicInfo(COUNT_TOPIC, info, 5, 100),
                       "topicInfo(t_info_counts,5,100ms) → true（独立收敛查询命中）");
-                check(typeName == "YomkDdsStd::MString",
+                check(info.typeName == "YomkDdsStd::MString",
                       "topicInfo 类型名为原始 DDS 类型名（YomkDdsStd::MString，无转换）");
-                check(pubCount == 2, "topicInfo publisherCount == 2（同主题两个远端 DataWriter）");
-                check(subCount == 1, "topicInfo subscriptionCount == 1（同主题一个远端 DataReader）");
-                std::cout << "[OBSERVE] topicInfo pub=" << pubCount << " sub=" << subCount
-                          << " type=" << typeName << std::endl;
+                check(info.publisherCount == 2,
+                      "topicInfo publisherCount == 2（同主题两个远端 DataWriter）");
+                check(info.subscriptionCount == 1,
+                      "topicInfo subscriptionCount == 1（同主题一个远端 DataReader）");
+                check(info.publishers.size() == 2 && info.subscriptions.size() == 1,
+                      "topicInfo 两端点清单长度与计数一致");
+                std::cout << "[OBSERVE] topicInfo pub=" << info.publisherCount
+                          << " sub=" << info.subscriptionCount
+                          << " type=" << info.typeName << std::endl;
 
                 // 未发现主题：单次快照快速路径（stableRounds=1 免等待）→ false
-                std::string missType;
-                size_t missPub = 0;
-                size_t missSub = 0;
-                check(!dbg.topicInfo("t_not_exist", missType, missPub, missSub, 1, 50),
+                yomk::payload::TopicInfo missInfo;
+                check(!dbg.topicInfo("t_not_exist", missInfo, 1, 50),
                       "topicInfo(t_not_exist,1,50) → false（未发现主题，单次快照快速路径）");
+                check(missInfo.publishers.empty() && missInfo.subscriptions.empty(),
+                      "未发现主题时端点清单保持为空");
             } // dbg 析构：reader/topic/subscriber/participant 逆序清理，随后 ts 析构
 
             // 清理：writer/reader → topic → publisher/subscriber → participant（同既有块模式）
@@ -790,44 +790,35 @@ int main()
               "nodeInfo 重复调用 → true（收敛后查询）");
         check(pubs2 == pubs && subs2 == subs, "nodeInfo 重复调用结果与首调一致（收敛快照一致性）");
 
-        // topic info verbose：同 peer 端点详情（归属节点名 + FastDDS 原生 GUID + QoS 行集）
-        std::string vTypeName;
-        size_t vPubCount = 0;
-        size_t vSubCount = 0;
-        std::vector<FastDDSDebugNode::EndpointDetail> vPubs;
-        std::vector<FastDDSDebugNode::EndpointDetail> vSubs;
-        check(dbg.topicInfo(NODEINFO_PUB_TOPIC, vTypeName, vPubCount, vSubCount, 5, 100,
-                  &vPubs, nullptr),
-            "topicInfo(t_nodeinfo_pub, verbose) → true（writer 端点详情命中）");
-        check(vTypeName == "YomkDdsStd::MString" && vPubCount == 1,
-            "topicInfo(t_nodeinfo_pub, verbose) 类型名与发布者计数正确");
-        check(vPubs.size() == 1 && vPubs[0].nodeName == NODEINFO_PEER_NAME,
-            "writer 端点详情归属节点名 == test-nodeinfo-peer（GUID 前缀归属）");
-        check(vPubs[0].guid.find('|') != std::string::npos,
+        // topic info 结构化端点详情（归属节点名 + FastDDS 原生 GUID + 结构化 QoS 字段）
+        yomk::payload::TopicInfo vInfo;
+        check(dbg.topicInfo(NODEINFO_PUB_TOPIC, vInfo, 5, 100),
+            "topicInfo(t_nodeinfo_pub) → true（writer 端点详情命中）");
+        check(vInfo.typeName == "YomkDdsStd::MString" && vInfo.publisherCount == 1,
+            "topicInfo(t_nodeinfo_pub) 类型名与发布者计数正确");
+        check(vInfo.publishers.size() == 1 && vInfo.publishers[0].nodeName == NODEINFO_PEER_NAME,
+            "writer 端点归属节点名 == test-nodeinfo-peer（GUID 前缀归属）");
+        check(vInfo.publishers[0].guid.find('|') != std::string::npos,
             "writer GUID 为 FastDDS 原生 prefix|entity 形态");
-        bool hasReliability = false;
-        bool hasDurability = false;
-        for (const auto& line : vPubs[0].qosLines)
-        {
-            hasReliability = hasReliability || line.rfind("  Reliability: ", 0) == 0;
-            hasDurability = hasDurability || line.rfind("  Durability: ", 0) == 0;
-            std::cout << "[OBSERVE] writer qos |" << line << "|" << std::endl;
-        }
-        check(hasReliability && hasDurability,
-            "writer QoS 行集含 Reliability 与 Durability 键行");
-        check(dbg.topicInfo(NODEINFO_SUB_TOPIC, vTypeName, vPubCount, vSubCount, 5, 100,
-                  nullptr, &vSubs),
-            "topicInfo(t_nodeinfo_sub, verbose) → true（reader 端点详情命中）");
-        check(vSubCount == 1 && vSubs.size() == 1 && vSubs[0].nodeName == NODEINFO_PEER_NAME,
-            "reader 端点详情归属节点名 == test-nodeinfo-peer（GUID 前缀归属）");
-        std::cout << "[OBSERVE] writer guid=" << vPubs[0].guid
-                  << " reader guid=" << vSubs[0].guid << std::endl;
-        // 未发现主题：verbose 指针传入 → false 且输出保持为空（单次快照快速路径）
-        std::vector<FastDDSDebugNode::EndpointDetail> missDetails;
-        check(!dbg.topicInfo("t_not_exist_verbose", vTypeName, vPubCount, vSubCount, 1, 50,
-                  &missDetails, nullptr),
-            "topicInfo(t_not_exist_verbose, verbose) → false（未发现主题）");
-        check(missDetails.empty(), "未发现主题时 verbose 输出保持为空");
+        const auto& writerQos = vInfo.publishers[0].qos;
+        check(writerQos.reliability == "RELIABLE" && writerQos.durability == "TRANSIENT_LOCAL",
+            "writer 结构化 QoS 回填 reliability/durability 枚举名（RELIABLE/TRANSIENT_LOCAL 底座）");
+        std::cout << "[OBSERVE] writer qos reliability=" << writerQos.reliability
+                  << " durability=" << writerQos.durability << std::endl;
+        yomk::payload::TopicInfo vInfoSub;
+        check(dbg.topicInfo(NODEINFO_SUB_TOPIC, vInfoSub, 5, 100),
+            "topicInfo(t_nodeinfo_sub) → true（reader 端点详情命中）");
+        check(vInfoSub.subscriptionCount == 1 && vInfoSub.subscriptions.size() == 1 &&
+                  vInfoSub.subscriptions[0].nodeName == NODEINFO_PEER_NAME,
+            "reader 端点归属节点名 == test-nodeinfo-peer（GUID 前缀归属）");
+        std::cout << "[OBSERVE] writer guid=" << vInfo.publishers[0].guid
+                  << " reader guid=" << vInfoSub.subscriptions[0].guid << std::endl;
+        // 未发现主题：结构化载荷保持空清单（单次快照快速路径）
+        yomk::payload::TopicInfo missInfo;
+        check(!dbg.topicInfo("t_not_exist_verbose", missInfo, 1, 50),
+            "topicInfo(t_not_exist_verbose) → false（未发现主题）");
+        check(missInfo.publishers.empty() && missInfo.subscriptions.empty(),
+            "未发现主题时端点清单保持为空");
 
         // interface show：按类型名输出 IDL 结构（TypeObject→DynamicType 纯类型内省，
         // 不建订阅；peer 的 MString writer 在场，TypeInformation 经 TypeLookup 已就绪）
@@ -1412,21 +1403,20 @@ int main()
                 check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（裸类型场景）");
 
                 // ① 发现层：writer 端点信息进缓存，类型名原样可见（与真类型端点无差别）
-                std::string plainType;
-                size_t plainPubCount = 0;
-                size_t plainSubCount = 0;
+                yomk::payload::TopicInfo plainInfo;
                 bool plainSeen = false;
                 for (int i = 0; i < 50 && !plainSeen; ++i)
                 {
-                    plainSeen = dbg.topicInfo(PLAIN_TOPIC, plainType, plainPubCount, plainSubCount, 1, 50);
+                    plainInfo = yomk::payload::TopicInfo{};
+                    plainSeen = dbg.topicInfo(PLAIN_TOPIC, plainInfo, 1, 50);
                     if (!plainSeen)
                     {
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     }
                 }
                 check(plainSeen, "裸类型主题发现层可见（topicInfo → true）");
-                check(plainType == "Plain::NoTypeObject", "裸类型主题类型名原样回传");
-                check(plainPubCount == 1, "裸类型主题 publisherCount==1");
+                check(plainInfo.typeName == "Plain::NoTypeObject", "裸类型主题类型名原样回传");
+                check(plainInfo.publisherCount == 1, "裸类型主题 publisherCount==1");
 
                 // ② 类型重建层：TypeObject 不可得 → interfaceShow / topicExample / topicMsgJson
                 // 均归类为 not available，且不得包含 not found（区分第一层"未发现"）
@@ -1549,44 +1539,73 @@ int main()
 
     // ---- 端点 QoS 用例（闭环 2）：topicPub writer 与动态订阅 reader 的 QoS 经
     // DDSQosProfile 可调，无参（全哨兵）保持默认底座。writer/reader 均不外露，断言
-    // 经二号调试节点（observer）topicInfo verbose 的发现 QoS 行读回（发现数据携带端点
-    // QoS，是唯一观察面，先例同 nodeInfo verbose 用例）；收发实证经 setOutputSink ----
+    // 经二号调试节点（observer）topicInfo 的结构化端点 QoS 字段读回（发现数据携带端点
+    // QoS，是唯一观察面，先例同 nodeInfo 用例）；收发实证经 setOutputSink ----
     {
         FastDDSDebugNode observer;
         check(observer.setDomainId(TEST_DOMAIN), "QoS 用例观察节点 setDomainId(200) → true");
 
-        // 辅助：轮询读回 verbose 端点详情（等发现/建订就绪，最多约 4s×快照窗）；minCount
-        // 为命中所需端点数下限（pub 用例读回含 peer+topicPub 两个 writer，peer 先被发现时
-        // 不能提前命中，须等到被测 writer 也在场）
-        auto waitVerbose = [&observer](const char *topic, bool wantPubs,
-                std::vector<FastDDSDebugNode::EndpointDetail> &out, size_t minCount = 1) {
-            std::string tn;
-            size_t pc = 0;
-            size_t sc = 0;
+        // 辅助：轮询读回端点详情（等发现/建订就绪，最多约 4s×快照窗）；minCount 为命中所需
+        // 端点数下限（pub 用例读回含 peer+topicPub 两个 writer，peer 先被发现时不能提前命中）
+        auto waitEndpoints = [&observer](const char *topic, bool wantPubs,
+                std::vector<yomk::payload::TopicEndpointInfo> &out, size_t minCount = 1) {
+            yomk::payload::TopicInfo info;
             for (int i = 0; i < 40; ++i)
             {
-                out.clear();
-                if (observer.topicInfo(topic, tn, pc, sc, 2, 100,
-                        wantPubs ? &out : nullptr, wantPubs ? nullptr : &out) &&
-                        out.size() >= minCount)
+                info = yomk::payload::TopicInfo{};
+                if (observer.topicInfo(topic, info, 2, 100))
                 {
-                    return true;
+                    out = wantPubs ? info.publishers : info.subscriptions;
+                    if (out.size() >= minCount)
+                    {
+                        return true;
+                    }
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
+            out.clear();
             return false;
         };
-        // 辅助：端点详情行集（任一端点）是否含 "  <键>: <值>" 行（逐行前缀匹配，同 verbose
-        // 先例；全端点扫描——读回端点含 peer 与 topicPub 两个 writer，peer 显式 QoS 与
-        // 目标行集双差异故命中无歧义）
-        auto hasQosLine = [](const std::vector<FastDDSDebugNode::EndpointDetail> &detail,
+        // 辅助：任一端点的结构化字段命中（全端点扫描——读回端点含 peer 与被测端两个 writer，
+        // peer 显式 QoS 与目标值双差异故命中无歧义）；未公告项以 "not advertised" 查询
+        auto hasQosField = [](const std::vector<yomk::payload::TopicEndpointInfo> &detail,
                 const char *key, const char *value) {
-            const std::string prefix = std::string("  ") + key + ": " + value;
+            const std::string k(key);
+            const std::string v(value);
             for (const auto &ep : detail)
             {
-                for (const auto &line : ep.qosLines)
+                const auto &q = ep.qos;
+                if (k == "Reliability" && q.reliability == v)
                 {
-                    if (line.rfind(prefix, 0) == 0)
+                    return true;
+                }
+                if (k == "Durability" && q.durability == v)
+                {
+                    return true;
+                }
+                if (k == "History")
+                {
+                    if (v == "not advertised" && !q.historyAdvertised)
+                    {
+                        return true;
+                    }
+                    if (v == "KEEP_ALL" && q.historyAdvertised && q.historyKeepAll)
+                    {
+                        return true;
+                    }
+                    if (v == "KEEP_LAST" && q.historyAdvertised && !q.historyKeepAll)
+                    {
+                        return true;
+                    }
+                }
+                if (k == "Depth")
+                {
+                    if (v == "not advertised" && !q.historyAdvertised)
+                    {
+                        return true;
+                    }
+                    if (v != "not advertised" && q.historyAdvertised &&
+                            std::to_string(q.depth) == v)
                     {
                         return true;
                     }
@@ -1594,24 +1613,13 @@ int main()
             }
             return false;
         };
-        // 辅助：单端点前 8 行 ROS2 对齐组键序恒齐（History/Depth/Reliability/Durability/
-        // Deadline/Lifespan/Liveliness/Liveliness lease duration，rmw_qos_profile_t 八字段序）
-        auto alignKeysOk = [](const FastDDSDebugNode::EndpointDetail &ep) {
-            static const char *kAlignKeys[8] = {"History", "Depth", "Reliability",
-                "Durability", "Deadline", "Lifespan", "Liveliness",
-                "Liveliness lease duration"};
-            if (ep.qosLines.size() < 8)
-            {
-                return false;
-            }
-            for (size_t i = 0; i < 8; ++i)
-            {
-                if (ep.qosLines[i].rfind(std::string("  ") + kAlignKeys[i] + ": ", 0) != 0)
-                {
-                    return false;
-                }
-            }
-            return true;
+        // 辅助：枚举型 QoS 字段全员回填（ROS2 对齐组 reliability/durability/liveliness +
+        // 扩展组 ownership/destinationOrder），空串即视为未采集
+        auto alignFieldsOk = [](const yomk::payload::TopicEndpointInfo &ep) {
+            const auto &q = ep.qos;
+            return !q.reliability.empty() && !q.durability.empty() &&
+                    !q.liveliness.empty() && !q.ownership.empty() &&
+                    !q.destinationOrder.empty();
         };
 
         // ① topicPub 显式 BEST_EFFORT+VOLATILE（持续模式给观察窗）：与 writer 默认底座
@@ -1642,34 +1650,34 @@ int main()
                 std::cout << "[OBSERVE] topicPub(be) ok=" << ok << " err=|" << pErr
                           << "| total=" << beTotal << " failed=" << beFailed << std::endl;
             });
-            std::vector<FastDDSDebugNode::EndpointDetail> pubDetail;
-            const bool seen = waitVerbose(BE_TOPIC, true, pubDetail, 2);
+            std::vector<yomk::payload::TopicEndpointInfo> pubDetail;
+            const bool seen = waitEndpoints(BE_TOPIC, true, pubDetail, 2);
             yomk::debugPubStop();  // 停止持续发布（发布线程 join 后 dbg 析构）
             pubThread.join();
             check(seen, "topicPub 持续发布期间观察节点读回 writer 端点详情");
             for (const auto &ep : pubDetail)
             {
-                for (const auto &line : ep.qosLines)
-                {
-                    std::cout << "[OBSERVE] be writer qos |" << line << "|" << std::endl;
-                }
+                std::cout << "[OBSERVE] be writer qos |reliability=" << ep.qos.reliability
+                          << "|durability=" << ep.qos.durability
+                          << "|historyAdvertised=" << ep.qos.historyAdvertised << "|"
+                          << std::endl;
             }
-            check(hasQosLine(pubDetail, "Reliability", "BEST_EFFORT"),
-                  "显式 BEST_EFFORT → writer 发现读回 Reliability: BEST_EFFORT（profile 落端点）");
-            check(hasQosLine(pubDetail, "Durability", "VOLATILE"),
-                  "显式 VOLATILE → writer 发现读回 Durability: VOLATILE（profile 落端点）");
-            // 对齐组恒齐：两 writer 端点 qosLines 前 8 行键序固定（闭环 3 口径，对齐
-            // rmw_qos_profile_t 八字段序）
+            check(hasQosField(pubDetail, "Reliability", "BEST_EFFORT"),
+                  "显式 BEST_EFFORT → writer 发现读回 reliability=BEST_EFFORT（profile 落端点）");
+            check(hasQosField(pubDetail, "Durability", "VOLATILE"),
+                  "显式 VOLATILE → writer 发现读回 durability=VOLATILE（profile 落端点）");
+            // 对齐组恒齐：两 writer 端点的枚举型 QoS 字段全部回填（对齐 rmw_qos_profile_t
+            // 的 reliability/durability/liveliness 组 + 扩展组 ownership/destinationOrder）
             for (const auto &ep : pubDetail)
             {
-                check(alignKeysOk(ep), "writer 端点 qosLines 前 8 行 ROS2 对齐组键序恒齐");
+                check(alignFieldsOk(ep), "writer 端点 QoS 枚举字段全量回填（非空串）");
             }
-            // not advertised 兜底：Fast DDS 本地 writer 发现数据不携带 history → 两行显式
-            // not advertised（替代旧口径 has_value 为空静默跳过）
-            check(hasQosLine(pubDetail, "History", "not advertised"),
-                  "writer 发现数据不携带 history → History: not advertised 显式兜底");
-            check(hasQosLine(pubDetail, "Depth", "not advertised"),
-                  "writer 发现数据不携带 history → Depth: not advertised 显式兜底");
+            // not advertised 兜底：Fast DDS 本地 writer 发现数据不携带 history →
+            // historyAdvertised=false（替代旧口径 has_value 为空静默跳过）
+            check(hasQosField(pubDetail, "History", "not advertised"),
+                  "writer 发现数据不携带 history → historyAdvertised=false 显式兜底");
+            check(hasQosField(pubDetail, "Depth", "not advertised"),
+                  "writer 未公告 history → depth 不作数（historyAdvertised=false 判定）");
         }
 
         // ② topicPub 无参（全哨兵零覆盖）→ 保现值 RELIABLE+TRANSIENT_LOCAL
@@ -1696,22 +1704,20 @@ int main()
                 std::cout << "[OBSERVE] topicPub(def) ok=" << ok << " err=|" << pErr << "|"
                           << std::endl;
             });
-            std::vector<FastDDSDebugNode::EndpointDetail> defDetail;
-            const bool seenDef = waitVerbose(DEF_TOPIC, true, defDetail, 2);
+            std::vector<yomk::payload::TopicEndpointInfo> defDetail;
+            const bool seenDef = waitEndpoints(DEF_TOPIC, true, defDetail, 2);
             yomk::debugPubStop();
             pubThread.join();
             check(seenDef, "无参 topicPub 持续发布期间观察节点读回 writer 端点详情");
             for (const auto &ep : defDetail)
             {
-                for (const auto &line : ep.qosLines)
-                {
-                    std::cout << "[OBSERVE] def writer qos |" << line << "|" << std::endl;
-                }
+                std::cout << "[OBSERVE] def writer qos |reliability=" << ep.qos.reliability
+                          << "|durability=" << ep.qos.durability << "|" << std::endl;
             }
-            check(hasQosLine(defDetail, "Reliability", "RELIABLE"),
-                  "无参 → writer 发现读回 Reliability: RELIABLE（保现值）");
-            check(hasQosLine(defDetail, "Durability", "TRANSIENT_LOCAL"),
-                  "无参 → writer 发现读回 Durability: TRANSIENT_LOCAL（保现值）");
+            check(hasQosField(defDetail, "Reliability", "RELIABLE"),
+                  "无参 → writer 发现读回 reliability=RELIABLE（保现值）");
+            check(hasQosField(defDetail, "Durability", "TRANSIENT_LOCAL"),
+                  "无参 → writer 发现读回 durability=TRANSIENT_LOCAL（保现值）");
         }
 
         // ③ 动态订阅 reader 显式 RELIABLE+depth=10：peer 发布端（默认底座 RELIABLE offered）
@@ -1759,21 +1765,22 @@ int main()
             }
             check(got, "显式 RELIABLE reader（requested==offered）收到消息（异步建订链路终端实证）");
 
-            // observer 读回被测端 reader 端点（verbose Subscribers 段）
-            std::vector<FastDDSDebugNode::EndpointDetail> subDetail;
-            const bool seenSub = waitVerbose(SUB_TOPIC, false, subDetail);
+            // observer 读回被测端 reader 端点（结构化 subscriptions 清单）
+            std::vector<yomk::payload::TopicEndpointInfo> subDetail;
+            const bool seenSub = waitEndpoints(SUB_TOPIC, false, subDetail);
             check(seenSub, "观察节点读回被测端 reader 端点详情（建订完成实证）");
-            for (const auto &line : (subDetail.empty() ? std::vector<std::string>()
-                                                       : subDetail[0].qosLines))
+            for (const auto &ep : subDetail)
             {
-                std::cout << "[OBSERVE] reliable reader qos |" << line << "|" << std::endl;
+                std::cout << "[OBSERVE] reliable reader qos |reliability=" << ep.qos.reliability
+                          << "|historyAdvertised=" << ep.qos.historyAdvertised
+                          << "|depth=" << ep.qos.depth << "|" << std::endl;
             }
-            check(hasQosLine(subDetail, "Reliability", "RELIABLE"),
-                  "显式 RELIABLE → reader 发现读回 Reliability: RELIABLE（与底座 BEST_EFFORT 差异）");
-            check(hasQosLine(subDetail, "History", "KEEP_LAST"),
-                  "显式 depth=10 → reader 发现读回 History: KEEP_LAST（Depth 独立行）");
-            check(hasQosLine(subDetail, "Depth", "10"),
-                  "显式 depth=10 → reader 发现读回独立 Depth: 10 行");
+            check(hasQosField(subDetail, "Reliability", "RELIABLE"),
+                  "显式 RELIABLE → reader 发现读回 reliability=RELIABLE（与底座 BEST_EFFORT 差异）");
+            check(hasQosField(subDetail, "History", "KEEP_LAST"),
+                  "显式 depth=10 → reader 发现读回 history=KEEP_LAST（depth 独立字段）");
+            check(hasQosField(subDetail, "Depth", "10"),
+                  "显式 depth=10 → reader 发现读回 depth=10");
         }
 
         // ④ requested>offered 反证：发布端经闭环 1 通道显式 BEST_EFFORT（offered），
@@ -1817,11 +1824,11 @@ int main()
                       "requested RELIABLE > offered BEST_EFFORT 不匹配 → 收 0 条（翻译生效反证）");
             }
             // reader 建立实证：observer 读回 Subscribers 段 Reliability: RELIABLE
-            std::vector<FastDDSDebugNode::EndpointDetail> msDetail;
-            const bool seenMs = waitVerbose(MS_TOPIC, false, msDetail);
+            std::vector<yomk::payload::TopicEndpointInfo> msDetail;
+            const bool seenMs = waitEndpoints(MS_TOPIC, false, msDetail);
             check(seenMs, "反证用例 reader 建立 成功（读回端点详情）");
-            check(hasQosLine(msDetail, "Reliability", "RELIABLE"),
-                  "反证用例 reader 读回 Reliability: RELIABLE（requested 翻译落端点直证）");
+            check(hasQosField(msDetail, "Reliability", "RELIABLE"),
+                  "反证用例 reader 读回 reliability=RELIABLE（requested 翻译落端点直证）");
         }
     }
     

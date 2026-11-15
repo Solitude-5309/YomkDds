@@ -64,7 +64,7 @@ static void printUsage(std::ostream &os)
 {
     os << "Usage:\n"
           "  yomkdds topic print [--qos-ros | --qos-KEY VAL ... | --qos-file FILE] <topic-name>\n"
-          "  yomkdds topic list [-t | --types]\n"
+          "  yomkdds topic list [-t | --types] [-v | --verbose]\n"
           "  yomkdds topic info [-v | --verbose] <topic-name>\n"
           "  yomkdds topic type <topic-name>\n"
           "  yomkdds topic find <type-name>\n"
@@ -112,8 +112,8 @@ static void printUsage(std::ostream &os)
           "                      profiles 文件路径（默认空，相对/绝对均可）；开关开启且路径\n"
           "                      非空时创建节点前自动加载（空路径静默跳过，加载失败报错退出），\n"
           "                      启动时无则创建默认值并写入 .bashrc，任意终端可查看可继承\n"
-          "  -v, --verbose       端点详情模式（仅 topic info 生效）：追加逐端点 Node name、\n"
-          "                      Endpoint type、GUID 与 QoS profile 详情段\n"
+          "  -v, --verbose       端点详情模式（topic info 与 topic list 生效）：逐端点追加\n"
+          "                      Node name、Endpoint type、GUID 与 QoS profile 详情段\n"
           "  -t, --types         类型名模式（仅 topic list 生效）：每行输出 \"主题名 [类型名]\"\n"
           "  -o, --output <dir>  输出目录（topic pub -ef 生效：消息描述文件生成位置，相对/\n"
           "                      绝对路径均可，缺省当前目录，目录不存在报错退出，不自动创建；\n"
@@ -1291,10 +1291,136 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
     return 0;
 }
 
+// ---- topic info/list 的客户端渲染（结构化载荷 → 文本，全工程仅此一份） ----
+// 服务层只回结构化数据（topicName/typeName/计数 + 逐端点 nodeName/GUID/QoS 字段），
+// 展示形态（三行 / 【-v】逐端点详情段）全部在此决定；文本口径与旧服务层拼装逐字一致
+static std::string formatDurationNs(int64_t ns)
+{
+    if (ns == yomk::payload::kInfiniteDurationNs)
+    {
+        return "Infinite";
+    }
+    constexpr int64_t kNsPerSec = 1000000000LL;
+    constexpr int kNanosDigits = 9;
+    std::ostringstream os;
+    os << ns / kNsPerSec;
+    const int64_t sub = ns % kNsPerSec;
+    if (sub != 0)
+    {
+        os << '.' << std::setw(kNanosDigits) << std::setfill('0') << sub;
+    }
+    os << " s";
+    return os.str();
+}
+
+// 端点 QoS 行集：ROS2 对齐组恒在，DDS 扩展组按 publisher/subscription 专属字段与
+// *Advertised 标记追加（未公告项显式标 not advertised，不静默跳过）
+static std::vector<std::string> endpointQosLines(const yomk::payload::TopicEndpointQos &qos,
+                                                bool publisher)
+{
+    std::vector<std::string> lines;
+    if (qos.historyAdvertised)
+    {
+        lines.emplace_back(std::string("  History: ") + (qos.historyKeepAll ? "KEEP_ALL" : "KEEP_LAST"));
+        lines.emplace_back("  Depth: " + std::to_string(qos.depth));
+    }
+    else
+    {
+        lines.emplace_back("  History: not advertised");
+        lines.emplace_back("  Depth: not advertised");
+    }
+    lines.emplace_back("  Reliability: " + qos.reliability);
+    lines.emplace_back("  Durability: " + qos.durability);
+    lines.emplace_back("  Deadline: " + formatDurationNs(qos.deadlineNs));
+    lines.emplace_back("  Lifespan: " + formatDurationNs(qos.lifespanNs));
+    lines.emplace_back("  Liveliness: " + qos.liveliness);
+    lines.emplace_back("  Liveliness lease duration: " + formatDurationNs(qos.livelinessLeaseNs));
+    lines.emplace_back("  Latency Budget: " + formatDurationNs(qos.latencyBudgetNs));
+    lines.emplace_back("  Ownership: " + qos.ownership);
+    if (publisher)
+    {
+        lines.emplace_back("  Ownership Strength: " + std::to_string(qos.ownershipStrength));
+    }
+    else
+    {
+        lines.emplace_back("  Time Based Filter: " + formatDurationNs(qos.timeBasedFilterNs));
+    }
+    lines.emplace_back("  Destination Order: " + qos.destinationOrder);
+    std::string partition = "[";
+    for (size_t idx = 0; idx < qos.partition.size(); ++idx)
+    {
+        if (idx != 0)
+        {
+            partition += ", ";
+        }
+        partition += qos.partition[idx];
+    }
+    partition += "]";
+    lines.emplace_back("  Partition: " + partition);
+    if (qos.resourceLimitsAdvertised)
+    {
+        lines.push_back("  Resource Limits: max_samples=" + std::to_string(qos.maxSamples) +
+                        ", max_instances=" + std::to_string(qos.maxInstances) +
+                        ", max_samples_per_instance=" + std::to_string(qos.maxSamplesPerInstance));
+    }
+    if (publisher && qos.publishModeAdvertised)
+    {
+        lines.emplace_back(std::string("  Publish Mode: ") + (qos.publishModeAsync ? "ASYNCHRONOUS" : "SYNCHRONOUS"));
+    }
+    if (publisher && qos.transportPriorityAdvertised)
+    {
+        lines.emplace_back("  Transport Priority: " + std::to_string(qos.transportPriority));
+    }
+    if (publisher && qos.writerDataLifecycleAdvertised)
+    {
+        lines.emplace_back(std::string("  Writer Data Lifecycle: autodispose_unregistered_instances=") +
+                           (qos.autodisposeUnregisteredInstances ? "true" : "false"));
+    }
+    return lines;
+}
+
+// 单端点详情段：首行为空行（与上一段/计数行隔开），后接固定四行头 + QoS 行集
+static void printEndpointBlock(std::ostream &os, const yomk::payload::TopicEndpointInfo &endpoint,
+                               bool publisher)
+{
+    os << "\nNode name: " << endpoint.nodeName
+       << "\nEndpoint type: " << (publisher ? "PUBLISHER" : "SUBSCRIPTION")
+       << "\nGUID: " << endpoint.guid
+       << "\nQoS profile:\n";
+    for (const auto &line : endpointQosLines(endpoint.qos, publisher))
+    {
+        os << line << "\n";
+    }
+}
+
+// 单主题详情：三行形态（Type/Publisher count/Subscription count）或缺省三行 + 逐端点详情段
+static void printTopicInfo(std::ostream &os, const yomk::payload::TopicInfo &info, bool verbose)
+{
+    if (!verbose)
+    {
+        os << "Type: " << info.typeName << "\n"
+           << "Publisher count: " << info.publisherCount << "\n"
+           << "Subscription count: " << info.subscriptionCount << "\n";
+        return;
+    }
+    os << "Type: " << info.typeName << "\n\n"
+       << "Publisher count: " << info.publisherCount << "\n";
+    for (const auto &endpoint : info.publishers)
+    {
+        printEndpointBlock(os, endpoint, true);
+    }
+    os << "\nSubscription count: " << info.subscriptionCount << "\n";
+    for (const auto &endpoint : info.subscriptions)
+    {
+        printEndpointBlock(os, endpoint, false);
+    }
+}
+
 // topic list 子命令：自适应收敛查询域内已发现主题与数据类型名（每 ~200ms 轮询一次发现缓存
-// 快照，连续 waitRounds 次集合不变即收敛立即输出；types 模式（-t）每行输出 "主题名 [类型名]"；
-// 无 Ctrl+C 循环，查完即退）
-static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false)
+// 快照，连续 waitRounds 次集合不变即收敛立即输出；缺省仅主题名，types 模式（-t）每行
+// "主题名 [类型名]"，verbose 模式（-v）逐主题追加完整详情段；无 Ctrl+C 循环，查完即退）
+static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false,
+                   bool verbose = false)
 {
     ::yomk::server().init();
     ::yomk::server().srv<YomkDdsDebugService>().create();
@@ -1312,37 +1438,45 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false)
     }
 
     // 2. 收敛查询：节点内部轮询发现缓存快照（~200ms 间隔），连续 waitRounds 次集合不变即返回，
-    //    发现重放完成即立即输出，无需固定等待窗口；types 模式（-t）每行 "主题名 [类型名]"
-    if (types)
-    {
-        resp = yomk::dds().debug().rounds(waitRounds).interval(200).with_type().topics();
-    }
-    else
-    {
-        resp = yomk::dds().debug().rounds(waitRounds).interval(200).topics();
-    }
+    //    发现重放完成即立即输出；载荷为全量结构化 TopicInfoArray，行文本在此渲染
+    resp = yomk::dds().debug().rounds(waitRounds).interval(200).topics();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("list topics failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::TopicInfoArray>(resp.data);
     if (arr == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("list topics failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
-    if (arr->d.empty())
+    const std::vector<::yomk::payload::TopicInfo> &rows = arr->d.d;
+    if (rows.empty())
     {
         std::cout << "no topics discovered on domain " << domainId << std::endl;
     }
     else
     {
-        for (const auto &line : arr->d)
+        for (const auto &info : rows)
         {
-            std::cout << line << "\n";
+            if (verbose)
+            {
+                // 逐主题：标题行 "主题名 [类型名]" + 详情段（段间空行）
+                std::cout << info.topicName << " [" << info.typeName << "]\n";
+                printTopicInfo(std::cout, info, true);
+                std::cout << "\n";
+            }
+            else if (types)
+            {
+                std::cout << info.topicName << " [" << info.typeName << "]\n";
+            }
+            else
+            {
+                std::cout << info.topicName << "\n";
+            }
         }
         std::cout.flush();
     }
@@ -1358,10 +1492,10 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false)
 }
 
 // topic info 子命令：独立收敛查询单个主题的发现详情（节点内部轮询该主题快照——存在标志 +
-// 类型名 + 端点计数，连续 waitRounds 次不变即返回），输出三行：Type / Publisher count /
-// Subscription count；verbose 模式（-v）追加逐端点详情段（Node name/Endpoint type/GUID/
-// QoS profile，段间空行，count 为 0 的端点类型无清单段）；未发现主题报错退出（无 Ctrl+C
-// 循环，查完即退）
+// 类型名 + 端点计数 + 逐端点 QoS，连续 waitRounds 次不变即返回），输出三行：Type /
+// Publisher count / Subscription count；verbose 模式（-v）追加逐端点详情段（Node name/
+// Endpoint type/GUID/QoS profile，段间空行，count 为 0 的端点类型无清单段）；未发现主题
+// 报错退出（无 Ctrl+C 循环，查完即退）
 static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t waitRounds,
                    bool verbose = false)
 {
@@ -1380,34 +1514,23 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
         return 1;
     }
 
-    // 2. 独立收敛查询单主题详情（与 list 查询完全分开的路径）：命中返回 StringArray，
-    //    行内容由服务层拼装（非 verbose 三行 / verbose 逐端点详情段），原样直出；
-    //    未发现主题（含收敛窗口内始终不可见）返回 eNo
-    if (verbose)
-    {
-        resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).verbose(true).info();
-    }
-    else
-    {
-        resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).info();
-    }
+    // 2. 独立收敛查询单主题详情（与 list 查询完全分开的路径）：载荷为结构化 TopicInfo，
+    //    三行与逐端点详情段均在此渲染；未发现主题（含收敛窗口内始终不可见）返回错误
+    resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).info();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         ::yomk::log().tag("yomkdds").error("topic info failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
-    if (arr == nullptr)
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::TopicInfo>(resp.data);
+    if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("topic info failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
-    for (const auto &line : arr->d)
-    {
-        std::cout << line << "\n";
-    }
+    printTopicInfo(std::cout, info->msg, verbose);
     std::cout.flush();
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
@@ -1420,9 +1543,9 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
     return 0;
 }
 
-// topic type 子命令：查询单主题数据类型（topic info 的单值快捷方式，复用 /topic_info 非 verbose
-// 端点）：取首行 "Type: xxx" 去前缀裸出类型名（对齐 ros2 topic type，便于脚本 $() 取用）；
-// 未发现主题报错退出（无 Ctrl+C 循环，查完即退）
+// topic type 子命令：查询单主题数据类型（topic info 的单值快捷方式，复用 /topic_info
+// 端点）：载荷即结构化 TopicInfo，直接取 typeName 裸出（对齐 ros2 topic type，便于
+// 脚本 $() 取用）；未发现主题报错退出（无 Ctrl+C 循环，查完即退）
 static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_t waitRounds)
 {
     ::yomk::server().init();
@@ -1440,7 +1563,7 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
         return 1;
     }
 
-    // 2. 独立收敛查询单主题详情（非 verbose 三行），仅消费首行类型名
+    // 2. 独立收敛查询单主题详情（载荷即结构化 TopicInfo），仅消费类型名
     resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).info();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
@@ -1448,23 +1571,14 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
-    if (arr == nullptr || arr->d.empty())
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::TopicInfo>(resp.data);
+    if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("topic type failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
-    const std::string kTypePrefix = "Type: ";
-    const std::string &first = arr->d.front();
-    if (first.rfind(kTypePrefix, 0) == 0)
-    {
-        std::cout << first.substr(kTypePrefix.size()) << "\n"; // 裸类型名
-    }
-    else
-    {
-        std::cout << first << "\n"; // 防御：前缀不匹配时原样输出
-    }
+    std::cout << info->msg.typeName << "\n";
     std::cout.flush();
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
@@ -2159,7 +2273,7 @@ int main(int argc, char *argv[])
     uint32_t domainId = 0;
     bool hasDomainArg = false;  // 显式 --domain/-D 在场：域号解析跳过 env 恒读（显式优先）
     uint32_t waitRounds = 5; // 收敛判定次数（从环境变量 YOMKDDS_DDS_DISCOVER_ROUNDS 读取；查询类命令生效）
-    bool verbose = false;    // 端点详情模式（-v/--verbose；仅 topic info 生效）
+    bool verbose = false;    // 端点详情模式（-v/--verbose；topic info 与 topic list 生效）
     bool types = false;      // 类型名模式（-t/--types；仅 topic list 生效）
     bool startPaused = false; // 暂停态启动（--start-paused；bag record/play 生效）
     bool playLoop = false;   // 循环回放（-l/--loop；仅 bag play 生效）
@@ -2857,7 +2971,7 @@ int main(int argc, char *argv[])
     }
     if (pos.size() == 2 && pos[0] == "topic" && pos[1] == "list")
     {
-        return runList(domainId, waitRounds, types);
+        return runList(domainId, waitRounds, types, verbose);
     }
     if (pos.size() == 3 && pos[0] == "topic" && pos[1] == "type" && !pos[2].empty())
     {

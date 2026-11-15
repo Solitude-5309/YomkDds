@@ -92,15 +92,16 @@ average rate: 1.000
 
 ### topic list：列出域内主题
 
-- **用途**：一次性列出当前域内全部已发现主题，每行一个 topicName 按主题名排序。
+- **用途**：一次性列出当前域内全部已发现主题，每行一个 topicName 按主题名排序；`-t` 附类型名，`-v` 逐主题展开完整详情段。
 - **完整命令行**：
 
 ```bash
 yomkdds topic list          # 默认域 0
 yomkdds topic list -t       # 类型名模式：每行输出 主题名 [类型名]
+yomkdds topic list -v       # 端点详情模式：逐主题输出 主题名 [类型名] + 详情段
 ```
 
-- **关键选项**：`-t`（`--types`）进入类型名模式，每行输出 `主题名 [类型名]`（单空格 + 方括号，对齐 `ros2 topic list -t` 形态，类型名原样输出）。
+- **关键选项**：`-t`（`--types`）进入类型名模式，每行输出 `主题名 [类型名]`（单空格 + 方括号，对齐 `ros2 topic list -t` 形态，类型名原样输出）；`-v`（`--verbose`）逐主题输出 `主题名 [类型名]` 标题行，后接与 `topic info -v` 完全同构的详情段（段间空行）。三种形态只是同一份结构化载荷（`TopicInfoArray`）的不同渲染。
 - **示例输出**：
 
 ```
@@ -114,7 +115,9 @@ hello_world [YomkDdsStd::MString]
 ```
 
 域内无任何已发布主题时输出 `no topics discovered on domain N`（types 模式同）。
-- **等价库调用**：`yomk::dds().debug().rounds(5).interval(200).topics()`；`-t` 模式对应 `yomk::dds().debug().rounds(5).interval(200).with_type().topics()`（输出内容与 CLI 一致）。
+
+`-v` 端点详情模式逐主题先打 `主题名 [类型名]`，随后是与 `topic info -v` 完全同构的段（Type/Publisher count/逐端点块/Subscription count，多主题时主题间空行分隔），范例见下一小节 `topic info -v` 输出示例。
+- **等价库调用**：三种形态同为 `yomk::dds().debug().rounds(5).interval(200).topics()`（返回 `TopicInfoArray`）；缺省打 `topicName`、`-t` 打 `topicName [typeName]`、`-v` 再逐主题展开端点详情段，均属 CLI 侧渲染（服务层只回结构化数据）。
 
 建议先启动发布端再执行 `topic list`——工具创建调试节点入域后内部自适应收敛查询，无需固定等待窗口。
 
@@ -168,7 +171,7 @@ Subscription count: 0
 QoS 键值行分两组：**ROS2 对齐组**恒输出前 8 行（History/Depth/Reliability/Durability/Deadline/Lifespan/Liveliness/Liveliness lease duration，发现数据未携带时输出 `not advertised` 兜底行——writer 端点在 RTPS 发现协议中不携带 history 字段，属协议层 optional 字段缺席，非「无 QoS」）；**DDS 扩展组**紧随其后（Latency Budget/Ownership/Ownership Strength/Time Based Filter/Destination Order/Partition 等，optional 项仅当发现数据携带时追加）。输出的全部是对端随发现数据（SPDP/SEDP）声明的 QoS，即「对端宣称值」而非本地配置。GUID 为 FastDDS 原生格式直出（12 字节前缀 | 4 字节实体 ID 点分十六进制）。
 
 目标主题在收敛窗口内始终未被发现时报错退出（`topic [<主题名>] not found`，verbose 模式同）。
-- **等价库调用**：`yomk::dds().debug().topic("hello_world").rounds(5).interval(200).info()`；`-v` 模式对应 `yomk::dds().debug().topic("hello_world").rounds(5).interval(200).verbose(true).info()`。
+- **等价库调用**：`yomk::dds().debug().topic("hello_world").rounds(5).interval(200).info()`（返回单个 `TopicInfo`，与 `topics()` 单项同构）；`-v` 与否只影响 CLI 的渲染行数，库侧一次给全结构化字段。
 
 ### topic type：单主题类型名快捷查询
 
@@ -180,7 +183,7 @@ yomkdds topic type hello_world        # 输出：YomkDdsStd::MString
 ```
 
 - **关键选项**：无；未发现主题时报错退出（`topic [<主题名>] not found`，与 topic info 同语义）。
-- **等价库调用**：`yomk::dds().debug().topic(主题名).rounds(5).interval(200).info()`（取首行去前缀，复用同一 `/topic_info` 端点与收敛语义）。
+- **等价库调用**：`yomk::dds().debug().topic(主题名).rounds(5).interval(200).info()`（取 `TopicInfo::typeName`，复用同一 `/topic_info` 端点与收敛语义）。
 
 ### topic find：按类型名反查主题
 

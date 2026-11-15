@@ -593,18 +593,19 @@ public:
             .request();
     }
     /**
-     * @brief Query a copy-pastable publish example for the topic (request terminator)
-     * @return Response carrying a StringArray packet of three sections: "Type: <raw DDS
-     *         type name>", "IDL:" followed by the IDL lines, and "example:" followed by
-     *         the copy-pastable publish command (the JSON default template is quoted as a
-     *         whole, so editing field values is enough); Invalid when YomkServer is not
-     *         initialized
+     * @brief Query a publish example packet for the topic (request terminator)
+     * @return Response carrying a TopicExampleInfo packet: topicName/typeName, the reflected
+     *         interfaceInfo (root members plus the struct dependency closure) and json, the
+     *         compact default-value template that is already a valid publish payload; IDL
+     *         syntax, section headers and the publish command are rendered by the caller;
+     *         Invalid when YomkServer is not initialized
      * @note Independent convergence query (rounds()/interval(), 0 clamped to 5 rounds /
      *       200ms); fails when the topic has not been discovered
      */
-    // @zh: 按主题名查询可直接复制的发布示例（请求终结）
-    // @zh: return Response 携带 StringArray 三段行集：Type: 原始 DDS 类型名、IDL: 及 IDL 行集、
-    // @zh: example: 及可复制发布命令（JSON 默认值模板整体包单引号，改字段值即可发布）；未初始化返回 Invalid
+    // @zh: 按主题名查询发布示例包（请求终结）
+    // @zh: return Response 携带 TopicExampleInfo 包：主题名/类型名、反射得到的 interfaceInfo（root 成员表
+    // @zh: 加 struct 依赖闭包）与 json（紧凑默认值模板，本身即合法发布载荷）；IDL 语法、段标题与发布
+    // @zh: 命令由调用方渲染；未初始化返回 Invalid
     // @zh: note 独立收敛查询（rounds()/interval()，0 钳制为 5 次/200ms）；未发现主题返回错误
     yomk::payload::Response pub_example()
     {
@@ -619,17 +620,16 @@ public:
     }
     /**
      * @brief Query the topic's message description: type name + compact default-value JSON sample
-     * @return Response carrying a StringArray packet of exactly two lines: d[0] is the raw
-     *         DDS type name, d[1] the compact (single-line) JSON sample of default values,
-     *         which is itself a valid publish payload; Invalid when YomkServer is not
-     *         initialized
+     * @return Response carrying a TopicMessageInfo packet: topicName/typeName and json, the
+     *         compact (single-line) sample of default values, which is itself a valid
+     *         publish payload; Invalid when YomkServer is not initialized
      * @note Independent convergence query (rounds()/interval(), 0 clamped to 5 rounds /
      *       200ms); fails when the topic has not been discovered. Writing the sample to a
      *       file is a caller-side concern: no output path travels in the request
      */
     // @zh: 查询主题的消息描述：类型名 + 紧凑默认值 JSON 样本（请求终结）
-    // @zh: return Response 携带 StringArray 恰两行：d[0] 原始 DDS 类型名，d[1] 紧凑（单行）默认值
-    // @zh: JSON 样本，本身即合法发布载荷；未初始化返回 Invalid
+    // @zh: return Response 携带 TopicMessageInfo 包：主题名/类型名与 json（紧凑单行默认值
+    // @zh: 样本，本身即合法发布载荷）；未初始化返回 Invalid
     // @zh: note 独立收敛查询（rounds()/interval()，0 钳制为 5 次/200ms）；未发现主题返回错误；
     // @zh: 是否落盘由调用方决定，请求负载不携带输出路径
     yomk::payload::Response sample_to_json()
@@ -645,17 +645,19 @@ public:
     }
     /**
      * @brief Publish the accumulated JSON payload to the topic (request terminator)
-     * @return Response; on a repeating publish it carries a StringArray {"total=N",
-     *         "failed=M"}; Invalid when YomkServer is not initialized or payload() was
-     *         not accumulated
+     * @return Response carrying a TopicPublishInfo packet in both single-shot and repeating
+     *         modes: topicName plus total (first shot included, 1 for a single-shot publish)
+     *         and failed (repeat-mode write failures); Invalid when YomkServer is not
+     *         initialized or payload() was not accumulated
      * @note Blocking until the first-round convergence and, for RELIABLE peers, until
      *       acknowledgment; repeat() keeps the chain alive until the stop flag or
      *       max_times(). Stop a repeating publish through yomk::debugPubStop
      *       (async-signal-safe) and reset it with yomk::debugPubReset() before a new
      *       session
      */
-    // @zh: 按累积的 JSON 载荷发布到目标主题（请求终结）；持续发布时载荷为 {"total=N", "failed=M"}
-    // @zh: return Response；未初始化或未累积 payload() 载荷时返回 Invalid
+    // @zh: 按累积的 JSON 载荷发布到目标主题（请求终结）
+    // @zh: return Response 携带 TopicPublishInfo 包（单次与持续模式均有）：主题名与 total（含首轮，
+    // @zh: 单次发布即 1）、failed（持续模式的 write 失败数）；未初始化或未累积 payload() 载荷时返回 Invalid
     // @zh: note 阻塞至首轮收敛完成（RELIABLE 订阅端还等送达确认）；repeat() 使其持续至停止标志
     // @zh: 置位或发满 max_times()；持续发布经 yomk::debugPubStop 停止（async-signal-safe），
     // @zh: 再次发起前宜先 yomk::debugPubReset() 复位
@@ -831,19 +833,19 @@ public:
     }
     /**
      * @brief Query the pub/sub topic lists of the accumulated participant (request terminator)
-     * @return Response carrying a StringArray packet: one participant name line followed by
-     *         the "Subscribers:" / "Publishers:" sections, each line being
-     *         "    topicName: typeName"; Invalid when YomkServer is not initialized
+     * @return Response carrying a NodeInfo packet: nodeName plus publishers/subscribers, each
+     *         a list of topicName/typeName endpoints deduplicated per topic and sorted by
+     *         (topicName, typeName); Invalid when YomkServer is not initialized
      * @note Independent convergence query (rounds()/interval(), 0 clamped to 5 rounds /
      *       200ms); ownership is resolved by the endpoint GUID prefix, endpoints of
-     *       same-name participants are merged, an empty section prints its header only,
-     *       and a name never discovered fails after the convergence window
+     *       same-name participants are merged, an empty list still means the participant
+     *       was discovered, and a name never discovered fails after the convergence window
      */
     // @zh: 查询累积的参与者名的发布/订阅主题清单（请求终结）
-    // @zh: return Response 携带 StringArray 包：节点名行 + "Subscribers:"/"Publishers:" 两段，
-    // @zh: 每行 "    主题名: 类型名"；未初始化返回 Invalid
+    // @zh: return Response 携带 NodeInfo 包：节点名与 publishers/subscribers 两份端点清单，
+    // @zh: 每项为主题名/类型名，按主题去重、以 (topicName, typeName) 排序；未初始化返回 Invalid
     // @zh: note 独立收敛查询（rounds()/interval()，0 钳制为 5 次/200ms）；归属判定按端点 GUID 前缀，
-    // @zh: 同名多参与者端点合并，空段仅打段头，收敛窗口内始终不可见则返回错误
+    // @zh: 同名多参与者端点合并，空清单仍表示已发现，收敛窗口内始终不可见则返回错误
     yomk::payload::Response info()
     {
         if (!requireServer())
@@ -1765,7 +1767,11 @@ inline detail::DdsBuilder dds()
  * node list as yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes(), and the node
  * details as yomk::dds().debug().node(name)[.rounds(n)][.interval(ms)].info().
  * list/info/find share the convergence semantics: consecutive stableRounds
- * unchanged snapshots, 0 clamped to defaults 5 rounds / 200ms. Full behavior:
+ * unchanged snapshots, 0 clamped to defaults 5 rounds / 200ms. Query and publish
+ * responses carry structured packets (TopicInfo / TopicExampleInfo /
+ * TopicMessageInfo / TopicPublishInfo / NodeInfo / InterfaceInfo) instead of
+ * pre-rendered text; only the plain name-list surfaces (topics/find_topics/
+ * interfaces/nodes) stay StringArray. Full behavior:
  * docs/features/debug-service.md
  */
 // @zh: 调试 API（YomkDdsDebugService 端点，已全链式化，等价 CLI：yomkdds）
@@ -1785,7 +1791,11 @@ inline detail::DdsBuilder dds()
 // @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()，节点详情为
 // @zh: yomk::dds().debug().node(name)[.rounds(n)][.interval(ms)].info()；
 // @zh: list/info/find 组共用收敛语义：
-// @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；详见 docs/features/debug-service.md
+// @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；
+// @zh: 查询与发布响应均为结构化包（TopicInfo / TopicExampleInfo / TopicMessageInfo /
+// @zh: TopicPublishInfo / NodeInfo / InterfaceInfo），不再回预渲染文本；
+// @zh: 仅纯名称清单（topics/find_topics/interfaces/nodes）保持 StringArray；
+// @zh: 详见 docs/features/debug-service.md
 
 
 // ===== YomkDdsBagService — mcap bag record/replay =====

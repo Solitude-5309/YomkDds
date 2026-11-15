@@ -772,8 +772,7 @@ bool FastDDSDebugNode::nodeList(std::vector<std::string>& names,
 }
 
 bool FastDDSDebugNode::nodeInfo(const std::string& nodeName,
-        std::vector<std::pair<std::string, std::string>>& publishers,
-        std::vector<std::pair<std::string, std::string>>& subscribers,
+        yomk::payload::NodeInfo& info,
         uint32_t stableRounds, uint32_t intervalMs, std::string* error)
 {
     if (stableRounds == 0)
@@ -795,7 +794,10 @@ bool FastDDSDebugNode::nodeInfo(const std::string& nodeName,
             return false;
         }
     }
-    if (!waitForNodeInfoStable(nodeName, publishers, subscribers, stableRounds, intervalMs))
+    info.nodeName = nodeName;
+    info.publishers.clear();
+    info.subscribers.clear();
+    if (!waitForNodeInfoStable(nodeName, info, stableRounds, intervalMs))
     {
         if (error != nullptr)
         {
@@ -833,7 +835,7 @@ bool FastDDSDebugNode::interfaceShow(const std::string& typeName,
 }
 
 bool FastDDSDebugNode::topicExample(const std::string& topicName,
-        std::vector<std::string>& lines,
+        yomk::payload::TopicExampleInfo& info,
         uint32_t stableRounds, uint32_t intervalMs, std::string* error)
 {
     if (stableRounds == 0)
@@ -855,8 +857,8 @@ bool FastDDSDebugNode::topicExample(const std::string& topicName,
             return false;
         }
     }
-    yomk::payload::TopicInfo info;
-    if (!waitForTopicInfoStable(topicName, info, stableRounds, intervalMs))
+    yomk::payload::TopicInfo topicInfo;
+    if (!waitForTopicInfoStable(topicName, topicInfo, stableRounds, intervalMs))
     {
         if (error != nullptr)
         {
@@ -864,33 +866,24 @@ bool FastDDSDebugNode::topicExample(const std::string& topicName,
         }
         return false;
     }
-    yomk::payload::InterfaceInfo iface;
-    if (!waitForInterfaceStable(info.typeName, iface, stableRounds, intervalMs, error))
+    if (!waitForInterfaceStable(topicInfo.typeName, info.interfaceInfo, stableRounds, intervalMs, error))
     {
         return false;
     }
-    // 默认值模板与 json_deserialize 输入格式对称；example 命令的 JSON 整体包单引号，防 shell
-    // 剥内层双引号（裸传会被剥成 {data:123} 解析失败）
+    // 默认值模板与 json_deserialize 输入格式对称；是否包单引号、如何拼成发布命令由展示层决定
     std::string json;
-    if (!jsonExampleOfType(info.typeName, json, error))
+    if (!jsonExampleOfType(topicInfo.typeName, json, error))
     {
         return false;
     }
-    std::vector<std::string> idl;
-    appendIdlLines(iface.root, idl);  // 只渲染 root，不展开依赖（输出与改造前逐字一致）
-    lines.clear();
-    lines.push_back("Type: " + info.typeName);
-    lines.push_back("IDL:");
-    lines.insert(lines.end(), std::make_move_iterator(idl.begin()),
-            std::make_move_iterator(idl.end()));
-    lines.push_back("example:");
-    lines.push_back("yomkdds topic pub " + topicName + " '" + json + "'");
+    info.topicName = topicName;
+    info.typeName = std::move(topicInfo.typeName);
+    info.json = std::move(json);
     return true;
 }
 
-bool FastDDSDebugNode::topicMsgJson(const std::string& topicName,
-        std::string& typeName,
-        std::string& json,
+bool FastDDSDebugNode::topicMsg(const std::string& topicName,
+        yomk::payload::TopicMessageInfo& info,
         uint32_t stableRounds, uint32_t intervalMs, std::string* error)
 {
     if (stableRounds == 0)
@@ -912,8 +905,8 @@ bool FastDDSDebugNode::topicMsgJson(const std::string& topicName,
             return false;
         }
     }
-    yomk::payload::TopicInfo info;
-    if (!waitForTopicInfoStable(topicName, info, stableRounds, intervalMs))
+    yomk::payload::TopicInfo topicInfo;
+    if (!waitForTopicInfoStable(topicName, topicInfo, stableRounds, intervalMs))
     {
         if (error != nullptr)
         {
@@ -921,8 +914,15 @@ bool FastDDSDebugNode::topicMsgJson(const std::string& topicName,
         }
         return false;
     }
-    typeName = std::move(info.typeName);
-    return jsonExampleOfType(typeName, json, error);
+    std::string json;
+    if (!jsonExampleOfType(topicInfo.typeName, json, error))
+    {
+        return false;
+    }
+    info.topicName = topicName;
+    info.typeName = std::move(topicInfo.typeName);
+    info.json = std::move(json);
+    return true;
 }
 
 bool FastDDSDebugNode::waitForTopicsStable(std::vector<std::pair<std::string, std::string>>& topics,
@@ -1136,8 +1136,7 @@ bool FastDDSDebugNode::waitForNodesStable(std::vector<std::string>& names,
 }
 
 bool FastDDSDebugNode::waitForNodeInfoStable(const std::string& nodeName,
-        std::vector<std::pair<std::string, std::string>>& publishers,
-        std::vector<std::pair<std::string, std::string>>& subscribers,
+        yomk::payload::NodeInfo& info,
         uint32_t stableRounds, uint32_t intervalMs)
 {
     // 快照仅拿 seenMtx_ 叶子锁（不持锁睡眠，发现事件线程可并行写入）；归属判定基于 RTPS 规范
@@ -1153,15 +1152,15 @@ bool FastDDSDebugNode::waitForNodeInfoStable(const std::string& nodeName,
                 prefixes.insert(kv.first);
             }
         }
-        std::vector<std::pair<std::string, std::string>> pubs;
-        std::vector<std::pair<std::string, std::string>> subs;
+        std::vector<yomk::payload::NodeEndpoint> pubs;
+        std::vector<yomk::payload::NodeEndpoint> subs;
         for (const auto& kv : seen_)
         {
             for (const auto& w : kv.second)
             {
                 if (prefixes.count(w.guid.guidPrefix) > 0)
                 {
-                    pubs.emplace_back(kv.first, w.type_name.to_string());
+                    pubs.push_back({kv.first, w.type_name.to_string()});
                     break;  // 同主题去重：任一归属 writer 命中即计一条
                 }
             }
@@ -1172,13 +1171,18 @@ bool FastDDSDebugNode::waitForNodeInfoStable(const std::string& nodeName,
             {
                 if (prefixes.count(r.guid.guidPrefix) > 0)
                 {
-                    subs.emplace_back(kv.first, r.type_name.to_string());
+                    subs.push_back({kv.first, r.type_name.to_string()});
                     break;  // 同主题去重：任一归属 reader 命中即计一条
                 }
             }
         }
-        std::sort(pubs.begin(), pubs.end());
-        std::sort(subs.begin(), subs.end());
+        // NodeEndpoint 不提供 operator<，显式按 (topicName, typeName) 比较
+        auto less = [](const yomk::payload::NodeEndpoint& a, const yomk::payload::NodeEndpoint& b)
+        {
+            return std::tie(a.topicName, a.typeName) < std::tie(b.topicName, b.typeName);
+        };
+        std::sort(pubs.begin(), pubs.end(), less);
+        std::sort(subs.begin(), subs.end(), less);
         return std::make_tuple(!prefixes.empty(), std::move(pubs), std::move(subs));
     };
     auto prev = snapshot();
@@ -1201,8 +1205,8 @@ bool FastDDSDebugNode::waitForNodeInfoStable(const std::string& nodeName,
     {
         return false;
     }
-    publishers = std::move(std::get<1>(prev));
-    subscribers = std::move(std::get<2>(prev));
+    info.publishers = std::move(std::get<1>(prev));
+    info.subscribers = std::move(std::get<2>(prev));
     return true;
 }
 
@@ -1576,19 +1580,6 @@ bool FastDDSDebugNode::waitForInterfaceStable(const std::string& typeName,
     return true;
 }
 
-void FastDDSDebugNode::appendIdlLines(const yomk::payload::InterfaceType& type,
-        std::vector<std::string>& lines)
-{
-    // topicExample 仍需 IDL 行集：此处只渲染 root 成员表（不展开 dependencies），输出与改造前
-    // 逐字一致；topic_example 迁移到结构化载荷后删除本函数
-    lines.push_back("struct " + type.typeName + " {");
-    for (const auto& member : type.members)
-    {
-        lines.push_back("    " + member.typeName + " " + member.name + ";");
-    }
-    lines.push_back("};");
-}
-
 bool FastDDSDebugNode::fetchTypeObject(const std::string& typeName,
         xtypes::TypeObject& type_object)
 {
@@ -1665,19 +1656,15 @@ bool FastDDSDebugNode::jsonExampleOfType(const std::string& typeName, std::strin
 }
 
 bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string& json,
+        yomk::payload::TopicPublishInfo& info,
         std::string& error, uint32_t stableRounds, uint32_t intervalMs,
         uint32_t repeatIntervalMs, uint32_t requiredSubscribers,
-        uint32_t maxTimes, uint32_t* total, uint32_t* failed,
-        const DDSQosProfile& qos)
+        uint32_t maxTimes, const DDSQosProfile& qos)
 {
-    if (total != nullptr)
-    {
-        *total = 0;
-    }
-    if (failed != nullptr)
-    {
-        *failed = 0;
-    }
+    // 入口即给出单次发布的计数（total 含首轮）；持续模式在循环末尾回填真实值
+    info.topicName = topicName;
+    info.total = 1;
+    info.failed = 0;
     yomk::debugPubReset();  // 复位上次会话残留的停止请求，此后 SIGINT 置位才对本轮生效
     if (stableRounds == 0)
     {
@@ -1736,13 +1723,13 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         }
     }
     // ① 发现收敛
-    yomk::payload::TopicInfo info;
-    if (!waitForTopicInfoStable(topicName, info, stableRounds, intervalMs))
+    yomk::payload::TopicInfo topicInfo;
+    if (!waitForTopicInfoStable(topicName, topicInfo, stableRounds, intervalMs))
     {
         error = "topic [" + topicName + "] not found";
         return false;
     }
-    const std::string& typeName = info.typeName;
+    const std::string& typeName = topicInfo.typeName;
     // ② 类型重建 + JSON 解析（失败不建任何发布实体）
     xtypes::TypeObject type_object;
     if (!fetchTypeObject(typeName, type_object))
@@ -2006,14 +1993,8 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(kPubDrainMs));
         }
-        if (total != nullptr)
-        {
-            *total = sent;
-        }
-        if (failed != nullptr)
-        {
-            *failed = failCount;
-        }
+        info.total = sent;
+        info.failed = failCount;
     }
     // 清理临时发布链；类型注册幂等不注销
     publisher->delete_datawriter(writer);

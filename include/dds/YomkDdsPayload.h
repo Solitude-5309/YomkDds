@@ -593,6 +593,114 @@ struct InterfaceInfo
     bool operator!=(const InterfaceInfo& rhs) const { return !(*this == rhs); }
 };
 
+/**
+ * @brief topic_example response: type identity, reflected struct closure and JSON template
+ * @note interfaceInfo.root is the queried type, whose typeName equals typeName; json is the
+ *       compact default-value sample and is already a valid publish payload
+ */
+// @zh: topic_example 响应：类型标识 + struct 反射闭包 + JSON 模板
+// @zh: note interfaceInfo.root 为查询类型（其 typeName 与 typeName 相同）；
+// @zh: json 为紧凑默认值样本，本身即合法发布载荷
+struct TopicExampleInfo
+{
+    std::string topicName;        // queried topic (exact match)
+    std::string typeName;         // raw DDS type name, no style conversion
+    InterfaceInfo interfaceInfo;  // root members plus the struct dependency closure
+    std::string json;             // compact default-value JSON, a valid publish payload
+
+    std::tuple<const std::string&, const std::string&, const InterfaceInfo&, const std::string&> tie() const
+    {
+        return std::tie(topicName, typeName, interfaceInfo, json);
+    }
+
+    bool operator==(const TopicExampleInfo& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const TopicExampleInfo& rhs) const { return !(*this == rhs); }
+};
+
+/**
+ * @brief topic_msg response: type name plus the compact default-value JSON sample
+ * @note json is single-line and itself a valid publish payload; writing it to a file is a
+ *       caller-side concern, no output path travels in the request
+ */
+// @zh: topic_msg 响应：类型名 + 紧凑默认值 JSON 样本
+// @zh: note json 为单行文本，本身即合法发布载荷；是否落盘由调用方决定，请求负载不携带输出路径
+struct TopicMessageInfo
+{
+    std::string topicName;  // queried topic (exact match)
+    std::string typeName;   // raw DDS type name
+    std::string json;       // compact default-value JSON, a valid publish payload
+
+    std::tuple<const std::string&, const std::string&, const std::string&> tie() const
+    {
+        return std::tie(topicName, typeName, json);
+    }
+
+    bool operator==(const TopicMessageInfo& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const TopicMessageInfo& rhs) const { return !(*this == rhs); }
+};
+
+/**
+ * @brief topic_pub response counters (reported in both single-shot and repeat modes)
+ * @note total includes the first shot (1 for a single-shot publish); failed only counts
+ *       repeat-mode write failures
+ */
+// @zh: topic_pub 响应计数（单次与持续模式均回填）
+// @zh: note total 含首轮（单次发布即 1）；failed 仅统计持续模式下的 write 失败
+struct TopicPublishInfo
+{
+    std::string topicName;  // target topic
+    uint32_t total = 0;     // published samples, first shot included
+    uint32_t failed = 0;    // failed writes in repeat mode
+
+    std::tuple<const std::string&, const uint32_t&, const uint32_t&> tie() const
+    {
+        return std::tie(topicName, total, failed);
+    }
+
+    bool operator==(const TopicPublishInfo& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const TopicPublishInfo& rhs) const { return !(*this == rhs); }
+};
+
+/** @brief One topic/type pair of a participant endpoint list */
+// @zh: 参与者端点清单中的一条主题/类型对
+struct NodeEndpoint
+{
+    std::string topicName;  // topic name as registered on the endpoint
+    std::string typeName;   // raw DDS type name, no style conversion
+
+    std::tuple<const std::string&, const std::string&> tie() const
+    {
+        return std::tie(topicName, typeName);
+    }
+
+    bool operator==(const NodeEndpoint& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const NodeEndpoint& rhs) const { return !(*this == rhs); }
+};
+
+/**
+ * @brief node_info response: participant name plus its publisher/subscriber topic lists
+ * @note each list is deduplicated per topic and sorted by (topicName, typeName); an empty
+ *       list still means a discovered participant, only a never-discovered name fails
+ */
+// @zh: node_info 响应：参与者名 + 发布/订阅主题清单
+// @zh: note 两份清单按主题去重、以 (topicName, typeName) 排序；空清单仍表示参与者已被发现，
+// @zh: 只有收敛窗口内始终不可见的名字才失败
+struct NodeInfo
+{
+    std::string nodeName;                   // participant_name as discovered
+    std::vector<NodeEndpoint> publishers;   // sorted by (topicName, typeName)
+    std::vector<NodeEndpoint> subscribers;  // sorted by (topicName, typeName)
+
+    std::tuple<const std::string&, const std::vector<NodeEndpoint>&,
+            const std::vector<NodeEndpoint>&> tie() const
+    {
+        return std::tie(nodeName, publishers, subscribers);
+    }
+
+    bool operator==(const NodeInfo& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const NodeInfo& rhs) const { return !(*this == rhs); }
+};
+
 /** @brief list_nodes request (independent convergence parameters) */
 // @zh: list_nodes 请求负载（独立收敛参数）
 struct DDSNodeList

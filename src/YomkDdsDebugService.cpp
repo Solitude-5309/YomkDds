@@ -308,10 +308,10 @@ yomk::payload::Response YomkDdsDebugService::topicExample(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // 失败原因由节点层按步归类透传：步骤 1 topic not found / 步骤 2 类型侧 / 步骤 3 示例生成侧；
-    // 未发现主题按查询失败处理（info 族语义）
-    std::vector<std::string> lines;
+    // 未发现主题按查询失败处理（info 族语义）。响应只含结构化包，段头/IDL 语法/发布命令由调用方渲染
+    yomk::payload::TopicExampleInfo info;
     std::string error;
-    if (!node_->topicExample(p->msg.topicName, lines, p->msg.stableRounds, p->msg.intervalMs, &error))
+    if (!node_->topicExample(p->msg.topicName, info, p->msg.stableRounds, p->msg.intervalMs, &error))
     {
         if (error.empty())
         {
@@ -320,7 +320,8 @@ yomk::payload::Response YomkDdsDebugService::topicExample(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::topicExample").error(error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
-    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
+            ::yomk::msgs::TopicExampleInfo::shared(std::move(info)));
 }
 
 yomk::payload::Response YomkDdsDebugService::topicMsg(YomkMsgPtr pkg)
@@ -343,13 +344,11 @@ yomk::payload::Response YomkDdsDebugService::topicMsg(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsDebugService::topicMsg").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
-    // StringArray 恰 2 行：d[0]=类型名、d[1]=紧凑 msg JSON（机器可读契约，非展示行集）；
-    // 失败原因由节点层按步归类透传：步骤 1 topic not found / 步骤 2 JSON 模板生成侧
-    std::string typeName;
-    std::string json;
+    // 失败原因由节点层按步归类透传：步骤 1 topic not found / 步骤 2 JSON 模板生成侧；
+    // 是否落盘由调用方处理，响应不含展示文本
+    yomk::payload::TopicMessageInfo info;
     std::string error;
-    if (!node_->topicMsgJson(p->msg.topicName, typeName, json,
-                p->msg.stableRounds, p->msg.intervalMs, &error))
+    if (!node_->topicMsg(p->msg.topicName, info, p->msg.stableRounds, p->msg.intervalMs, &error))
     {
         if (error.empty())
         {
@@ -359,7 +358,7 @@ yomk::payload::Response YomkDdsDebugService::topicMsg(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
-            ::yomk::msgs::StringArray::shared(std::vector<std::string>{typeName, json}));
+            ::yomk::msgs::TopicMessageInfo::shared(std::move(info)));
 }
 
 yomk::payload::Response YomkDdsDebugService::topicPub(YomkMsgPtr pkg)
@@ -383,24 +382,18 @@ yomk::payload::Response YomkDdsDebugService::topicPub(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // 持锁长驻阻塞；repeatIntervalMs>0 为持续发布模式，节点层周期发送直到 g_debugPubStop
-    // （CLI Ctrl+C）置位或发满 maxTimes 条；total/failed（含首轮）经 StringArray 随响应带回
+    // （CLI Ctrl+C）置位或发满 maxTimes 条；计数（含首轮）随结构化响应带回，单次发布同样非空
     std::string error;
-    uint32_t total = 0;
-    uint32_t failed = 0;
-    if (!node_->topicPub(p->msg.topicName, p->msg.json, error, p->msg.stableRounds,
+    yomk::payload::TopicPublishInfo info;
+    if (!node_->topicPub(p->msg.topicName, p->msg.json, info, error, p->msg.stableRounds,
                 p->msg.intervalMs, p->msg.repeatIntervalMs, p->msg.requiredSubscribers,
-                p->msg.maxTimes, &total, &failed, p->msg.qos))
+                p->msg.maxTimes, p->msg.qos))
     {
         ::yomk::log().tag("YomkDdsDebugService::topicPub").error("pub failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
-    if (p->msg.repeatIntervalMs > 0)
-    {
-        return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "delivered",
-                ::yomk::msgs::StringArray::shared(std::vector<std::string>{
-                        "total=" + std::to_string(total), "failed=" + std::to_string(failed)}));
-    }
-    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "delivered");
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "delivered",
+            ::yomk::msgs::TopicPublishInfo::shared(std::move(info)));
 }
 
 yomk::payload::Response YomkDdsDebugService::topicInfo(YomkMsgPtr pkg)
@@ -483,28 +476,14 @@ yomk::payload::Response YomkDdsDebugService::nodeInfo(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // node_ 非空即已入域；持锁阻塞收敛（锁保护 node_ 生命周期，同 listNodes）；0 值参数由节点层钳制
-    std::vector<std::pair<std::string, std::string>> publishers;
-    std::vector<std::pair<std::string, std::string>> subscribers;
-    if (!node_->nodeInfo(p->msg.nodeName, publishers, subscribers, p->msg.stableRounds, p->msg.intervalMs))
+    yomk::payload::NodeInfo info;
+    if (!node_->nodeInfo(p->msg.nodeName, info, p->msg.stableRounds, p->msg.intervalMs))
     {
         ::yomk::log().tag("YomkDdsDebugService::nodeInfo").error("node [", p->msg.nodeName, "] not found");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node [" + p->msg.nodeName + "] not found");
     }
-    // 输出形态对齐 ros2 node info；类型名原样输出不做风格转换
-    std::vector<std::string> lines;
-    lines.reserve(3 + publishers.size() + subscribers.size());
-    lines.emplace_back(p->msg.nodeName);
-    lines.emplace_back("  Subscribers:");
-    for (const auto& entry : subscribers)
-    {
-        lines.emplace_back("    " + entry.first + ": " + entry.second);
-    }
-    lines.emplace_back("  Publishers:");
-    for (const auto& entry : publishers)
-    {
-        lines.emplace_back("    " + entry.first + ": " + entry.second);
-    }
-    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
+            ::yomk::msgs::NodeInfo::shared(std::move(info)));
 }
 
 yomk::payload::Response YomkDdsDebugService::deleteNode(YomkMsgPtr pkg)

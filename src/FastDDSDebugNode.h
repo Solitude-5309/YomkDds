@@ -116,10 +116,11 @@ public:
     // 互不影响）。归属判定：RTPS 规范保证端点 GUID 前缀 == 所属参与者 GUID 前缀，与前缀集合
     // 比对即得（不依赖 participant_guid 字段）；同名多参与者的端点合并归入同一清单。
     // "/" 与空名参与者不在此过滤，按名可查——查 "/" 即该名称下全部参与者的端点合并。
+    // info.nodeName 为查询名，info.publishers/info.subscribers 为按主题去重、以
+    // (topicName, typeName) 排序的结构化端点清单（类型名原样，不做风格转换）。
     // 未入域 error="debug node not created"，无此名参与者 error="node [...] not found"。
     bool nodeInfo(const std::string& nodeName,
-            std::vector<std::pair<std::string, std::string>>& publishers,
-            std::vector<std::pair<std::string, std::string>>& subscribers,
+            yomk::payload::NodeInfo& info,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
@@ -134,21 +135,19 @@ public:
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
-    // 收敛查询指定主题的发布示例三段行集（Type / IDL / example，与 listTopics/topicInfo/
-    // interfaceShow 互不影响）：依次拿类型名 → IDL 行集（由 interfaceShow 的 root 成员表渲染，
-    // 不展开依赖的过渡实现）→ JSON 发布示例（与 json_deserialize 输入格式对称，可直接作为
-    // 发布载荷模板）。失败按步骤各自归类回填 error，不统一报 not found。
-    // 最长阻塞约 2*stableRounds*intervalMs。
+    // 收敛查询指定主题的发布示例包（与 listTopics/topicInfo/interfaceShow 互不影响）：依次拿
+    // 类型名 → 类型反射闭包（root 成员表 + struct 依赖闭包）→ JSON 发布模板（与 json_deserialize
+    // 输入格式对称，可直接作为发布载荷）。IDL 语法、段标题与发布命令均为展示层职责，由调用方渲染。
+    // 失败按步骤各自归类回填 error，不统一报 not found；最长阻塞约 2*stableRounds*intervalMs。
     bool topicExample(const std::string& topicName,
-            std::vector<std::string>& lines,
+            yomk::payload::TopicExampleInfo& info,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
-    // 收敛查询指定主题的消息描述两要素（typeName + JSON 发布模板，供导出消息描述文件用）。
-    // 失败按步骤各自归类回填 error；最长阻塞约 stableRounds*intervalMs。
-    bool topicMsgJson(const std::string& topicName,
-            std::string& typeName,
-            std::string& json,
+    // 收敛查询指定主题的消息描述（类型名 + JSON 发布模板，供导出消息描述文件用；落盘属调用方
+    // 职责，请求不携带输出路径）。失败按步骤各自归类回填 error；最长阻塞约 stableRounds*intervalMs。
+    bool topicMsg(const std::string& topicName,
+            yomk::payload::TopicMessageInfo& info,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
@@ -165,16 +164,16 @@ public:
     // 保底排空 200ms（末条消息失去协议重传窗口；Ctrl+C 中断不排空）。成败均清理临时发布链
     // （类型注册幂等不注销）。未入域 error="debug node not created"；最长阻塞约
     // 2*stableRounds*intervalMs + 2s（ack 可用时），requiredSubscribers>0 时匹配等待不设上限。
-    // total/failed 仅持续模式回填（单次发布成功隐含 total=1）。
+    // info 回填目标主题名与发布计数：total 含首轮（单次发布即 1），failed 仅持续模式的 write
+    // 失败；token 不区分模式，单次发布同样给出 total=1/failed=0。
     bool topicPub(const std::string& topicName, const std::string& json,
+            yomk::payload::TopicPublishInfo& info,
             std::string& error,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             uint32_t repeatIntervalMs = 0,
             uint32_t requiredSubscribers = 0,
             uint32_t maxTimes = 0,
-            uint32_t* total = nullptr,
-            uint32_t* failed = nullptr,
             const DDSQosProfile& qos = DDSQosProfile{});
 
 private:
@@ -195,8 +194,7 @@ private:
             uint32_t stableRounds, uint32_t intervalMs);
     // Precondition: 调用方已完成入域检查
     bool waitForNodeInfoStable(const std::string& nodeName,
-            std::vector<std::pair<std::string, std::string>>& publishers,
-            std::vector<std::pair<std::string, std::string>>& subscribers,
+            yomk::payload::NodeInfo& info,
             uint32_t stableRounds, uint32_t intervalMs);
     // Precondition: 调用方已完成入域检查；失败按收敛末轮实际原因归类写 error
     // （类型名未出现 / TypeObject 不可得 / 反射采集失败三态）。
@@ -207,8 +205,6 @@ private:
     // DynamicType → 成员表（成员按 MemberId 升序 == 声明序，idlTypeNameOf 产出类型文本）；
     // 依赖闭包采集与类型重建均无节点状态，实现为 .cpp 内文件级函数（见 buildInterfaceType /
     // collectInterfaceDependencies）。
-    // 将单个 InterfaceType 渲染为 IDL 行集（topicExample 尚未改造的过渡实现，届时删除）
-    void appendIdlLines(const yomk::payload::InterfaceType& type, std::vector<std::string>& lines);
     // 锁内仅查发现缓存与拷贝 TypeObject，锁外重建 DynamicType 取默认值样本序列化
     // （不注册类型不建订阅，纯类型内省）；失败分支各自经 error 回填具体原因。
     bool jsonExampleOfType(const std::string& typeName, std::string& out,

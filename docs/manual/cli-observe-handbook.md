@@ -221,7 +221,7 @@ pub_node
 
 ### node info：查询节点发布/订阅清单
 
-- **用途**：独立收敛查询指定节点名参与者的发布/订阅主题清单（归属判定基于 RTPS 规范保证的「端点 GUID 前缀 == 所属参与者 GUID 前缀」），输出形态对齐 `ros2 node info`：节点名行 + `Subscribers:` 段 + 每条订阅一行 `    <主题名>: <类型名>` + `Publishers:` 段同形态（类型名为原始 DDS 类型名，无任何风格转换；空段仅打段头）。
+- **用途**：独立收敛查询指定节点名参与者的发布/订阅主题清单（归属判定基于 RTPS 规范保证的「端点 GUID 前缀 == 所属参与者 GUID 前缀」），库侧返回结构化 `NodeInfo`（`nodeName` + `publishers`/`subscribers` 端点清单，按（主题名, 类型名）排序），CLI 渲染形态对齐 `ros2 node info`：节点名行 + `Subscribers:` 段 + 每条订阅一行 `    <主题名>: <类型名>` + `Publishers:` 段同形态（类型名为原始 DDS 类型名，无任何风格转换；空段仅打段头）。
 - **完整命令行**：
 
 ```bash
@@ -238,7 +238,7 @@ pub_node
     hello_world: YomkDdsStd::MString
 ```
 
-- **等价库调用**：`yomk::dds().debug().node("pub_node").rounds(5).interval(200).info()`。
+- **等价库调用**：`yomk::dds().debug().node("pub_node").rounds(5).interval(200).info()`（返回结构化 `NodeInfo`，段头与缩进属 CLI 渲染）。
 
 ### 观察命令的 QoS 参数（仅 topic print / topic hz 生效）
 

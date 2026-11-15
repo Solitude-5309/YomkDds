@@ -1642,10 +1642,33 @@ static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t
     return 0;
 }
 
+// IDL 渲染（展示层职责）：服务端只回成员表，此处只加 IDL 语法（struct 头 / 4 空格缩进 / 结尾分号）
+static void printIdlType(std::ostream &os, const ::yomk::payload::InterfaceType &type)
+{
+    os << "struct " << type.typeName << " {\n";
+    for (const auto &member : type.members)
+    {
+        os << "    " << member.typeName << " " << member.name << ";\n";
+    }
+    os << "};\n";
+}
+
+// 完整 interface 渲染：依赖 struct 定义按拓扑序前置输出（被依赖者在前），块间空行；最后输出主
+// struct（无依赖时输出与旧版逐字相同）
+static void printIdlInterface(std::ostream &os, const ::yomk::payload::InterfaceInfo &info)
+{
+    for (const auto &dep : info.dependencies)
+    {
+        printIdlType(os, dep);
+        os << "\n";
+    }
+    printIdlType(os, info.root);
+}
+
 // interface show 子命令：按数据类型名输出该类型的 IDL 结构描述（类型名精确匹配，FastDDS
 // 无原生类型文本化能力，自设计对齐主流 schema 源语法形态）：服务端只回成员表与 struct 依赖
-// 闭包，此处按拓扑序先渲染依赖 struct 定义（块间空行）再渲染主 struct；无依赖时输出与旧版
-// 逐字相同；未发现类型报错退出（可发现类型名拼写错误）。无 Ctrl+C 循环，查完即退
+// 闭包，此处经 printIdlInterface 按拓扑序渲染；未发现类型报错退出（可发现类型名拼写错误）。
+// 无 Ctrl+C 循环，查完即退
 static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint32_t waitRounds)
 {
     ::yomk::server().init();
@@ -1679,20 +1702,7 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
         return 1;
     }
     // 依赖 struct 定义按拓扑序前置输出（被依赖者在前），块间空行；最后输出主 struct
-    auto printType = [](const ::yomk::payload::InterfaceType &type) {
-        std::cout << "struct " << type.typeName << " {\n";
-        for (const auto &member : type.members)
-        {
-            std::cout << "    " << member.typeName << " " << member.name << ";\n";
-        }
-        std::cout << "};\n";
-    };
-    for (const auto &dep : info->msg.dependencies)
-    {
-        printType(dep);
-        std::cout << "\n";
-    }
-    printType(info->msg.root);
+    printIdlInterface(std::cout, info->msg);
     std::cout.flush();
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
@@ -1825,7 +1835,7 @@ static std::string prettyJson(const std::string &json, int indentBase = 0)
 }
 
 // topic pub -ef 子命令：按主题名导出消息描述 JSON 文件（查完即退，不发布）：服务层返回
-// 两要素（d[0]=类型名仅用于 stdout 提示、d[1]=紧凑 msg JSON），本函数负责文件名拼装与
+// 结构化包（typeName 仅用于 stdout 提示、json 为紧凑 msg JSON），本函数负责文件名拼装与
 // 落盘：文件名 <主题名>_msg_<年-月-日-时-分-秒-毫秒>.json；无 -o 时当前目录，有 -o 时
 // 指定目录（相对/绝对均可，目录不存在报错退出，不自动创建）；文件内容即 msg 默认值
 // 模板 JSON 本身（展开多行缩进），整体就是一份合法发布载荷，可直接 "$(cat 文件)" 填进
@@ -1848,7 +1858,7 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
         return 1;
     }
 
-    // 2. 独立收敛查询消息描述两要素（StringArray 恰 2 行：类型名 + 紧凑 msg JSON）
+    // 2. 独立收敛查询消息描述（typeName 仅用于提示行，json 为紧凑 msg JSON）
     resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).sample_to_json();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
@@ -1856,15 +1866,15 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
-    if (arr == nullptr || arr->d.size() != 2)
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::TopicMessageInfo>(resp.data);
+    if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("topic msg failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
-    const std::string &typeName = arr->d[0];
-    const std::string &compactJson = arr->d[1];
+    const std::string &typeName = info->msg.typeName;
+    const std::string &compactJson = info->msg.json;
 
     // 3. 输出目录检查：指定目录不存在报错退出（不自动创建；相对/绝对路径均可）
     std::string dir = outDir;
@@ -1917,9 +1927,10 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
     return 0;
 }
 
-// topic pub -e 子命令：按主题名输出发布示例三段行集（Type / IDL / example 可复制发布命令），供
+// topic pub -e 子命令：按主题名输出发布示例三段（Type / IDL / example 可复制发布命令），供
 // 用户按 JSON 模板填好字段值后发布（查完即退，不发布）；调试节点内部依次收敛：类型名 →
-// IDL 行集 → JSON 示例，独立收敛参数同其余查询（无 Ctrl+C 循环）
+// 反射结构与依赖闭包 → JSON 示例，独立收敛参数同其余查询（无 Ctrl+C 循环）；段头、空行、
+// IDL 语法与发布命令均为展示层拼装
 static int runTopicPubExample(uint32_t domainId, const std::string &topicName, uint32_t waitRounds)
 {
     ::yomk::server().init();
@@ -1937,7 +1948,7 @@ static int runTopicPubExample(uint32_t domainId, const std::string &topicName, u
         return 1;
     }
 
-    // 2. 独立收敛查询发布示例三段行集
+    // 2. 独立收敛查询发布示例包
     resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).pub_example();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
@@ -1945,23 +1956,22 @@ static int runTopicPubExample(uint32_t domainId, const std::string &topicName, u
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
-    if (arr == nullptr)
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::TopicExampleInfo>(resp.data);
+    if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("topic example failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
-    for (const auto &line : arr->d)
-    {
-        // 段标题（IDL: / example:）前空一行，三段展示不拥挤（空行属展示层修饰，
-        // 不入数据行集）
-        if (line == "IDL:" || line == "example:")
-        {
-            std::cout << "\n";
-        }
-        std::cout << line << "\n";
-    }
+    // 段标题（IDL: / example:）前空一行，三段展示不拥挤；example 命令的 JSON 整体包单引号，
+    // 防 shell 剥内层双引号（裸传会被剥成 {data:123} 解析失败）
+    std::cout << "Type: " << info->msg.typeName << "\n"
+              << "\n"
+              << "IDL:\n";
+    printIdlInterface(std::cout, info->msg.interfaceInfo);
+    std::cout << "\n"
+              << "example:\n"
+              << "yomkdds topic pub " << info->msg.topicName << " '" << info->msg.json << "'\n";
     std::cout.flush();
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
@@ -2028,34 +2038,16 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
         yomk::dds().debug().quit();
         return 1;
     }
-    // 持续发布统计：响应 data 为 StringArray { "total=N", "failed=M" }（含首轮）
-    uint32_t total = 1;
-    uint32_t failed = 0;
-    auto stats = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
-    if (stats != nullptr)
+    // 发布计数：响应携带 TopicPublishInfo（单次与持续模式均有），total 含首轮
+    auto stat = ::yomk::msgs::unpack<::yomk::msgs::TopicPublishInfo>(resp.data);
+    if (stat == nullptr)
     {
-        for (const auto &kv : stats->d)
-        {
-            const auto eq = kv.find('=');
-            if (eq == std::string::npos)
-            {
-                continue;
-            }
-            const auto key = kv.substr(0, eq);
-            const auto val =
-                static_cast<uint32_t>(std::strtoul(kv.c_str() + eq + 1, nullptr, 10));
-            if (key == "total")
-            {
-                total = val;
-            }
-            else if (key == "failed")
-            {
-                failed = val;
-            }
-        }
+        ::yomk::log().tag("yomkdds").error("topic pub failed: unexpected response payload");
+        yomk::dds().debug().quit();
+        return 1;
     }
-    std::cout << "published total=" << total << " failed=" << failed
-              << " to topic " << topicName << std::endl;
+    std::cout << "published total=" << stat->msg.total << " failed=" << stat->msg.failed
+              << " to topic " << stat->msg.topicName << std::endl;
 
     // 3. 退出前显式删除调试节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理（同 print/list 不变式）
     resp = yomk::dds().debug().quit();
@@ -2168,7 +2160,7 @@ static int runNodeList(uint32_t domainId, uint32_t waitRounds)
 // （节点内部轮询归属快照，连续 waitRounds 次不变即返回；归属判定基于 RTPS 规范保证的
 // "端点 GUID 前缀 == 所属参与者 GUID 前缀"），输出对齐 ros2 node info 形态：节点名行 +
 // "  Subscribers:" 段 + 每行 "    topic: type" + "  Publishers:" 段同形态（类型名原样输出；
-// 空段仅打段头）；未发现节点名报错退出（无 Ctrl+C 循环，查完即退）
+// 空清单仅打段头）；段头与缩进均为展示层拼装；未发现节点名报错退出（查完即退）
 static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t waitRounds)
 {
     ::yomk::server().init();
@@ -2186,9 +2178,8 @@ static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t 
         return 1;
     }
 
-    // 2. 独立收敛查询单节点清单（与 list 查询完全分开的路径）：命中返回 StringArray 多行，
-    //    行文案由服务层拼装（节点名 + Subscribers/Publishers 段），原样直出；
-    //    未发现节点名（含收敛窗口内始终不可见）返回 eNo
+    // 2. 独立收敛查询单节点清单（与 list 查询完全分开的路径）：命中返回结构化节点包，
+    //    段头与缩进由本函数拼装；未发现节点名（含收敛窗口内始终不可见）返回错误
     resp = yomk::dds().debug().node(nodeName).rounds(waitRounds).interval(200).info();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
@@ -2196,16 +2187,23 @@ static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t 
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
-    if (arr == nullptr)
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::NodeInfo>(resp.data);
+    if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("node info failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
-    for (const auto &line : arr->d)
+    std::cout << info->msg.nodeName << "\n"
+              << "  Subscribers:\n";
+    for (const auto &endpoint : info->msg.subscribers)
     {
-        std::cout << line << "\n";
+        std::cout << "    " << endpoint.topicName << ": " << endpoint.typeName << "\n";
+    }
+    std::cout << "  Publishers:\n";
+    for (const auto &endpoint : info->msg.publishers)
+    {
+        std::cout << "    " << endpoint.topicName << ": " << endpoint.typeName << "\n";
     }
     std::cout.flush();
 

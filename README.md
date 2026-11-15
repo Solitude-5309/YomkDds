@@ -70,13 +70,13 @@
 | `yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()` | 列出域内主题（返回结构化 `TopicInfoArray`：主题名/类型名/收发计数/逐端点 GUID 与 QoS） |
 | `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()` | 查询主题详情（返回单个 `TopicInfo`，字段与 `topics()` 单项同构） |
 | `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()` | 列出域内节点 |
-| `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()` | 查询节点发布/订阅清单 |
+| `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()` | 查询节点发布/订阅清单（返回结构化 `NodeInfo`：节点名 + `publishers`/`subscribers` 端点清单，按 (主题名, 类型名) 排序） |
 | `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()` | 按数据类型反查主题 |
 | `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()` | 按类型名查询类型结构（返回结构化 `InterfaceInfo`：root 成员表 + struct 依赖闭包，拓扑序） |
 | `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()` | 列出全部类型名 |
-| `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()` | 查询主题发布示例 |
-| `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()` | 查询消息描述两要素（类型名 + JSON 样本） |
-| `yomk::dds().debug().topic(topicName).payload(json)[.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()` | 发布 JSON 载荷消息（支持持续发布/条数上限/QoS 累积） |
+| `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()` | 查询主题发布示例（返回结构化 `TopicExampleInfo`：主题名/类型名/`InterfaceInfo` 反射树/JSON 默认值模板） |
+| `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()` | 查询消息描述（返回结构化 `TopicMessageInfo`：主题名/类型名/紧凑 JSON 样本） |
+| `yomk::dds().debug().topic(topicName).payload(json)[.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()` | 发布 JSON 载荷消息（返回结构化 `TopicPublishInfo`：主题名/已发条数/失败计数；支持持续发布/条数上限/QoS 累积） |
 | `yomk::dds().debug().quit()` | 退出调试（删除调试节点） |
 
 **Bag 服务（YomkDdsBagService）** — 详见 [功能文档：Bag 录制/回放](docs/features/bag-service.md)：

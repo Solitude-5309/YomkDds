@@ -27,7 +27,7 @@ topic pub 共五种形态（互相独立，均为「先解析再发布」）：`
 
 ### topic pub -e：查看主题的发布示例
 
-- **用途**：按主题名输出发布示例三段行集（类型名 / IDL / JSON 发布载荷模板）——同类型重建 DynamicType 取默认值样本生成，与发布输入格式对称。
+- **用途**：按主题名输出发布示例（类型名 / IDL / JSON 发布载荷模板）——同类型重建 DynamicType 取默认值样本生成，与发布输入格式对称；库侧返回结构化 `TopicExampleInfo`（`topicName` / `typeName` / `interfaceInfo` 反射树 / `json`），三段文本与 `yomkdds topic pub ...` 命令均由 CLI 渲染。
 - **完整命令行**：
 
 ```bash
@@ -60,7 +60,7 @@ yomkdds topic pub hello_world '{"data":""}'
 | `type rebuild failed for [<类型名>]` | 步骤 3：DynamicType 构建失败 |
 | `example generation failed for [<类型名>]: create_data` / `: json_serialize` | 步骤 3：默认值样本创建或 JSON 序列化失败 |
 
-- **等价库调用**：`yomk::dds().debug().topic(topicName).rounds(5).interval(200).pub_example()`。
+- **等价库调用**：`yomk::dds().debug().topic(topicName).rounds(5).interval(200).pub_example()`（返回结构化 `TopicExampleInfo`，IDL 与示例命令由调用方渲染）。
 
 ### topic pub -ef：导出消息描述 JSON 文件
 
@@ -88,7 +88,7 @@ message description written: hello_world_msg_2026-09-28-12-14-42-626.json (topic
 
 - **要点**：主题名/类型名不在文件内，从文件名与 stdout 提示行追溯；编辑文件改字段值后按文件发布（见下文 `-f` 形态）——`"$(cat 文件)"` 命令替换结果不再经历引号删除，内层双引号与换行原样保留，多行缩进 JSON 解析无碍。
 - **失败报错**：按节点层两步骤归类——步骤 1 `topic [<主题名>] not found` 主题未发现；步骤 2 类型重建与 JSON 模板生成侧原因（同 `topic pub -e` 的步骤 2/3 错误文本）。
-- **等价库调用**：`yomk::dds().debug().topic(topicName).rounds(5).interval(200).sample_to_json()`（返回两行：类型名 + 紧凑 JSON 样本；`-o` 目录与写文件为 CLI 本地行为，不进入库调用）。
+- **等价库调用**：`yomk::dds().debug().topic(topicName).rounds(5).interval(200).sample_to_json()`（返回结构化 `TopicMessageInfo`：`topicName` + `typeName` + 紧凑 JSON 样本；`-o` 目录与写文件为 CLI 本地行为，不进入库调用）。
 
 ### topic pub 直发：发布 JSON 载荷
 
@@ -115,7 +115,7 @@ publishing #2 to topic hello_world
 ```
 
 逐条回执附带消息 JSON 内容（从实际待发数据转出，与 `topic print` 输出同源），发布期间可看到每条载荷。
-- **等价库调用**：`yomk::dds().debug().topic(topicName).payload(json).rounds(5).interval(200)[.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`（`-w`/`-r`/`-t` 分别对应 `required(n)`/`repeat(ms)`/`max_times(n)`）。
+- **等价库调用**：`yomk::dds().debug().topic(topicName).payload(json).rounds(5).interval(200)[.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`（`-w`/`-r`/`-t` 分别对应 `required(n)`/`repeat(ms)`/`max_times(n)`；返回结构化 `TopicPublishInfo`）。
 
 ### topic pub -f：从文件读取载荷发布
 
@@ -155,7 +155,7 @@ publishing to topic "hello_world" at 1.000000 Hz, press Ctrl+C to stop
 - **首轮完整强校验**：发现收敛 → 类型重建 → 匹配收敛 → matched 校验 → write → ack 确认，失败即报错退出；
 - **周期重发尽力而为**：首轮成功后按 N Hz 周期重复 write（RELIABLE 的 NACK 重传由协议自主完成，不再同步等 ack）；每轮输出 `publishing #N to topic <主题名>`；write 失败仅计入 failed 不中断（订阅者中途离场不停止发布，重新上线后可继续收到后续数据）；
 - **绝对节拍网格**：每轮唤醒时刻按 `首发时刻 + k×间隔` 的绝对网格调度（sleep_until），平均频率精确贴合 N Hz；单轮调度毛刺超过周期时网格重锚到未来最近节拍点（不追发）；频率换算：发送间隔 = round(1000/rate) ms（下限 1ms）；
-- **Ctrl+C 优雅停止**：输出统计 `published total=N failed=M to topic <主题名>`（total 含首轮），退出码 0。
+- **Ctrl+C 优雅停止**：输出统计 `published total=N failed=M to topic <主题名>`（total 含首轮；数值取结构化 `TopicPublishInfo` 的 `total`/`failed` 字段，文本由 CLI 渲染），退出码 0。
 
 **`-t N | --times N` 条数上限**（N 为 >=1 整数，含首轮）——发满 N 条自动停止：
 

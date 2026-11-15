@@ -37,7 +37,7 @@
 | 入口 | 能力 | 关键行为 |
 |---|---|---|
 | 链式 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()` | 查询主题详情 / 端点详情 | 独立收敛查询单个主题的发现详情（不依赖查询分面的 `topics()`）；命中返回单个结构化 `TopicInfo`（与 `topics()` 的单项完全同构）：`topicName` / `typeName`（原始 DDS 类型名，不做任何风格转换）/ 收发计数 / `publishers`+`subscriptions` 逐端点清单（归属节点名、GUID、结构化 QoS 字段；端点类型由所在清单表达）；三行计数文本与端点详情段均由调用方渲染 |
-| 链式 `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()` | 查询节点详情 | 独立收敛查询指定节点名参与者的发布/订阅主题清单（归属判定基于 RTPS 规范保证的"端点 GUID 前缀 == 所属参与者 GUID 前缀"）；返回节点名行 + `Subscribers:`/`Publishers:` 两段（每行 `    <主题名>: <类型名>`，类型名原样输出，空段仅打段头，同名多参与者端点合并） |
+| 链式 `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()` | 查询节点详情 | 独立收敛查询指定节点名参与者的发布/订阅主题清单（归属判定基于 RTPS 规范保证的"端点 GUID 前缀 == 所属参与者 GUID 前缀"）；命中返回结构化 `NodeInfo`：`nodeName`（participant_name 原样）+ `publishers` / `subscribers` 两份 `NodeEndpoint` 清单（`topicName` + `typeName`，按 (topicName, typeName) 升序），同名多参与者端点合并；节点名行与 `Subscribers:`/`Publishers:` 段头及各条 `    <主题名>: <类型名>` 行均由调用方渲染 |
 | CLI `yomkdds topic info [-v \| --verbose] <主题名>` | 查询单个主题详情 | 缺省三行：`Type: 原始类型名` / `Publisher count: N` / `Subscription count: N`；`-v`（`--verbose`）端点详情模式：在计数外逐端点追加 Node name / Endpoint type / GUID / QoS profile 段（count 为 0 的端点类型无清单段）；均属 CLI 侧渲染 |
 | CLI `yomkdds node info <节点名>` | 查询指定节点的发布/订阅主题清单 | 形态对齐 `ros2 node info` |
 
@@ -61,10 +61,10 @@
 
 | 入口 | 能力 | 关键行为 |
 |---|---|---|
-| 链式 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()` | 查询主题发布示例 | 返回三段行集：`Type: <类型名>`、`IDL:` + IDL 行集、`example:` + 可复制发布命令（JSON 默认值模板整体包单引号，改字段值即可发布） |
-| 链式 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()` | 查询消息描述两要素 | 返回 StringArray 恰 2 行：d[0]=类型名、d[1]=紧凑 msg JSON（单行，可直接作为发布载荷模板，`topic pub -ef` 导出文件的数据源；落盘属调用方职责，请求负载不携带输出路径） |
-| 链式 `yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()` | 发布 JSON 载荷消息 | 发布链路：首轮发现收敛 → 类型重建 + `json_deserialize` 解析载荷 → 临时 writer（QoS 按 `qos()`，缺省 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL）匹配收敛 → write → 存在 RELIABLE 订阅者时 `wait_for_acknowledgments` 确认送达（未全部确认返回错误，全 BEST_EFFORT 或无订阅者退化尽力而为） |
-| CLI `yomkdds topic pub -e <主题名>` | 按主题名输出发布示例三段行集 | 类型名 / IDL / JSON 发布载荷模板 |
+| 链式 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()` | 查询主题发布示例 | 返回结构化 `TopicExampleInfo`：`topicName` / `typeName`（原样）/ `interfaceInfo`（同 `interface_show` 的 root 成员表 + struct 依赖闭包）/ `json`（紧凑默认值模板，本身即合法发布载荷）；`Type:` / `IDL:` / `example:` 三段文本与可复制发布命令均由 CLI 渲染 |
+| 链式 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()` | 查询消息描述 | 返回结构化 `TopicMessageInfo`：`topicName` / `typeName` / `json`（紧凑单行 msg JSON，可直接作为发布载荷模板，`topic pub -ef` 导出文件的数据源；落盘属调用方职责，请求负载不携带输出路径） |
+| 链式 `yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()` | 发布 JSON 载荷消息 | 发布链路：首轮发现收敛 → 类型重建 + `json_deserialize` 解析载荷 → 临时 writer（QoS 按 `qos()`，缺省 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL）匹配收敛 → write → 存在 RELIABLE 订阅者时 `wait_for_acknowledgments` 确认送达（未全部确认返回错误，全 BEST_EFFORT 或无订阅者退化尽力而为）；返回结构化 `TopicPublishInfo`（`topicName` / `total` 已发条数含首轮 / `failed` 写失败计数，单次模式即 total=1） |
+| CLI `yomkdds topic pub -e <主题名>` | 按主题名输出发布示例 | 渲染 `Type:` / `IDL:` / `example:` 三段（末段为可复制发布命令） |
 | CLI `yomkdds topic pub -ef <主题名> [-o 目录]` | 按主题名导出消息描述 JSON 文件 | 内容即默认值模板 JSON 本身，多行缩进可直接 `$(cat)` 填进发布命令；仅发描述不发布 |
 | CLI `yomkdds topic pub [--qos-ros \| --qos-KEY VAL ... \| --qos-file FILE] <主题名> <JSON数据>` / `yomkdds topic pub [...] <主题名> -f <文件>` | 发布 JSON 载荷消息（文件形态整体作为载荷） | 缺省 1Hz 持续发送，Ctrl+C 停止并输出统计；`-w N` 期望建匹配订阅端数、`-r N` 持续发布频率、`-t N` 条数上限（三者独立识别、顺序任意叠加），分别对应链式侧 `required(n)`/`repeat(ms)`/`max_times(n)`；CLI 侧 qos 尾参经 `--qos-ros`/`--qos-*`/`--qos-file` 指定 |
 
@@ -177,7 +177,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 |---|---|
 | 形参形态 | 与 `info()` 同分面：`topic(topicName)` 必填起始，`rounds(n)` / `interval(ms)` 可选累积器、次序不限，`pub_example()` 终结 |
 | rounds / interval | 收敛语义同 `info()`：缺省/0 钳制为 5 次/200ms；最长阻塞约 rounds*interval |
-| 返回值 | StringArray 三段行集（`Type:` 类型名、`IDL:` + IDL 行集、`example:` + 可复制发布命令）；未在收敛窗口内发现该主题返回错误 |
+| 返回值 | 结构化 `TopicExampleInfo`（主题名 + 类型名 + `InterfaceInfo` 反射树 + JSON 默认值模板）；`Type:` / `IDL:` / `example:` 三段文本与发布命令由调用方渲染；未在收敛窗口内发现该主题返回错误 |
 
 ### 消息样本参数（`yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()`）
 
@@ -185,8 +185,8 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 |---|---|
 | 形参形态 | 与 `info()`/`pub_example()` 同分面：`topic(topicName)` 必填起始，`rounds(n)` / `interval(ms)` 可选累积器、次序不限，`sample_to_json()` 终结 |
 | rounds / interval | 收敛语义同 `info()`：缺省/0 钳制为 5 次/200ms；最长阻塞约 rounds*interval |
-| 返回值 | StringArray 恰 2 行（d[0]=类型名、d[1]=紧凑默认值 JSON 样本）；未在收敛窗口内发现该主题返回错误 |
-| 落盘 | 请求负载无输出路径字段：库侧只返回两行，是否写文件及路径由调用方决定（CLI `topic pub -ef -o <目录>` 的写文件为 CLI 本地行为） |
+| 返回值 | 结构化 `TopicMessageInfo`（主题名 + 类型名 + 紧凑默认值 JSON 样本）；未在收敛窗口内发现该主题返回错误 |
+| 落盘 | 请求负载无输出路径字段：库侧只返回结构化载荷，是否写文件及路径由调用方决定（CLI `topic pub -ef -o <目录>` 的写文件为 CLI 本地行为） |
 
 ### 类型反查参数（`yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()`）
 
@@ -235,7 +235,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 | `qos(qos)` | 临时发布 writer 的 QoS 描述 `DDSQosProfile`，全哨兵=既有固定值 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL，ROS2 底座建议 `ros2DefaultPublisher()`；CLI 侧经 `--qos-ros`/`--qos-*`/`--qos-file` 指定 |
 | `rounds(n)` / `interval(ms)` | 首轮发现收敛次数/轮询间隔，缺省/0 钳制为 5 次/200ms；与同分面查询终结共用累积器 |
 
-持续模式成功返回 StringArray {"total=N","failed=M"}。
+单次与持续模式均返回结构化 `TopicPublishInfo`：`total` 含首轮（单次模式恒为 1）、`failed` 为 write 失败计数（仅持续模式会非 0）；`published total=N failed=M` 文本由 CLI 渲染。
 
 ## 错误与边界行为
 

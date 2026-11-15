@@ -6,7 +6,7 @@
  *       participant）、/topic_print 登记契约与 /delete_node 析构清理，及 domainId 边界行为。
  *       节点层守卫（setDomainId 重复/未入域登记）与端到端流量（发现→动态类型→订阅→JSON 输出）
  *       已由 TestFastDDSDebugNode 覆盖，本测试不重复；topic_info/node_info 命中用例仅直连
- *       FastDDS 建最小远端发布端触发 EDP 发现（不发布数据），覆盖服务层拼行路径。
+ *       FastDDS 建最小远端发布端触发 EDP 发现（不发布数据），覆盖服务层结构化载荷组装路径。
  * 覆盖：
  *   A-1 生命周期：创建 → list_topics 收敛空列表 → list_nodes 单次快照空列表 → topic_info 未发现
  *       主题 eNo → 重复创建拒绝 → topicPrint 空回调拒绝 → 正常登记 → 同主题重复登记拒绝 →
@@ -17,13 +17,16 @@
  *       topic_find 按类型名反查命中唯一行与未匹配类型 eNo → interface_show 按类型名输出
  *       结构化 InterfaceInfo（root 成员表 data/string + 空依赖）与未发现类型 eNo →
  *       interface_list 类型名去重清单命中唯一行与空域未发现 eNo → topic_example 按主题名
- *       输出发布示例三段行集（Type/IDL/example 可复制命令逐段断言）与未发现主题 eNo →
- *       topic_pub 发布一次消息（eOk delivered，ack 确认送达）与非法 JSON eNo →
+ *       输出结构化 TopicExampleInfo（topicName/typeName/interfaceInfo 反射树/json 默认值
+ *       模板）与未发现主题 eNo →
+ *       topic_pub 发布一次消息（eOk delivered + TopicPublishInfo total=1/failed=0，ack 确认
+ *       送达）与非法 JSON eNo →
  *       topic_pub 带 qos 尾参（BEST_EFFORT+VOLATILE 持续模式，闭环 2）→ 直连 observer
  *       发现读回双差异行（服务层下传链路端到端）→
- *       topic_msg 两要素行集命中（类型名/紧凑 msg JSON 逐行断言）与未发现主题 eNo →
- *       node_info 命中五行断言（节点名/Subscribers
- *       段/Publishers 段，对齐 ros2 node info 形态）+ 未发现节点名 eNo → 退出前清理；
+ *       topic_msg 结构化 TopicMessageInfo 命中（topicName/typeName/json 字段断言）与
+ *       未发现主题 eNo →
+ *       node_info 结构化 NodeInfo 命中（nodeName + publishers/subscribers 的 NodeEndpoint
+ *       清单，对齐 ros2 node info 语义）+ 未发现节点名 eNo → 退出前清理；
  *   A-2 domainId 边界：有效域 0 与上界 232（eOk；真实创建 participant 后即删）。
  *
  * 关键不变式：每个 eOk 创建的调试节点必须在 main 返回前经 /delete_node 显式删除，以规避
@@ -416,25 +419,32 @@ int main()
                     std::cout << "[OBSERVE] interface list: " << l << std::endl;
                 }
 
-                // topic_example：三段行集（Type / IDL / example 可复制命令，共 7 行）
+                // topic_example：结构化载荷（topicName/typeName/interfaceInfo/json）——
+                // 展示文本（Type/IDL/example 命令）由 CLI 渲染，服务层不再出 StringArray
                 auto exampleHit = testInvoke(svc, "/topic_example", ::yomk::msgs::DDSDebugTopicExample::shared(DDSDebugTopicExample{HIT_TOPIC, 5, 100}));
                 check(exampleHit.status == yomk::payload::ResStatus::Succeeded && exampleHit.data != nullptr,
                       "topic_example(hello_world,5,100ms) → eOk（发布示例命中）");
-                auto exampleArr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(exampleHit.data);;
-                check(exampleArr != nullptr && exampleArr->d.size() == 7 &&
-                          exampleArr->d[0] == "Type: YomkDdsStd::MString" &&
-                          exampleArr->d[1] == "IDL:" &&
-                          exampleArr->d[2] == "struct YomkDdsStd::MString {" &&
-                          exampleArr->d[3] == "    string data;" &&
-                          exampleArr->d[4] == "};" &&
-                          exampleArr->d[5] == "example:" &&
-                          exampleArr->d[6].find("yomkdds topic pub " + std::string(HIT_TOPIC) +
-                                  " '{\"data\":") == 0 &&
-                          exampleArr->d[6].back() == '\'',
-                      "topic_example 三段行集逐行符合（Type/IDL 三行/example 段为可复制发布命令）");
-                for (const auto &l : exampleArr->d)
+                auto examplePkg = ::yomk::msgs::unpack<::yomk::msgs::TopicExampleInfo>(exampleHit.data);
+                check(examplePkg != nullptr, "topic_example 返回包可解包为结构化 TopicExampleInfo");
+                if (examplePkg != nullptr)
                 {
-                    std::cout << "[OBSERVE] topic example |" << l << "|" << std::endl;
+                    const auto &ex = examplePkg->msg;
+                    check(ex.topicName == HIT_TOPIC, "topic_example topicName 回填被查询主题名");
+                    check(ex.typeName == "YomkDdsStd::MString",
+                          "topic_example typeName 为原始 DDS 类型名（无转换）");
+                    check(ex.interfaceInfo.root.typeName == ex.typeName,
+                          "topic_example interfaceInfo.root.typeName 与平铺 typeName 同值");
+                    check(ex.interfaceInfo.root.members.size() == 1 &&
+                              ex.interfaceInfo.root.members[0].name == "data" &&
+                              ex.interfaceInfo.root.members[0].typeName == "string",
+                          "topic_example root 成员表恰一项 data/string（声明序 + IDL 类型表达式）");
+                    check(ex.interfaceInfo.dependencies.empty(),
+                          "topic_example MString 无 struct 依赖 → dependencies 为空");
+                    check(!ex.json.empty() && ex.json.front() == '{' && ex.json.back() == '}' &&
+                              ex.json.find("\"data\"") != std::string::npos,
+                          "topic_example json 为紧凑默认值模板（{...} 且含 data 字段）");
+                    std::cout << "[OBSERVE] topic example type=" << ex.typeName
+                              << " json=|" << ex.json << "|" << std::endl;
                 }
 
                 // topic_pub：writer 在场（默认 RELIABLE）→ 发现收敛+匹配收敛+write 一次+ack 确认
@@ -442,6 +452,11 @@ int main()
                 check(pubHit.status == yomk::payload::ResStatus::Succeeded &&
                           pubHit.msg.find("delivered") != std::string::npos,
                       "topic_pub(hello_world, 合法 JSON) → eOk delivered（ack 确认送达）");
+                auto pubPkg = ::yomk::msgs::unpack<::yomk::msgs::TopicPublishInfo>(pubHit.data);
+                check(pubPkg != nullptr && pubPkg->msg.topicName == HIT_TOPIC,
+                      "topic_pub 载荷为 TopicPublishInfo 且 topicName 回填目标主题");
+                check(pubPkg != nullptr && pubPkg->msg.total == 1 && pubPkg->msg.failed == 0,
+                      "topic_pub 单次模式统计 total=1/failed=0（写成功一次无失败）");
 
                 // 非法 JSON：解析失败不建 writer，不发布
                 auto pubBad = testInvoke(svc, "/topic_pub", ::yomk::msgs::DDSDebugTopicPub::shared(DDSDebugTopicPub{HIT_TOPIC, "{bad", 1, 50}));
@@ -502,20 +517,23 @@ int main()
                           "qos 下传持续模式停止后 invoke 返回 eOk");
                 }
 
-                // topic_msg：两要素行集（d[0]=类型名、d[1]=紧凑 msg JSON，机器可读契约，
-                // 断言对齐 topic_example 的宽松风格）
+                // topic_msg：结构化载荷（topicName/typeName/json，展示文本由 CLI 渲染）
                 auto msgHit = testInvoke(svc, "/topic_msg", ::yomk::msgs::DDSDebugTopicMsg::shared(DDSDebugTopicMsg{HIT_TOPIC, 5, 100}));
                 check(msgHit.status == yomk::payload::ResStatus::Succeeded && msgHit.data != nullptr,
                       "topic_msg(hello_world,5,100ms) → eOk（消息描述命中）");
-                auto topicMsgArr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(msgHit.data);;
-                check(topicMsgArr != nullptr && topicMsgArr->d.size() == 2 &&
-                          topicMsgArr->d[0] == "YomkDdsStd::MString" &&
-                          topicMsgArr->d[1].front() == '{' &&
-                          topicMsgArr->d[1].find("\"data\"") != std::string::npos,
-                      "topic_msg 两要素行集符合（d[0]=类型名、d[1]=紧凑 msg JSON 含 data 字段）");
-                for (const auto &l : topicMsgArr->d)
+                auto msgPkg = ::yomk::msgs::unpack<::yomk::msgs::TopicMessageInfo>(msgHit.data);
+                check(msgPkg != nullptr, "topic_msg 返回包可解包为结构化 TopicMessageInfo");
+                if (msgPkg != nullptr)
                 {
-                    std::cout << "[OBSERVE] topic msg |" << l << "|" << std::endl;
+                    const auto &tm = msgPkg->msg;
+                    check(tm.topicName == HIT_TOPIC, "topic_msg topicName 回填被查询主题名");
+                    check(tm.typeName == "YomkDdsStd::MString",
+                          "topic_msg typeName 为原始 DDS 类型名（无转换）");
+                    check(!tm.json.empty() && tm.json.front() == '{' && tm.json.back() == '}' &&
+                              tm.json.find("\"data\"") != std::string::npos,
+                          "topic_msg json 为紧凑 msg 模板（{...} 且含 data 字段）");
+                    std::cout << "[OBSERVE] topic msg type=" << tm.typeName
+                              << " json=|" << tm.json << "|" << std::endl;
                 }
             }
 
@@ -579,19 +597,23 @@ int main()
                 auto hitNodeInfo = testInvoke(svc, "/node_info", mkNodeInfo(PEER_NAME, 5, 100));
                 check(hitNodeInfo.status == yomk::payload::ResStatus::Succeeded && hitNodeInfo.data != nullptr,
                       "nodeInfo(test-svc-nodeinfo,5,100ms) → eOk（独立收敛命中）");
-                auto nodeInfoArr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(hitNodeInfo.data);;
-                check(nodeInfoArr != nullptr && nodeInfoArr->d.size() == 5,
-                      "nodeInfo 返回包可解包为 5 行 StringArray");
-                if (nodeInfoArr != nullptr && nodeInfoArr->d.size() == 5)
+                auto nodePkg = ::yomk::msgs::unpack<::yomk::msgs::NodeInfo>(hitNodeInfo.data);
+                check(nodePkg != nullptr, "nodeInfo 返回包可解包为结构化 NodeInfo");
+                if (nodePkg != nullptr)
                 {
-                    check(nodeInfoArr->d[0] == PEER_NAME, "nodeInfo 第 1 行为节点名（participant_name 原样输出）");
-                    check(nodeInfoArr->d[1] == "  Subscribers:", "nodeInfo 第 2 行为 Subscribers 段头");
-                    check(nodeInfoArr->d[2] == std::string("    ") + HIT_SUB_TOPIC + ": YomkDdsStd::MString",
-                          "nodeInfo 第 3 行为订阅主题行（缩进 + topic: type 原始类型名）");
-                    check(nodeInfoArr->d[3] == "  Publishers:", "nodeInfo 第 4 行为 Publishers 段头");
-                    check(nodeInfoArr->d[4] == std::string("    ") + HIT_PUB_TOPIC + ": YomkDdsStd::MString",
-                          "nodeInfo 第 5 行为发布主题行（缩进 + topic: type 原始类型名）");
-                    std::cout << "[OBSERVE] node_info " << nodeInfoArr->d.size() << " lines" << std::endl;
+                    const auto &ni = nodePkg->msg;
+                    check(ni.nodeName == PEER_NAME, "nodeInfo nodeName 为 participant_name 原样");
+                    check(ni.subscribers.size() == 1 &&
+                              ni.subscribers[0].topicName == HIT_SUB_TOPIC &&
+                              ni.subscribers[0].typeName == "YomkDdsStd::MString",
+                          "nodeInfo subscribers 命中 (t_nodeinfo_hit_sub, YomkDdsStd::MString)");
+                    check(ni.publishers.size() == 1 &&
+                              ni.publishers[0].topicName == HIT_PUB_TOPIC &&
+                              ni.publishers[0].typeName == "YomkDdsStd::MString",
+                          "nodeInfo publishers 命中 (t_nodeinfo_hit_pub, YomkDdsStd::MString)");
+                    std::cout << "[OBSERVE] node_info node=" << ni.nodeName
+                              << " pubs=" << ni.publishers.size()
+                              << " subs=" << ni.subscribers.size() << std::endl;
                 }
 
                 // 未发现节点名：单次快照快速路径 → eNo（归属判定不命中即早退）

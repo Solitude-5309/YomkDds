@@ -17,11 +17,11 @@ using namespace yomk::payload;
 
 /** @brief Bag record/replay service: mcap recording, inspection, conversion and timeline replay */
 // @zh: Bag 录制回放服务：mcap 录制、元信息查看、转换与按时间轴回放
-class YomkDdsBagService : public YomkService
+class YomkDdsBagHandler : public YomkService
 {
 public:
-    YomkDdsBagService(YomkServer* server);
-    virtual ~YomkDdsBagService();
+    YomkDdsBagHandler(YomkServer* server);
+    virtual ~YomkDdsBagHandler();
     virtual int init() override;
 
 private:

@@ -6,7 +6,7 @@
  *       逐主题原序、目录递归字节数）与三类失败路径契约。节点层只回数据，行标签/单位换算/
  *       人类可读时间归调用方渲染，故本测试不做任何文本形态断言。
  *       经 record 真实落盘的产物断言归 TestFastDDSBagNodeRecord；服务层回执链路归
- *       TestYomkDdsBagServiceContract。
+ *       TestYomkDdsBagHandlerContract。
  * 覆盖：
  *   I1 单主题全字段（files/storageId/startTimeNs/durationNs/messageCount/
  *      serializationFormat=cdr/bagSizeBytes=目录总字节/topics 单条四字段）；

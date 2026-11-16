@@ -7,7 +7,7 @@
  *       手写 metadata.json 构造（makeBag，写侧同款落盘形态：每分片自含 Channel 声明、
  *       metadata 键集同 record 组装），不依赖 record 产物。暂停/恢复（bagPlayPause/Resume
  *       的播放侧联动）与 10 项 play 选项归后续轮；服务层端点契约归
- *       TestYomkDdsBagServiceContract。
+ *       TestYomkDdsBagHandlerContract。
  * 覆盖：
  *   P5 预扫输入校验（失败快速返回不建任何 DDS 实体，节点可继续复用）：目录不存在 /
  *      路径是文件 / 缺 metadata.json / metadata 非 JSON / topics 空清单 / 有元信息无
@@ -129,7 +129,7 @@
 
 #include "TestCheck.h"
 #include "FastDDSBagNode.h"     // 被测节点（直测，不经服务层）
-#include "YomkDdsBagService.h"  // yomk::bagPlayStop/bagPlayReset（停止标志读写端）
+#include "YomkDdsBagHandler.h"  // yomk::bagPlayStop/bagPlayReset（停止标志读写端）
 
 #include <mcap/writer.hpp>      // makeBag 造分片（MCAP_IMPLEMENTATION 单译元在被测库内）
 #include <nlohmann/json.hpp>    // makeBag 手写 metadata.json（record 组装同款键集）

@@ -53,7 +53,7 @@ add_library(yomkdds_under_test STATIC
     ${YOMKDDS_ROOT}/src/YomkDdsDebugHandler.cpp
     ${YOMKDDS_ROOT}/src/FastDDSNode.cpp
     ${YOMKDDS_ROOT}/src/FastDDSDebugNode.cpp
-    ${YOMKDDS_ROOT}/src/YomkDdsBagService.cpp
+    ${YOMKDDS_ROOT}/src/YomkDdsBagHandler.cpp
     ${YOMKDDS_ROOT}/src/FastDDSBagNode.cpp
 )
 target_include_directories(yomkdds_under_test PUBLIC
@@ -147,7 +147,7 @@ add_subdirectory(fast_dds_debug_node)
 add_subdirectory(yomk_dds_debug_handler)
 # fast_dds_bag_node：bag 录制节点两层测试（启动校验 + 录制收尾落盘真实 DDS）
 add_subdirectory(fast_dds_bag_node)
-# yomk_dds_bag_service：bag 服务两层测试（契约 DDS-free + 生命周期真实 DDS）
-add_subdirectory(yomk_dds_bag_service)
+# yomk_dds_bag_handler：bag 服务两层测试（契约 DDS-free + 生命周期真实 DDS）
+add_subdirectory(yomk_dds_bag_handler)
 # ros2_interop：真机互通回归判定程序（run_ros2_interop.sh 驱动，不 add_test——需 ROS2 环境）
 add_subdirectory(ros2_interop)

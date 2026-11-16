@@ -48,7 +48,7 @@
 #include "YomkDdsMsg.h"
 #include "FastDDSNode.h"    // Part B 直接单元测试 setDomainId
 #include "YomkDdsDebugHandler.h" // C-2d：DDSDebugNode 无参全缺省聚合初始化 env 读回
-#include "YomkDdsBagService.h"   // C-2d：DDSBagNode 无参全缺省聚合初始化 env 读回
+#include "YomkDdsBagHandler.h"   // C-2d：DDSBagNode 无参全缺省聚合初始化 env 读回
 // Part C-E 白盒：yomkdds_xml 三件套（parseServerLocator/applyDiscoveryServers/
 // participantQosFromXml）
 #include "FastDDSXmlHelper.h"

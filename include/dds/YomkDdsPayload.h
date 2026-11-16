@@ -783,7 +783,7 @@ struct DDSDebugTopicPub
     DDSQosProfile qos;                 // temporary writer QoS
 };
 
-// ===== YomkDdsBagService request payloads =====
+// ===== YomkDdsBagHandler request payloads =====
 
 /** @brief bag create_node request (same env fallbacks as DDSNode) */
 // @zh: bag create_node 请求负载（环境变量回落语义同 DDSNode）
@@ -843,7 +843,7 @@ struct DDSBagPlay
     std::string qosOverridesPath = "";    // JSON: bag topic -> reliability/durability
 };
 
-// ===== YomkDdsBagService response payloads =====
+// ===== YomkDdsBagHandler response payloads =====
 
 /**
  * @brief Per-topic statistics of one bag operation (record or play)

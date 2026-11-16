@@ -5,7 +5,7 @@
  * @brief Service endpoint URL constants for the YomkDds extension
  *
  * Grouped per service: core communication (YomkDdsHandler), type-agnostic
- * debugging (YomkDdsDebugHandler), bag record/replay (YomkDdsBagService).
+ * debugging (YomkDdsDebugHandler), bag record/replay (YomkDdsBagHandler).
  * Endpoint behavior is documented by the YOMKDDS_* macros in YomkDdsAPI.h.
  *
  * @note yomk::url is an open namespace: extensions append constants in the
@@ -109,33 +109,33 @@ inline constexpr std::string_view ddsDebugListNodes = "/YomkDdsDebugHandler/list
 // @zh: 查询节点发布/订阅清单端点
 inline constexpr std::string_view ddsDebugNodeInfo = "/YomkDdsDebugHandler/node_info";
 
-// --- YomkDdsBagService ---
+// --- YomkDdsBagHandler ---
 
 /** @brief Create the bag node endpoint (single node per process) */
 // @zh: 创建 bag 节点端点（单节点模型）
-inline constexpr std::string_view ddsBagCreateNode = "/YomkDdsBagService/create_node";
+inline constexpr std::string_view ddsBagCreateNode = "/YomkDdsBagHandler/create_node";
 
 /** @brief Quit recording and delete the bag node endpoint */
 // @zh: 退出录制（删除 bag 节点）端点
-inline constexpr std::string_view ddsBagDeleteNode = "/YomkDdsBagService/delete_node";
+inline constexpr std::string_view ddsBagDeleteNode = "/YomkDdsBagHandler/delete_node";
 
 /** @brief Record topics to an mcap bag endpoint (blocking) */
 // @zh: 录制主题端点（阻塞）
-inline constexpr std::string_view ddsBagRecord = "/YomkDdsBagService/bag_record";
+inline constexpr std::string_view ddsBagRecord = "/YomkDdsBagHandler/bag_record";
 
 /** @brief Show bag metadata endpoint */
 // @zh: 查看 bag 元信息端点
-inline constexpr std::string_view ddsBagInfo = "/YomkDdsBagService/bag_info";
+inline constexpr std::string_view ddsBagInfo = "/YomkDdsBagHandler/bag_info";
 
 /** @brief Rebuild bag metadata endpoint */
 // @zh: 重建 bag 元信息端点
-inline constexpr std::string_view ddsBagReindex = "/YomkDdsBagService/bag_reindex";
+inline constexpr std::string_view ddsBagReindex = "/YomkDdsBagHandler/bag_reindex";
 
 /** @brief Convert/merge bags endpoint */
 // @zh: 转换 bag 端点
-inline constexpr std::string_view ddsBagConvert = "/YomkDdsBagService/bag_convert";
+inline constexpr std::string_view ddsBagConvert = "/YomkDdsBagHandler/bag_convert";
 
 /** @brief Replay an mcap bag endpoint (blocking) */
 // @zh: 回放 bag 端点（阻塞）
-inline constexpr std::string_view ddsBagPlay = "/YomkDdsBagService/bag_play";
+inline constexpr std::string_view ddsBagPlay = "/YomkDdsBagHandler/bag_play";
 }  // namespace yomk::url

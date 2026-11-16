@@ -22,7 +22,7 @@
  *      error 含「模式 [...] 未匹配到任何主题」且不误报 hit。
  * 校验失败不落盘断言：全程 bagDir() 为空，无 bag_* 目录产生（工作目录无新增 bag_ 前缀目录）。
  *
- * 域号 201：与 TestYomkDdsBagServiceLifecycle(200)/TestFastDDSBagNodeRecord(202) 错开，
+ * 域号 201：与 TestYomkDdsBagHandlerLifecycle(200)/TestFastDDSBagNodeRecord(202) 错开，
  * ctest 串行执行互不残留。
  *
  * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。

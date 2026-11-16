@@ -4,7 +4,7 @@
 #include <vector>
 
 #include <yomk/server/YomkServerApi.h>
-#include "YomkDdsBagService.h"   // flat quoted includes: install tree, test tree and main tree all resolve same-dir
+#include "YomkDdsBagHandler.h"   // flat quoted includes: install tree, test tree and main tree all resolve same-dir
 #include "YomkDdsDebugHandler.h"
 #include "YomkDdsMsg.h"
 #include "YomkDdsHandler.h"
@@ -1149,7 +1149,7 @@ public:
     }
 };
 
-// ===== YomkDdsBagService — mcap bag record/replay =====
+// ===== YomkDdsBagHandler — mcap bag record/replay =====
 // yomk::dds().bag() covers the whole bag domain: the node lifecycle as
 // yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit(),
 // recording as yomk::dds().bag().topics({...})[.out_dir/.max_size/.max_duration/
@@ -1161,7 +1161,7 @@ public:
 // the calling thread until finished or stopped via the yomk::bag* flags, and the
 // bag node created by create() is required by record()/play().
 // Full behavior: docs/features/bag-service.md
-// @zh: Bag API（YomkDdsBagService 端点，已全链式化，等价 CLI：yomkdds bag）
+// @zh: Bag API（YomkDdsBagHandler 端点，已全链式化，等价 CLI：yomkdds bag）
 // @zh: yomk::dds().bag() 覆盖整个 bag 域：节点生命周期为
 // @zh: yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit()，
 // @zh: 录制为 yomk::dds().bag().topics({...})[.out_dir/.max_size/.max_duration/.cache()].record()，

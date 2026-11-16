@@ -1,6 +1,6 @@
 # 功能文档：Bag 录制与回放
 
-> **本文档覆盖范围**：`YomkDdsBagService` bag 服务的完整能力——bag 节点模型、mcap 录制（分片/写缓存/暂停恢复/通配展开）、元信息查看与重建索引、多输入转换、按录制时间轴回放；以及"哪些操作须 bag 节点、哪些是纯文件操作"的能力边界。各命令的端到端实操见 [Bag 录制回放手册](../manual/bag-handbook.md)。
+> **本文档覆盖范围**：`YomkDdsBagHandler` bag 服务的完整能力——bag 节点模型、mcap 录制（分片/写缓存/暂停恢复/通配展开）、元信息查看与重建索引、多输入转换、按录制时间轴回放；以及"哪些操作须 bag 节点、哪些是纯文件操作"的能力边界。各命令的端到端实操见 [Bag 录制回放手册](../manual/bag-handbook.md)。
 
 ## 功能定位
 
@@ -24,7 +24,7 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 
 ### bag 节点（`yomk::dds().bag()…create()` / `yomk::dds().bag().quit()`）
 
-`yomk::dds().bag()[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()`（端点 `/YomkDdsBagService/create_node`）：
+`yomk::dds().bag()[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()`（端点 `/YomkDdsBagHandler/create_node`）：
 
 - 单节点模型（一个进程至多一个，重复创建须先删除）；`yomk::dds().bag().quit()` 删除 bag 节点并销毁其全部 DDS 实体，未创建时返回错误；
 - 三个累积器均可选、次序不限：未累积项回退类内缺省初始化器（domainId 读 `YOMKDDS_DDS_DOMAIN_ID`，两 locator 按 5.7 开关门控读 `YOMKDDS_UDP/TCP_DISCOVER_SERVERS`，语义同 `yomk::dds().node(...)` 缺省项）；全缺省形态即 `yomk::dds().bag().create()`；
@@ -32,7 +32,7 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 
 ### 录制（`yomk::dds().bag()...record()` / `bag record`）
 
-`yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()`（端点 `/YomkDdsBagService/bag_record`）**长驻阻塞至 Ctrl+C**（SIGINT 经 `yomk::bagRecordStop` 无锁置位）收尾返回。`topics()` 必填（缺失时终结直接返回 `topics are required`），其余四个累积器可选、次序不限；`out_dir()` 空 = 缺省时间戳目录名，`max_size()`/`max_duration()` 为单分片阈值（两条件同用时先到先分），`cache()` 为写缓存双缓冲字节数。CLI 形态：
+`yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()`（端点 `/YomkDdsBagHandler/bag_record`）**长驻阻塞至 Ctrl+C**（SIGINT 经 `yomk::bagRecordStop` 无锁置位）收尾返回。`topics()` 必填（缺失时终结直接返回 `topics are required`），其余四个累积器可选、次序不限；`out_dir()` 空 = 缺省时间戳目录名，`max_size()`/`max_duration()` 为单分片阈值（两条件同用时先到先分），`cache()` 为写缓存双缓冲字节数。CLI 形态：
 
 ```bash
 yomkdds bag record hello_world           # 录制单主题（默认域 0）
@@ -45,13 +45,13 @@ yomkdds bag record -c 8388608 hello_world     # 写缓存双缓冲 8MB（-c/--ma
 yomkdds bag record --start-paused hello_world  # 暂停态启动（订阅照常、消息丢弃不写入，按 SPACE 开始录制）
 ```
 
-等价链式调用（完整用户代码，`yomk::dds().bag()` 分面定义于 `YomkDdsAPI.h`，SIGINT 处理与暂停控制声明于 `YomkDdsBagService.h`）：
+等价链式调用（完整用户代码，`yomk::dds().bag()` 分面定义于 `YomkDdsAPI.h`，SIGINT 处理与暂停控制声明于 `YomkDdsBagHandler.h`）：
 
 ```cpp
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 #include <yomk/dds/YomkDdsAPI.h>
-#include <yomk/dds/YomkDdsBagService.h> // bagRecordStop/bagRecordReset（停止标志读写端）
+#include <yomk/dds/YomkDdsBagHandler.h> // bagRecordStop/bagRecordReset（停止标志读写端）
 
 #include <csignal>
 #include <iostream>
@@ -64,7 +64,7 @@ void onSignal(int) { bagRecordStop(); }  // 无锁原子置位，录制循环读
 int main()
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsBagService>().create();
+    ::yomk::server().srv<YomkDdsBagHandler>().create();
 
     // 1. 复位残留停止标志（防上次会话置位导致秒退）后创建 bag 节点（单节点模型）
     bagRecordReset();
@@ -145,7 +145,7 @@ yomkdds bag play bag_in --read-ahead-queue-size 5000   # 加大预读队列防 I
 yomkdds bag play bag_in --qos-profile-overrides-path qos.json   # 按主题覆盖发布 QoS（文件命中>快照>回退）
 ```
 
-交互键（tty 下）：SPACE 从暂停态开始、p 暂停、r 恢复、`+`/`-` ±10% 动态调率，Ctrl+C 停止。库侧同源控制函数（定义于 `YomkDdsBagService.h`，`namespace yomk`，无锁原子标志不经 DDS 协议传递）：
+交互键（tty 下）：SPACE 从暂停态开始、p 暂停、r 恢复、`+`/`-` ±10% 动态调率，Ctrl+C 停止。库侧同源控制函数（定义于 `YomkDdsBagHandler.h`，`namespace yomk`，无锁原子标志不经 DDS 协议传递）：
 
 | 函数 | 语义 |
 |---|---|

@@ -12,14 +12,14 @@
  * 创建并幂等写入 ~/.bashrc，使新开终端可查看继承）、discovery-server-tutorial 与
  * xml-profiles-tutorial；--help 输出为即用速查。
  *
- * 实现经 YomkDdsDebugHandler（yomk::dds().debug() 链式面）与 YomkDdsBagService（yomk::dds().bag() 链式面）
+ * 实现经 YomkDdsDebugHandler（yomk::dds().debug() 链式面）与 YomkDdsBagHandler（yomk::dds().bag() 链式面）
  * 驱动内部调试/录制节点；各子命令退出前 yomk::dds().debug().quit() 显式清理，规避
  * FastDDS 静态析构期段错误（同 ExampleYomkDdsSub 退出前 remove() 模式）。
  */
 
 #include <yomk/dds/YomkDdsAPI.h>
 #include <yomk/dds/YomkDdsMsg.h>
-#include <yomk/dds/YomkDdsBagService.h>
+#include <yomk/dds/YomkDdsBagHandler.h>
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 
@@ -732,7 +732,7 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
                      uint64_t maxBagDurationSec, uint64_t maxCacheSize)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsBagService>().create();
+    ::yomk::server().srv<YomkDdsBagHandler>().create();
 
     // 1. 复位双标志（防上次会话残留置位导致秒退/不录）后创建 bag 节点（单节点模型）
     yomk::bagRecordReset();
@@ -927,7 +927,7 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
         const std::string &playQosOverridesPath)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsBagService>().create();
+    ::yomk::server().srv<YomkDdsBagHandler>().create();
 
     // 1. 复位双标志（防上次会话残留置位导致秒退/开播即冻）后创建 bag 节点（单节点模型）；
     //    暂停态启动：先置位再发起播放（对齐 record 先例——服务 handler 只清 stop 不清
@@ -1195,7 +1195,7 @@ static std::string formatBagDuration(uint64_t durationNs)
 static int runBagInfo(const std::string &bagDir)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsBagService>().create();
+    ::yomk::server().srv<YomkDdsBagHandler>().create();
 
     auto resp = yomk::dds().bag().dir(bagDir).info();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
@@ -1271,7 +1271,7 @@ static int runBagInfo(const std::string &bagDir)
 static int runBagReindex(const std::string &bagDir)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsBagService>().create();
+    ::yomk::server().srv<YomkDdsBagHandler>().create();
 
     auto resp = yomk::dds().bag().dir(bagDir).reindex();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
@@ -1292,7 +1292,7 @@ static int runBagReindex(const std::string &bagDir)
 static int runBagConvert(const std::vector<std::string> &inputs, const std::string &cfgPath)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsBagService>().create();
+    ::yomk::server().srv<YomkDdsBagHandler>().create();
 
     auto resp = yomk::dds().bag().in_bags(inputs).out_cfg(cfgPath).convert();
     if (resp.status != yomk::payload::ResStatus::Succeeded)

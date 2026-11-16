@@ -5,7 +5,7 @@
  * 范围：bagConvert 对 mcap::McapWriter 造的真实输入 bag 临时目录的转换断言（全缺省合并、
  *       主题展开精确/通配、时段裁剪含边界、输出分片滚动、多输入全局归并、旧格式拒转与
  *       类型/qos 冲突）与失败路径契约；产物 metadata.json 全字段 + 消息 logTime 读回升序断言 +
- *       bagInfo 结构化读回联动。服务层回执链路归 TestYomkDdsBagServiceContract。
+ *       bagInfo 结构化读回联动。服务层回执链路归 TestYomkDdsBagHandlerContract。
  * 覆盖：
  *   C1 全缺省（单输入单条目仅 uri）→ 全主题全时段合并；metadata 对账（version/storage/
  *      relative_file_paths/starting_time+_format/duration+_format/message_count/topics

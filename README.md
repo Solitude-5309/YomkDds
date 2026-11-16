@@ -79,7 +79,7 @@
 | `yomk::dds().debug().topic(topicName).payload(json)[.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()` | 发布 JSON 载荷消息（返回结构化 `TopicPublishInfo`：主题名/已发条数/失败计数；支持持续发布/条数上限/QoS 累积） |
 | `yomk::dds().debug().quit()` | 退出调试（删除调试节点） |
 
-**Bag 服务（YomkDdsBagService）** — 详见 [功能文档：Bag 录制/回放](docs/features/bag-service.md)：
+**Bag 服务（YomkDdsBagHandler）** — 详见 [功能文档：Bag 录制/回放](docs/features/bag-service.md)：
 
 | 入口 | 简述 |
 |---|---|
@@ -124,7 +124,7 @@ cmake -S test -B test/build -DCMAKE_PREFIX_PATH="${YOMK_PREFIX_PATH:-/opt/yomk}"
 cmake --build test/build -j
 ```
 
-构建产物为 22 个测试可执行（位于 `test/build/harness/`、`test/build/yomk_dds_handler/`、`test/build/fast_dds_debug_node/`、`test/build/yomk_dds_debug_handler/`、`test/build/yomk_dds_bag_service/`、`test/build/fast_dds_bag_node/`）：
+构建产物为 22 个测试可执行（位于 `test/build/harness/`、`test/build/yomk_dds_handler/`、`test/build/fast_dds_debug_node/`、`test/build/yomk_dds_debug_handler/`、`test/build/yomk_dds_bag_handler/`、`test/build/fast_dds_bag_node/`）：
 
 > 另有 `test/build/ros2_interop/` 下的 `TestRos2InteropPub` / `TestRos2InteropSub` 两个 ROS2 真机互通判定程序，不注册 CTest，由 `./test/run_ros2_interop.sh` 手动驱动（详见 [ros2-interop.md](docs/features/ros2-interop.md)）。
 
@@ -134,7 +134,7 @@ cmake --build test/build -j
 | YomkDdsHandler (10) | TestYomkDdsHandlerContract、TestYomkDdsHandlerLifecycle、TestYomkDdsNodeLifecycle、TestYomkDdsSetNaming、TestYomkDdsTopic、TestYomkDdsLoan、TestYomkDdsTypes、TestYomkDdsConcurrency、TestYomkDdsStressSerial、TestYomkDdsStressConcurrent |
 | FastDDSDebugNode (1) | TestFastDDSDebugNode（节点层守卫 + 发现→动态类型→订阅→JSON 输出端到端） |
 | YomkDdsDebugHandler (2) | TestYomkDdsDebugHandlerContract（DDS-free 契约）、TestYomkDdsDebugHandlerLifecycle（真实 DDS 生命周期） |
-| YomkDdsBagService (2) | TestYomkDdsBagServiceContract（DDS-free 契约）、TestYomkDdsBagServiceLifecycle（真实 DDS 录制生命周期） |
+| YomkDdsBagHandler (2) | TestYomkDdsBagHandlerContract（DDS-free 契约）、TestYomkDdsBagHandlerLifecycle（真实 DDS 录制生命周期） |
 | FastDDSBagNode (6) | TestFastDDSBagNodeValidation（启动校验与输入校验分支，含通配展开判定）、TestFastDDSBagNodeRecord（发布→录制→Ctrl+C 收尾→落盘断言端到端，含通配模式录制）、TestFastDDSBagNodeInfo（bag info 静态函数直测）、TestFastDDSBagNodeReindex（bag reindex 静态函数直测）、TestFastDDSBagNodeConvert（bag convert 静态函数直测）、TestFastDDSBagNodePlay（节点层回放端到端） |
 
 可选构建开关（CMake cache 变量）：

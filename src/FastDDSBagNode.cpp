@@ -6,7 +6,7 @@
 // 安全，多 reader 并发写须串行），不触 mtx_。
 #include "FastDDSBagNode.h"
 
-#include "YomkDdsBagService.h" // yomk::g_bagRecordStop（录制停止标志，API 头内联定义）
+#include "YomkDdsBagHandler.h" // yomk::g_bagRecordStop（录制停止标志，API 头内联定义）
 
 #define MCAP_IMPLEMENTATION  // mcap header-only：实现随本 TU 编译（全库唯一单译元）
 #include <mcap/reader.hpp>   // 读回侧实现同译元编译（读回断言经链接本库取实现）

@@ -5,7 +5,7 @@
  * 范围：bagReindex 对 mcap::McapWriter 造的真实 bag 临时目录的重建断言（编号序收集、
  *       多分片合并、主题名升序、metadata.json 全字段与 _format 伴生键、无条件覆盖、
  *       无 summary 回退扫描）与失败路径契约；重建产物 bagInfo 结构化读回断言。
- *       服务层回执链路归 TestYomkDdsBagServiceContract。
+ *       服务层回执链路归 TestYomkDdsBagHandlerContract。
  * 覆盖：
  *   R1 单文件重建全字段（version/storage_identifier/relative_file_paths/starting_time
  *      ns+_format/duration ns+_format/message_count/topics name+count+type+qos 经

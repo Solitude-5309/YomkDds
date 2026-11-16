@@ -1,6 +1,6 @@
 /**
- * @file TestYomkDdsBagServiceLifecycle.cpp
- * @brief YomkDdsBagService 真实 DDS 生命周期测试
+ * @file TestYomkDdsBagHandlerLifecycle.cpp
+ * @brief YomkDdsBagHandler 真实 DDS 生命周期测试
  *
  * 范围：契约测试（DDS-free）刻意豁免的 /create_node 成功路径（经 setDomainId 创建真实
  *       participant）、/bag_record 完整录制链路（校验通过 → 透传订阅 → mcap 落盘 →
@@ -30,7 +30,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsBagService.h" // 服务/DDSBagNode/DDSBagRecord/DDSBagReindex/yomk::bagRecordStop
+#include "YomkDdsBagHandler.h" // 服务/DDSBagNode/DDSBagRecord/DDSBagReindex/yomk::bagRecordStop
 #include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（完整录制用例的远端发布端）
@@ -68,8 +68,8 @@ int main()
 
     ::yomk::server().init();
 
-    auto *svc = new YomkDdsBagService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsBagService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsBagHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsBagHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     // ---- L0：/bag_info 与节点生命周期解耦（纯文件读，节点状态无关） ----
     auto infoBefore = testInvoke(svc, "/bag_info", ::yomk::msgs::DDSBagInfo::shared(DDSBagInfo{"info_svc_l0_miss"}));
@@ -281,5 +281,5 @@ int main()
         dds::DomainParticipantFactory::get_instance()->delete_participant(peerParticipant);
     }
 
-    return testReport("TestYomkDdsBagServiceLifecycle");
+    return testReport("TestYomkDdsBagHandlerLifecycle");
 }

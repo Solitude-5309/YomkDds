@@ -41,8 +41,8 @@
 # 写磁盘操作审计（2026-09 逐文件核对，bag 八例新增时更新）：
 #   - 除 bag 八例外，其余测试程序与被测源码 src/*.cpp 均无写盘操作；唯一文件 IO 是 stress
 #     两例只读 /proc/self/status 与 /proc/self/fd 的资源采样器（VmRSS/Threads/fd）。
-#   - bag 八例的写盘（均落在运行时临时工作目录）：TestYomkDdsBagServiceLifecycle 与
-#     TestFastDDSBagNodeRecord 经真实 DDS 录制产 bag 目录；TestYomkDdsBagServiceContract
+#   - bag 八例的写盘（均落在运行时临时工作目录）：TestYomkDdsBagHandlerLifecycle 与
+#     TestFastDDSBagNodeRecord 经真实 DDS 录制产 bag 目录；TestYomkDdsBagHandlerContract
 #     （T7-T9）与 TestFastDDSBagNodeInfo/Reindex/Convert 经 mcap::McapWriter 造输入分片与
 #     info/重建/转换产物；TestFastDDSBagNodePlay 经 mcap::McapWriter + 手写 metadata.json
 #     造回放输入 bag（固定命名目录，用例收尾 remove_all 自清理）；仅
@@ -79,9 +79,9 @@ ALL_TESTS=(
     TestYomkDdsHandlerContract
     TestYomkDdsHandlerLifecycle
     TestYomkDdsDebugHandlerContract
-    TestYomkDdsBagServiceContract
+    TestYomkDdsBagHandlerContract
     TestYomkDdsDebugHandlerLifecycle
-    TestYomkDdsBagServiceLifecycle
+    TestYomkDdsBagHandlerLifecycle
     TestFastDDSDebugNode
     TestFastDDSBagNodeInfo
     TestFastDDSBagNodeReindex

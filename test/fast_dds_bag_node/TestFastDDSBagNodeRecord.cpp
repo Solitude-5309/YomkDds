@@ -44,7 +44,7 @@
  *      默认 TRANSIENT_LOCAL）→ Channel.metadata 与 metadata.json 的 qos 均 ==
  *      "RELIABLE,VOLATILE"，证 qos 反映真实 offered 而非写死。
  *
- * 域号 202：与 TestYomkDdsBagServiceLifecycle(200)/TestFastDDSBagNodeValidation(201) 错开，
+ * 域号 202：与 TestYomkDdsBagHandlerLifecycle(200)/TestFastDDSBagNodeValidation(201) 错开，
  * ctest 串行执行互不残留。
  *
  * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
@@ -52,7 +52,7 @@
 
 #include "TestCheck.h"
 #include "FastDDSBagNode.h"     // 被测节点（直测，不经服务层）
-#include "YomkDdsBagService.h"  // yomk::bagRecordStop/bagRecordReset（停止标志读写端）
+#include "YomkDdsBagHandler.h"  // yomk::bagRecordStop/bagRecordReset（停止标志读写端）
 
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（远端发布端制造录制流量）
 

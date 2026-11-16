@@ -22,7 +22,7 @@
 // 透传机制：PassthroughPubSubType 不解析数据，原始 CDR 字节（含 encapsulation header）
 // 原样落盘 mcap（schema_id=0 无 schema 通道、encoding="cdr"、thirdparty/mcap v2.1.3，
 // 实现仅在本节点 .cpp 单译元编译）；发现层仅按主题名 + 类型名字符串匹配，与远端类型
-// 定义零耦合。停止/暂停标志由 YomkDdsBagService 提供（record: yomk::g_bagRecordStop/
+// 定义零耦合。停止/暂停标志由 YomkDdsBagHandler 提供（record: yomk::g_bagRecordStop/
 // g_bagRecordPaused；play: yomk::g_bagPlayStop/g_bagPlayPaused，暂停冻结时间轴）。
 // 线程模型：发现回调仅缓存发现信息（seenMtx_ 叶子锁，锁序倒置防护同 FastDDSDebugNode）；
 // 数据回调两路：maxCacheSize=0 同步直写（DDS 接收线程逐条写盘，payloadMtx_ 串行多

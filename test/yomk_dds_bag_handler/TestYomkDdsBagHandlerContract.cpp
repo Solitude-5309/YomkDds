@@ -1,10 +1,10 @@
 /**
- * @file TestYomkDdsBagServiceContract.cpp
- * @brief YomkDdsBagService 服务层契约测试（DDS-free，白盒经服务器公开路由直接分发）
+ * @file TestYomkDdsBagHandlerContract.cpp
+ * @brief YomkDdsBagHandler 服务层契约测试（DDS-free，白盒经服务器公开路由直接分发）
  *
  * 范围：仅验证 bag 服务 8 端点在不触发任何 DDS 运行时（不创建 participant）前提下的
  *       输入校验与错误码契约；真实 DDS 生命周期（创建/录制/删除）归
- *       TestYomkDdsBagServiceLifecycle，节点层校验与落盘归 TestFastDDSBagNode。
+ *       TestYomkDdsBagHandlerLifecycle，节点层校验与落盘归 TestFastDDSBagNode。
  * 覆盖：
  *   T1 funcInfos 内省 7 端点齐全 + 未知端点 eNo；
  *   T2 /version 正常路径（eOk + 版本串契约 + 忽略 pkg）；
@@ -39,7 +39,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsBagService.h" // 服务/DDSBagNode/DDSBagRecord/String/YOMK_* 宏
+#include "YomkDdsBagHandler.h" // 服务/DDSBagNode/DDSBagRecord/String/YOMK_* 宏
 #include "YomkDdsMsg.h"
 
 #include <mcap/writer.hpp> // T8 造最小 mcap 分片（实现经链接库内单译元，仅声明头）
@@ -92,7 +92,7 @@ namespace
     }
 
     // T2：/version 契约（不解包，忽略 pkg）
-    void testVersion(YomkDdsBagService *svc)
+    void testVersion(YomkDdsBagHandler *svc)
     {
         auto resp = testInvoke(svc, "/version");
         check(resp.status == yomk::payload::ResStatus::Succeeded, "/version 返回 eOk");
@@ -110,7 +110,7 @@ namespace
     }
 
     // T3：/create_node、/bag_record 的解包双守卫（nullptr / 异类包 / 改名伪造）
-    void testUnpackGuards(YomkDdsBagService *svc)
+    void testUnpackGuards(YomkDdsBagHandler *svc)
     {
         auto checkGuards = [&](const char *ep, const char *expectName, YomkMsgPtr wrongPkg)
         {
@@ -143,7 +143,7 @@ namespace
     }
 
     // T4：/delete_node 特殊契约——单节点模型无参载荷，(void)pkg 不走解包守卫
-    void testNoPayloadEndpoints(YomkDdsBagService *svc)
+    void testNoPayloadEndpoints(YomkDdsBagHandler *svc)
     {
         // 未建节点：无论载荷形态，均在 node_ 空检查处早退（不触 DDS）
         auto rNull = testInvoke(svc, "/delete_node", nullptr);
@@ -163,7 +163,7 @@ namespace
     }
 
     // T5：/create_node domainId 越界前置拦截（锁外校验，不触 DDS）
-    void testCreateDomainBoundary(YomkDdsBagService *svc)
+    void testCreateDomainBoundary(YomkDdsBagHandler *svc)
     {
         auto r233 = testInvoke(svc, "/create_node", ::yomk::msgs::DDSBagNode::shared(DDSBagNode{233}));
         check(r233.status == yomk::payload::ResStatus::Failed &&
@@ -177,7 +177,7 @@ namespace
     }
 
     // T6：/bag_record topics 校验锁外先于节点检查（空清单/空名不触 DDS，合法清单未建节点早退）
-    void testBagRecordInputOrder(YomkDdsBagService *svc)
+    void testBagRecordInputOrder(YomkDdsBagHandler *svc)
     {
         // 空清单：topics 校验先于 node_ 检查，报输入问题而非节点未建
         auto rEmpty = testInvoke(svc, "/bag_record", ::yomk::msgs::DDSBagRecord::shared(DDSBagRecord{{}}));
@@ -199,7 +199,7 @@ namespace
     }
 
     // T7：/bag_info 纯文件读契约（不依赖节点生命周期；BagInfo 结构化回执保真）
-    void testBagInfoContract(YomkDdsBagService *svc)
+    void testBagInfoContract(YomkDdsBagHandler *svc)
     {
         // bagDir 空校验锁外前置：未建节点也报输入错误（对齐 bagRecord topics 校验先例）
         auto rEmpty = testInvoke(svc, "/bag_info", ::yomk::msgs::DDSBagInfo::shared(DDSBagInfo{""}));
@@ -260,7 +260,7 @@ namespace
     }
 
     // T8：/bag_reindex 纯文件操作契约（不依赖节点生命周期；metadata.json 重建落盘）
-    void testBagReindexContract(YomkDdsBagService *svc)
+    void testBagReindexContract(YomkDdsBagHandler *svc)
     {
         // bagDir 空校验锁外前置：未建节点也报输入错误（对齐 bagInfo 输入校验先例）
         auto rEmpty = testInvoke(svc, "/bag_reindex", ::yomk::msgs::DDSBagReindex::shared(DDSBagReindex{""}));
@@ -290,7 +290,7 @@ namespace
     }
 
     // T9：/bag_convert 纯文件操作契约（不依赖节点生命周期；转换产物落盘 + 统计行回执）
-    void testBagConvertContract(YomkDdsBagService *svc)
+    void testBagConvertContract(YomkDdsBagHandler *svc)
     {
         // inputs 空校验锁外前置：未建节点也报输入错误（对齐 bagRecord topics 校验先例）
         auto rNoInput = testInvoke(svc,
@@ -369,7 +369,7 @@ namespace
     }
 
     // T10：/bag_play 契约（未建节点：输入校验先于节点检查、节点检查先于文件触达）
-    void testBagPlayContract(YomkDdsBagService *svc)
+    void testBagPlayContract(YomkDdsBagHandler *svc)
     {
         // bagDir 空校验锁外前置：未建节点也报输入错误（对齐 bagInfo 输入校验先例）
         auto rEmpty = testInvoke(svc, "/bag_play", ::yomk::msgs::DDSBagPlay::shared(DDSBagPlay{""}));
@@ -414,8 +414,8 @@ int main()
     ::yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsBagService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsBagService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsBagHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsBagHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     // T1：内省——8 端点齐全
     auto infos = testFuncInfos(svc);
@@ -437,5 +437,5 @@ int main()
 
     check(testInvoke(svc, "/no_such_endpoint").status == yomk::payload::ResStatus::Failed, "未知端点返回 eNo");
 
-    return testReport("TestYomkDdsBagServiceContract");
+    return testReport("TestYomkDdsBagHandlerContract");
 }

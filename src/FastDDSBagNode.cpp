@@ -2071,7 +2071,7 @@ bool FastDDSBagNode::bagReindex(const std::string& bagDir, std::string* error)
 // tie 按输入序）过滤写盘 → metadata.json（reindex 同构）。单线程同步、不触任何 DDS 实体
 // 与节点状态，静态调用。
 bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const std::string& cfgPath,
-    std::vector<std::string>& outLines, std::string* error)
+    std::vector<BagConvertStat>& outStats, std::string* error)
 {
     auto fail = [&error](const std::string& reason) {
         if (error != nullptr)
@@ -2190,8 +2190,8 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
 
     // ④逐输出条目转换（条目间独立：游标每条目重建；任一条目失败即整体 fail，
     // 已产生的输出目录保留不回滚——错误信息注明）
-    outLines.clear();
-    outLines.reserve(entries.size());
+    outStats.clear();
+    outStats.reserve(entries.size());
     for (const auto& entry : entries)
     {
         // 主题展开：精确项须存在于输入主题集；模式项对输入主题全集匹配；展开集 = 精确 ∪
@@ -2439,9 +2439,8 @@ bool FastDDSBagNode::bagConvert(const std::vector<std::string>& inputs, const st
             }
             meta << info.dump(4) << "\n";
         }
-        outLines.push_back("converted " + entry.uri + ": " + std::to_string(msgCount) +
-                           " messages / " + std::to_string(bytesTotal) + " bytes / " +
-                           std::to_string(outTopics.size()) + " topics");
+        // 回执只回结构化统计（uri/条数/字节/通道数），行文本由调用方渲染
+        outStats.push_back(BagConvertStat{entry.uri, msgCount, bytesTotal, outTopics.size()});
     }
     return true;
 }

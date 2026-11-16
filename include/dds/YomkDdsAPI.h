@@ -1588,18 +1588,20 @@ public:
     /**
      * @brief Filter/trim/merge the accumulated input bags into new bags per the
      *        accumulated config (request terminator)
-     * @return Response carrying a StringArray with one
-     *         "converted <uri>: N messages / M bytes / K topics" line per output entry;
-     *         Invalid when YomkServer is not initialized or in_bags()/out_cfg() were not
-     *         accumulated
+     * @return Response carrying a ConvertResult packet: bags, one ConvertedBagStat per
+     *         output entry (uri/messageCount/byteCount/topicCount in output_bags config
+     *         order); the "converted <uri>: N messages / M bytes / K topics" lines are
+     *         rendered by the caller; Invalid when YomkServer is not initialized or
+     *         in_bags()/out_cfg() were not accumulated
      * @note Pure file operation: no bag node needed; multi-input merge is globally
      *       ordered by logTime, CDR bytes and timestamps are passed through untouched,
      *       a cross-input type mismatch on the same topic fails, and already produced
      *       outputs are kept on failure
      */
     // @zh: 按累积的输入清单与输出配置过滤/裁剪/归并输入为新 bag（请求终结）
-    // @zh: return Response 携带 StringArray，每个输出条目一行 "converted <uri>: N messages / M bytes / K topics"；
-    // @zh: 未初始化或未累积 in_bags()/out_cfg() 返回 Invalid
+    // @zh: return Response 携带 ConvertResult 包：bags 与 output_bags 条目一一对应
+    // @zh: （ConvertedBagStat：uri/条数/字节/通道数，保持配置序）；"converted <uri>: N messages /
+    // @zh: M bytes / K topics" 行由调用方渲染；未初始化或未累积 in_bags()/out_cfg() 返回 Invalid
     // @zh: note 纯文件操作不经 bag 节点（无须 create()）；多输入按 logTime 全局归并，
     // @zh: 透传原始 CDR 字节与时间戳不反序列化；同主题跨输入类型不一致报错，失败不回滚已产生输出
     yomk::payload::Response convert()

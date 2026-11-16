@@ -1171,8 +1171,9 @@ static int runBagReindex(const std::string &bagDir)
 
 // bag convert 子命令：读输入 bag 目录集与输出配置文件（JSON，顶层 output_bags 键），把输入
 // 消息按配置过滤合并写为新 bag（对齐参考实现 ros2 bag convert 的输出配置语义）；纯文件操作
-// 不建 bag 节点，服务端返回逐条目统计行（converted <uri>: N messages / M bytes / K topics）
-// 逐行打印，成功返回 0，失败（配置错误/转换失败）打印原因返回 1
+// 不建 bag 节点，成功后解包 ConvertResult 并按 CLI 约定逐条打印
+// （converted <uri>: N messages / M bytes / K topics），成功返回 0，失败（配置错误/转换失败）
+// 打印原因返回 1
 static int runBagConvert(const std::vector<std::string> &inputs, const std::string &cfgPath)
 {
     ::yomk::server().init();
@@ -1185,13 +1186,17 @@ static int runBagConvert(const std::vector<std::string> &inputs, const std::stri
         return 1;
     }
 
-    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
-    if (lines != nullptr)
+    // 输出统计（渲染属业务层）：载荷只给数据（uri/条数/字节/通道数），行文本由 CLI 约定
+    auto result = ::yomk::msgs::unpack<::yomk::msgs::ConvertResult>(resp.data);
+    if (result == nullptr)
     {
-        for (const auto &line : lines->d)
-        {
-            std::cout << line << std::endl;
-        }
+        ::yomk::log().tag("yomkdds").error("bag convert failed: unexpected response payload");
+        return 1;
+    }
+    for (const auto &bag : result->msg.bags)
+    {
+        std::cout << "converted " << bag.uri << ": " << bag.messageCount << " messages / "
+                  << bag.byteCount << " bytes / " << bag.topicCount << " topics" << std::endl;
     }
     return 0;
 }

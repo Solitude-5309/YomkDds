@@ -69,6 +69,14 @@ public:
         uint64_t count = 0;
         uint64_t bytes = 0;    // CDR 全量，含 encapsulation header
     };
+    // 单个转换输出 bag 的统计（逐 output_bags 条目一项，保持配置序）
+    struct BagConvertStat
+    {
+        std::string uri;       // 输出 bag 目录（配置原样）
+        uint64_t messageCount = 0;
+        uint64_t byteCount = 0;    // CDR 全量，含 encapsulation header
+        uint64_t topicCount = 0;   // 该条目注册的 channel 数（含 0 条消息的主题）
+    };
     // 仅可成功一次，失败/重复调用返回 false。spec/err 语义同 FastDDSNode::setDomainId
     // （XML 三级提取链——本节点无用户名，仅默认档可兜底；serverLocator 直配强制 CLIENT）。
     bool setDomainId(uint32_t domainId, const yomkdds_xml::ParticipantQosSpec& spec =
@@ -140,8 +148,9 @@ public:
     // （同主题跨输入类型冲突报错；入选主题无类型名的旧格式 bag 拒转），逐条目 k-way 归并
     // （logTime 全局升序，多输入按 logTime 全局归并；inputs 至少 1 个，重复目录拒绝）。
     // 任一条目失败返回 false 并经 error 回填原因（已产生的输出目录保留不回滚）。
+    // outStats 与 output_bags 条目一一对应（保持配置序），只回数据，文本行由调用方渲染。
     static bool bagConvert(const std::vector<std::string>& inputs, const std::string& cfgPath,
-            std::vector<std::string>& outLines, std::string* error = nullptr);
+            std::vector<BagConvertStat>& outStats, std::string* error = nullptr);
 
 private:
     // 发现线程回调入口（BagParticipantListener 转发）：新见 writer/reader 追加进发现缓存。

@@ -257,9 +257,9 @@ yomk::payload::Response YomkDdsBagService::bagConvert(YomkMsgPtr pkg)
     }
 
     // bagConvert 为静态纯文件操作，不依赖 node_，不取 mtx_
-    std::vector<std::string> lines;
+    std::vector<FastDDSBagNode::BagConvertStat> stats;
     std::string error;
-    if (!FastDDSBagNode::bagConvert(p->msg.inputs, p->msg.cfgPath, lines, &error))
+    if (!FastDDSBagNode::bagConvert(p->msg.inputs, p->msg.cfgPath, stats, &error))
     {
         if (error.empty())
         {
@@ -268,7 +268,18 @@ yomk::payload::Response YomkDdsBagService::bagConvert(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsBagService::bagConvert").error("bag convert failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
-    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
+
+    // 回执只回结构化数据：每个输出 bag 一条统计（保持 output_bags 配置序）；
+    // "converted <uri>: N messages / M bytes / K topics" 行由调用方（yomkdds）渲染
+    yomk::payload::ConvertResult result;
+    result.bags.reserve(stats.size());
+    for (const auto& stat : stats)
+    {
+        result.bags.push_back(yomk::payload::ConvertedBagStat{
+                stat.uri, stat.messageCount, stat.byteCount, stat.topicCount});
+    }
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
+            ::yomk::msgs::ConvertResult::shared(std::move(result)));
 }
 
 yomk::payload::Response YomkDdsBagService::bagPlay(YomkMsgPtr pkg)

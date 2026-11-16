@@ -891,4 +891,50 @@ struct RecordResult
     bool operator==(const RecordResult& rhs) const { return tie() == rhs.tie(); }
     bool operator!=(const RecordResult& rhs) const { return !(*this == rhs); }
 };
+
+/**
+ * @brief Statistics of one converted output bag (one output_bags config entry)
+ * @note Bytes are the written payload bytes (encapsulation header included), not the
+ *       on-disk file size; topics counts the channels registered for the entry, so
+ *       topics with zero written messages are included
+ */
+// @zh: 单个转换输出 bag 的统计（对应输出配置 output_bags 的一条目）
+// @zh: note bytes 为写出的载荷字节（含 encapsulation header），不是磁盘文件大小；
+// @zh: topics 为该条目注册的通道数，写入 0 条消息的主题同样计入
+struct ConvertedBagStat
+{
+    std::string uri;             // output bag uri as written by the config
+    uint64_t messageCount = 0;   // messages written
+    uint64_t byteCount = 0;      // payload bytes written
+    uint64_t topicCount = 0;     // channels registered for this entry
+
+    std::tuple<const std::string&, const uint64_t&, const uint64_t&, const uint64_t&> tie() const
+    {
+        return std::tie(uri, messageCount, byteCount, topicCount);
+    }
+
+    bool operator==(const ConvertedBagStat& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const ConvertedBagStat& rhs) const { return !(*this == rhs); }
+};
+
+/**
+ * @brief bag_convert response: one statistics record per output bag
+ * @note Data only: the "converted <uri>: N messages / M bytes / K topics" lines are
+ *       rendered by the caller (yomkdds); bags keeps the output_bags config order
+ */
+// @zh: bag_convert 响应：每个输出 bag 一条统计
+// @zh: note 只回数据："converted <uri>: N messages / M bytes / K topics" 行由调用方
+// @zh: （yomkdds）渲染；bags 保持 output_bags 配置顺序
+struct ConvertResult
+{
+    std::vector<ConvertedBagStat> bags;  // output_bags config order
+
+    std::tuple<const std::vector<ConvertedBagStat>&> tie() const
+    {
+        return std::tie(bags);
+    }
+
+    bool operator==(const ConvertResult& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const ConvertResult& rhs) const { return !(*this == rhs); }
+};
 }  // namespace yomk::payload

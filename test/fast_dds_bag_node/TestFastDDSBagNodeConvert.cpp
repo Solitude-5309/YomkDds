@@ -191,7 +191,7 @@ namespace
 int main()
 {
     std::string err;
-    std::vector<std::string> lines;
+    std::vector<FastDDSBagNode::BagConvertStat> stats;
 
     // ---- C1：全缺省（单输入单条目仅 uri）→ 全主题全时段合并 + metadata 对账 + 联动可读 ----
     {
@@ -207,11 +207,11 @@ int main()
         check(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
               "C1 前置：cfg 写入成功");
 
-        lines.clear();
-        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C1 全缺省转换成功");
-        check(lines.size() == 1 && lines[0].rfind("converted " + outDir + ":", 0) == 0 &&
-                  lines[0].find("3 messages") != std::string::npos,
-              "C1 统计行（converted <uri>: 3 messages / ...）");
+        stats.clear();
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err), "C1 全缺省转换成功");
+        check(stats.size() == 1 && stats[0].uri == outDir && stats[0].messageCount == 3 &&
+                  stats[0].topicCount == 1 && stats[0].byteCount > 0,
+              "C1 统计项（uri/3 条/通道数/字节）");
 
         nlohmann::json info;
         check(readMetadataJson(outDir, info), "C1 产物 metadata.json 可解析");
@@ -267,9 +267,9 @@ int main()
                   infoLines[3] == "Storage id:        mcap",
               "C1 info 文本 9 行对齐（首行空行 + Storage id）");
 
-        lines.clear();
+        stats.clear();
         err.clear();
-        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err) &&
                   err.find("output dir [" + outDir + "] already exists") != std::string::npos,
               "C1 重复转换 → 输出目录已存在 fail");
 
@@ -296,8 +296,8 @@ int main()
         check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir + R"(", "topics": ["/rt/a", "/rt/b*"]}]})"),
               "C2 前置：cfg（精确 /rt/a + 通配 /rt/b*）写入成功");
-        lines.clear();
-        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C2 抽取转换成功");
+        stats.clear();
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err), "C2 抽取转换成功");
         nlohmann::json info;
         check(readMetadataJson(outDir, info), "C2 产物 metadata.json 可解析");
         const nlohmann::json topics = info.at("topics_with_message_count");
@@ -314,9 +314,9 @@ int main()
         check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir + R"(", "topics": ["/rt/nope*"]}]})"),
               "C2 前置：cfg（模式未命中）写入成功");
-        lines.clear();
+        stats.clear();
         err.clear();
-        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err) &&
                   err.find("topic pattern [/rt/nope*] matched no input topic") !=
                       std::string::npos,
               "C2 模式未命中 fail 精确文案");
@@ -324,18 +324,18 @@ int main()
         check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir + R"(", "topics": ["/rt/none"]}]})"),
               "C2 前置：cfg（精确项不存在）写入成功");
-        lines.clear();
+        stats.clear();
         err.clear();
-        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err) &&
                   err.find("topic [/rt/none] not found in input bags") != std::string::npos,
               "C2 精确项不存在 fail 精确文案");
 
         check(writeCfg(cfg,
                   R"({"output_bags": [{"uri": ")" + outDir + R"(", "topics": ["a*b*c"]}]})"),
               "C2 前置：cfg（两个 '*'）写入成功");
-        lines.clear();
+        stats.clear();
         err.clear();
-        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err) &&
                   err.find("topic pattern [a*b*c] must contain at most one '*'") !=
                       std::string::npos,
               "C2 两个 '*' fail 精确文案");
@@ -360,8 +360,8 @@ int main()
                       R"(", "start_time": 2000000000, "end_time": 4000000000}]})"),
               "C3 前置：cfg（2s..4s 收窄）写入成功");
 
-        lines.clear();
-        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C3 时段裁剪转换成功");
+        stats.clear();
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err), "C3 时段裁剪转换成功");
         nlohmann::json info;
         check(readMetadataJson(outDir, info), "C3 产物 metadata.json 可解析");
         check(info.at("message_count") == 3 &&
@@ -378,9 +378,9 @@ int main()
                   R"({"output_bags": [{"uri": ")" + outDir +
                       R"(", "start_time": 4000000000, "end_time": 2000000000}]})"),
               "C3 前置：cfg（start > end）写入成功");
-        lines.clear();
+        stats.clear();
         err.clear();
-        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err) &&
                   err.find("start_time must not exceed end_time") != std::string::npos,
               "C3 start > end fail 精确文案");
 
@@ -405,8 +405,8 @@ int main()
                       R"(", "max_bagfile_size": 1024}]})"),
               "C4 前置：cfg（size 下限 1024）写入成功");
 
-        lines.clear();
-        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C4 size 分片转换成功");
+        stats.clear();
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err), "C4 size 分片转换成功");
         nlohmann::json info;
         check(readMetadataJson(outDir, info), "C4 产物 metadata.json 可解析");
         const nlohmann::json files = info.at("relative_file_paths");
@@ -438,8 +438,8 @@ int main()
                   R"({"output_bags": [{"uri": ")" + outDir +
                       R"(", "max_bagfile_duration": 1}]})"),
               "C4 前置：cfg（duration 1s）写入成功");
-        lines.clear();
-        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err), "C4 duration 分片转换成功");
+        stats.clear();
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err), "C4 duration 分片转换成功");
         check(readMetadataJson(outDir, info) &&
                   info.at("relative_file_paths") ==
                       nlohmann::json::array({"bag_0.mcap", "bag_1.mcap", "bag_2.mcap"}),
@@ -450,9 +450,9 @@ int main()
                   R"({"output_bags": [{"uri": ")" + outDir +
                       R"(", "max_bagfile_size": 999}]})"),
               "C4 前置：cfg（size 999）写入成功");
-        lines.clear();
+        stats.clear();
         err.clear();
-        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err) &&
                   err.find("max_bagfile_size must be at least 1024 bytes (got 999)") !=
                       std::string::npos,
               "C4 size < 1024 fail 精确文案");
@@ -482,8 +482,8 @@ int main()
         check(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
               "C5 前置：cfg 写入成功");
 
-        lines.clear();
-        check(FastDDSBagNode::bagConvert({inA, inB}, cfg, lines, &err),
+        stats.clear();
+        check(FastDDSBagNode::bagConvert({inA, inB}, cfg, stats, &err),
               "C5 两输入归并转换成功");
         nlohmann::json info;
         check(readMetadataJson(outDir, info), "C5 产物 metadata.json 可解析");
@@ -532,9 +532,9 @@ int main()
               "C6 前置：旧格式输入（无类型名）造文件成功");
         check(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
               "C6 前置：cfg 写入成功");
-        lines.clear();
+        stats.clear();
         err.clear();
-        check(!FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err) &&
                   err.find("topic [/rt/old] has no type name") != std::string::npos,
               "C6 旧格式入选主题拒转 fail 精确文案");
         std::error_code ec;
@@ -546,9 +546,9 @@ int main()
         check(makeMcapFile(inA + "/bag_0.mcap", "/rt/x", 1, kSecondNs, kSecondNs, "T1") &&
                   makeMcapFile(inB + "/bag_0.mcap", "/rt/x", 1, 2 * kSecondNs, kSecondNs, "T2"),
               "C6 前置：同主题不同类型两输入造文件成功");
-        lines.clear();
+        stats.clear();
         err.clear();
-        check(!FastDDSBagNode::bagConvert({inA, inB}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inA, inB}, cfg, stats, &err) &&
                   err.find("topic [/rt/x] has conflicting types [T1] vs [T2]") !=
                       std::string::npos,
               "C6 跨输入类型冲突 fail 精确文案");
@@ -579,8 +579,8 @@ int main()
                       nsToEpochFormat(2 * kSecondNs) + R"(", "end_time": ")" +
                       nsToEpochFormat(4 * kSecondNs) + R"("}]})"),
               "C7 前置：cfg（可读时间字符串 start/end）写入成功");
-        lines.clear();
-        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err),
+        stats.clear();
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err),
               "C7 字符串时段裁剪转换成功");
         nlohmann::json info;
         check(readMetadataJson(outDir, info), "C7 产物 metadata.json 可解析");
@@ -599,8 +599,8 @@ int main()
                   R"({"output_bags": [{"uri": ")" + outDir2 + R"(", "start_time": ")" +
                       copiedStart + R"("}]})"),
               "C7 前置：cfg（拷贝产物 _format 作 start_time）写入成功");
-        lines.clear();
-        check(FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err),
+        stats.clear();
+        check(FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err),
               "C7 拷贝 _format 作 start_time 转换成功");
         nlohmann::json info2;
         check(readMetadataJson(outDir2, info2) && info2.at("message_count") == 3 &&
@@ -611,10 +611,10 @@ int main()
         const auto expectConvertFail = [&](const std::string &content,
                                            const std::string &fragment,
                                            const std::string &label) {
-            lines.clear();
+            stats.clear();
             err.clear();
             check(writeCfg(cfg, content) &&
-                      !FastDDSBagNode::bagConvert({inDir}, cfg, lines, &err) &&
+                      !FastDDSBagNode::bagConvert({inDir}, cfg, stats, &err) &&
                       err.find(fragment) != std::string::npos,
                   label);
         };
@@ -677,9 +677,9 @@ int main()
               "C8 前置：同主题 type 一致而 qos 不同的两输入造文件成功");
         check(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
               "C8 前置：cfg 写入成功");
-        lines.clear();
+        stats.clear();
         err.clear();
-        check(!FastDDSBagNode::bagConvert({inA, inB}, cfg, lines, &err) &&
+        check(!FastDDSBagNode::bagConvert({inA, inB}, cfg, stats, &err) &&
                   err.find("topic [/rt/q] has conflicting qos [RELIABLE,VOLATILE] vs "
                            "[RELIABLE,TRANSIENT_LOCAL] across inputs") != std::string::npos,
               "C8 跨输入 qos 冲突 fail 精确文案（预扫期整体报错）");

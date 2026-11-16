@@ -21,9 +21,9 @@
  *   T8 /bag_reindex 纯文件操作契约：解包双守卫；bagDir 空校验锁外前置；路径不存在报
  *      文件层错误（不依赖节点生命周期）；真实最小 mcap 临时目录 → eOk ok 且重建产物
  *      metadata.json 落盘（回执无数据载荷）。
- *   T9 /bag_convert 纯文件操作契约：inputs/cfgPath 空校验锁外前置；cfg 不存在/非法 JSON
- *      报解析错误；真实带类型输入 bag + 最小 cfg → eOk + 统计行回执（converted <uri>:
- *      N messages / ...）+ 输出 bag_0.mcap/metadata.json 落盘；输出目录已存在报错。
+ *   T9 /bag_convert 纯文件操作契约：inputs/cfgPath 空校验锁外前置；cfg 不存在/ 非法 JSON
+ *      报解析错误；真实带类型输入 bag + 最小 cfg → eOk + ConvertResult 统计回执（逐输出
+ *      条目 uri/条数/字节/通道数）+ 输出 bag_0.mcap/metadata.json 落盘；输出目录已存在报错。
  *   T10 /bag_play 契约：bagDir 空校验锁外前置；节点检查先于文件触达（未建节点报
  *      "bag node not created" 而非文件层错误——与 /bag_info 纯文件读形态相反，
  *      bag_play 触 DDS 必经节点实例）；playbackRate<=0 锁外校验先于节点检查（报
@@ -343,11 +343,12 @@ namespace
             "/bag_convert", ::yomk::msgs::DDSBagConvert::shared(DDSBagConvert{{inDir}, cfg}));
         check(rOk.status == yomk::payload::ResStatus::Succeeded && rOk.msg == "ok",
               "/bag_convert 真实输入+最小 cfg → eOk ok");
-        auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(rOk.data);;
-        check(lines != nullptr && lines->d.size() == 1 &&
-                  lines->d[0].rfind("converted " + outDir + ":", 0) == 0 &&
-                  lines->d[0].find("2 messages") != std::string::npos,
-              "回执统计行（converted <uri>: N messages / ...）内容透传");
+        auto result = ::yomk::msgs::unpack<::yomk::msgs::ConvertResult>(rOk.data);
+        check(result != nullptr && result->msg.bags.size() == 1 &&
+                  result->msg.bags[0].uri == outDir &&
+                  result->msg.bags[0].messageCount == 2 && result->msg.bags[0].byteCount > 0 &&
+                  result->msg.bags[0].topicCount == 1,
+              "回执可解包为 ConvertResult（逐输出条目 uri/条数/字节/通道数）");
         check(fs::exists(outDir + "/metadata.json", ec) &&
                   fs::exists(outDir + "/bag_0.mcap", ec),
               "T9 转换产物 bag_0.mcap + metadata.json 落盘");

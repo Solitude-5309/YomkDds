@@ -53,5 +53,6 @@ YOMK_DEFINE_MSG(yomk::payload::RecordResult, RecordResult, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSBagInfo, DDSBagInfo, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSBagReindex, DDSBagReindex, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSBagConvert, DDSBagConvert, msg)
+YOMK_DEFINE_MSG(yomk::payload::ConvertResult, ConvertResult, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSBagPlay, DDSBagPlay, msg)
 // clang-format on

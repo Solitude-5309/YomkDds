@@ -19,7 +19,7 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 | 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | `/YomkDdsService/load_xml` | participant 级配置入口，详见 [xml-profiles.md](./xml-profiles.md) |
 | Loan 借出零拷贝发布 | `yomk::dds().node(nodeName).topic(topicName).loan()` / `...topic(topicName).sample(sample).return_loan()` | `/YomkDdsService/loan`、`/YomkDdsService/discard_loan` | 详见 [loan-zero-copy.md](./loan-zero-copy.md) |
 
-返回值约定：除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
+返回值约定：除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余链式终结均返回 `yomk::payload::Response`，调用后须判 `status == yomk::payload::ResStatus::Succeeded`；失败时可读 `msg` 获取错误信息。
 
 ## 使用方式概述
 
@@ -34,7 +34,7 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 
 ### 最小闭环示例（普通发布订阅）
 
-摘自 README 5.1：同一节点内注册发布与订阅主题，发布 5 条 MString 消息并等待接收。
+[quick-start.md](../manual/quick-start.md) 中的示例：同一节点内注册发布与订阅主题，发布 5 条 MString 消息并等待接收。
 
 ```cpp
 #include <yomk/server/YomkServerApi.h>
@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
     - **推荐**：`alignof≤4` 的 plain 类型（`float` / `byte` / `int32` 及其定长数组，如点云 `float pts[N]`、图像 `octet pixels[N]`）——借出指针天然对齐，可直接解引用，从零拷贝获益且无对齐风险。大数据 / 点云 / 图像负载应优先选用这类类型。
     - **注意**：`alignof>4` 的 plain 标量（`double` / `int64` / `uint64`，如 `MFloat64` / `MInt64`）——借出指针仅 4 字节对齐，回调中应 `memcpy` 到对齐局部变量再读取；直接解引用在 x86-64 良性，但在严格对齐 ARM 上会触发 SIGBUS。勿用定长 `double` / `int64` 标量作为借出负载。
 
-回调体片段（摘自 README 5.4，配合上面完整程序的 `onMessage` 理解）：
+回调体片段（摘自 [pub-sub-tutorial.md](../manual/pub-sub-tutorial.md)，配合上面完整程序的 `onMessage` 理解）：
 
 ```cpp
 #include <cstring>
@@ -131,7 +131,7 @@ auto onMessage = [&](const void *data)
 
 ### 节点创建（yomk::dds().node(nodeName).create()）
 
-四种形态（形态 3/4 命名沿 README 5.7）：
+四种形态（形态 3/4 命名沿 [discovery-server.md](./discovery-server.md)）：
 
 | 形态 | 调用示例 | 说明 |
 |---|---|---|
@@ -157,7 +157,7 @@ auto onMessage = [&](const void *data)
 
 ### 版本查询（yomk::dds().version()）
 
-- 无参数；返回 Response 携带 String 版本串（"YomkDds v<版本号>"），解包/打印由调用方处理；须判 `eOk`。
+- 无参数；返回 Response 携带 String 版本串（"YomkDds v<版本号>"），解包/打印由调用方处理；须判 `status == yomk::payload::ResStatus::Succeeded`。
 
 ### 代码位置与链接要求
 
@@ -166,7 +166,7 @@ auto onMessage = [&](const void *data)
 
 ## 错误与边界行为
 
-- **返回值**：除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外的链式终结调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`，失败读 `m_msg`。
+- **返回值**：除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外的链式终结调用后须判 `status == yomk::payload::ResStatus::Succeeded`，失败读 `msg`。
 - **节点创建失败**：domainId 非法（超出 [0,232]）或 nodeName 为空，返回错误；serverLocator 非法串创建失败回显（不静默回落多播发现）。
 - **节点删除**：`remove()` 对不存在的节点返回错误。
 - **discovery 时序**：注册订阅后远端发布者需要时间被发现——示例在发布前等待 1 秒（`std::this_thread::sleep_for(std::chrono::seconds(1))`），首条消息可能因 discovery 时序丢失；对收发条数做精确预期的程序须预留等待。

@@ -1232,13 +1232,13 @@ public:
     /**
      * @brief Rebuild metadata.json from the bag's mcap shards (pure file op, request
      *        terminator)
-     * @return Response; on success eOk with m_msg == "ok" and no data payload;
-     *         Invalid when YomkServer is not initialized
+     * @return Response; on success status == ResStatus::Succeeded with msg == "ok" and
+     *         no data payload; Invalid when YomkServer is not initialized
      * @note Does not need the bag node; overwrites unconditionally, and bags without
      *       type metadata fall back to an empty type string
      */
     // @zh: 从 mcap 分片重建 metadata.json（纯文件操作的请求终结）
-    // @zh: return Response；成功为 eOk（m_msg == "ok"，无数据载荷）；未初始化返回 Invalid
+    // @zh: return Response；成功为 status == ResStatus::Succeeded（msg == "ok"，无数据载荷）；未初始化返回 Invalid
     // @zh: note 不经 bag 节点（无须 create()）；无条件覆盖写出；旧格式 bag（无 type 元数据）回退空串
     yomk::payload::Response reindex()
     {
@@ -1711,10 +1711,10 @@ public:
 };
 
 /**
- * @brief Domain entry builder: core communication, debug and bag facets live here during
- *        the macro-to-chain migration
+ * @brief Domain entry builder: the core communication, debug and bag facets are
+ *        mounted here
  */
-// @zh: 域入口 Builder：宏链迁移期内核心通信、调试与 Bag 分面挂载于此
+// @zh: 域入口 Builder：核心通信、调试与 Bag 三个套件的分面挂载于此
 class DdsBuilder
 {
 public:

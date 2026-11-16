@@ -11,7 +11,7 @@
  *      同主题对跑 → 收流 >0——两端 Fast DDS 3.x 均携带 TypeInformation，EDP 按 tid/TypeObject
  *      兼容性匹配而 tid 与名字无关（“tid 恒定”在匹配层的直接体现），set_name 改名在
  *      Fast DDS 内部对跑不隔离；与 ROS2 互通仍走名字匹配（ROS2 端不参与 XTypes，见
- *      README 5.6 与 run_ros2_interop.sh 真机实测）。
+ *      docs/features/ros2-interop.md 与 run_ros2_interop.sh 真机实测）。
  *   S3 typename 探针（闭环 6 用例 4a 并入）：Log Info + SetCategoryFilter(全类别正则) +
  *      dup2 fd 级 stdout/stderr 捕获（设施思路同 TestFastDDSDebugNode），对跑窗口抓库日志；
  *      断言从宽——S1 的 topicInfo 新名读回已闭环主问题，TypeLookup 请求名/typename 取值以
@@ -314,8 +314,8 @@ namespace
         // 实测固化（原计划预判收 0 被推翻）：两端 Fast DDS 3.x 均携带 TypeInformation，EDP
         // 走 tid/TypeObject 兼容性匹配而 tid 与名字无关（闭环 6 机制取证“tid 恒定”在匹配
         // 层的直接体现）→ set_name 改名在 Fast DDS 内部对跑不隔离；与 ROS2 互通仍走名字
-        // 匹配（ROS2 端不参与 XTypes 类型发现，退化为 type_name 字符串比较，见 README 5.6
-        // 与 run_ros2_interop.sh 真机实测）
+        // 匹配（ROS2 端不参与 XTypes 类型发现，退化为 type_name 字符串比较，见
+        // docs/features/ros2-interop.md 与 run_ros2_interop.sh 真机实测）
         int r = received.load();
         check(r > 0,
               "S2 不对称改名同主题收 >0（Fast DDS 3.x EDP 按 tid/TypeObject 兼容匹配，名字无关实测固化）");

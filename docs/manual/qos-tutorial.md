@@ -1,19 +1,19 @@
 # 使用手册：QoS 配置教程
 
-> **本文档覆盖范围**：为发布/订阅端点配置 QoS——三层语义（缺省底座、ROS2 预置底座、逐项覆盖）的宏 API 实操、8 项 QoS 参数逐项说明、`yomkdds` 命令行侧的 QoS 参数（`--qos-ros` / `--qos-*` / `--qos-file`）与优先级链、QoS 匹配常识与「收不到消息先查 QoS」的排障方法。XML 文件级集中配置（`yomk::dds().load_cfg()`）不在本文档范围内。
+> **本文档覆盖范围**：为发布/订阅端点配置 QoS——三层语义（缺省底座、ROS2 预置底座、逐项覆盖）的链式 API 实操、8 项 QoS 参数逐项说明、`yomkdds` 命令行侧的 QoS 参数（`--qos-ros` / `--qos-*` / `--qos-file`）与优先级链、QoS 匹配常识与「收不到消息先查 QoS」的排障方法。XML 文件级集中配置（`yomk::dds().load_cfg()`）不在本文档范围内。
 
 ## 目标
 
 完成本文档后，你将能够：
 
 1. 理解并选用三层 QoS 语义：什么都不传（Fast DDS 默认底座）、预置底座（`ros2DefaultPublisher()` / `ros2DefaultSubscriber()` / `ros2SensorData()`）、在底座上逐项覆盖；
-2. 在宏 API 与 `yomkdds` 命令行两侧按需配置 8 项 QoS 参数；
+2. 在链式 API 与 `yomkdds` 命令行两侧按需配置 8 项 QoS 参数；
 3. 用 QoS 匹配常识排查「订阅端收不到消息」一类问题。
 
 ## 前提与准备
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成安装，并跑通 [quick-start.md](./quick-start.md)；
-- 知道注册链的可缺省 qos 累积：`yomk::dds().node(nodeName).topic(topicName).type(type)[.qos(qos)].create_pub()` 与 `yomk::dds().node(nodeName).topic(topicName).type(type).sub_cb(callback)[.qos(qos)].create_sub()` 的 `qos` 为端点 QoS 描述 `DDSQosProfile`（定义于 `include/dds/YomkDdsService.h`，头文件已随 `yomk/dds/YomkDdsAPI.h` 引入）。
+- 知道注册链的可缺省 qos 累积：`yomk::dds().node(nodeName).topic(topicName).type(type)[.qos(qos)].create_pub()` 与 `yomk::dds().node(nodeName).topic(topicName).type(type).sub_cb(callback)[.qos(qos)].create_sub()` 的 `qos` 为端点 QoS 描述 `DDSQosProfile`（定义于 `include/dds/YomkDdsPayload.h`，头文件已随 `yomk/dds/YomkDdsAPI.h` 引入）。
 
 ## 分步操作
 
@@ -28,7 +28,7 @@
 
 底座选取的匹配依据（requested<=offered 匹配方向）：publisher RELIABLE offered 对任意 ROS2 侧 requested 可匹配；subscriber BEST_EFFORT requested 对任意 offered 可匹配（RELIABLE 版订阅 BEST_EFFORT 话题不匹配收不到）。
 
-### 第 2 步：宏 API 实操（完整可编译示例）
+### 第 2 步：链式 API 实操（完整可编译示例）
 
 发布端用 `ros2DefaultPublisher()` 底座并逐项覆盖 depth=10，订阅端用 `ros2DefaultSubscriber()`（BEST_EFFORT requested 对任意 offered 均可匹配）：
 
@@ -178,7 +178,7 @@ yomkdds topic info qos_topic
 | `--qos-depth` 不生效 | depth 只在 keep_last 下生效：未设 `--qos-history` 时底座即 keep_last 直接生效；若显式设了 keep_all 则 depth 被忽略（须 >=1 整数） |
 | `--qos-file` 报错 | 文件须为扁平 JSON 对象，键为 reliability/durability/history/depth/deadline/lifespan/liveliness/liveliness_lease_duration，值形态同对应 `--qos-*` 选项（见第 4 步示例） |
 | 两项 QoS 配置互相冲突不知哪个生效 | 按优先级链：命令行逐项 > 文件逐项 > `--qos-ros` 底座 > 默认 |
-| 想按主题/节点集中配置而非逐处写代码 | 宏 API 逐项覆盖适合少量端点；participant 级集中配置走 XML profiles（`yomk::dds().load_cfg()`，须在节点创建之前调用） |
+| 想按主题/节点集中配置而非逐处写代码 | 链式 API 逐项覆盖适合少量端点；participant 级集中配置走 XML profiles（`yomk::dds().load_cfg()`，须在节点创建之前调用） |
 
 ## 延伸阅读
 

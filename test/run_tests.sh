@@ -4,7 +4,7 @@
 #
 # 用法:
 #   ./run_tests.sh               全量运行（含 2 个 stress，编译期规模 5000/30）
-#   ./run_tests.sh --skip-stress 仅运行 17 个非 stress 测试（快速冒烟）
+#   ./run_tests.sh --skip-stress 仅运行 20 个非 stress 测试（快速冒烟）
 #   ./run_tests.sh --full        以闭环规模(STRESS_ITERS=100000, STRESS_CYCLES=50)
 #                                 重配+重编 stress 目标后全量运行
 #   ./run_tests.sh --bin DIR     指定测试可执行根目录（默认 <test>/build，自动定位子目录）
@@ -77,6 +77,7 @@ SAN_LIST=()
 ALL_TESTS=(
     TestHarnessSmoke
     TestYomkDdsServiceContract
+    TestYomkDdsServiceLifecycle
     TestYomkDdsDebugServiceContract
     TestYomkDdsBagServiceContract
     TestYomkDdsDebugServiceLifecycle
@@ -89,6 +90,7 @@ ALL_TESTS=(
     TestFastDDSBagNodeRecord
     TestFastDDSBagNodePlay
     TestYomkDdsNodeLifecycle
+    TestYomkDdsSetNaming
     TestYomkDdsTopic
     TestYomkDdsLoan
     TestYomkDdsTypes

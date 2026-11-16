@@ -1,6 +1,6 @@
 # 使用手册：快速开始（第一个发布订阅）
 
-> **本文档覆盖范围**：用一个最小闭环程序跑通 YomkDds 普通发布订阅——同进程内发布并收到消息（README 5.1 完整代码逐段讲解 + 工程编译方法），以及用两个安装好的示例程序观察跨进程发布/订阅（README 5.5 双进程 hello world）。回调消费细节、消息类型定制与多节点多主题见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)。
+> **本文档覆盖范围**：用一个最小闭环程序跑通 YomkDds 普通发布订阅——同进程内发布并收到消息（完整代码逐段讲解 + 工程编译方法），以及用两个安装好的示例程序观察跨进程发布/订阅（双进程 hello world）。回调消费细节、消息类型定制与多节点多主题见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)。
 
 ## 目标
 
@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
 | `yomk::dds().node("node0").topic("my_topic").data(&msg).pub()` | 发布数据；data 为数据实例指针（借用，同步写入，caller 保留所有权） |
 | `yomk::dds().node("node0").remove()` | 退出前删除节点，显式销毁 DDS 实体 |
 
-除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。（上例为最小篇幅省略了判断，正式代码建议参照 `examples/ExampleYomkDdsTopic.cpp` 逐端点判错）。
+除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `status == yomk::payload::ResStatus::Succeeded`；失败时可读 `msg` 获取错误信息。（上例为最小篇幅省略了判断，正式代码建议参照 `examples/ExampleYomkDdsTopic.cpp` 逐端点判错）。
 
 ### 第 3 步：编译并运行
 

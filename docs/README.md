@@ -49,7 +49,7 @@ flowchart TD
 |---|---|
 | 第一次接触 YomkDds，想把它跑起来 | [手册入口](./manual/README.md) → [环境搭建](./manual/setup-and-build.md) → [快速开始](./manual/quick-start.md) |
 | 想知道 YomkDds 有哪些能力、边界在哪 | [功能文档入口](./features/README.md) 的「功能速查矩阵」 |
-| 已经会用，想查某个宏/命令/参数的细节 | 对应功能文档的「参数与约束」章节 |
+| 已经会用，想查某个接口/命令/参数的细节 | 对应功能文档的「参数与约束」章节 |
 | 想完成一个具体任务（录制 bag、跨域互通、对接 ROS2…） | [手册入口](./manual/README.md) 的「我想……」场景导航表 |
 | 查环境变量与公共配置 | [环境变量与公共配置参考](./manual/env-vars-reference.md) |
 | 想了解这套文档如何组织、如何参与维护 | 本页「设计原则」「写作规范」「维护规则」 |
@@ -71,7 +71,7 @@ flowchart TD
 
 ### 3. 内容来源唯一
 
-所有宏名、命令、参数、环境变量、默认值与错误信息，以仓库根 `README.md` 与 `examples/` 已验证代码为唯一事实来源，文档不引入未经代码验证的描述。
+所有接口名、命令、参数、环境变量、默认值与错误信息，以仓库根 `README.md` 与 `examples/` 已验证代码为唯一事实来源，文档不引入未经代码验证的描述。
 
 ## 四、写作规范
 
@@ -106,7 +106,7 @@ docs/
 │   ├── discovery-server.md            发现服务器（UDP/TCP 直配、跨域互通）
 │   ├── xml-profiles.md                XML profiles 配置（三级提取链）
 │   ├── ros2-interop.md                ROS2 互通
-│   ├── debug-service.md               调试服务（宏 + yomkdds 观察类）
+│   ├── debug-service.md               调试服务（链式 API + yomkdds 观察类）
 │   └── bag-service.md                 Bag 录制/回放/转换
 └── manual/                            【用户使用手册册】
     ├── README.md                      手册总入口（学习路径 + 场景导航）

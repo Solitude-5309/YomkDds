@@ -95,9 +95,9 @@ int main(int argc, char *argv[])
 
     // 1. 创建调试节点（单节点模型：一个进程至多一个，重复创建须先删除）
     auto resp = yomk::dds().debug().domain(0).create();
-    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("DebugExample").error("create debug node failed: ", resp.m_msg);
+        ::yomk::log().tag("DebugExample").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -105,18 +105,18 @@ int main(int argc, char *argv[])
     //    消息文本逐条投递 out_cb 回调（输出权在调用方，服务层不打印）
     resp = yomk::dds().debug().topic("hello_world").out_cb([](const std::string &text)
         { std::cout << text << std::endl; }).print();
-    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("DebugExample").error("register debug topic failed: ", resp.m_msg);
+        ::yomk::log().tag("DebugExample").error("register debug topic failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
 
     // 3. 业务逻辑后退出前显式清理（规避 FastDDS 静态析构期段错误）
     resp = yomk::dds().debug().quit();
-    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("DebugExample").error("debug quit failed: ", resp.m_msg);
+        ::yomk::log().tag("DebugExample").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -239,7 +239,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 ## 错误与边界行为
 
-- **前置约束**：查询/发布终结与主题登记链式入口须先经 `yomk::dds().debug()...create()` 创建调试节点，失败时 `m_msg` 携具体拒绝原因；`yomk::dds().debug().quit()` 未创建时返回错误；
+- **前置约束**：查询/发布终结与主题登记链式入口须先经 `yomk::dds().debug()...create()` 创建调试节点，失败时 `msg` 携具体拒绝原因；`yomk::dds().debug().quit()` 未创建时返回错误；
 - **登记被拒**（主题登记 `yomk::dds().debug().topic(...).print()` 失败原因枚举）：`out_cb() callback is required`（未累积回调）/ `debug node not created` / `subscriber not created` / `empty topic name` / `already registered`；CLI 侧输出形态为 `register debug topic failed: subscribeTopic [<主题名>] failed: <具体原因>`（重复登记为 `topic [<主题名>] already registered`）；
 - **延迟登记语义**：登记为发现驱动的延迟行为，主题尚未被发布者上线时仍返回成功（登记约 3s 后仍无发布者则打一次性等待提示 `[FastDDSDebugNode] topic [<主题名>] not discovered yet, waiting for publisher...`——仅提示，不阻塞不改返回码，发布者上线后自动建订）；
 - **类型不可重建告警**：主题已发现但类型不可重建（典型为 ROS2 rmw_fastrtps 端点：编译期类型映射，不提供 XTypes TypeObject）时打 `warning: TypeObject not ready, keep pending. topic=... type=... -- the remote endpoint does not publish XTypes TypeInformation/TypeObject ...`——首次立即打印、之后按 5s 节流；同类告警覆盖 DynamicType 构建失败 / `create_topic` 失败 / `create_datareader` 失败 / 建订异常四类；
@@ -267,7 +267,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 - **`topic pub` 发布失败**：未发现主题/载荷不合法/送达未确认返回错误，错误文本枚举：`invalid json for type [...]`（非法 JSON）、`not all subscribers acknowledged`（未全部确认送达）、`subscribers exist but not all matched (suspended or offline)`（订阅者在场却无一与发布端匹配）、`cannot open json file`/`json file is empty`（`-f` 文件问题）、`非法频率 "..."`/`非法订阅者数量 "..."`/`非法发布条数 "..."`/`waiting for subscribers interrupted` 等。ack 确认覆盖语义：RELIABLE 订阅者运行中 → ack 协议级确认送达；中途挂起 → ack 超时报错退出不假成功；发布端启动前已离线的订阅者无从期待、照常返回成功（DDS 发现机制的客观边界）；BEST_EFFORT 订阅者不参与 ack 与 matched 校验，始终尽力而为。
 
-> 核心通信套件除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
+> 核心通信套件除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余链式终结均返回 `yomk::payload::Response`，调用后须判 `status == yomk::payload::ResStatus::Succeeded`；失败时可读 `msg` 获取错误信息。
 
 ## 与其他功能的关系
 

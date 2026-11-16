@@ -7,20 +7,20 @@
 完成本文档后，你将：
 
 1. 编写一份最小可用的 profiles XML（具名 participant 档 + `is_default_profile="true"` 默认档）；
-2. 在任何节点创建之前用 `yomk::dds().load_cfg()` 加载，并正确判错（读 `m_msg`）；
+2. 在任何节点创建之前用 `yomk::dds().load_cfg()` 加载，并正确判错（读 `msg`）；
 3. 验证 profile 命中：节点名精确匹配优先、默认档兜底、命中后节点名仍最后覆盖。
 
 ## 前提与准备
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成编译安装；C++ 工程骨架与 [quick-start.md](./quick-start.md) 相同（`find_package(YomkServer REQUIRED)` + `find_package(YomkDds REQUIRED)`，链接 `YomkDds::YomkDds YomkServer::YomkServer`——本教程示例未使用消息类型，无需 `YomkDdsStdMsgs`）；
-- 加载语义（README 5.7 口径）：`yomk::dds().load_cfg()` 读文件经 `load_XML_profiles_file` 解析校验（返回码显式检查）后缓存，供后续 create_node 的 participant 按**三级提取链**叠加：按节点名 `profile_name` 精确匹配 → `is_default_profile="true"` 默认档兜底（同文件多默认档取首个）→ 均未命中保持默认底座；命中后节点名仍最后覆盖。可配置范围为 participant 级发现/传输/QoS 配置，字段写法经 Fast DDS XML schema 校验；
-- 返回值约定：除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`，失败时读 `m_msg` 获取错误信息。
+- 加载语义（[xml-profiles.md](../features/xml-profiles.md) 口径）：`yomk::dds().load_cfg()` 读文件经 `load_XML_profiles_file` 解析校验（返回码显式检查）后缓存，供后续 create_node 的 participant 按**三级提取链**叠加：按节点名 `profile_name` 精确匹配 → `is_default_profile="true"` 默认档兜底（同文件多默认档取首个）→ 均未命中保持默认底座；命中后节点名仍最后覆盖。可配置范围为 participant 级发现/传输/QoS 配置，字段写法经 Fast DDS XML schema 校验；
+- 返回值约定：除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `status == yomk::payload::ResStatus::Succeeded`，失败时读 `msg` 获取错误信息。
 
 ## 分步操作
 
 ### 第 1 步：编写 profiles XML
 
-新建 `profiles.xml`，包含两种命中形态：一个 `profile_name` 与节点名对应的具名档，一个 `is_default_profile="true"` 的默认档兜底（字段写法与 README 5.7 示例同源，本文不展开 README 之外的 Fast DDS 配置项细节）：
+新建 `profiles.xml`，包含两种命中形态：一个 `profile_name` 与节点名对应的具名档，一个 `is_default_profile="true"` 的默认档兜底（字段写法与 [xml-profiles.md](../features/xml-profiles.md) 示例同源，本文不展开该功能文档之外的 Fast DDS 配置项细节）：
 
 ```xml
 <?xml version="1.0" encoding="UTF-8" ?>
@@ -56,7 +56,7 @@
 
 ### 第 2 步：load_cfg 链式加载并检查返回值
 
-宏的两种形态（README 5.7 原文）：
+链式的两种形态（[xml-profiles.md](../features/xml-profiles.md) 原文）：
 
 ```cpp
 yomk::dds().xml("/path/to/profiles.xml").load_cfg();   // 形态 1：显式路径；必须在任何节点创建之前调用！
@@ -97,24 +97,24 @@ int main()
 
     // 1. 加载 XML profiles——必须在任何节点创建之前调用！
     auto resp = yomk::dds().xml("/path/to/profiles.xml").load_cfg();
-    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("XmlProfilesDemo").error("load xml failed: ", resp.m_msg);
+        ::yomk::log().tag("XmlProfilesDemo").error("load xml failed: ", resp.msg);
         return 1;
     }
 
     // 2. 创建节点：xml_node 精确命中具名档；other_node 具名档无匹配走默认档兜底
     resp = yomk::dds().node("xml_node").domain(0).create();
-    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("XmlProfilesDemo").error("create xml_node failed: ", resp.m_msg);
+        ::yomk::log().tag("XmlProfilesDemo").error("create xml_node failed: ", resp.msg);
         return 1;
     }
 
     resp = yomk::dds().node("other_node").domain(0).create();
-    if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("XmlProfilesDemo").error("create other_node failed: ", resp.m_msg);
+        ::yomk::log().tag("XmlProfilesDemo").error("create other_node failed: ", resp.msg);
         yomk::dds().node("xml_node").remove();
         return 1;
     }
@@ -144,8 +144,8 @@ cmake --build build
 
 命中效果的观察方式：
 
-- 加载与建节点均返回 `eOk` 是命中生效的前提（任何一步失败都会回显，见「常见错误与排障」）；
-- 若 XML 配置了可观察的端点 QoS 项，可用 `yomkdds topic info <主题名> -v` 的逐端点 QoS 详情段对照（CLI 用法见 README 6.1 与 [cli-observe-handbook.md](./cli-observe-handbook.md)）。
+- 加载与建节点均返回 `yomk::payload::ResStatus::Succeeded` 是命中生效的前提（任何一步失败都会回显，见「常见错误与排障」）；
+- 若 XML 配置了可观察的端点 QoS 项，可用 `yomkdds topic info <主题名> -v` 的逐端点 QoS 详情段对照（CLI 用法见 [cli-observe-handbook.md](./cli-observe-handbook.md)）。
 
 ### 时序红线（务必遵守）
 
@@ -156,15 +156,15 @@ cmake --build build
 ## 预期输出
 
 - 程序启动先打印版本号（`yomk::dds().version()` 解包后经 `yomk::log()` 输出）；
-- `yomk::dds().load_cfg()` 成功返回 `eOk`，无额外打印；
-- 两次 `yomk::dds().node(...).create()` 均返回 `eOk`（框架日志前缀以实际环境为准）；两个节点按各自命中的档运行——本示例的 leaseDuration 数值差异不产生可见打印，命中效果体现在 participant 配置上（观察方式见第 3 步）；
-- 失败路径示例：把路径改成不存在的文件重跑，程序打印 `load xml failed: <m_msg 携原因与返回码>` 后以退出码 1 退出（失败回显，不静默降级）。
+- `yomk::dds().load_cfg()` 成功返回 `yomk::payload::ResStatus::Succeeded`，无额外打印；
+- 两次 `yomk::dds().node(...).create()` 均返回 `yomk::payload::ResStatus::Succeeded`（框架日志前缀以实际环境为准）；两个节点按各自命中的档运行——本示例的 leaseDuration 数值差异不产生可见打印，命中效果体现在 participant 配置上（观察方式见第 3 步）；
+- 失败路径示例：把路径改成不存在的文件重跑，程序打印 `load xml failed: <msg 携原因与返回码>` 后以退出码 1 退出（失败回显，不静默降级）。
 
 ## 常见错误与排障
 
 | 现象 | 原因与处理 |
 |---|---|
-| `yomk::dds().load_cfg()` 返回错误，`m_msg` 携原因与返回码 | 三类失败：路径不存在/文件为空/格式非法——核对路径（相对/绝对均可）与文件内容，确认 XML 经 Fast DDS XML schema 校验合法后重试 |
+| `yomk::dds().load_cfg()` 返回错误，`msg` 携原因与返回码 | 三类失败：路径不存在/文件为空/格式非法——核对路径（相对/绝对均可）与文件内容，确认 XML 经 Fast DDS XML schema 校验合法后重试 |
 | 形态 2 无参加载报 `xml path is empty` | 总开关 `YOMKDDS_USE_XML_PROFILE` 关闭时路径变量被忽略恒空（服务端报 `xml path is empty`）——先 `export YOMKDDS_USE_XML_PROFILE=true` 再设置 `YOMKDDS_XML_PROFILE_PATH` |
 | 「改了 XML 不生效」 | 时序原因：节点创建后才加载——participant 的发现配置/传输/QoS 在创建时固化，对已建节点不生效，仅影响后续新建实体；把 `yomk::dds().load_cfg()` 挪到第一个 `yomk::dds().node(...).create()` 之前，或删除相关节点后重建 |
 | 具名档没命中、走了默认档 | 三级提取链第一级按节点名 `profile_name` **精确匹配**——检查 XML 的 `profile_name` 与 `yomk::dds().node(...)` 首参是否逐字节一致 |

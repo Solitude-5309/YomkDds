@@ -35,13 +35,13 @@ flowchart LR
 |---|---|---|---|
 | YomkDdsService | 节点生命周期、主题注册、发布订阅、Loan、XML 加载 | `yomk::dds()` 链式 | 不覆盖（编程能力） |
 | YomkDdsDebugService | 类型无关的域内观察（主题/节点/类型/端点）与 JSON 载荷发布 | `yomk::dds().debug()` 链式面 | `yomkdds topic/node/interface` 全部覆盖 |
-| YomkDdsBagService | mcap 格式录制、元信息、重建索引、转换、回放 | `yomk::dds().bag()` 链式全分面（建删/录制/转换/元信息/回放） | `yomkdds bag` 全部覆盖（play 仅 CLI） |
+| YomkDdsBagService | mcap 格式录制、元信息、重建索引、转换、回放 | `yomk::dds().bag()` 链式全分面（建删/录制/转换/元信息/回放） | `yomkdds bag` 全部覆盖（record/play 由 CLI 自动建删 bag 节点） |
 
-> 除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
+> 除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `status == yomk::payload::ResStatus::Succeeded`；失败时可读 `msg` 获取错误信息。
 
 ## 二、功能速查矩阵
 
-| 功能域 | 能力 | 链式/宏 API | yomkdds CLI | 详见 |
+| 功能域 | 能力 | 链式 API | yomkdds CLI | 详见 |
 |---|---|---|---|---|
 | 核心通信 | 版本查询 | `yomk::dds().version()` | — | [core-communication.md](./core-communication.md) |
 | 核心通信 | 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg()` | — | [xml-profiles.md](./xml-profiles.md) |
@@ -73,7 +73,7 @@ flowchart LR
 |---|---|
 | [core-communication.md](./core-communication.md) | 节点生命周期、主题注册、发布订阅与回调消费、版本查询 |
 | [loan-zero-copy.md](./loan-zero-copy.md) | plain 类型的借出（loan）零拷贝发布机制与池语义 |
-| [qos-profiles.md](./qos-profiles.md) | DDSQosProfile 8 项配置、ROS2 预置底座、宏/CLI 两侧 QoS 优先级 |
+| [qos-profiles.md](./qos-profiles.md) | DDSQosProfile 8 项配置、ROS2 预置底座、API/CLI 两侧 QoS 优先级 |
 | [discovery-server.md](./discovery-server.md) | 发现服务器 UDP/TCP 直配、CLIENT 协议、跨域互通 |
 | [xml-profiles.md](./xml-profiles.md) | yomk::dds().load_cfg() 语义与 participant 三级 profile 提取链 |
 | [ros2-interop.md](./ros2-interop.md) | set_name 类型名直改实现与 ROS2 互通约束 |

@@ -1,6 +1,6 @@
 # 功能文档：发现服务器（UDP/TCP 直配）
 
-> **本文档覆盖范围**：发现服务器直配——多播发现受限（无多播环境）与跨网段场景下，把参与者的发现流量从多播改为单播直送发现服务器（本方为 CLIENT 角色）。覆盖三个节点创建宏的 UDP/TCP 定位串尾参、显式直配聚合串格式、环境变量门控直配、CLIENT 发现协议语义、TCPv4 传输注入、跨域互通模型与发现服务器启动脚本。XML profiles 打底配置见 [xml-profiles.md](./xml-profiles.md)；节点本身的创建/删除见 [core-communication.md](./core-communication.md)。
+> **本文档覆盖范围**：发现服务器直配——多播发现受限（无多播环境）与跨网段场景下，把参与者的发现流量从多播改为单播直送发现服务器（本方为 CLIENT 角色）。覆盖三个套件建节点链（核心通信/调试/bag）的 UDP/TCP 直配累积器、显式直配聚合串格式、环境变量门控直配、CLIENT 发现协议语义、TCPv4 传输注入、跨域互通模型与发现服务器启动脚本。XML profiles 打底配置见 [xml-profiles.md](./xml-profiles.md)；节点本身的创建/删除见 [core-communication.md](./core-communication.md)。
 
 ## 功能定位
 
@@ -9,7 +9,7 @@ Fast DDS 默认走**简单发现**（多播 PDP）：同网段参与者经多播
 - **无多播环境**：部分容器/云网络禁用多播，参与者互相不可见；
 - **跨网段/跨域互通**：不同网段（乃至不同域号）的参与者需要互相发现并收发数据。
 
-发现服务器解决这两类问题：用集中式发现服务器（server 角色）中转发现信息，参与方以 **CLIENT 发现协议**直配——禁用多播 PDP，发现流量单播直送 server。YomkDds 在节点创建链式累积器（核心通信节点与调试节点）及 bag 节点宏上提供 UDP/TCP 双通道直配，并配套进程级环境变量门控（不改代码、容器/CI 批量注入友好）。
+发现服务器解决这两类问题：用集中式发现服务器（server 角色）中转发现信息，参与方以 **CLIENT 发现协议**直配——禁用多播 PDP，发现流量单播直送 server。YomkDds 在三个套件的建节点链上提供 UDP/TCP 双通道直配（`yomk::dds().node(...)`、`yomk::dds().debug()`、`yomk::dds().bag()` 的 `udp_ds()`/`tcp_ds()` 累积器），并配套进程级环境变量门控（不改代码、容器/CI 批量注入友好）。
 
 ## 能力清单
 
@@ -34,12 +34,12 @@ Fast DDS 默认走**简单发现**（多播 PDP）：同网段参与者经多播
 fastdds discovery -i 0 -l 127.0.0.1 -p 11811
 ```
 
-### client 侧方式一：显式直配（链式累积器/bag 宏尾参）
+### client 侧方式一：显式直配（链式累积器）
 
-链式 udp_ds()/tcp_ds() 累积器（核心通信与调试节点）与 bag 节点宏的定位串尾参直配（UDP/TCP 通道格式一致）：
+三个套件建节点链上的 udp_ds()/tcp_ds() 累积器直配（UDP/TCP 通道格式一致）：
 
 ```cpp
-// client 侧：显式直配（链式累积器/bag 宏尾参，UDP/TCP 通道格式一致："ip[:port]" 分号分隔多 server，
+// client 侧：显式直配（链式累积器，UDP/TCP 通道格式一致："ip[:port]" 分号分隔多 server，
 // UDP port 缺省 11811，非法串创建失败回显）
 yomk::dds().node("ds_node").domain(0).udp_ds("127.0.0.1:11811").create();            // 形态 3：仅 UDP 通道
 yomk::dds().debug().domain(0).udp_ds("127.0.0.1:11811").create();
@@ -83,7 +83,7 @@ TCP 场景：终端 1 换 `--type tcp --port 42100` 启动，终端 2/3 换 expo
 
 ## 参数与约束
 
-### 直配入口（链式/宏）
+### 直配入口（链式累积器）
 
 | 入口 | 直配通道 | 说明 |
 |---|---|---|
@@ -105,7 +105,7 @@ TCP 场景：终端 1 换 `--type tcp --port 42100` 启动，终端 2/3 换 expo
 | 环境变量 | 作用 | 缺省/关闭行为 |
 |---|---|---|
 | `YOMKDDS_USE_DISCOVER_SERVER` | 直配总开关 | 默认 `false`；`true`/`1` 视为开启（大小写不敏感）；未设置/空/`false`/`0`/其余任意值关闭 |
-| `YOMKDDS_UDP_DISCOVER_SERVERS` | UDP 通道 server 聚合串（格式同宏尾参直配串） | 默认空；仅开关开启时读取，开关关闭时被忽略恒空（=不直配，行为同未设置） |
+| `YOMKDDS_UDP_DISCOVER_SERVERS` | UDP 通道 server 聚合串（格式同显式直配串） | 默认空；仅开关开启时读取，开关关闭时被忽略恒空（=不直配，行为同未设置） |
 | `YOMKDDS_TCP_DISCOVER_SERVERS` | TCP 通道 server 聚合串（格式同上） | 同上 |
 
 语义要点：

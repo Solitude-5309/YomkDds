@@ -41,7 +41,7 @@ int main()
         return 1;
     }
 
-    // 类型对象 new 后、移交前 set_name 成 ROS2 约定名（宏实参位内联 new 无法先改名）
+    // 类型对象 new 后、移交前 set_name 成 ROS2 约定名（type() 实参位内联 new 无法先改名）
     std::atomic<int> received{0};
     auto* type = new YomkDdsStd::MStringPubSubType();
     type->set_name("std_msgs::msg::dds_::String_");

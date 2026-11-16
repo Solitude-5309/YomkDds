@@ -18,14 +18,14 @@ QoS（Quality of Service）决定 DDS 端点的可靠性、持久化、历史深
 
 ### 库侧（编程）
 
-qos 为主题注册链式 `qos()` 累积器（create_pub()/create_sub() 共用）与调试发布链 `topic(name).payload(json)…qos(qos).publish()` 的 qos() 累积器，传入 `DDSQosProfile` 实例即可。摘自 README 5.6 的发布端用法（ROS2 互通场景使用 ROS2 发布端默认底座）：
+qos 为主题注册链式 `qos()` 累积器（create_pub()/create_sub() 共用）与调试发布链 `topic(name).payload(json)…qos(qos).publish()` 的 qos() 累积器，传入 `DDSQosProfile` 实例即可。摘自 [ros2-interop.md](./ros2-interop.md) 的发布端用法（ROS2 互通场景使用 ROS2 发布端默认底座）：
 
 ```cpp
 // DDS 层话题名带 rt/ 前缀（rmw_fastrtps 对语义名 /chatter 的实际 DDS 名），QoS 用 ROS2 发布端默认底座
 yomk::dds().node("interop_pub").topic("rt/chatter").type(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
 ```
 
-底座上逐项覆盖（如只设 depth=10，其余项保持底座值；字段定义见公共头 `include/dds/YomkDdsService.h` 的 `DDSQosProfile`）：
+底座上逐项覆盖（如只设 depth=10，其余项保持底座值；字段定义见公共头 `include/dds/YomkDdsPayload.h` 的 `DDSQosProfile`）：
 
 ```cpp
 DDSQosProfile qos = DDSQosProfile::ros2DefaultPublisher();
@@ -65,7 +65,7 @@ yomkdds topic pub --qos-file qos.json <主题名> <JSON数据>
 
 ### 8 项参数表
 
-逐项覆盖的值大小写不敏感，ros2 小写与 DDS 大写均收。库侧字段名为公共头 `include/dds/YomkDdsService.h` 中 `DDSQosProfile` 的成员（未设置哨兵为 `Unset` / `-1`）：
+逐项覆盖的值大小写不敏感，ros2 小写与 DDS 大写均收。库侧字段名为公共头 `include/dds/YomkDdsPayload.h` 中 `DDSQosProfile` 的成员（未设置哨兵为 `Unset` / `-1`）：
 
 | 配置项 | 库侧字段 | CLI 选项 | 取值（CLI） | 说明 |
 |---|---|---|---|---|

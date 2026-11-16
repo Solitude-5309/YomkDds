@@ -27,14 +27,14 @@ static void onSignal(int)
 
 // 发现服务器示例·发布端：演示 跨域经发现服务器互通 的发布侧代码流程——节点域 id 固定 100，
 // 以 CLIENT 角色直配发现服务器，与域 id 200 的 ExampleDiscoverServerSub 互通（DS 模式下
-// server 不校验域 id，原理见 README 5.7/5.8）。
+// server 不校验域 id，原理见 docs/features/discovery-server.md）。
 // 直配串经环境变量自动填入（node().create() 缺省形态，domain/udp/tcp 全缺省读 env）：
 //   export YOMKDDS_USE_DISCOVER_SERVER=true
 //   export YOMKDDS_UDP_DISCOVER_SERVERS=127.0.0.1:11811   // 须与 LaunchDiscoverServer.sh
 //                                                         // 启动的 server 一致；TCP 场景改用
 //                                                         // YOMKDDS_TCP_DISCOVER_SERVERS
 // 未配置时回落多播发现，本示例跨域 100/200 场景将无法互通，运行前务必先 export。
-// 三终端运行方式（先启动发现服务器，再 Sub/Pub 任意顺序）见 README 5.8。
+// 三终端运行方式（先启动发现服务器，再 Sub/Pub 任意顺序）见 docs/manual/discovery-server-tutorial.md。
 int main()
 {
     ::yomk::server().init();

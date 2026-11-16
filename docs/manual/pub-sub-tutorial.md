@@ -14,7 +14,7 @@
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成安装，并按 [quick-start.md](./quick-start.md) 跑通第一个程序；
 - 工程链接 `YomkDds::YomkDds YomkServer::YomkServer YomkDdsStdMsgs`（CMake 写法见 quick-start 第 1 步）；
-- 知道消息类型实例用法：`new XxxPubSubType()` 传给注册宏后所有权移交服务端，caller 不再持有/释放。
+- 知道消息类型实例用法：`new XxxPubSubType()` 传给 `type()` 后所有权移交服务端，caller 不再持有/释放。
 
 ## 分步操作
 
@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
 | 回调里保存了 `data` 指针、之后读取崩溃或数据异常 | `data` 仅回调执行期间有效：回调内同步消费（读取或拷贝到自有存储），不要跨回调持有 |
 | ARM 设备上读取 `double`/`int64` 字段触发 SIGBUS | `alignof>4` 的 plain 标量在零拷贝交付下仅 4 字节对齐：回调中 `memcpy` 到对齐局部变量再读取（见第 1 步）；大数据负载优先选 `alignof<=4` 的 plain 类型 |
 | 两端注册了同名主题但收不到 | type 不一致：两端必须用同一种消息类型（同一 PubSubType）；并确认两端域号一致（`YOMKDDS_DDS_DOMAIN_ID`，合法范围 [0,232]） |
-| 宏调用返回非 `eOk` | 读 `m_msg` 获取原因；常见如节点名重复、删除不存在的节点——每节点名唯一，`yomk::dds().node(...).create()` 前确认同名节点已删除 |
+| 链式终结返回非 `yomk::payload::ResStatus::Succeeded` | 读 `msg` 获取原因；常见如节点名重复、删除不存在的节点——每节点名唯一，`yomk::dds().node(...).create()` 前确认同名节点已删除 |
 | 多主题只收到其中一个 | 同样是 discovery 时序：注册全部主题后再统一 `sleep 1s`，不要边注册边立即发布 |
 | 收到的消息内容错乱 | 检查是否在回调外复用了发布侧的栈变量指针，或把 `const void *data` 强转成了错误的消息类型 |
 

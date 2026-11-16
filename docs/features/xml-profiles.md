@@ -25,7 +25,7 @@ yomk::dds().load_cfg();                          // 形态 2：无参缺省，�
 yomk::dds().node("xml_node").domain(0).create();                 // 创建时按三级提取链叠加 XML 配置
 ```
 
-宏内部读文件经 `load_XML_profiles_file` 解析校验（返回码显式检查）后缓存，供后续 create_node 的 participant 按三级提取链叠加。
+`load_cfg()` 内部读文件经 `load_XML_profiles_file` 解析校验（返回码显式检查）后缓存，供后续 create_node 的 participant 按三级提取链叠加。
 
 participant 档 XML 片段示例（格式经 Fast DDS XML schema 校验）：
 
@@ -85,11 +85,11 @@ export YOMKDDS_XML_PROFILE_PATH="/path/to/profiles.xml"
 
 ## 错误与边界行为
 
-- 失败（路径不存在/文件为空/格式非法）返回错误，`m_msg` 携原因与返回码，不静默降级；
+- 失败（路径不存在/文件为空/格式非法）返回错误，`msg` 携原因与返回码，不静默降级；
 - 开关关闭时无参形态不加载（路径变量被忽略恒空，服务端报 `xml path is empty`）；
 - 开关开启但路径空：静默不加载（同发现服务器空串=不直配）。
 
-> 核心通信套件除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余链式终结均返回 `yomk::payload::Response`，调用后须判 `m_status == yomk::payload::ResStatus::Succeeded`；失败时可读 `m_msg` 获取错误信息。
+> 核心通信套件除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余链式终结均返回 `yomk::payload::Response`，调用后须判 `status == yomk::payload::ResStatus::Succeeded`；失败时可读 `msg` 获取错误信息。
 
 ## 与其他功能的关系
 

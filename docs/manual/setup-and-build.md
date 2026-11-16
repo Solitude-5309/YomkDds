@@ -109,7 +109,12 @@ source build_ubuntu.sh
 | `ExampleYomkDdsTopicLoan` | loan 借出机制演示 |
 | `ExampleYomkDdsPub` | 跨进程发布端示例（每 1s 发布 hello world，Ctrl+C 退出） |
 | `ExampleYomkDdsSub` | 跨进程订阅端示例（订阅 hello_world，Ctrl+C 退出） |
-| `yomkdds` | 命令行工具：观察任意 DDS 主题与频率（topic print/type/find/hz）、列出域内主题与类型（topic list）、查询主题与节点详情（topic info/node info）、查看类型 IDL 结构（interface show/list）、按 JSON 载荷发布消息（topic pub）、录制/查看/重建/转换 mcap bag（bag record/info/reindex/convert） |
+| `ExampleRos2InteropPub` | ROS2 互通发布端示例（1Hz 持续发布 `rt/chatter_interop`，Ctrl+C 退出） |
+| `ExampleRos2InteropSub` | ROS2 互通订阅端示例（监听 `rt/chatter_interop` 逐条打印，Ctrl+C 退出） |
+| `ExampleDiscoverServerPub` | 发现服务器跨域发布端示例（域 100，经环境变量直配） |
+| `ExampleDiscoverServerSub` | 发现服务器跨域订阅端示例（域 200，经环境变量直配） |
+| `LaunchDiscoverServer.sh` | 启动 UDP/TCP 发现服务器（`--type`/`--ip`/`--port`） |
+| `yomkdds` | 命令行工具：观察任意 DDS 主题与频率（topic print/type/find/hz）、列出域内主题与类型（topic list）、查询主题与节点详情（topic info/node info）、查看类型 IDL 结构（interface show/list）、按 JSON 载荷发布消息（topic pub）、录制/查看/回放/重建/转换 mcap bag（bag record/info/play/reindex/convert） |
 
 确认程序就位：
 

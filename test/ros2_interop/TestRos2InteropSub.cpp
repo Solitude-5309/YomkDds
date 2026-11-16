@@ -13,7 +13,7 @@
  *   （与 TestRos2InteropPub 不互通：两者分别只与 ROS2 CLI 对跑，判定口径见脚本头注释）
  *
  * 话题名口径：rmw_fastrtps 对 ROS2 语义话题名加 rt/ 前缀生成实际 DDS 话题名，
- * YomkDds 端直接用 rt/ 形态注册（README 5.6 互通三要素之一）。
+ * YomkDds 端直接用 rt/ 形态注册（docs/features/ros2-interop.md 互通三要素之一）。
  */
 
 #include <yomk/dds/YomkDdsAPI.h>

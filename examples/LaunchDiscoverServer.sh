@@ -12,7 +12,7 @@
 # 免 sudo），退出时自动清理。动态库依赖经 ldconfig 缓存解析（build_ubuntu.sh 已注册），
 # 与示例程序运行条件一致。
 #
-# 完整演示流程（另开两个终端，先本脚本再 Pub/Sub，顺序任意）见 README 5.8。
+# 完整演示流程（另开两个终端，先本脚本再 Pub/Sub，顺序任意）见 docs/manual/discovery-server-tutorial.md。
 
 set -u
 
@@ -123,7 +123,7 @@ echo "   client 环境变量自动直配（另开终端执行）："
 echo "     export YOMKDDS_USE_DISCOVER_SERVER=true"
 echo "     ${DS_ENV_HINT}"
 echo "   （另开两个终端运行 ExampleDiscoverServerPub/Sub，"
-echo "     域 id 100/200 跨域互通，详见 README 5.8）"
+echo "     域 id 100/200 跨域互通，详见 docs/manual/discovery-server-tutorial.md）"
 echo "============================================================"
 
 # Fast DDS 3.x 的 fast-discovery-server 要求首个参数为整数命令索引（42=SERVER，

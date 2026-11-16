@@ -43,7 +43,7 @@ int main()
         return 1;
     }
 
-    // 2. 类型对象 new 后、移交前 set_name 成 ROS2 约定名（宏实参位内联 new 无法先改名）
+    // 2. 类型对象 new 后、移交前 set_name 成 ROS2 约定名（type() 实参位内联 new 无法先改名）
     auto *type = new YomkDdsStd::MStringPubSubType();
     type->set_name("std_msgs::msg::dds_::String_");
     // QoS 用 ROS2 发布端默认底座：RELIABLE offered 对 ros2 topic echo 任意 requested 可匹配

@@ -1,19 +1,19 @@
 # 使用手册：环境变量与公共配置参考
 
-> **本文档覆盖范围**：YomkDds 的 5 个环境变量（`YOMKDDS_DDS_DOMAIN_ID`、`YOMKDDS_DDS_DISCOVER_ROUNDS`、`YOMKDDS_USE_DISCOVER_SERVER`、`YOMKDDS_UDP_DISCOVER_SERVERS`、`YOMKDDS_TCP_DISCOVER_SERVERS`）逐项参考——作用与作用域（库侧宏 / yomkdds CLI 侧 / 两侧）、默认值、取值约束、`~/.bashrc` 幂等写入行为、与显式参数的优先级关系，以及「改了不生效」等排障。发现服务器直配原理与跨域互通见 [../features/discovery-server.md](../features/discovery-server.md)。
+> **本文档覆盖范围**：YomkDds 的 5 个环境变量（`YOMKDDS_DDS_DOMAIN_ID`、`YOMKDDS_DDS_DISCOVER_ROUNDS`、`YOMKDDS_USE_DISCOVER_SERVER`、`YOMKDDS_UDP_DISCOVER_SERVERS`、`YOMKDDS_TCP_DISCOVER_SERVERS`）逐项参考——作用与作用域（库侧 / yomkdds CLI 侧 / 两侧）、默认值、取值约束、`~/.bashrc` 幂等写入行为、与显式参数的优先级关系，以及「改了不生效」等排障。发现服务器直配原理与跨域互通见 [../features/discovery-server.md](../features/discovery-server.md)。
 
 ## 目标
 
 完成本文档后，你将：
 
 1. 查清任一环境变量的作用、作用域、默认值与取值约束；
-2. 知道哪些命令/宏受 `YOMKDDS_DDS_DISCOVER_ROUNDS` 收敛次数影响、哪些不受影响；
+2. 知道哪些命令/接口受 `YOMKDDS_DDS_DISCOVER_ROUNDS` 收敛次数影响、哪些不受影响；
 3. 掌握「不改代码、进程级配置」的环境变量用法（容器/CI 批量注入）与 `.bashrc` 幂等写入行为；
 4. 排查「改了环境变量但不生效」「值非法报错」两类高频问题。
 
 ## 前提与准备
 
-- 已安装 yomkdds 命令行工具（见 [setup-and-build.md](./setup-and-build.md)）；库侧宏使用见 [quick-start.md](./quick-start.md)；
+- 已安装 yomkdds 命令行工具（见 [setup-and-build.md](./setup-and-build.md)）；库侧接口使用见 [quick-start.md](./quick-start.md)；
 - `.bashrc` 幂等写入是 **yomkdds CLI 侧**行为：`yomkdds` 启动时无某变量则自动创建并设默认值，同时幂等写入 `~/.bashrc`（仅当其中无该变量时，带 `# added by yomkdds` 注释便于识别）——新开任意终端可直接 `echo $<变量名>` 查看并自动继承；**已打开的终端须 `source ~/.bashrc` 或重开才生效**；
 - 库侧建点 API（`yomk::dds().node(...).create()`、`yomk::dds().debug()...create()` 与 `yomk::dds().bag()...create()`）经类内缺省初始化器读环境变量，**不写 `.bashrc`**；
 - 另有一组 XML profiles 双环境变量（`YOMKDDS_USE_XML_PROFILE`/`YOMKDDS_XML_PROFILE_PATH`）属于 XML 集中配置通道，机制同本文（开关+路径、幂等写入），详见 [../features/xml-profiles.md](../features/xml-profiles.md)。

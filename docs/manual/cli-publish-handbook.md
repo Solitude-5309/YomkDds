@@ -1,6 +1,6 @@
 # 使用手册：yomkdds 发布与类型内省手册（topic pub/interface）
 
-> **本文档覆盖范围**：用 `yomkdds` 命令行工具不写代码向任意 DDS 主题发布消息——topic pub -e 查看发布示例、-ef 导出载荷文件、JSON 直发、-f 文件发布、-w/-r/-t 组合控制与临时 writer QoS 调参（README 6.1 与 6.4 topic pub 部分），以及类型内省 interface show / interface list（探明消息结构）。观察类命令（print/list/info/hz/node）见 [cli-observe-handbook.md](./cli-observe-handbook.md)。
+> **本文档覆盖范围**：用 `yomkdds` 命令行工具不写代码向任意 DDS 主题发布消息——topic pub -e 查看发布示例、-ef 导出载荷文件、JSON 直发、-f 文件发布、-w/-r/-t 组合控制与临时 writer QoS 调参（topic pub 部分），以及类型内省 interface show / interface list（探明消息结构）。观察类命令（print/list/info/hz/node）见 [cli-observe-handbook.md](./cli-observe-handbook.md)。
 
 ## 目标
 

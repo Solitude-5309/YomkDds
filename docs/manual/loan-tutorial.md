@@ -1,6 +1,6 @@
 # 使用手册：Loan 零拷贝发布教程
 
-> **本文档覆盖范围**：用借出（loan）样本方式发布 plain 类型消息——链式 `loan()` 借出、判空、池内填值、`pub()` 发布、未用样本 `return_loan()` 归还的完整流程（README 5.2 示例全文走读），plain 类型判定规则、失败回退路径与何时用/不用 loan（README 5.3 机制说明）。订阅端的零拷贝读取约束见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)。
+> **本文档覆盖范围**：用借出（loan）样本方式发布 plain 类型消息——链式 `loan()` 借出、判空、池内填值、`pub()` 发布、未用样本 `return_loan()` 归还的完整流程（借出发布示例全文走读），plain 类型判定规则、失败回退路径与何时用/不用 loan（机制说明见 [loan-zero-copy.md](../features/loan-zero-copy.md)）。订阅端的零拷贝读取约束见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)。
 
 ## 目标
 
@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 
 ### 何时用 / 不用 loan
 
-结合 loan 机制说明（README 5.3）：
+结合 loan 机制说明（详见 [loan-zero-copy.md](../features/loan-zero-copy.md)）：
 
 - **订阅端完全透明**：`FastDDSNode` 内部自动使用 reader loan 接收（回调接口与指针语义不变，仅回调期间有效），零序列化拷贝，配合 data-sharing 跨进程零拷贝读取——订阅端无需为此写任何额外代码；
 - **发布端显式 API**：链式 `loan()` 借出 writer 池内样本，直接在池内填值后经 `...data(...).pub()` 链发布免序列化；每次 write 后指针即被中间件收回，须重新借出——适合高频、消息构造后即发即弃的发布路径；

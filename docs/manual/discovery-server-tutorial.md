@@ -1,6 +1,6 @@
 # 使用手册：发现服务器与跨域互通教程
 
-> **本文档覆盖范围**：在无多播、跨网段或跨域（domain id 不同）环境中，用发现服务器（Discovery Server）完成 YomkDds 节点间的发现与互通——启动发现服务器（`examples/LaunchDiscoverServer.sh`）、UDP/TCP 直配（宏尾参显式直配与环境变量门控两种方式）、直配与 XML profiles 打底的组合使用，并用 examples 自带的跨域示例（域 100/200）验证端到端互通。功能原理与参数约束详见[功能文档](../features/discovery-server.md)。
+> **本文档覆盖范围**：在无多播、跨网段或跨域（domain id 不同）环境中，用发现服务器（Discovery Server）完成 YomkDds 节点间的发现与互通——启动发现服务器（`examples/LaunchDiscoverServer.sh`）、UDP/TCP 直配（链式累积器显式直配与环境变量门控两种方式）、直配与 XML profiles 打底的组合使用，并用 examples 自带的跨域示例（域 100/200）验证端到端互通。功能原理与参数约束详见[功能文档](../features/discovery-server.md)。
 
 ## 目标
 
@@ -8,12 +8,12 @@
 
 1. 用 `LaunchDiscoverServer.sh` 启动一个 UDP 或 TCP 发现服务器；
 2. 跑通跨域互通示例：发布端（域 100）与订阅端（域 200）经同一发现服务器持续收发数据；
-3. 掌握三种直配方式：宏尾参显式直配、环境变量自动直配（进程级，无需改代码）、XML 打底加直配覆盖的组合。
+3. 掌握三种直配方式：链式累积器显式直配、环境变量自动直配（进程级，无需改代码）、XML 打底加直配覆盖的组合。
 
 ## 前提与准备
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成 YomkDds 编译安装：`source build_ubuntu.sh` 三步编译安装会一并构建示例程序，安装后 `<安装路径>/bin` 下有 `ExampleDiscoverServerPub`、`ExampleDiscoverServerSub` 与 `LaunchDiscoverServer.sh`；
-- 如需按 README 5.8 的路径（`./examples/build/`）运行，可在仓库根目录单独构建 examples：
+- 如需在仓库内按 `./examples/build/` 路径单独构建运行 examples：
 
 ```bash
 cmake -S examples -B examples/build -DCMAKE_PREFIX_PATH="$YOMK_PREFIX_PATH"
@@ -54,7 +54,7 @@ cmake --build examples/build
      export YOMKDDS_USE_DISCOVER_SERVER=true
      export YOMKDDS_UDP_DISCOVER_SERVERS=127.0.0.1:11811
    （另开两个终端运行 ExampleDiscoverServerPub/Sub，
-     域 id 100/200 跨域互通，详见 README 5.8）
+     域 id 100/200 跨域互通，详见 docs/manual/discovery-server-tutorial.md）
 ============================================================
 ```
 
@@ -66,7 +66,7 @@ fastdds discovery -i 0 -l 127.0.0.1 -p 11811
 
 ### 第 2 步：UDP 直配跨域示例走读（域 100 与域 200 经 server 互通）
 
-examples 提供一对发现服务器示例：`ExampleDiscoverServerPub`（域 100 发布端）与 `ExampleDiscoverServerSub`（域 200 订阅端）。两个示例的节点创建**不携带直配尾参**——直配串经环境变量自动填入（启动前 export，见第 4 步），两者经同一发现服务器以 CLIENT 模式互通（异域互通的原理见「前提与准备」）。
+examples 提供一对发现服务器示例：`ExampleDiscoverServerPub`（域 100 发布端）与 `ExampleDiscoverServerSub`（域 200 订阅端）。两个示例的节点创建**不携带直配累积器**——直配串经环境变量自动填入（启动前 export，见第 4 步），两者经同一发现服务器以 CLIENT 模式互通（异域互通的原理见「前提与准备」）。
 
 `yomk::dds().node(nodeName)` 节点创建链（三个累积器均可选，次序不限）：
 
@@ -83,9 +83,9 @@ yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLo
 // 1. 创建节点：域 id 显式 100（DS 模式下可与对端异域）；省略双通道直配 →
 //    直配串自动取环境变量（总开关开启时生效，participant 以 CLIENT 发现协议运行）
 auto resp = yomk::dds().node("ds_pub_node").domain(100).create();
-if (resp.m_status != yomk::payload::ResStatus::Succeeded)
+if (resp.status != yomk::payload::ResStatus::Succeeded)
 {
-    ::yomk::log().tag("ExampleDiscoverServerPub").error("create node failed: ", resp.m_msg);
+    ::yomk::log().tag("ExampleDiscoverServerPub").error("create node failed: ", resp.msg);
     return 1;
 }
 
@@ -140,7 +140,7 @@ yomk::dds().node("ds_dual_node").domain(0).udp_ds("127.0.0.1:11811").tcp_ds("127
 yomk::dds().node("ds_tcp_only_node").domain(0).udp_ds("").tcp_ds("10.0.0.2:42100").create();
 ```
 
-TCP 通道机制（README 5.7 原文口径）：
+TCP 通道机制（[discovery-server.md](../features/discovery-server.md) 原文口径）：
 
 - 内置传输默认集不含 TCPv4——任一 TCP 直配项存在时 participant **自动补注入 TCPv4 传输描述符**（与内置 UDPv4/SHM "alongside" 共存，UDP/SHM 数据通道不受影响；XML 提取已注入 TCPv4 描述符时不重复注入）；
 - 两通道各自可分号分隔多 server，任一通道 server 在场即完成发现。
@@ -169,7 +169,7 @@ export YOMKDDS_USE_DISCOVER_SERVER=true
 export YOMKDDS_UDP_DISCOVER_SERVERS="192.168.1.10:11811;192.168.1.11:11811"  # TCP 场景换 YOMKDDS_TCP_DISCOVER_SERVERS
 ```
 
-规则（README 5.7 原文口径）：
+规则（[discovery-server.md](../features/discovery-server.md) 原文口径）：
 
 - 总开关 `YOMKDDS_USE_DISCOVER_SERVER`：`true`/`1` 视为开启（大小写不敏感）；未设置/空/`false`/`0`/其余任意值关闭；
 - 两通道 server 聚合串 `YOMKDDS_UDP_DISCOVER_SERVERS`/`YOMKDDS_TCP_DISCOVER_SERVERS` 格式同直配聚合串：`ip[:port]` 分号分隔多 server；
@@ -203,7 +203,7 @@ yomk::dds().node("combo_node").domain(0).udp_ds("127.0.0.1:11811").create();   /
 
 ## 预期输出
 
-三个终端按序运行（README 5.8）：
+三个终端按序运行：
 
 ```bash
 # 终端 1：启动发现服务器（--type udp/tcp 可选缺省 udp；--ip/--port 可选，端口缺省随类型 11811/42100；前台运行 Ctrl+C 停止）

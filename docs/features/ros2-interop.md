@@ -4,9 +4,9 @@
 
 ## 功能定位
 
-YomkDds 与 ROS2 在同一 DDS 域内互通（YomkDds 节点发布、`ros2` 节点订阅，反之亦然）经**类型名直改**实现：构造类型实例后用 `set_name` 把注册类型名改成 ROS2 约定形态，再传给注册宏——链路内 `register_type` 以新名注册、发现数据 `type_name` 即新名，ROS2 侧同名匹配即通。
+YomkDds 与 ROS2 在同一 DDS 域内互通（YomkDds 节点发布、`ros2` 节点订阅，反之亦然）经**类型名直改**实现：构造类型实例后用 `set_name` 把注册类型名改成 ROS2 约定形态，再交给 `type()` 累积器——链路内 `register_type` 以新名注册、发现数据 `type_name` 即新名，ROS2 侧同名匹配即通。
 
-该能力是编程约定（不引入新宏/新端点），零额外运行时开销；代价与限制见下文「限制与注意事项」。
+该能力是编程约定（不引入新端点与参数），零额外运行时开销；代价与限制见下文「限制与注意事项」。
 
 ## 能力清单
 
@@ -34,7 +34,7 @@ yomk::dds().node("interop_pub").topic("rt/chatter").type(type).qos(DDSQosProfile
 // yomk::dds().node("interop_pub").topic("rt/chatter").data(&msg).pub();   // 之后正常发布（话题名与注册名逐字节一致）
 ```
 
-**使用注意**：`set_name` 必须在类型对象移交（传宏）之前调用——宏实参位内联 `new` 无法先改名。
+**使用注意**：`set_name` 必须在类型对象移交（传入 `type()`）之前调用——`type()` 实参位内联 `new` 无法先改名。
 
 示例（发布/订阅独立二进制，无命令行参数，均常驻运行、Ctrl+C/SIGTERM 优雅退出）：`examples/ExampleRos2InteropPub.cpp`（1Hz 持续发布 `rt/chatter_interop`）、`examples/ExampleRos2InteropSub.cpp`（持续监听 `rt/chatter_interop` 逐条打印，退出时打印总收条数）；两端同主题互为对端，也可与 ROS2 CLI 互通。
 
@@ -50,13 +50,13 @@ ros2 topic echo /chatter std_msgs/msg/String
 
 | 要素 | 说明 |
 |---|---|
-| 域 id | ROS2 默认域 0（`ROS_DOMAIN_ID`），YomkDds 侧对齐（`YOMKDDS_DDS_DOMAIN_ID` 或宏显式 domainId） |
+| 域 id | ROS2 默认域 0（`ROS_DOMAIN_ID`），YomkDds 侧对齐（`YOMKDDS_DDS_DOMAIN_ID` 或 `.domain()` 显式域号） |
 | topic 名 | 逐字节一致，且须为 **rmw_fastrtps 的 DDS 层话题名**——ROS2 语义名加 `rt/` 前缀（`ros2 topic pub /chatter` 的实际 DDS 名为 `rt/chatter`），YomkDds 端直接用 `rt/chatter` 注册；无前缀名在 DDS 层与 ROS2 端永不匹配（真机实测：`/chatter_interop` 双向收不到，改 `rt/chatter_interop` 双向即通，见 run_ros2_interop.sh） |
 | 类型名 + CDR 布局 | 类型名一致（`set_name` 直改为 `pkg::msg::dds_::Type_` 形态）且两端消息 CDR 编码布局一致（ROS2 msg 严格转 idl 生成即满足；字段结构不同的类型即使同名也不兼容） |
 
 ### 真机回归脚本
 
-`./test/run_ros2_interop.sh`（ctest 树不含，手动执行；无参默认取 test 树构建产物 `test/build/Ros2Interop/TestRos2InteropPub|Sub`，可选传参覆盖；examples 侧示例仅面向用户教学，不承担判定职责）。两项判定均以**数据到达**为准并逐行列出两侧收发消息流：方向 1 YomkDds pub 发 30 条 `hello ros2 N` → `ros2 topic echo` 6s 窗口收到多条；方向 2 `ros2 topic pub` 三路各 `-r 1` 发 `hello yomkdds N`（N=1..3）→ YomkDds sub 收满 3 条 `[RECV]` 即退。退出码 0=两项全过；前置 humble 环境与 test 树构建产物。
+`./test/run_ros2_interop.sh`（ctest 树不含，手动执行；无参默认取 test 树构建产物 `test/build/ros2_interop/TestRos2InteropPub|Sub`，可选传参覆盖；examples 侧示例仅面向用户教学，不承担判定职责）。两项判定均以**数据到达**为准并逐行列出两侧收发消息流：方向 1 YomkDds pub 发 30 条 `hello ros2 N` → `ros2 topic echo` 6s 窗口收到多条；方向 2 `ros2 topic pub` 三路各 `-r 1` 发 `hello yomkdds N`（N=1..3）→ YomkDds sub 收满 3 条 `[RECV]` 即退。退出码 0=两项全过；前置 humble 环境与 test 树构建产物。
 
 ## 错误与边界行为（限制与注意事项）
 

@@ -145,16 +145,18 @@ yomk::payload::Response YomkDdsBagService::bagRecord(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
 
-    // 回执形态对齐 list_topics 的 StringArray 返回
-    std::vector<std::string> lines;
-    lines.reserve(stats.size() + 1);
-    lines.emplace_back(node_->bagDir());
+    // 回执只回结构化数据：bag 目录 + 逐主题统计（通配项已展开，保持录制清单顺序）；
+    // 目录行与 "topic: N 条 / M 字节" 行由调用方（yomkdds）渲染
+    yomk::payload::RecordResult result;
+    result.bagDir = node_->bagDir();
+    result.topics.reserve(stats.size());
     for (const auto& stat : stats)
     {
-        lines.emplace_back(stat.topic + ": " + std::to_string(stat.count) + " 条 / " +
-                           std::to_string(stat.bytes) + " 字节");
+        result.topics.push_back(
+                yomk::payload::BagTopicStat{stat.topic, stat.type, stat.count, stat.bytes});
     }
-    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
+            ::yomk::msgs::RecordResult::shared(std::move(result)));
 }
 
 yomk::payload::Response YomkDdsBagService::bagInfo(YomkMsgPtr pkg)

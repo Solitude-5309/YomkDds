@@ -842,4 +842,53 @@ struct DDSBagPlay
     size_t readAheadQueueSize = kBagPlayReadAheadQueueSize;
     std::string qosOverridesPath = "";    // JSON: bag topic -> reliability/durability
 };
+
+// ===== YomkDdsBagService response payloads =====
+
+/**
+ * @brief Per-topic statistics of one bag operation
+ * @note count/bytes cover the whole session across all shards; bytes are the written
+ *       payload bytes (encapsulation header included), not the on-disk file size
+ */
+// @zh: 单主题的 bag 操作统计
+// @zh: note count/bytes 覆盖跨全部分片的整次会话；bytes 为写出的载荷字节（含 encapsulation
+// @zh: header），不是磁盘文件大小
+struct BagTopicStat
+{
+    std::string topicName;  // recorded topic name (wildcard items already expanded)
+    std::string typeName;   // raw DDS type name as advertised by the remote endpoint
+    uint64_t count = 0;     // messages written
+    uint64_t bytes = 0;     // payload bytes written
+
+    std::tuple<const std::string&, const std::string&, const uint64_t&, const uint64_t&> tie() const
+    {
+        return std::tie(topicName, typeName, count, bytes);
+    }
+
+    bool operator==(const BagTopicStat& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const BagTopicStat& rhs) const { return !(*this == rhs); }
+};
+
+/**
+ * @brief bag_record response: the output bag directory plus per-topic statistics
+ * @note Data only: the directory line and the "topic: N messages / M bytes" lines are
+ *       rendered by the caller (yomkdds); topics keeps the recording order (wildcard
+ *       items already expanded)
+ */
+// @zh: bag_record 响应：输出 bag 目录 + 逐主题统计
+// @zh: note 只回数据：目录行与 "topic: N 条 / M 字节" 行由调用方（yomkdds）渲染；
+// @zh: topics 保持录制清单顺序（通配项已展开）
+struct RecordResult
+{
+    std::string bagDir;                // recorded bag directory
+    std::vector<BagTopicStat> topics;  // recording order, wildcard items expanded
+
+    std::tuple<const std::string&, const std::vector<BagTopicStat>&> tie() const
+    {
+        return std::tie(bagDir, topics);
+    }
+
+    bool operator==(const RecordResult& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const RecordResult& rhs) const { return !(*this == rhs); }
+};
 }  // namespace yomk::payload

@@ -85,7 +85,7 @@
 |---|---|
 | `yomk::dds().bag()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` | 创建 bag 节点（单节点模型） |
 | `yomk::dds().bag().quit()` | 删除 bag 节点并销毁其全部 DDS 实体 |
-| `yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()` | 录制主题列表为 mcap bag（长驻阻塞至 Ctrl+C） |
+| `yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()` | 录制主题列表为 mcap bag（长驻阻塞至 Ctrl+C；返回结构化 `RecordResult`） |
 | `yomk::dds().bag().dir(bagDir).info()` | 查看 bag 元信息（纯文件操作，无须 bag 节点） |
 | `yomk::dds().bag().dir(bagDir).reindex()` | 从 mcap 分片重建 metadata.json（纯文件操作） |
 | `yomk::dds().bag().in_bags({...}).out_cfg(path).convert()` | 按配置过滤/裁剪/归并转换 bag（纯文件操作） |

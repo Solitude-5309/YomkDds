@@ -49,6 +49,7 @@ YOMK_DEFINE_MSG(yomk::payload::DDSDebugTopicPub, DDSDebugTopicPub, msg)
 // ===== YomkDdsBagService =====
 YOMK_DEFINE_MSG(yomk::payload::DDSBagNode, DDSBagNode, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSBagRecord, DDSBagRecord, msg)
+YOMK_DEFINE_MSG(yomk::payload::RecordResult, RecordResult, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSBagInfo, DDSBagInfo, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSBagReindex, DDSBagReindex, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSBagConvert, DDSBagConvert, msg)

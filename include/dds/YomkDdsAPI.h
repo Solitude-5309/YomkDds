@@ -1523,16 +1523,19 @@ public:
     }
     /**
      * @brief Record the accumulated topics into an mcap bag (blocking request terminator)
-     * @return Response; success carries a StringArray whose first line is the bag directory
-     *         and then one "topic: N messages / M bytes" line per topic; Invalid when
+     * @return Response carrying a RecordResult packet: bagDir plus topics, one
+     *         BagTopicStat per recorded topic (topicName/typeName/count/bytes in recording
+     *         order, wildcard items already expanded); the directory line and the
+     *         "topic: N messages / M bytes" lines are rendered by the caller; Invalid when
      *         YomkServer is not initialized or topics() was not accumulated
      * @note Blocks the calling thread until recording finishes or stops through
      *       yomk::bagRecordStop (async-signal-safe); call yomk::bagRecordReset()
      *       before reuse; requires the bag node created by create()
      */
     // @zh: 按累积的主题清单与阈值录制到 mcap bag（阻塞至录制收尾的请求终结）
-    // @zh: return Response；成功载荷为 StringArray（首行 bag 目录，其后每主题一行 "topic: N 条 / M 字节"）；
-    // @zh: 未初始化或未累积 topics() 返回 Invalid
+    // @zh: return Response 携带 RecordResult 包：bagDir 与逐主题 BagTopicStat（主题名/原始
+    // @zh: 类型名/条数/字节，保持录制清单顺序、通配项已展开）；目录行与 "topic: N 条 / M 字节"
+    // @zh: 行由调用方渲染；未初始化或未累积 topics() 返回 Invalid
     // @zh: note 阻塞调用线程至录制收尾或经 yomk::bagRecordStop 停止（async-signal-safe）；
     // @zh: 复用前先 bagRecordReset() 复位；须先经 create() 建 bag 节点
     yomk::payload::Response record()

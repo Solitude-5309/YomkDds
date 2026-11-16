@@ -4,18 +4,19 @@
  *
  * 范围：契约测试（DDS-free）刻意豁免的 /create_node 成功路径（经 setDomainId 创建真实
  *       participant）、/bag_record 完整录制链路（校验通过 → 透传订阅 → mcap 落盘 →
- *       bagRecordStop 收尾 → StringArray 统计回执）、/bag_play 完整回放链路与 /delete_node
+ *       bagRecordStop 收尾 → RecordResult 统计回执）、/bag_play 完整回放链路与 /delete_node
  *       析构清理。节点层校验分支归 TestFastDDSBagNodeValidation，落盘内容与回放对账细节归
  *       TestFastDDSBagNodeRecord/Play。
  * 覆盖：
  *   L1 生命周期：创建 → 重复创建拒绝 → record 空清单 eNo → record 无端点主题 eNo（msg
  *      含主题名，校验失败不落盘）→ 完整录制（远端 MString 发布者 + 停止线程模拟 Ctrl+C →
- *      eOk + StringArray 首行 bag 目录 + 统计行）→ 定格后重复 record 拒绝 → 删除 →
+ *      eOk + RecordResult（bagDir + 逐主题统计）→ 定格后重复 record 拒绝 → 删除 →
  *      重复删除拒绝 → 删除后 record 拒绝 → 重建 → 重复创建拒绝 → delete 收尾；
  *   L2 停止标志契约：录制经 yomk::bagRecordStop 置位收尾（模拟 SIGINT 处理函数行为）；
  *   L3 /bag_play 端点（重建节点后）：负载往返保真（路径不存在 → 错误文本回显 bagDir）+
  *      最小 bag 真实回放（mcap writer + 手写 metadata.json 造 2 条 @100ms bag → eOk +
- *      StringArray 回执：首行 bagDir + 统计行，与 record 回执形态同构）；
+ *      StringArray 回执：首行 bagDir + 统计行；play 仍回文本行，record 已改结构化
+ *      RecordResult，二者不再同构）；
  *   L0 解耦契约：/bag_info 纯文件读、/bag_reindex 纯文件操作与节点生命周期无关（未建/
  *      已建节点均可调，路径不存在报文件层错误而非 bag node not created）。
  *
@@ -161,14 +162,16 @@ int main()
     pubThread.join();
 
     check(rec.status == yomk::payload::ResStatus::Succeeded, "完整录制（bagRecordStop 收尾）→ eOk");
-    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(rec.data);;
-    check(lines != nullptr && lines->d.size() == 2, "record 回执可解包为 2 行 StringArray（bag 目录 + 统计行）");
-    if (lines != nullptr && lines->d.size() == 2)
+    auto result = ::yomk::msgs::unpack<::yomk::msgs::RecordResult>(rec.data);
+    check(result != nullptr && !result->msg.topics.empty(),
+          "record 回执可解包为 RecordResult（bagDir + 逐主题统计）");
+    if (result != nullptr && !result->msg.topics.empty())
     {
-        check(lines->d[0].rfind("bag_", 0) == 0, "回执首行 bag 目录名（bag_ 前缀）");
-        check(lines->d[1].find(REC_TOPIC) != std::string::npos, "统计行含主题名");
-        check(lines->d[1].find(" 条 / ") != std::string::npos && lines->d[1].find(" 字节") != std::string::npos,
-              "统计行形如 topic: N 条 / M 字节");
+        check(result->msg.bagDir.rfind("bag_", 0) == 0, "bagDir 为 bag_ 前缀目录名");
+        const auto& stat = result->msg.topics.front();
+        check(stat.topicName == REC_TOPIC, "统计项主题名与录制清单一致");
+        check(!stat.typeName.empty(), "统计项带回远端公告的原始类型名");
+        check(stat.count > 0 && stat.bytes > 0, "统计项条数与字节数大于 0");
     }
 
     // ---- 定格语义：成功录制后重复 record 拒绝 ----

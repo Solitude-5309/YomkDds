@@ -719,12 +719,12 @@ static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQo
 }
 
 // bag record 子命令：录制主题列表（透传原始 CDR 字节直写 mcap），服务端长驻阻塞至
-// Ctrl+C 触发收尾，返回后逐行打印统计（首行 bag 目录，其后每主题 "topic: N 条 / M 字节"），
-// 退出前删除 bag 节点；outputDir 非空时指定 bag 目录名/路径（相对/绝对均可），空则缺省
-// 时间戳名；startPaused 暂停态启动（订阅照常、消息丢弃不写入，等空格后启动录制）；
-// maxBagSize 单分片最大字节数（0=不分片，>0 写满滚动 bag_N.mcap）；maxBagDurationSec
-// 单分片最大时长秒（0=不分片，无下限，与 maxBagSize 同用先到先分）；maxCacheSize 写
-// 缓存双缓冲字节数（0=直写；>0 缓冲异步写盘，缓存满丢弃新消息）
+// Ctrl+C 触发收尾，返回后解包 RecordResult 并按业务约定逐行打印（首行 bag 目录，其后每主题
+// "topic: N 条 / M 字节"），退出前删除 bag 节点；outputDir 非空时指定 bag 目录名/路径
+// （相对/绝对均可），空则缺省时间戳名；startPaused 暂停态启动（订阅照常、消息丢弃不写入，
+// 等空格后启动录制）；maxBagSize 单分片最大字节数（0=不分片，>0 写满滚动 bag_N.mcap）；
+// maxBagDurationSec 单分片最大时长秒（0=不分片，无下限，与 maxBagSize 同用先到先分）；
+// maxCacheSize 写缓存双缓冲字节数（0=直写；>0 缓冲异步写盘，缓存满丢弃新消息）
 static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
                      const std::string &outputDir, bool startPaused, uint64_t maxBagSize,
                      uint64_t maxBagDurationSec, uint64_t maxCacheSize)
@@ -843,14 +843,20 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
         return 2;
     }
 
-    // 4. 输出统计：首行 bag 目录，其后每主题一行 "topic: N 条 / M 字节"
-    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
-    if (lines != nullptr)
+    // 4. 输出统计（渲染属业务层）：解包 RecordResult，首行 bag 目录，其后每主题一行
+    //    "topic: N 条 / M 字节"；载荷只给数据，行文本与单位由 CLI 约定
+    auto rec = ::yomk::msgs::unpack<::yomk::msgs::RecordResult>(resp.data);
+    if (rec == nullptr)
     {
-        for (const auto &line : lines->d)
-        {
-            std::cout << line << std::endl;
-        }
+        ::yomk::log().tag("yomkdds").error("bag record failed: unexpected response payload");
+        yomk::dds().bag().quit();
+        return 2;
+    }
+    std::cout << rec->msg.bagDir << std::endl;
+    for (const auto &stat : rec->msg.topics)
+    {
+        std::cout << stat.topicName << ": " << stat.count << " 条 / " << stat.bytes << " 字节"
+                  << std::endl;
     }
 
     // 5. 退出前显式删除 bag 节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理

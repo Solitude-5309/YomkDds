@@ -846,19 +846,19 @@ struct DDSBagPlay
 // ===== YomkDdsBagService response payloads =====
 
 /**
- * @brief Per-topic statistics of one bag operation
- * @note count/bytes cover the whole session across all shards; bytes are the written
- *       payload bytes (encapsulation header included), not the on-disk file size
+ * @brief Per-topic statistics of one bag operation (record or play)
+ * @note count/bytes cover the whole session across all shards; bytes are the payload
+ *       bytes moved (encapsulation header included), not the on-disk file size
  */
-// @zh: 单主题的 bag 操作统计
-// @zh: note count/bytes 覆盖跨全部分片的整次会话；bytes 为写出的载荷字节（含 encapsulation
+// @zh: 单主题的 bag 操作统计（录制或回放）
+// @zh: note count/bytes 覆盖跨全部分片的整次会话；bytes 为流转的载荷字节（含 encapsulation
 // @zh: header），不是磁盘文件大小
 struct BagTopicStat
 {
-    std::string topicName;  // recorded topic name (wildcard items already expanded)
-    std::string typeName;   // raw DDS type name as advertised by the remote endpoint
-    uint64_t count = 0;     // messages written
-    uint64_t bytes = 0;     // payload bytes written
+    std::string topicName;  // topic name of the operation (wildcards expanded, remaps applied)
+    std::string typeName;   // raw DDS type name stored in / advertised by the bag
+    uint64_t count = 0;     // messages recorded or played
+    uint64_t bytes = 0;     // payload bytes recorded or played
 
     std::tuple<const std::string&, const std::string&, const uint64_t&, const uint64_t&> tie() const
     {
@@ -991,5 +991,30 @@ struct BagInfo
 
     bool operator==(const BagInfo& rhs) const { return tie() == rhs.tie(); }
     bool operator!=(const BagInfo& rhs) const { return !(*this == rhs); }
+};
+
+/**
+ * @brief bag_play response: the played bag directory plus per-topic statistics
+ * @note Data only: the directory line and the "topic: N messages / M bytes" lines are
+ *       rendered by the caller (yomkdds); topics keeps the bag scan order, topicName
+ *       carries the published name (remaps applied), and a topic that was pre-scanned
+ *       but never reached reports 0/0 (playback stopped early via yomk::bagPlayStop)
+ */
+// @zh: bag_play 响应：回放的 bag 目录 + 逐主题统计
+// @zh: note 只回数据：目录行与 "topic: N 条 / M 字节" 行由调用方（yomkdds）渲染；topics 保持
+// @zh: bag 预扫顺序，topicName 为发布名（已应用 remap）；预扫命中但未播到的主题（经
+// @zh: yomk::bagPlayStop 提前停止）计 0/0
+struct PlayResult
+{
+    std::string bagDir;                 // played bag directory (as requested)
+    std::vector<BagTopicStat> topics;   // bag scan order, remap applied to topicName
+
+    std::tuple<const std::string&, const std::vector<BagTopicStat>&> tie() const
+    {
+        return std::tie(bagDir, topics);
+    }
+
+    bool operator==(const PlayResult& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const PlayResult& rhs) const { return !(*this == rhs); }
 };
 }  // namespace yomk::payload

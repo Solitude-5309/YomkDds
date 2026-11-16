@@ -28,7 +28,7 @@
 |---|---|---|---|
 | `yomkdds bag record` | 录制主题列表为 mcap bag（长驻阻塞至 Ctrl+C 收尾） | 经 bag 节点实现（CLI 自动建删） | `yomk::dds().bag().topics({...})….record()`（须先 `yomk::dds().bag()...create()` 自建 bag 节点） |
 | `yomkdds bag info` | 查看 bag 元信息（输出对齐 `ros2 bag info`） | 纯文件操作，无须节点 | `yomk::dds().bag().dir(bagDir).info()`（返回结构化 `BagInfo`，文本由调用方渲染） |
-| `yomkdds bag play` | 按录制时间轴回放为真实 DDS 流量 | CLI 自动建删 bag 节点 | `yomk::dds().bag().dir(bagDir)[.rate/.topics/.loop/.offset/.delay/.wait_acked/.remaps/.read_ahead/.qos_file()].play()`（须先 `yomk::dds().bag()...create()` 自建 bag 节点） |
+| `yomkdds bag play` | 按录制时间轴回放为真实 DDS 流量 | CLI 自动建删 bag 节点 | `yomk::dds().bag().dir(bagDir)[.rate/.topics/.loop/.offset/.delay/.wait_acked/.remaps/.read_ahead/.qos_file()].play()`（返回结构化 `PlayResult`，统计文本由调用方渲染；须先 `yomk::dds().bag()...create()` 自建 bag 节点） |
 | `yomkdds bag convert` | 按输出配置文件把一个或多个输入 bag 过滤/裁剪/合并写为新 bag | 纯文件操作，无须节点 | `yomk::dds().bag().in_bags({...}).out_cfg(path).convert()` |
 | `yomkdds bag reindex` | 从 mcap 分片重建被删/损坏的 `metadata.json` | 纯文件操作，无须节点 | `yomk::dds().bag().dir(bagDir).reindex()` |
 

@@ -89,7 +89,7 @@
 | `yomk::dds().bag().dir(bagDir).info()` | 查看 bag 元信息（纯文件操作，无须 bag 节点；返回结构化 `BagInfo`） |
 | `yomk::dds().bag().dir(bagDir).reindex()` | 从 mcap 分片重建 metadata.json（纯文件操作） |
 | `yomk::dds().bag().in_bags({...}).out_cfg(path).convert()` | 按配置过滤/裁剪/归并转换 bag（纯文件操作；返回结构化 `ConvertResult`） |
-| `yomk::dds().bag().dir(bagDir)[.rate(r)][.topics({...})][.loop()][.offset(sec)][.delay(sec)][.wait_acked(ms)][.remaps({...})][.read_ahead(n)][.qos_file(path)].play()` | 按录制时间轴回放 bag（须先自建 bag 节点；CLI `bag play` 自动建删） |
+| `yomk::dds().bag().dir(bagDir)[.rate(r)][.topics({...})][.loop()][.offset(sec)][.delay(sec)][.wait_acked(ms)][.remaps({...})][.read_ahead(n)][.qos_file(path)].play()` | 按录制时间轴回放 bag（须先自建 bag 节点；CLI `bag play` 自动建删；返回结构化 `PlayResult`） |
 
 安装后可直接运行的 CLI 工具 **`yomkdds`**（位于 `<安装路径>/bin`）：`topic print/list/info/type/find/hz/pub`、`interface show/list`、`node list/info`、`bag record/info/reindex/convert/play`，用法见 [yomkdds 观察手册](docs/manual/cli-observe-handbook.md) 与 [yomkdds 发布与内省手册](docs/manual/cli-publish-handbook.md)。
 

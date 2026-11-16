@@ -16,7 +16,7 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 | 查看 bag 元信息 | 链式 `yomk::dds().bag().dir(bagDir).info()`（返回结构化 `BagInfo`） | `bag info` | 不须（纯文件读，无须 create_node） |
 | 重建 bag 元信息 | 链式 `yomk::dds().bag().dir(bagDir).reindex()` | `bag reindex` | 不须（纯文件操作，无须 create_node） |
 | 转换 bag（过滤/裁剪/归并） | 链式 `yomk::dds().bag().in_bags({...}).out_cfg(path).convert()`（返回结构化 `ConvertResult`） | `bag convert` | 不须（纯文件操作，无须 create_node） |
-| 回放 bag | 链式 `yomk::dds().bag().dir(bagDir)[.rate(r)][.topics({...})][.loop()][.offset(sec)][.delay(sec)][.wait_acked(ms)][.remaps({...})][.read_ahead(n)][.qos_file(path)].play()` | `bag play` | **须**（库侧先 `yomk::dds().bag()...create()`）；CLI 自动创建并在退出前删除 bag 节点 |
+| 回放 bag | 链式 `yomk::dds().bag().dir(bagDir)[.rate(r)][.topics({...})][.loop()][.offset(sec)][.delay(sec)][.wait_acked(ms)][.remaps({...})][.read_ahead(n)][.qos_file(path)].play()`（返回结构化 `PlayResult`） | `bag play` | **须**（库侧先 `yomk::dds().bag()...create()`）；CLI 自动创建并在退出前删除 bag 节点 |
 
 > 核心通信套件除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余链式终结均返回 `yomk::payload::Response`，调用后须判 `status == yomk::payload::ResStatus::Succeeded`；失败时可读 `msg` 获取错误信息。
 
@@ -128,7 +128,7 @@ yomkdds bag convert -i bag_a -i bag_b -o convert.json      # 多输入按 logTim
 
 ### 回放（`yomk::dds().bag().dir(bagDir)…play()` / `bag play`）
 
-`yomkdds bag play <bag目录>` 按录制时间轴把 bag 回放为真实 DDS 流量：预扫 metadata.json 后按主题按需重建透传发布实体——消息 CDR 原始字节直发不反序列化，发布 QoS 按录制快照恢复；读播解耦（读线程从分片逐条预读入有界内存队列、播放线程按消息 logTime 相对间隔定时发布）。库侧在同一 `dir(bagDir)` 子分面上累积 `rate()`/`topics()`/`loop()`/`offset()`/`delay()`/`wait_acked()`/`remaps()`/`read_ahead()`/`qos_file()`（均可选、次序不限）后 `play()` 终结，阻塞至播毕或 `yomk::bagPlayStop` 停止。CLI 自动创建并在退出前删除 bag 节点（域号经环境变量 `YOMKDDS_DDS_DOMAIN_ID` 选择，同其他命令）。
+`yomkdds bag play <bag目录>` 按录制时间轴把 bag 回放为真实 DDS 流量：预扫 metadata.json 后按主题按需重建透传发布实体——消息 CDR 原始字节直发不反序列化，发布 QoS 按录制快照恢复；读播解耦（读线程从分片逐条预读入有界内存队列、播放线程按消息 logTime 相对间隔定时发布）。库侧在同一 `dir(bagDir)` 子分面上累积 `rate()`/`topics()`/`loop()`/`offset()`/`delay()`/`wait_acked()`/`remaps()`/`read_ahead()`/`qos_file()`（均可选、次序不限）后 `play()` 终结，阻塞至播毕或 `yomk::bagPlayStop` 停止。CLI 自动创建并在退出前删除 bag 节点（域号经环境变量 `YOMKDDS_DDS_DOMAIN_ID` 选择，同其他命令）。成功回执为 `PlayResult`（只回数据）：`bagDir` + `topics[]`（每项 `BagTopicStat`：`topicName`（应用 remap 后的发布名）/`typeName`/`count`/`bytes`，保持 bag 预扫顺序，预扫命中但未播到的主题（经 `yomk::bagPlayStop` 提前停止）计 0/0）；目录行与 `topic: N 条 / M 字节` 行由调用方渲染（CLI `bag play` 在收尾输出上述统计文本）。
 
 ```bash
 yomkdds bag play bag_in                    # 全主题 1x 按录制时间轴回放

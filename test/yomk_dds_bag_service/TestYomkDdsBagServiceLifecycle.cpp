@@ -15,8 +15,7 @@
  *   L2 停止标志契约：录制经 yomk::bagRecordStop 置位收尾（模拟 SIGINT 处理函数行为）；
  *   L3 /bag_play 端点（重建节点后）：负载往返保真（路径不存在 → 错误文本回显 bagDir）+
  *      最小 bag 真实回放（mcap writer + 手写 metadata.json 造 2 条 @100ms bag → eOk +
- *      StringArray 回执：首行 bagDir + 统计行；play 仍回文本行，record 已改结构化
- *      RecordResult，二者不再同构）；
+ *      PlayResult 回执：bagDir + 逐主题统计（发布名/类型/条数/字节））。
  *   L0 解耦契约：/bag_info 纯文件读、/bag_reindex 纯文件操作与节点生命周期无关（未建/
  *      已建节点均可调，路径不存在报文件层错误而非 bag node not created）。
  *
@@ -254,19 +253,23 @@ int main()
               playMiss.msg.find("bag path [play_svc_l3_miss] does not exist") != std::string::npos,
           "/bag_play 负载往返：错误文本回显 bagDir（解包字段保真）");
 
-    // b) 真实回放：eOk + StringArray 回执（首行 bagDir + 统计行，对齐 record 回执形态）
+    // b) 真实回放：eOk + PlayResult 结构化回执（bagDir + 逐主题统计，行文本归调用方）
     auto playOk = testInvoke(svc, "/bag_play", ::yomk::msgs::DDSBagPlay::shared(DDSBagPlay{playBagDir}));
     check(playOk.status == yomk::payload::ResStatus::Succeeded, "/bag_play 真实 bag 回放 → eOk");
-    auto playLines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(playOk.data);;
-    check(playLines != nullptr && playLines->d.size() == 2,
-          "play 回执可解包为 2 行 StringArray（bag 目录 + 统计行）");
-    if (playLines != nullptr && playLines->d.size() == 2)
+    auto played = ::yomk::msgs::unpack<::yomk::msgs::PlayResult>(playOk.data);
+    check(played != nullptr, "play 回执可解包为 PlayResult（非 StringArray）");
+    if (played != nullptr)
     {
-        check(playLines->d[0] == playBagDir, "回执首行 bag 目录名");
-        check(playLines->d[1].find("/rt/bag_svc_play") != std::string::npos &&
-                  playLines->d[1].find("2 条 / ") != std::string::npos &&
-                  playLines->d[1].find(" 字节") != std::string::npos,
-              "统计行形如 topic: 2 条 / N 字节");
+        check(played->msg.bagDir == playBagDir, "PlayResult.bagDir 原样回执");
+        check(played->msg.topics.size() == 1, "PlayResult.topics 单项（bag 预扫单主题）");
+        if (played->msg.topics.size() == 1)
+        {
+            const auto &stat = played->msg.topics.front();
+            check(stat.topicName == "/rt/bag_svc_play", "统计项 topicName = 发布名");
+            check(stat.typeName == "YomkDdsStd::MString", "统计项 typeName = bag 内类型名");
+            check(stat.count == 2, "统计项 count = 2（bag 内 2 条）");
+            check(stat.bytes > 0, "统计项 bytes = 载荷字节（含 encapsulation header）");
+        }
     }
     std::filesystem::remove_all(playBagDir, ec);  // 回放输入用例收尾自清理
 

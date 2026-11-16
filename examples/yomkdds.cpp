@@ -1100,14 +1100,19 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
         return 2;
     }
 
-    // 5. 输出统计：首行 bag 目录，其后每主题一行 "topic: N 条 / M 字节"
-    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
-    if (lines != nullptr)
+    // 5. 输出统计（渲染属业务层：载荷只给目录与逐主题计数/字节）
+    auto played = ::yomk::msgs::unpack<::yomk::msgs::PlayResult>(resp.data);
+    if (played == nullptr)
     {
-        for (const auto &line : lines->d)
-        {
-            std::cout << line << std::endl;
-        }
+        ::yomk::log().tag("yomkdds").error("bag play failed: unexpected response payload");
+        yomk::dds().bag().quit(); // 失败路径同样须清理已建 bag 节点
+        return 1;
+    }
+    std::cout << played->msg.bagDir << std::endl;
+    for (const auto &stat : played->msg.topics)
+    {
+        std::cout << stat.topicName << ": " << stat.count << " 条 / " << stat.bytes
+                  << " 字节" << std::endl;
     }
 
     // 6. 退出前显式删除 bag 节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理

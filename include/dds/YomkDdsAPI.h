@@ -11,17 +11,29 @@
 #include <yomk/dds/YomkDdsUrl.h>
 
 // Maintainer notes: this header exposes the chained Api only (the macro form is
-// fully retired; migration history lives in tmp/链式api改造-bag套件.md). The core
-// communication suite, the debug suite and the bag suite are all chained
-// (yomk::dds(), yomk::dds().debug(), yomk::dds().bag()). Each terminator wraps one
-// unified request:
+// fully retired). The core communication suite, the debug suite and the bag suite
+// are all chained (yomk::dds(), yomk::dds().debug(), yomk::dds().bag()). Each
+// terminator wraps one unified request:
 // yomk::server().url(<yomk::url constant>).msg(<yomk::msgs message>).request().
 // URLs come from YomkDdsUrl.h, payload structures from YomkDdsPayload.h,
 // message declarations from YomkDdsMsg.h.
 
-// ===== Chained Api — YomkDdsService core communication (migration in progress) =====
+// ===== YomkDdsService — core communication =====
+// Node lifecycle as yomk::dds().node(name)[.domain/.udp_ds/.tcp_ds()].create() /
+// .remove(); topic registration as yomk::dds().node(name).topic(name)[.type()
+// (required)][.qos()].create_pub() or [.sub_cb()].create_sub(); publishing via
+// [.data()].pub(), zero-copy through loan()/[.sample()].return_loan(); XML profiles
+// via [.xml(path)].load_cfg(); version via version(). Every terminator returns
+// yomk::payload::Response except loan(), whose pointer emptiness is the failure test.
+// Full behavior: docs/features/core-communication.md
 // 设计对齐 YomkServer 链式 API（srv_info/log）：域入口按值返回 builder，builder 机制
 // 内敛于 yomk::detail，调用方全程以 auto 接收，从不具名引用类型；builder 禁止缓存复用。
+// @zh: 节点生命周期 yomk::dds().node(name)[.domain/.udp_ds/.tcp_ds()].create() / .remove()；
+// @zh: 主题登记 yomk::dds().node(name).topic(name)[.type()（必填）][.qos()].create_pub() 或
+// @zh: [.sub_cb()].create_sub()；发布 [.data()].pub()；零拷贝 loan()/[.sample()].return_loan()；
+// @zh: XML profiles [.xml(path)].load_cfg()；版本 version()；
+// @zh: 终结均返回 yomk::payload::Response（仅 loan() 例外，以返回指针判空作失败判定）；
+// @zh: 详见 docs/features/core-communication.md
 namespace yomk::detail
 {
 /**
@@ -372,6 +384,49 @@ public:
             .request();
     }
 };
+
+// ===== YomkDdsDebugService — type-agnostic debugging =====
+// Every terminator returns yomk::payload::Response and requires a debug node created
+// first via yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create(), deleted via
+// yomk::dds().debug().quit(); topic registration is chained as
+// yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print(), the topic list as
+// yomk::dds().debug()[.rounds(n)][.interval(ms)].topics(), the single-topic details as
+// yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].info(), the reverse
+// lookup as yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics(),
+// the publish example as yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].pub_example(),
+// the JSON sample as yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].sample_to_json(),
+// the publish as yomk::dds().debug().topic(name).payload(json)[.rounds(n)][.interval(ms)]
+// [.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish(), the IDL struct dump as
+// yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show(), the type-name
+// list as yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces(), the node list as
+// yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes(), and the node details as
+// yomk::dds().debug().node(name)[.rounds(n)][.interval(ms)].info().
+// list/info/find share the convergence semantics: consecutive stableRounds unchanged
+// snapshots, 0 clamped to defaults 5 rounds / 200ms. Query and publish responses carry
+// structured packets (TopicInfo / TopicExampleInfo / TopicMessageInfo / TopicPublishInfo /
+// NodeInfo / InterfaceInfo) instead of pre-rendered text; only the plain name-list
+// surfaces (topics/find_topics/interfaces/nodes) stay StringArray.
+// Full behavior: docs/features/debug-service.md
+// @zh: 调试 API（YomkDdsDebugService 端点，已全链式化，等价 CLI：yomkdds）
+// @zh: 均返回 yomk::payload::Response，且须先经
+// @zh: yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create() 创建调试节点，
+// @zh: 退出经 yomk::dds().debug().quit()；主题登记为
+// @zh: yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print()，主题清单为
+// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()，单主题详情为
+// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].info()，类型反查为
+// @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics()，发布示例为
+// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].pub_example()，JSON 样本为
+// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].sample_to_json()，发布为
+// @zh: yomk::dds().debug().topic(name).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()，
+// @zh: 类型内省为 yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show()，
+// @zh: 类型清单为 yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()，节点清单为
+// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()，节点详情为
+// @zh: yomk::dds().debug().node(name)[.rounds(n)][.interval(ms)].info()；
+// @zh: list/info/find 组共用收敛语义：连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；
+// @zh: 查询与发布响应均为结构化包（TopicInfo / TopicExampleInfo / TopicMessageInfo /
+// @zh: TopicPublishInfo / NodeInfo / InterfaceInfo），不再回预渲染文本；
+// @zh: 仅纯名称清单（topics/find_topics/interfaces/nodes）保持 StringArray；
+// @zh: 详见 docs/features/debug-service.md
 
 /**
  * @brief Debug topic facet: carries the topicName opened by debug().topic(), the
@@ -1094,6 +1149,28 @@ public:
     }
 };
 
+// ===== YomkDdsBagService — mcap bag record/replay =====
+// yomk::dds().bag() covers the whole bag domain: the node lifecycle as
+// yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit(),
+// recording as yomk::dds().bag().topics({...})[.out_dir/.max_size/.max_duration/
+// .cache()].record(), conversion as
+// yomk::dds().bag().in_bags({...}).out_cfg(path).convert(), and the bag directory
+// facet as yomk::dds().bag().dir(bagDir) for info() / reindex() /
+// [.rate/.topics/.loop/.offset/.delay/.wait_acked/.remaps/.read_ahead/.qos_file()]
+// .play(). Every terminator returns yomk::payload::Response; record()/play() block
+// the calling thread until finished or stopped via the yomk::bag* flags, and the
+// bag node created by create() is required by record()/play().
+// Full behavior: docs/features/bag-service.md
+// @zh: Bag API（YomkDdsBagService 端点，已全链式化，等价 CLI：yomkdds bag）
+// @zh: yomk::dds().bag() 覆盖整个 bag 域：节点生命周期为
+// @zh: yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit()，
+// @zh: 录制为 yomk::dds().bag().topics({...})[.out_dir/.max_size/.max_duration/.cache()].record()，
+// @zh: 转换为 yomk::dds().bag().in_bags({...}).out_cfg(path).convert()，bag 目录分面为
+// @zh: yomk::dds().bag().dir(bagDir)，终结于 info() / reindex() /
+// @zh: [.rate/.topics/.loop/.offset/.delay/.wait_acked/.remaps/.read_ahead/.qos_file()].play()；
+// @zh: 终结均返回 yomk::payload::Response，record()/play() 阻塞至收尾或经 yomk::bag* 标志停止，
+// @zh: 且须先经 create() 建 bag 节点；详见 docs/features/bag-service.md
+
 /**
  * @brief Bag directory facet: carries the bag directory opened by bag().dir(),
  *        terminated by info()/reindex(); reopening it for playback accumulates the
@@ -1298,8 +1375,10 @@ public:
     }
     /**
      * @brief Replay the bag on its recorded timeline (blocking request terminator)
-     * @return Response; success carries a StringArray whose first line is the bag
-     *         directory and then one "topic: N messages / M bytes" line per topic;
+     * @return Response carrying a PlayResult packet: bagDir plus topics, one BagTopicStat
+     *         per pre-scanned topic (topicName as published after remaps, typeName,
+     *         count, bytes; a topic never reached reports 0/0); the directory line and
+     *         the "topic: N messages / M bytes" lines are rendered by the caller;
      *         Invalid when YomkServer is not initialized
      * @note Blocks the calling thread until all messages are played or stops through
      *       yomk::bagPlayStop (async-signal-safe); pause/resume/rate at runtime via
@@ -1308,8 +1387,9 @@ public:
      *       metadata are rejected
      */
     // @zh: 按录制时间轴回放该 bag（阻塞至播毕或停止的请求终结）
-    // @zh: return Response；成功载荷为 StringArray（首行 bag 目录，其后每主题一行 "topic: N 条 / M 字节"）；
-    // @zh: 未初始化返回 Invalid
+    // @zh: return Response 携带 PlayResult 包：bagDir + topics（bag 预扫序，每项 BagTopicStat：
+    // @zh: topicName（应用 remap 后的发布名）/typeName/条数/字节；未播到的主题计 0/0）；
+    // @zh: 目录行与 "topic: N 条 / M 字节" 行由调用方渲染；未初始化返回 Invalid
     // @zh: note 阻塞调用线程至全部播毕或经 yomk::bagPlayStop 停止（async-signal-safe）；
     // @zh: 运行时经 bagPlayPause/Resume/SetRate 控制，复用前先 bagPlayReset()；
     // @zh: 须先经 create() 建 bag 节点；旧格式 bag（type 空串）拒播
@@ -1754,82 +1834,3 @@ inline detail::DdsBuilder dds()
     return detail::DdsBuilder{};
 }
 }  // namespace yomk
-
-// ===== YomkDdsDebugService — type-agnostic debugging =====
-/**
- * @brief Debug API (YomkDdsDebugService endpoints, chain-only); equal CLI: yomkdds
- *
- * Every terminator returns yomk::payload::Response and requires a debug node created
- * first via yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create(), deleted via
- * yomk::dds().debug().quit(); topic registration is chained as
- * yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print(), the topic list as
- * yomk::dds().debug()[.rounds(n)][.interval(ms)].topics(), and the
- * single-topic details as
- * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].info(), and the
- * reverse lookup as yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics(),
- * the publish example as
- * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].pub_example(), the JSON sample as
- * yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].sample_to_json(), the publish as
- * yomk::dds().debug().topic(name).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)]
- * [.required(n)][.max_times(n)][.qos(qos)].publish(), and the IDL struct dump as
- * yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show(), and the
- * type-name list as yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces(), the
- * node list as yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes(), and the node
- * details as yomk::dds().debug().node(name)[.rounds(n)][.interval(ms)].info().
- * list/info/find share the convergence semantics: consecutive stableRounds
- * unchanged snapshots, 0 clamped to defaults 5 rounds / 200ms. Query and publish
- * responses carry structured packets (TopicInfo / TopicExampleInfo /
- * TopicMessageInfo / TopicPublishInfo / NodeInfo / InterfaceInfo) instead of
- * pre-rendered text; only the plain name-list surfaces (topics/find_topics/
- * interfaces/nodes) stay StringArray. Full behavior:
- * docs/features/debug-service.md
- */
-// @zh: 调试 API（YomkDdsDebugService 端点，已全链式化，等价 CLI：yomkdds）
-// @zh: 均返回 yomk::payload::Response，且须先经
-// @zh: yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create() 创建调试节点，
-// @zh: 退出经 yomk::dds().debug().quit()；主题登记已链式化为
-// @zh: yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print()，主题清单为
-// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()，单主题详情为
-// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].info()，发布示例为
-// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].pub_example()，JSON 样本为
-// @zh: yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].sample_to_json()，发布为
-// @zh: yomk::dds().debug().topic(name).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()，
-// @zh: 类型反查为
-// @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].find_topics()，类型内省为
-// @zh: yomk::dds().debug().type(name)[.rounds(n)][.interval(ms)].interface_show()，类型清单为
-// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()，节点清单为
-// @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()，节点详情为
-// @zh: yomk::dds().debug().node(name)[.rounds(n)][.interval(ms)].info()；
-// @zh: list/info/find 组共用收敛语义：
-// @zh: 连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；
-// @zh: 查询与发布响应均为结构化包（TopicInfo / TopicExampleInfo / TopicMessageInfo /
-// @zh: TopicPublishInfo / NodeInfo / InterfaceInfo），不再回预渲染文本；
-// @zh: 仅纯名称清单（topics/find_topics/interfaces/nodes）保持 StringArray；
-// @zh: 详见 docs/features/debug-service.md
-
-
-// ===== YomkDdsBagService — mcap bag record/replay =====
-/**
- * @brief Bag API (YomkDdsBagService endpoints, chain-only); equal CLI: yomkdds bag
- *
- * yomk::dds().bag() covers the whole bag domain: the node lifecycle as
- * yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit(),
- * recording as yomk::dds().bag().topics({...})[.out_dir/.max_size/.max_duration/
- * .cache()].record(), conversion as
- * yomk::dds().bag().in_bags({...}).out_cfg(path).convert(), and the bag directory
- * facet as yomk::dds().bag().dir(bagDir) for info() / reindex() /
- * [.rate/.topics/.loop/.offset/.delay/.wait_acked/.remaps/.read_ahead/.qos_file()]
- * .play(). Every terminator returns yomk::payload::Response; record()/play() block
- * the calling thread until finished or stopped via the yomk::bag* flags, and the
- * bag node created by create() is required by record()/play().
- * Full behavior: docs/features/bag-service.md
- */
-// @zh: Bag API（YomkDdsBagService 端点，已全链式化，等价 CLI：yomkdds bag）
-// @zh: yomk::dds().bag() 覆盖整个 bag 域：节点生命周期为
-// @zh: yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create() / yomk::dds().bag().quit()，
-// @zh: 录制为 yomk::dds().bag().topics({...})[.out_dir/.max_size/.max_duration/.cache()].record()，
-// @zh: 转换为 yomk::dds().bag().in_bags({...}).out_cfg(path).convert()，bag 目录分面为
-// @zh: yomk::dds().bag().dir(bagDir)，终结于 info() / reindex() /
-// @zh: [.rate/.topics/.loop/.offset/.delay/.wait_acked/.remaps/.read_ahead/.qos_file()].play()；
-// @zh: 终结均返回 yomk::payload::Response，record()/play() 阻塞至收尾或经 yomk::bag* 标志停止，
-// @zh: 且须先经 create() 建 bag 节点；详见 docs/features/bag-service.md

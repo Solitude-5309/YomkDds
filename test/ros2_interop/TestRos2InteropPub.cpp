@@ -14,7 +14,7 @@
  * YomkDds 端直接用 rt/ 形态注册（docs/features/ros2-interop.md 互通三要素之一）。
  */
 
-#include <yomk/dds/YomkDdsAPI.h>
+#include "YomkDdsAPI.h"  // flat quoted include: build against the source tree header, not the installed one
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 
@@ -40,7 +40,7 @@ static void onSignal(int)
 int main()
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsService>().create();
+    ::yomk::server().srv<YomkDdsHandler>().create();
 
     // 创建节点（域 0 对齐 ROS2 默认域）
     auto resp = yomk::dds().node("interop_pub").domain(0).create();

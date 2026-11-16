@@ -23,10 +23,10 @@ using namespace yomk;
 int main(int argc, char* argv[])
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsService>().create();
+    ::yomk::server().srv<YomkDdsHandler>().create();
 
     // 1. 创建节点
-    ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== YomkDdsService::createNode ===");
+    ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== YomkDdsHandler::createNode ===");
     auto resp = yomk::dds().node("node0").create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
@@ -123,7 +123,7 @@ int main(int argc, char* argv[])
     }
 
     // 7. 退出前销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
-    ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== YomkDdsService::deleteNode ===");
+    ::yomk::log().tag("ExampleYomkDdsTopicLoan").info("=== YomkDdsHandler::deleteNode ===");
     resp = yomk::dds().node("node0").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {

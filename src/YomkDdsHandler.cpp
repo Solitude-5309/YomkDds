@@ -2,7 +2,7 @@
 //   type（DDSTopic/DDSSubRequest.type）caller new、服务端全路径接管，无论成败均由本服务 delete；
 //   data（DDSPublish.data）借用（非所有权），publish 同步写入后归 caller 管理；
 //   sample（DDSLoan/LoanSample.sample）从 writer 池借出，经 write（发布）或 discard（归还）交回中间件。
-#include "YomkDdsService.h"
+#include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
 
 #include "FastDDSNode.h"
@@ -31,34 +31,34 @@ struct LoanGuard
 };
 }  // namespace
 
-YomkDdsService::YomkDdsService(YomkServer* server) : YomkService(server)
+YomkDdsHandler::YomkDdsHandler(YomkServer* server) : YomkService(server)
 {
-    name("/YomkDdsService");
+    name("/YomkDdsHandler");
 }
 
-YomkDdsService::~YomkDdsService() = default;
+YomkDdsHandler::~YomkDdsHandler() = default;
 
-int YomkDdsService::init()
+int YomkDdsHandler::init()
 {
-    installFunc("/version", &YomkDdsService::getVersion);
-    installFunc("/load_xml", &YomkDdsService::loadXml);
-    installFunc("/create_node", &YomkDdsService::createNode);
-    installFunc("/delete_node", &YomkDdsService::deleteNode);
-    installFunc("/register_pub_topic", &YomkDdsService::registerPubTopic);
-    installFunc("/register_sub_topic", &YomkDdsService::registerSubTopic);
-    installFunc("/publish", &YomkDdsService::publish);
-    installFunc("/loan", &YomkDdsService::loan);
-    installFunc("/discard_loan", &YomkDdsService::discardLoan);
+    installFunc("/version", &YomkDdsHandler::getVersion);
+    installFunc("/load_xml", &YomkDdsHandler::loadXml);
+    installFunc("/create_node", &YomkDdsHandler::createNode);
+    installFunc("/delete_node", &YomkDdsHandler::deleteNode);
+    installFunc("/register_pub_topic", &YomkDdsHandler::registerPubTopic);
+    installFunc("/register_sub_topic", &YomkDdsHandler::registerSubTopic);
+    installFunc("/publish", &YomkDdsHandler::publish);
+    installFunc("/loan", &YomkDdsHandler::loan);
+    installFunc("/discard_loan", &YomkDdsHandler::discardLoan);
     return 0;
 }
 
-yomk::payload::Response YomkDdsService::getVersion(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsHandler::getVersion(YomkMsgPtr pkg)
 {
     std::string version = "YomkDds v" YOMKDDS_VERSION_STRING;
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::String::shared(version));
 }
 
-yomk::payload::Response YomkDdsService::loadXml(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsHandler::loadXml(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != "DDSXmlLoad")
     {
@@ -74,14 +74,14 @@ yomk::payload::Response YomkDdsService::loadXml(YomkMsgPtr pkg)
 
     if (p->msg.xmlPath.empty())
     {
-        ::yomk::log().tag("YomkDdsService::loadXml").error("xml path is empty");
+        ::yomk::log().tag("YomkDdsHandler::loadXml").error("xml path is empty");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "xml path is empty");
     }
     // 缓存 raw 串：节点层 QoS 提取链吃 raw 串而非文件路径
     std::ifstream file(p->msg.xmlPath);
     if (!file)
     {
-        ::yomk::log().tag("YomkDdsService::loadXml").error("xml file [", p->msg.xmlPath, "] not readable");
+        ::yomk::log().tag("YomkDdsHandler::loadXml").error("xml file [", p->msg.xmlPath, "] not readable");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "xml file [" + p->msg.xmlPath + "] not readable");
     }
     std::ostringstream buf;
@@ -89,7 +89,7 @@ yomk::payload::Response YomkDdsService::loadXml(YomkMsgPtr pkg)
     const std::string xml = buf.str();
     if (xml.empty())
     {
-        ::yomk::log().tag("YomkDdsService::loadXml").error("xml file [", p->msg.xmlPath, "] is empty");
+        ::yomk::log().tag("YomkDdsHandler::loadXml").error("xml file [", p->msg.xmlPath, "] is empty");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "xml file [" + p->msg.xmlPath + "] is empty");
     }
     // 此处仅证明文件可解析，QoS 提取由节点层经 xmlCache() 完成；rc 为 ReturnCode_t（int32_t），
@@ -98,7 +98,7 @@ yomk::payload::Response YomkDdsService::loadXml(YomkMsgPtr pkg)
     const auto rc = factory->load_XML_profiles_file(p->msg.xmlPath);
     if (rc != eprosima::fastdds::dds::RETCODE_OK)
     {
-        ::yomk::log().tag("YomkDdsService::loadXml").error("load_XML_profiles_file [", p->msg.xmlPath, "] failed, rc=", rc);
+        ::yomk::log().tag("YomkDdsHandler::loadXml").error("load_XML_profiles_file [", p->msg.xmlPath, "] failed, rc=", rc);
         return yomk::payload::Response(
             yomk::payload::ResStatus::Failed,
             "load_XML_profiles_file [" + p->msg.xmlPath + "] failed, rc=" + std::to_string(rc));
@@ -109,7 +109,7 @@ yomk::payload::Response YomkDdsService::loadXml(YomkMsgPtr pkg)
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }
 
-yomk::payload::Response YomkDdsService::createNode(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsHandler::createNode(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != "DDSNode")
     {
@@ -125,12 +125,12 @@ yomk::payload::Response YomkDdsService::createNode(YomkMsgPtr pkg)
 
     if (p->msg.nodeName.empty())
     {
-        ::yomk::log().tag("YomkDdsService::createNode").error("node name is empty");
+        ::yomk::log().tag("YomkDdsHandler::createNode").error("node name is empty");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node name is empty");
     }
     if (p->msg.domainId > kMaxDomainId)
     {
-        ::yomk::log().tag("YomkDdsService::createNode").error("domainId [", p->msg.domainId, "] out of valid range [0,232]");
+        ::yomk::log().tag("YomkDdsHandler::createNode").error("domainId [", p->msg.domainId, "] out of valid range [0,232]");
         return yomk::payload::Response(
             yomk::payload::ResStatus::Failed, "domainId [" + std::to_string(p->msg.domainId) + "] out of valid range [0,232]");
     }
@@ -141,7 +141,7 @@ yomk::payload::Response YomkDdsService::createNode(YomkMsgPtr pkg)
     std::lock_guard<std::mutex> lock(mtx_);
     if (nodes_.find(p->msg.nodeName) != nodes_.end())
     {
-        ::yomk::log().tag("YomkDdsService::createNode").error("node [", p->msg.nodeName, "] already exists");
+        ::yomk::log().tag("YomkDdsHandler::createNode").error("node [", p->msg.nodeName, "] already exists");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node [" + p->msg.nodeName + "] already exists");
     }
 
@@ -155,7 +155,7 @@ yomk::payload::Response YomkDdsService::createNode(YomkMsgPtr pkg)
     std::string nodeErr;
     if (!node->setDomainId(p->msg.domainId, p->msg.nodeName, spec, &nodeErr))
     {
-        ::yomk::log().tag("YomkDdsService::createNode").error("create node [", p->msg.nodeName, "] failed: ", nodeErr.empty() ? "setDomainId error" : nodeErr);
+        ::yomk::log().tag("YomkDdsHandler::createNode").error("create node [", p->msg.nodeName, "] failed: ", nodeErr.empty() ? "setDomainId error" : nodeErr);
         return yomk::payload::Response(
             yomk::payload::ResStatus::Failed,
             "create node [" + p->msg.nodeName + "] failed: " +
@@ -165,7 +165,7 @@ yomk::payload::Response YomkDdsService::createNode(YomkMsgPtr pkg)
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }
 
-yomk::payload::Response YomkDdsService::deleteNode(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsHandler::deleteNode(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != "String")
     {
@@ -183,14 +183,14 @@ yomk::payload::Response YomkDdsService::deleteNode(YomkMsgPtr pkg)
     auto it = nodes_.find(p->d);
     if (it == nodes_.end())
     {
-        ::yomk::log().tag("YomkDdsService::deleteNode").error("node [", p->d, "] not exists");
+        ::yomk::log().tag("YomkDdsHandler::deleteNode").error("node [", p->d, "] not exists");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node [" + p->d + "] not exists");
     }
     nodes_.erase(it);
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }
 
-yomk::payload::Response YomkDdsService::registerPubTopic(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsHandler::registerPubTopic(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != "DDSTopic")
     {
@@ -208,21 +208,21 @@ yomk::payload::Response YomkDdsService::registerPubTopic(YomkMsgPtr pkg)
     auto it = nodes_.find(p->msg.nodeName);
     if (it == nodes_.end())
     {
-        ::yomk::log().tag("YomkDdsService::registerPubTopic").error("node [", p->msg.nodeName, "] not exists");
+        ::yomk::log().tag("YomkDdsHandler::registerPubTopic").error("node [", p->msg.nodeName, "] not exists");
         // type 所有权无条件接管：未委托到节点层，须在此释放避免泄漏
         delete static_cast<eprosima::fastdds::dds::TopicDataType*>(p->msg.type);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node [" + p->msg.nodeName + "] not exists");
     }
     if (!it->second->registerPubTopic(p->msg.topicName, p->msg.type, p->msg.qos))
     {
-        ::yomk::log().tag("YomkDdsService::registerPubTopic").error("registerPubTopic [", p->msg.topicName, "] failed on node [", p->msg.nodeName, "]");
+        ::yomk::log().tag("YomkDdsHandler::registerPubTopic").error("registerPubTopic [", p->msg.topicName, "] failed on node [", p->msg.nodeName, "]");
         return yomk::payload::Response(
             yomk::payload::ResStatus::Failed, "registerPubTopic [" + p->msg.topicName + "] failed on node [" + p->msg.nodeName + "]");
     }
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }
 
-yomk::payload::Response YomkDdsService::registerSubTopic(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsHandler::registerSubTopic(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != "DDSSubRequest")
     {
@@ -240,21 +240,21 @@ yomk::payload::Response YomkDdsService::registerSubTopic(YomkMsgPtr pkg)
     auto it = nodes_.find(p->msg.nodeName);
     if (it == nodes_.end())
     {
-        ::yomk::log().tag("YomkDdsService::registerSubTopic").error("node [", p->msg.nodeName, "] not exists");
+        ::yomk::log().tag("YomkDdsHandler::registerSubTopic").error("node [", p->msg.nodeName, "] not exists");
         // type 所有权无条件接管：未委托到节点层，须在此释放避免泄漏
         delete static_cast<eprosima::fastdds::dds::TopicDataType*>(p->msg.type);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node [" + p->msg.nodeName + "] not exists");
     }
     if (!it->second->registerSubTopic(p->msg.topicName, p->msg.type, p->msg.callback, p->msg.qos))
     {
-        ::yomk::log().tag("YomkDdsService::registerSubTopic").error("registerSubTopic [", p->msg.topicName, "] failed on node [", p->msg.nodeName, "]");
+        ::yomk::log().tag("YomkDdsHandler::registerSubTopic").error("registerSubTopic [", p->msg.topicName, "] failed on node [", p->msg.nodeName, "]");
         return yomk::payload::Response(
             yomk::payload::ResStatus::Failed, "registerSubTopic [" + p->msg.topicName + "] failed on node [" + p->msg.nodeName + "]");
     }
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }
 
-yomk::payload::Response YomkDdsService::publish(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsHandler::publish(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != "DDSPublish")
     {
@@ -272,19 +272,19 @@ yomk::payload::Response YomkDdsService::publish(YomkMsgPtr pkg)
     auto it = nodes_.find(p->msg.nodeName);
     if (it == nodes_.end())
     {
-        ::yomk::log().tag("YomkDdsService::publish").error("node [", p->msg.nodeName, "] not exists");
+        ::yomk::log().tag("YomkDdsHandler::publish").error("node [", p->msg.nodeName, "] not exists");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node [" + p->msg.nodeName + "] not exists");
     }
     if (!it->second->publish(p->msg.topicName, p->msg.data))
     {
-        ::yomk::log().tag("YomkDdsService::publish").error("publish [", p->msg.topicName, "] failed on node [", p->msg.nodeName, "]");
+        ::yomk::log().tag("YomkDdsHandler::publish").error("publish [", p->msg.topicName, "] failed on node [", p->msg.nodeName, "]");
         return yomk::payload::Response(
             yomk::payload::ResStatus::Failed, "publish [" + p->msg.topicName + "] failed on node [" + p->msg.nodeName + "]");
     }
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }
 
-yomk::payload::Response YomkDdsService::loan(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsHandler::loan(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != "DDSLoan")
     {
@@ -302,13 +302,13 @@ yomk::payload::Response YomkDdsService::loan(YomkMsgPtr pkg)
     auto it = nodes_.find(p->msg.nodeName);
     if (it == nodes_.end())
     {
-        ::yomk::log().tag("YomkDdsService::loan").error("node [", p->msg.nodeName, "] not exists");
+        ::yomk::log().tag("YomkDdsHandler::loan").error("node [", p->msg.nodeName, "] not exists");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node [" + p->msg.nodeName + "] not exists");
     }
     void* sample = nullptr;
     if (!it->second->loan(p->msg.topicName, sample) || sample == nullptr)
     {
-        ::yomk::log().tag("YomkDdsService::loan").error("loan [", p->msg.topicName, "] failed on node [", p->msg.nodeName, "] (非 plain 类型或池耗尽，回退普通发布)");
+        ::yomk::log().tag("YomkDdsHandler::loan").error("loan [", p->msg.topicName, "] failed on node [", p->msg.nodeName, "] (非 plain 类型或池耗尽，回退普通发布)");
         return yomk::payload::Response(
             yomk::payload::ResStatus::Failed, "loan [" + p->msg.topicName + "] failed on node [" + p->msg.nodeName + "]");
     }
@@ -319,7 +319,7 @@ yomk::payload::Response YomkDdsService::loan(YomkMsgPtr pkg)
     return resp;
 }
 
-yomk::payload::Response YomkDdsService::discardLoan(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsHandler::discardLoan(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != "DDSLoan")
     {
@@ -337,21 +337,21 @@ yomk::payload::Response YomkDdsService::discardLoan(YomkMsgPtr pkg)
     auto it = nodes_.find(p->msg.nodeName);
     if (it == nodes_.end())
     {
-        ::yomk::log().tag("YomkDdsService::discardLoan").error("node [", p->msg.nodeName, "] not exists");
+        ::yomk::log().tag("YomkDdsHandler::discardLoan").error("node [", p->msg.nodeName, "] not exists");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "node [" + p->msg.nodeName + "] not exists");
     }
     if (!it->second->discardLoan(p->msg.topicName, p->msg.sample))
     {
-        ::yomk::log().tag("YomkDdsService::discardLoan").error("discardLoan [", p->msg.topicName, "] failed on node [", p->msg.nodeName, "]");
+        ::yomk::log().tag("YomkDdsHandler::discardLoan").error("discardLoan [", p->msg.topicName, "] failed on node [", p->msg.nodeName, "]");
         return yomk::payload::Response(
             yomk::payload::ResStatus::Failed, "discardLoan [" + p->msg.topicName + "] failed on node [" + p->msg.nodeName + "]");
     }
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }
 
-std::string YomkDdsService::xmlCache_;  // 已成功加载的 XML profiles raw 串（空=未加载）
+std::string YomkDdsHandler::xmlCache_;  // 已成功加载的 XML profiles raw 串（空=未加载）
 
-const std::string& YomkDdsService::xmlCache()
+const std::string& YomkDdsHandler::xmlCache()
 {
     return xmlCache_;
 }

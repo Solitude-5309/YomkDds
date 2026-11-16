@@ -47,7 +47,7 @@
 
 > 除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `status == yomk::payload::ResStatus::Succeeded`；失败时可读 `msg` 获取错误信息。
 
-**核心通信（YomkDdsService）** — 详见 [功能文档：核心通信](docs/features/core-communication.md)：
+**核心通信（YomkDdsHandler）** — 详见 [功能文档：核心通信](docs/features/core-communication.md)：
 
 | 链式 API | 简述 |
 |---|---|
@@ -124,14 +124,14 @@ cmake -S test -B test/build -DCMAKE_PREFIX_PATH="${YOMK_PREFIX_PATH:-/opt/yomk}"
 cmake --build test/build -j
 ```
 
-构建产物为 22 个测试可执行（位于 `test/build/harness/`、`test/build/yomk_dds_service/`、`test/build/fast_dds_debug_node/`、`test/build/yomk_dds_debug_service/`、`test/build/yomk_dds_bag_service/`、`test/build/fast_dds_bag_node/`）：
+构建产物为 22 个测试可执行（位于 `test/build/harness/`、`test/build/yomk_dds_handler/`、`test/build/fast_dds_debug_node/`、`test/build/yomk_dds_debug_service/`、`test/build/yomk_dds_bag_service/`、`test/build/fast_dds_bag_node/`）：
 
 > 另有 `test/build/ros2_interop/` 下的 `TestRos2InteropPub` / `TestRos2InteropSub` 两个 ROS2 真机互通判定程序，不注册 CTest，由 `./test/run_ros2_interop.sh` 手动驱动（详见 [ros2-interop.md](docs/features/ros2-interop.md)）。
 
 | 模块 | 测试目标 |
 |---|---|
 | Harness (1) | TestHarnessSmoke（零 DDS 基座自检） |
-| YomkDdsService (10) | TestYomkDdsServiceContract、TestYomkDdsServiceLifecycle、TestYomkDdsNodeLifecycle、TestYomkDdsSetNaming、TestYomkDdsTopic、TestYomkDdsLoan、TestYomkDdsTypes、TestYomkDdsConcurrency、TestYomkDdsStressSerial、TestYomkDdsStressConcurrent |
+| YomkDdsHandler (10) | TestYomkDdsHandlerContract、TestYomkDdsHandlerLifecycle、TestYomkDdsNodeLifecycle、TestYomkDdsSetNaming、TestYomkDdsTopic、TestYomkDdsLoan、TestYomkDdsTypes、TestYomkDdsConcurrency、TestYomkDdsStressSerial、TestYomkDdsStressConcurrent |
 | FastDDSDebugNode (1) | TestFastDDSDebugNode（节点层守卫 + 发现→动态类型→订阅→JSON 输出端到端） |
 | YomkDdsDebugService (2) | TestYomkDdsDebugServiceContract（DDS-free 契约）、TestYomkDdsDebugServiceLifecycle（真实 DDS 生命周期） |
 | YomkDdsBagService (2) | TestYomkDdsBagServiceContract（DDS-free 契约）、TestYomkDdsBagServiceLifecycle（真实 DDS 录制生命周期） |
@@ -160,7 +160,7 @@ cmake --build test/build -j
 每个测试为独立可执行（纯 `main()` + `CHECK` 断言，返回 0 = 全部通过），可直接单独运行：
 
 ```bash
-./test/build/yomk_dds_service/TestYomkDdsTopic
+./test/build/yomk_dds_handler/TestYomkDdsTopic
 ```
 
 2 个 stress 测试的规模是**编译期**旋钮，由 CMake 变量 `STRESS_ITERS` / `STRESS_CYCLES` 注入（缺省 5000/30，闭环规模 100000/50），`./test/run_tests.sh --full` 会自动重配+重编后全量运行。
@@ -170,7 +170,7 @@ cmake --build test/build -j
 - ✅ 基础框架搭建完成
 - ✅ CMake 构建系统集成
 - ✅ FastDDS 集成（FastDDSNode 发布订阅）
-- ✅ YomkDdsService DDS 接口（节点管理/主题注册/发布）
+- ✅ YomkDdsHandler DDS 接口（节点管理/主题注册/发布）
 - ✅ Loan 借出机制（订阅端透明自动切换，发布端 loan/discard 接口）
 - ✅ 跨进程通信验证（ExampleYomkDdsPub/ExampleYomkDdsSub 双进程示例）
 - ✅ 类型无关调试（FastDDSDebugNode + YomkDdsDebugService + yomkdds 命令行工具）

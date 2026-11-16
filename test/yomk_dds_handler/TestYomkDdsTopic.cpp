@@ -26,9 +26,9 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-// 引服务头：YomkDdsService + DDSQosProfile + DDSTopic/DDSSubRequest/DDSPublish +
+// 引服务头：YomkDdsHandler + DDSQosProfile + DDSTopic/DDSSubRequest/DDSPublish +
 // String + YOMK_* 宏
-#include "YomkDdsService.h"
+#include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
 #include "YomkDdsDebugService.h" // YomkDdsDebugService + DDSDebugNode/DDSDebugInfo（QoS-B4 读回链路）
 
@@ -56,7 +56,7 @@ namespace
     }
 
     // T8/T10/T9：注册成功 + 守卫（重复注册/type==null）+ 类型名不符回滚
-    void testTopicRegistration(YomkDdsService *svc)
+    void testTopicRegistration(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "topic_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 topic_node(domain 200) → eOk");
@@ -98,7 +98,7 @@ namespace
     }
 
     // T11：publish → on_data_available → callback 本地回环（同 participant 内 pub+sub 同主题）
-    void testEndToEndPubSub(YomkDdsService *svc)
+    void testEndToEndPubSub(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "e2e_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 e2e_node → eOk");
@@ -160,7 +160,7 @@ namespace
     }
 
     // publish 守卫（节点存在但主题未注册 / 数据非法）
-    void testPublishGuards(YomkDdsService *svc)
+    void testPublishGuards(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "pg_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 pg_node → eOk");
@@ -188,7 +188,7 @@ namespace
     // 覆盖修复的 4 个失败点中未被上方用例触达的 3 个：服务层节点不存在（pub/sub）、节点层
     // 重复注册 sub 守卫；节点层重复注册 pub 守卫已由 testTopicRegistration 的 T10 覆盖。
     // 断言行为 eNo；泄漏由 asan 兜底（修复前重复注册泄漏 MStringPubSubType）。
-    void testTypeOwnershipOnFailure(YomkDdsService *svc)
+    void testTypeOwnershipOnFailure(YomkDdsHandler *svc)
     {
         // 服务层：节点不存在（未委托到 FastDDSNode，type 须由服务层释放）
         check(testInvoke(svc, "/register_pub_topic",
@@ -219,7 +219,7 @@ namespace
     // callback_==false 分支（防御性跳过空调用，避免 bad_function_call）。MC3 原 e2e 均带有效回调，
     // 空回调 sub（testTypeOwnershipOnFailure 的 s_dup）从未收到数据，故此分支恒 taken 0。
     // 本地回环：同 node 内 pub+sub 同 topic，发布数据触发 sub 的 on_data_available，callback_ 空则跳过。
-    void testEmptyCallbackSub(YomkDdsService *svc)
+    void testEmptyCallbackSub(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "ecb_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 ecb_node → eOk");
@@ -268,7 +268,7 @@ namespace
     //     RELIABLE+TRANSIENT_LOCAL 双双不同）经调试节点 topic info -v 从发现数据
     //     读回断言两行 QoS，直证 profile 值落到端点；
     // 全哨兵缺省兼容：既有 T8/e2e 等用例的三参/四参聚合初始化（不带尾参）即全哨兵路径。
-    void testQosProfile(YomkDdsService *svc, YomkDdsDebugService *svcDebug)
+    void testQosProfile(YomkDdsHandler *svc, YomkDdsDebugService *svcDebug)
     {
         // B1：ros2 底座组合收发（invoke+四参/五参聚合尾参，与宏展开等价同链路）
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "qos1_node")).status == yomk::payload::ResStatus::Succeeded,
@@ -385,8 +385,8 @@ int main()
     ::yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
     // 调试服务（QoS-B4 从发现数据读回端点实际 QoS 用）
     auto *svcDebug = new YomkDdsDebugService(::yomk::server().instance().get());
     check(::yomk::server().srv_ptr(svcDebug).add() == 0, "YomkDdsDebugService 注册成功");

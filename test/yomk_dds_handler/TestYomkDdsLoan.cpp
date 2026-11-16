@@ -4,7 +4,7 @@
  *
  * 范围：MC0-MC3 覆盖服务契约、节点生命周期、主题注册与普通发布订阅，但 loan 免序列化路径
  *       完全未测。本用例经 testInvoke(svc, ) 白盒验证 FastDDSNode::loan/discardLoan 与
- *       YomkDdsService::loan/discardLoan 的真实行为：plain(MInt32) 借出成功、非 plain(MString)
+ *       YomkDdsHandler::loan/discardLoan 的真实行为：plain(MInt32) 借出成功、非 plain(MString)
  *       回退、loan→池内填值→publish 免序列化端到端、discard_loan 归还、loan/discard 守卫。
  * 覆盖：
  *   Part A  loan 类型差异：plain MInt32 → eOk + sample 非空；池内填值后 discard_loan 归还 → eOk；
@@ -30,7 +30,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 // 引服务头：DDSLoan/LoanSample/DDSTopic/DDSSubRequest/DDSPublish + String + YOMK_* 宏
-#include "YomkDdsService.h"
+#include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MInt32 / MString
@@ -56,7 +56,7 @@ namespace
     }
 
     // Part A：loan 类型差异（plain MInt32 借出成功 / 非 plain MString 回退）+ discard 归还
-    void testLoanTypeAndDiscard(YomkDdsService *svc)
+    void testLoanTypeAndDiscard(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "loan_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 loan_node(domain 200) → eOk");
@@ -94,7 +94,7 @@ namespace
     }
 
     // Part B：loan 端到端（plain MInt32：loan→池内填值→publish→sub callback 本地回环）
-    void testLoanEndToEnd(YomkDdsService *svc)
+    void testLoanEndToEnd(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "e2e_loan_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 e2e_loan_node → eOk");
@@ -160,7 +160,7 @@ namespace
     }
 
     // Part C：loan/discard 守卫（未注册主题 / sample==null）
-    void testLoanGuards(YomkDdsService *svc)
+    void testLoanGuards(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "lg_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 lg_node → eOk");
@@ -195,8 +195,8 @@ int main()
     ::yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     testLoanTypeAndDiscard(svc);
     testLoanEndToEnd(svc);

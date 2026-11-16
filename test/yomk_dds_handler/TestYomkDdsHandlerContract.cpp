@@ -1,6 +1,6 @@
 /**
- * @file TestYomkDdsServiceContract.cpp
- * @brief MC1：YomkDdsService 服务层契约测试（DDS-free，白盒经服务器公开路由直接分发）
+ * @file TestYomkDdsHandlerContract.cpp
+ * @brief MC1：YomkDdsHandler 服务层契约测试（DDS-free，白盒经服务器公开路由直接分发）
  *
  * 范围：仅验证服务层在不触发任何 DDS 运行时（不创建 participant）前提下的输入校验与
  *       错误码契约——这是 MC2+（真实节点/主题/收发）的前置 correctness 基线。
@@ -17,13 +17,13 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsService.h" // 引入 YomkServerApi.h 域头、DDS 结构体与 YOMK_DEFINE_MSG 声明、String 内建类型
+#include "YomkDdsHandler.h" // 引入 YomkServerApi.h 域头、DDS 结构体与 YOMK_DEFINE_MSG 声明、String 内建类型
 #include "YomkDdsMsg.h"
 
 namespace
 {
     // T1：/version 契约（不解包，忽略 pkg）
-    void testVersion(YomkDdsService *svc)
+    void testVersion(YomkDdsHandler *svc)
     {
         auto resp = testInvoke(svc, "/version");
         check(resp.status == yomk::payload::ResStatus::Succeeded, "/version 返回 eOk");
@@ -42,7 +42,7 @@ namespace
     }
 
     // T2：7 个解包端点的双守卫（nullptr / 异类包 / 改名伪造）
-    void testUnpackGuards(YomkDdsService *svc)
+    void testUnpackGuards(YomkDdsHandler *svc)
     {
         // ep=端点；expectName=该端点期望的消息类型名；wrongPkg=调用点 freshly 构造的异类包
         auto checkGuards = [&](const char *ep, const char *expectName, YomkMsgPtr wrongPkg)
@@ -77,7 +77,7 @@ namespace
     }
 
     // T3：6 个查节点端点的"节点不存在"早退（合法包 + 不存在 nodeName → eNo，不触达 DDS）
-    void testNodeNotFound(YomkDdsService *svc)
+    void testNodeNotFound(YomkDdsHandler *svc)
     {
         const std::string ghost = "ghost_node_mc1";
         auto checkNodeGone = [&](const char *ep, YomkMsgPtr pkg)
@@ -102,8 +102,8 @@ int main()
     ::yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     // 内省：9 个 dds 端点均已注册（闭环 4 增 /load_xml）
     auto infos = testFuncInfos(svc);
@@ -116,5 +116,5 @@ int main()
 
     check(testInvoke(svc, "/no_such_endpoint").status == yomk::payload::ResStatus::Failed, "未知端点返回 eNo");
 
-    return testReport("TestYomkDdsServiceContract");
+    return testReport("TestYomkDdsHandlerContract");
 }

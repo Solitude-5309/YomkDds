@@ -29,7 +29,7 @@ static void onSignal(int)
 int main(int argc, char* argv[])
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsService>().create();
+    ::yomk::server().srv<YomkDdsHandler>().create();
 
     // 1. 创建节点：domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID，须与发布端同域方可互通
     auto resp = yomk::dds().node("sub_node").create();

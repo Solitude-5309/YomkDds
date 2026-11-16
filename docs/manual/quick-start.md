@@ -62,13 +62,13 @@ int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 YomkDds 服务
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsService>().create();
+    ::yomk::server().srv<YomkDdsHandler>().create();
     // 查看版本（链式 version() 返回 Response，解包/打印由调用方处理）
     auto vresp = yomk::dds().version();
     if (vresp.status == yomk::payload::ResStatus::Succeeded)
     {
         auto ver = yomk::msgs::unpack<yomk::msgs::String>(vresp.data);
-        if (ver) { yomk::log().tag("YomkDdsService").info(ver->d); }
+        if (ver) { yomk::log().tag("YomkDdsHandler").info(ver->d); }
     }
 
     // 2. 创建节点（每节点一个独立 DDS 参与者；domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
 
 | 片段 | 作用 |
 |---|---|
-| `::yomk::server().init()` + `::yomk::server().srv<YomkDdsService>().create()` | 初始化 YomkServer 框架并启动 YomkDds 服务（`yomk/server/YomkServerApi.h` 提供）；每个使用 YomkDds API 的程序开头都需要 |
+| `::yomk::server().init()` + `::yomk::server().srv<YomkDdsHandler>().create()` | 初始化 YomkServer 框架并启动 YomkDds 服务（`yomk/server/YomkServerApi.h` 提供）；每个使用 YomkDds API 的程序开头都需要 |
 | `yomk::dds().version()` | 版本查询，返回 Response 携带 String 版本串，解包/打印由调用方处理 |
 | `yomk::dds().node("node0").create()` | 创建节点，每节点一个独立 DDS 参与者；domainId 缺省取环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0，合法范围 [0,232]） |
 | `yomk::dds().node(...).topic(...).type(...).create_pub() / ...create_sub()` | 在节点上注册发布/订阅主题；type() 实参为 `new XxxPubSubType()`，**所有权移交服务端，调用后 caller 不再持有/释放** |

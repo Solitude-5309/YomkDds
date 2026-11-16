@@ -4,11 +4,11 @@
 #include <vector>
 
 #include <yomk/server/YomkServerApi.h>
-#include <yomk/dds/YomkDdsBagService.h>
-#include <yomk/dds/YomkDdsDebugService.h>
-#include <yomk/dds/YomkDdsMsg.h>
-#include <yomk/dds/YomkDdsService.h>
-#include <yomk/dds/YomkDdsUrl.h>
+#include "YomkDdsBagService.h"   // flat quoted includes: install tree, test tree and main tree all resolve same-dir
+#include "YomkDdsDebugService.h"
+#include "YomkDdsMsg.h"
+#include "YomkDdsHandler.h"
+#include "YomkDdsUrl.h"
 
 // Maintainer notes: this header exposes the chained Api only (the macro form is
 // fully retired). The core communication suite, the debug suite and the bag suite
@@ -18,7 +18,7 @@
 // URLs come from YomkDdsUrl.h, payload structures from YomkDdsPayload.h,
 // message declarations from YomkDdsMsg.h.
 
-// ===== YomkDdsService — core communication =====
+// ===== YomkDdsHandler — core communication =====
 // Node lifecycle as yomk::dds().node(name)[.domain/.udp_ds/.tcp_ds()].create() /
 // .remove(); topic registration as yomk::dds().node(name).topic(name)[.type()
 // (required)][.qos()].create_pub() or [.sub_cb()].create_sub(); publishing via

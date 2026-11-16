@@ -63,7 +63,7 @@
  *         topicInfo 的结构化端点 QoS 字段读回（发现数据是唯一观察面）。
  *
  * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
- *       不经 YomkDdsService/YOMK_INIT，直接 RAII 使用 FastDDSNode 与 FastDDSDebugNode
+ *       不经 YomkDdsHandler/YOMK_INIT，直接 RAII 使用 FastDDSNode 与 FastDDSDebugNode
  *       （规避 YOMK atexit 静态析构问题，模式同 TestYomkDdsNodeLifecycle Part B）。
  */
 

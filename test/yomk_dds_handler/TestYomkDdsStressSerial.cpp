@@ -44,9 +44,9 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-// 引服务头：YomkDdsService + DDSNode/DDSTopic/DDSSubRequest/DDSPublish/DDSLoan/
+// 引服务头：YomkDdsHandler + DDSNode/DDSTopic/DDSSubRequest/DDSPublish/DDSLoan/
 // LoanSample/String + YOMK_* 宏
-#include "YomkDdsService.h"
+#include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MInt32
@@ -184,7 +184,7 @@ namespace
     }
 
     // ============================ S1：node 生命周期 soak ============================
-    void s1_nodeLifecycleSoak(YomkDdsService *svc)
+    void s1_nodeLifecycleSoak(YomkDdsHandler *svc)
     {
         std::atomic<long> cbCount{0};
         auto cb = [&](const void *d)
@@ -286,7 +286,7 @@ namespace
     }
 
     // S2：持续 publish + loan/discard（writer-only）
-    void s2_continuousPublishLoan(YomkDdsService *svc)
+    void s2_continuousPublishLoan(YomkDdsHandler *svc)
     {
         const std::string node = "s2_node";
         const std::string topic = "s2_topic";
@@ -400,7 +400,7 @@ namespace
     }
 
     // ============================ S3：实体增长 + 完整回收 ============================
-    void s3_entityGrowthReclaim(YomkDdsService *svc)
+    void s3_entityGrowthReclaim(YomkDdsHandler *svc)
     {
         const std::string node = "s3_node";
         constexpr int K = 200; // pub+sub 各 K，共 2K=400 实体（平衡运行时/discovery 与可测资源增长）
@@ -473,8 +473,8 @@ int main()
     ::yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     std::cout << "[CFG] STRESS_ITERS=" << STRESS_ITERS << " STRESS_CYCLES=" << STRESS_CYCLES
               << " domain=" << TEST_DOMAIN << std::endl;

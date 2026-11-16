@@ -1,14 +1,14 @@
 # =============================================================================
 # MC1：服务层契约测试（DDS-free）
-# 目的：白盒经 testInvoke()（服务器公开路由）验证 YomkDdsService 8 端点的输入校验与错误码契约，
+# 目的：白盒经 testInvoke()（服务器公开路由）验证 YomkDdsHandler 8 端点的输入校验与错误码契约，
 #       全程不创建任何 DDS participant（解包守卫/节点不存在均在触达 DDS 前早退）。
 # =============================================================================
-add_executable(TestYomkDdsServiceContract TestYomkDdsServiceContract.cpp)
-target_link_libraries(TestYomkDdsServiceContract PRIVATE yomkdds_under_test)
+add_executable(TestYomkDdsHandlerContract TestYomkDdsHandlerContract.cpp)
+target_link_libraries(TestYomkDdsHandlerContract PRIVATE yomkdds_under_test)
 
 # 注册到 CTest；LSAN/TSAN 抑制文件经环境变量注入（各自仅在 asan/tsan 模式生效，其它模式无副作用）
-add_test(NAME TestYomkDdsServiceContract COMMAND ${YOMKDDS_TEST_LAUNCHER} $<TARGET_FILE:TestYomkDdsServiceContract>)
-set_tests_properties(TestYomkDdsServiceContract PROPERTIES
+add_test(NAME TestYomkDdsHandlerContract COMMAND ${YOMKDDS_TEST_LAUNCHER} $<TARGET_FILE:TestYomkDdsHandlerContract>)
+set_tests_properties(TestYomkDdsHandlerContract PROPERTIES
     ENVIRONMENT "LSAN_OPTIONS=suppressions=${CMAKE_SOURCE_DIR}/lsan.supp:print_suppressions=0;TSAN_OPTIONS=suppressions=${CMAKE_SOURCE_DIR}/tsan.supp:print_suppressions=0"
 )
 
@@ -34,11 +34,11 @@ set_tests_properties(TestYomkDdsNodeLifecycle PROPERTIES
 # + 时序语义（load 前 create 现状零改动 / load 后 create 合成链不阻断）+ 非法 serverLocator 回显。
 # QoS 字段级读回（按名/默认档/回退）、直配端到端、双通道合并与连通性在 NodeLifecycle（白盒）。
 # =============================================================================
-add_executable(TestYomkDdsServiceLifecycle TestYomkDdsServiceLifecycle.cpp)
-target_link_libraries(TestYomkDdsServiceLifecycle PRIVATE yomkdds_under_test)
+add_executable(TestYomkDdsHandlerLifecycle TestYomkDdsHandlerLifecycle.cpp)
+target_link_libraries(TestYomkDdsHandlerLifecycle PRIVATE yomkdds_under_test)
 
-add_test(NAME TestYomkDdsServiceLifecycle COMMAND ${YOMKDDS_TEST_LAUNCHER} $<TARGET_FILE:TestYomkDdsServiceLifecycle>)
-set_tests_properties(TestYomkDdsServiceLifecycle PROPERTIES
+add_test(NAME TestYomkDdsHandlerLifecycle COMMAND ${YOMKDDS_TEST_LAUNCHER} $<TARGET_FILE:TestYomkDdsHandlerLifecycle>)
+set_tests_properties(TestYomkDdsHandlerLifecycle PROPERTIES
     ENVIRONMENT "LSAN_OPTIONS=suppressions=${CMAKE_SOURCE_DIR}/lsan.supp:print_suppressions=0;TSAN_OPTIONS=suppressions=${CMAKE_SOURCE_DIR}/tsan.supp:print_suppressions=0"
 )
 

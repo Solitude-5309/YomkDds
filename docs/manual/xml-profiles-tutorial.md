@@ -86,13 +86,13 @@ using namespace yomk;
 int main()
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsService>().create();
+    ::yomk::server().srv<YomkDdsHandler>().create();
     // 查看版本（链式 version() 返回 Response，解包/打印由调用方处理）
     auto vresp = yomk::dds().version();
     if (vresp.status == yomk::payload::ResStatus::Succeeded)
     {
         auto ver = yomk::msgs::unpack<yomk::msgs::String>(vresp.data);
-        if (ver) { yomk::log().tag("YomkDdsService").info(ver->d); }
+        if (ver) { yomk::log().tag("YomkDdsHandler").info(ver->d); }
     }
 
     // 1. 加载 XML profiles——必须在任何节点创建之前调用！

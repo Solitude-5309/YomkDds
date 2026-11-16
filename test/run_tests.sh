@@ -76,8 +76,8 @@ SAN_LIST=()
 # （~6s 时间轴 + 订阅端收数等待）；bag 产物写在各自临时工作目录（Play 用例自清理）
 ALL_TESTS=(
     TestHarnessSmoke
-    TestYomkDdsServiceContract
-    TestYomkDdsServiceLifecycle
+    TestYomkDdsHandlerContract
+    TestYomkDdsHandlerLifecycle
     TestYomkDdsDebugServiceContract
     TestYomkDdsBagServiceContract
     TestYomkDdsDebugServiceLifecycle
@@ -151,7 +151,7 @@ cleanup_workdir() {
 trap cleanup_workdir EXIT
 trap 'echo ""; echo "被用户中断"; exit 130' INT TERM
 
-# 定位每个测试可执行（兼容 test/build/{Harness,YomkDdsService}/ 与单 bin 目录两种布局）
+# 定位每个测试可执行（兼容 test/build/<模块目录>/ 与单一 bin 目录两种布局）
 declare -A TEST_BIN
 locate_tests() {
     TEST_BIN=()   # 多轮 sanitizer 间复用: 先清空，防上一轮 BIN_DIR 的旧路径残留误判为就绪

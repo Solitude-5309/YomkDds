@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 YomkDds 服务
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsService>().create();
+    ::yomk::server().srv<YomkDdsHandler>().create();
 
     // 2. 创建节点（domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
     yomk::dds().node("qos_node").create();

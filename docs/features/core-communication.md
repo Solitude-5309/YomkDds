@@ -1,23 +1,23 @@
 # 功能文档：核心通信（节点与发布订阅）
 
-> **本文档覆盖范围**：`YomkDdsService` 服务域的核心通信能力——框架初始化前提、节点生命周期（创建与删除）、主题注册（发布/订阅）、消息发布、订阅回调与数据消费、版本查询。Loan 借出零拷贝发布见 [loan-zero-copy.md](./loan-zero-copy.md)；端点 QoS 配置见 [qos-profiles.md](./qos-profiles.md)。
+> **本文档覆盖范围**：`YomkDdsHandler` 服务域的核心通信能力——框架初始化前提、节点生命周期（创建与删除）、主题注册（发布/订阅）、消息发布、订阅回调与数据消费、版本查询。Loan 借出零拷贝发布见 [loan-zero-copy.md](./loan-zero-copy.md)；端点 QoS 配置见 [qos-profiles.md](./qos-profiles.md)。
 
 ## 功能定位
 
-YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast DDS 提供分布式发布订阅能力。核心通信是 YomkDds 的基础能力域：用户程序经 `yomk::dds()` 链式 API（定义于 `YomkDdsAPI.h`）创建节点、注册主题、发布与订阅消息，链式终结打包请求交由 `YomkDdsService` 服务端落为对应的 Fast DDS 实体——每节点一个独立 DDS 参与者，注册主题创建对应端点，发布为同步写入。
+YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast DDS 提供分布式发布订阅能力。核心通信是 YomkDds 的基础能力域：用户程序经 `yomk::dds()` 链式 API（定义于 `YomkDdsAPI.h`）创建节点、注册主题、发布与订阅消息，链式终结打包请求交由 `YomkDdsHandler` 服务端落为对应的 Fast DDS 实体——每节点一个独立 DDS 参与者，注册主题创建对应端点，发布为同步写入。
 
 ## 能力清单
 
 | 能力 | 链式 API | URL 端点 | 说明 |
 |---|---|---|---|
-| 版本查询 | `yomk::dds().version()` | `/YomkDdsService/version` | 返回 Response 携带 String 版本串（"YomkDds v<版本号>"），解包/打印由调用方处理 |
-| 创建节点 | `yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | `/YomkDdsService/create_node` | 每节点一个独立 DDS 参与者 |
-| 删除节点 | `yomk::dds().node(nodeName).remove()` | `/YomkDdsService/delete_node` | 销毁节点及其全部 DDS 实体，不存在的节点返回错误 |
-| 注册发布主题 | `yomk::dds().node(nodeName).topic(topicName).type(type)[.qos(qos)].create_pub()` | `/YomkDdsService/register_pub_topic` | type 为 `new XxxPubSubType()`，所有权移交服务端 |
-| 注册订阅主题 | `yomk::dds().node(nodeName).topic(topicName).type(type).sub_cb(callback)[.qos(qos)].create_sub()` | `/YomkDdsService/register_sub_topic` | callback 收到消息时回调，接收缓冲 data 由内部自动创建 |
-| 发布数据 | `yomk::dds().node(nodeName).topic(topicName).data(data).pub()` | `/YomkDdsService/publish` | data 为数据实例指针（借用，同步写入，caller 保留所有权） |
-| 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | `/YomkDdsService/load_xml` | participant 级配置入口，详见 [xml-profiles.md](./xml-profiles.md) |
-| Loan 借出零拷贝发布 | `yomk::dds().node(nodeName).topic(topicName).loan()` / `...topic(topicName).sample(sample).return_loan()` | `/YomkDdsService/loan`、`/YomkDdsService/discard_loan` | 详见 [loan-zero-copy.md](./loan-zero-copy.md) |
+| 版本查询 | `yomk::dds().version()` | `/YomkDdsHandler/version` | 返回 Response 携带 String 版本串（"YomkDds v<版本号>"），解包/打印由调用方处理 |
+| 创建节点 | `yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | `/YomkDdsHandler/create_node` | 每节点一个独立 DDS 参与者 |
+| 删除节点 | `yomk::dds().node(nodeName).remove()` | `/YomkDdsHandler/delete_node` | 销毁节点及其全部 DDS 实体，不存在的节点返回错误 |
+| 注册发布主题 | `yomk::dds().node(nodeName).topic(topicName).type(type)[.qos(qos)].create_pub()` | `/YomkDdsHandler/register_pub_topic` | type 为 `new XxxPubSubType()`，所有权移交服务端 |
+| 注册订阅主题 | `yomk::dds().node(nodeName).topic(topicName).type(type).sub_cb(callback)[.qos(qos)].create_sub()` | `/YomkDdsHandler/register_sub_topic` | callback 收到消息时回调，接收缓冲 data 由内部自动创建 |
+| 发布数据 | `yomk::dds().node(nodeName).topic(topicName).data(data).pub()` | `/YomkDdsHandler/publish` | data 为数据实例指针（借用，同步写入，caller 保留所有权） |
+| 加载 XML profiles | `yomk::dds().xml(xmlPath).load_cfg() / yomk::dds().load_cfg()` | `/YomkDdsHandler/load_xml` | participant 级配置入口，详见 [xml-profiles.md](./xml-profiles.md) |
+| Loan 借出零拷贝发布 | `yomk::dds().node(nodeName).topic(topicName).loan()` / `...topic(topicName).sample(sample).return_loan()` | `/YomkDdsHandler/loan`、`/YomkDdsHandler/discard_loan` | 详见 [loan-zero-copy.md](./loan-zero-copy.md) |
 
 返回值约定：除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余链式终结均返回 `yomk::payload::Response`，调用后须判 `status == yomk::payload::ResStatus::Succeeded`；失败时可读 `msg` 获取错误信息。
 
@@ -29,7 +29,7 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 
 ```cpp
 ::yomk::server().init();
-::yomk::server().srv<YomkDdsService>().create();
+::yomk::server().srv<YomkDdsHandler>().create();
 ```
 
 ### 最小闭环示例（普通发布订阅）
@@ -53,13 +53,13 @@ int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 YomkDds 服务
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsService>().create();
+    ::yomk::server().srv<YomkDdsHandler>().create();
     // 查看版本（链式 version() 返回 Response，解包/打印由调用方处理）
     auto vresp = yomk::dds().version();
     if (vresp.status == yomk::payload::ResStatus::Succeeded)
     {
         auto ver = yomk::msgs::unpack<yomk::msgs::String>(vresp.data);
-        if (ver) { yomk::log().tag("YomkDdsService").info(ver->d); }
+        if (ver) { yomk::log().tag("YomkDdsHandler").info(ver->d); }
     }
 
     // 2. 创建节点（每节点一个独立 DDS 参与者；domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
@@ -161,7 +161,7 @@ auto onMessage = [&](const void *data)
 
 ### 代码位置与链接要求
 
-- 链式 API 位于 `include/dds/YomkDdsAPI.h`（`yomk::dds()` 域入口，builder 机制内敛于 `yomk::detail`）；DDS 节点实现位于 `src/FastDDSNode.h` / `src/FastDDSNode.cpp`（发布订阅与 QoS/Loan 底层交付路径）；请求包与服务声明位于 `include/dds/YomkDdsService.h`。
+- 链式 API 位于 `include/dds/YomkDdsAPI.h`（`yomk::dds()` 域入口，builder 机制内敛于 `yomk::detail`）；DDS 节点实现位于 `src/FastDDSNode.h` / `src/FastDDSNode.cpp`（发布订阅与 QoS/Loan 底层交付路径）；请求包与服务声明位于 `include/dds/YomkDdsHandler.h`。
 - 示例均为完整可复制编译的程序，链接 `YomkDds::YomkDds YomkServer::YomkServer YomkDdsStdMsgs`。
 
 ## 错误与边界行为

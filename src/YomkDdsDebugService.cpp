@@ -1,6 +1,6 @@
 // 输出契约：消息内容零打印进服务层——/topic_print 携带用户回调经 setOutputSink 原样转交节点，
 // 仅服务自身状态错误走 YOMK_ERROR_TAG。
-// createNode 的 setDomainId 即 create_participant，必须在 mtx_ 内串行（同 YomkDdsService::createNode 注释）。
+// createNode 的 setDomainId 即 create_participant，必须在 mtx_ 内串行（同 YomkDdsHandler::createNode 注释）。
 #include "YomkDdsDebugService.h"
 #include "YomkDdsMsg.h"
 
@@ -78,10 +78,10 @@ yomk::payload::Response YomkDdsDebugService::createNode(YomkMsgPtr pkg)
     }
 
     auto node = std::make_unique<FastDDSDebugNode>();
-    // xmlCache 经 YomkDdsService::xmlCache() 单例取用（load_xml 成功后非空）；
+    // xmlCache 经 YomkDdsHandler::xmlCache() 单例取用（load_xml 成功后非空）；
     // 直配串空串=不直配现状
     auto spec = yomkdds_xml::ParticipantQosSpec{};
-    spec.xml = YomkDdsService::xmlCache();
+    spec.xml = YomkDdsHandler::xmlCache();
     spec.udpServerSpec = p->msg.udpDiscoverServerLocator;
     spec.tcpServerSpec = p->msg.tcpDiscoverServerLocator;
     std::string nodeErr;

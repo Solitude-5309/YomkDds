@@ -3,7 +3,7 @@
 // SIGINT 处理函数异步置位，不依赖本服务其他端点。
 #include "YomkDdsBagService.h"
 #include "YomkDdsMsg.h"
-#include "YomkDdsService.h"  // YomkDdsService::xmlCache()（XML profiles raw 串单例访问；本头未 include 公共头）
+#include "YomkDdsHandler.h"  // YomkDdsHandler::xmlCache()（XML profiles raw 串单例访问；本头未 include 公共头）
 
 #include "FastDDSBagNode.h"
 // 显式引入 yomkdds_xml::ParticipantQosSpec（FastDDSBagNode.h 传递亦可得，对齐 IWYU）
@@ -72,10 +72,10 @@ yomk::payload::Response YomkDdsBagService::createNode(YomkMsgPtr pkg)
     }
 
     auto node = std::make_unique<FastDDSBagNode>();
-    // xmlCache 经 YomkDdsService::xmlCache() 单例取用（load_xml 成功后非空）；
+    // xmlCache 经 YomkDdsHandler::xmlCache() 单例取用（load_xml 成功后非空）；
     // 直配串空串=不直配现状
     auto spec = yomkdds_xml::ParticipantQosSpec{};
-    spec.xml = YomkDdsService::xmlCache();
+    spec.xml = YomkDdsHandler::xmlCache();
     spec.udpServerSpec = p->msg.udpDiscoverServerLocator;
     spec.tcpServerSpec = p->msg.tcpDiscoverServerLocator;
     std::string nodeErr;

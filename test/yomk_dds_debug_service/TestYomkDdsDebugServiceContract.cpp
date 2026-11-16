@@ -12,7 +12,7 @@
  *      /interface_list、/topic_example、/topic_pub、/list_nodes、/node_info 解包双守卫
  *      （nullptr / 异类包 / 改名伪造）；
  *   T4 /delete_node 特殊契约：单节点模型无参载荷，handler (void)pkg 不走解包守卫，未建节点时
- *      无论何种载荷均 eNo "debug node not created"（与 YomkDdsService delete_node 的 String
+ *      无论何种载荷均 eNo "debug node not created"（与 YomkDdsHandler delete_node 的 String
  *      包解包守卫形态不同，属设计差异点）；
  *   T5 /create_node domainId 越界前置拦截（233 / UINT32_MAX → eNo，不触 DDS）；
  *   T6 /topic_print 未建节点早退（node_ 空检查先于 output 空检查）；

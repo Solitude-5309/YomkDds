@@ -26,7 +26,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 #include "FastDDSDebugNode.h"   // debug 节点直测（topicInfo 类型名读回）
-#include "YomkDdsService.h"     // 服务 + DDSTopic/DDSSubRequest/DDSPublish + String + YOMK_* 宏
+#include "YomkDdsHandler.h"     // 服务 + DDSTopic/DDSSubRequest/DDSPublish + String + YOMK_* 宏
 #include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MString 数据类
@@ -196,7 +196,7 @@ namespace
     };
 
     // S1：对称改名正验证（pub/sub 同 set_name 新名 → 收流 ≥1 + topicInfo 读回新名）
-    void testSymmetricRename(YomkDdsService *svc)
+    void testSymmetricRename(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "setname_pub")).status ==
                   yomk::payload::ResStatus::Succeeded,
@@ -269,7 +269,7 @@ namespace
     }
 
     // S2：不对称隔离负验证（pub 新名 / sub 原名 → EDP 类型名不匹配 → 收 0）
-    void testAsymmetricIsolation(YomkDdsService *svc)
+    void testAsymmetricIsolation(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "mismatch_pub")).status ==
                   yomk::payload::ResStatus::Succeeded,
@@ -335,7 +335,7 @@ namespace
     }
 
     // S3：typename 探针（用例 4a 并入）——库日志观察窗，断言从宽
-    void testTypenameProbe(YomkDdsService *svc)
+    void testTypenameProbe(YomkDdsHandler *svc)
     {
         // Info 级 + 全类别正则（SetCategoryFilter 为白名单语义，"匹配所有类别"等价不过滤；
         // 类别名以实际输出为准，[OBSERVE] 固化后按需收窄）
@@ -430,8 +430,8 @@ int main()
     ::yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     testSymmetricRename(svc);
     testAsymmetricIsolation(svc);

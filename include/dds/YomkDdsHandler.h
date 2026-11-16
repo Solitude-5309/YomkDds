@@ -19,11 +19,11 @@ using namespace yomk::payload;
 
 /** @brief Core communication service: node lifecycle, pub/sub endpoints and zero-copy loan */
 // @zh: 核心通信服务：节点生命周期、发布/订阅端点与零拷贝借出
-class YomkDdsService : public YomkService
+class YomkDdsHandler : public YomkService
 {
 public:
-    YomkDdsService(YomkServer* server);
-    virtual ~YomkDdsService();
+    YomkDdsHandler(YomkServer* server);
+    virtual ~YomkDdsHandler();
     virtual int init() override;
 
 private:

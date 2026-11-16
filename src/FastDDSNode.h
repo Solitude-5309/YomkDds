@@ -2,8 +2,8 @@
 #define FASTDDSNODE_H
 
 // 引公共头与 FastDDSXmlHelper：平铺引号命中 include/，安装树经 yomk/dds/ 前缀提供同一头；
-// 缺省实参需完整类型，必须引 YomkDdsService.h
-#include "YomkDdsService.h"
+// 缺省实参需完整类型，必须引 YomkDdsHandler.h
+#include "YomkDdsHandler.h"
 #include "FastDDSXmlHelper.h"
 
 #include <cstdint>
@@ -20,7 +20,7 @@
 #include <mutex>
 #include <string>
 
-// 由 YomkDdsService 持有（每个 nodeName 一个实例）；析构按 DataReader/Writer → Topic →
+// 由 YomkDdsHandler 持有（每个 nodeName 一个实例）；析构按 DataReader/Writer → Topic →
 // Publisher/Subscriber → Participant 顺序清理。
 class FastDDSNode
 {

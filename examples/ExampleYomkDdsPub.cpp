@@ -31,7 +31,7 @@ static void onSignal(int)
 int main(int argc, char* argv[])
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsService>().create();
+    ::yomk::server().srv<YomkDdsHandler>().create();
 
     // 1. 创建节点：domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID（无/非法回落 0；仅同域
     //    节点互通），nodeName 唯一

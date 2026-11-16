@@ -2,7 +2,7 @@
 #define FASTDDSDEBUGNODE_H
 
 // 引号平铺形式命中 include/，安装树经 yomk/dds/ 前缀提供同一头；缺省实参需完整类型
-#include "YomkDdsService.h"
+#include "YomkDdsHandler.h"
 #include "FastDDSXmlHelper.h"
 
 #include <chrono>

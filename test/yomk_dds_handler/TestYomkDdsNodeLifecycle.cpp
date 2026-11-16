@@ -44,7 +44,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsService.h" // 服务/DDSNode/String/YOMK_* 宏
+#include "YomkDdsHandler.h" // 服务/DDSNode/String/YOMK_* 宏
 #include "YomkDdsMsg.h"
 #include "FastDDSNode.h"    // Part B 直接单元测试 setDomainId
 #include "YomkDdsDebugService.h" // C-2d：DDSDebugNode 无参全缺省聚合初始化 env 读回
@@ -79,7 +79,7 @@ namespace
       }
 
       // Part A-1：生命周期——创建/重名/同域共存/删除/重复删除
-      void testLifecycle(YomkDdsService *svc)
+      void testLifecycle(YomkDdsHandler *svc)
       {
             check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "node_a")).status == yomk::payload::ResStatus::Succeeded,
                   "创建 node_a(domain 200) → eOk（真实创建 participant）");
@@ -103,7 +103,7 @@ namespace
       }
 
       // Part A-2：domainId 边界——有效域 [0,232]（O1 前置校验）；越界 233/UINT32_MAX 直接 eNo
-      void testDomainIdBoundary(YomkDdsService *svc)
+      void testDomainIdBoundary(YomkDdsHandler *svc)
       {
             check(testInvoke(svc, "/create_node", mkNode(0, "node_d0")).status == yomk::payload::ResStatus::Succeeded,
                   "domainId=0 → eOk（有效域下界）");
@@ -127,7 +127,7 @@ namespace
       }
 
       // Part A-3：nodeName 边界——空串（O2 拒绝）/单字符/超长（后两者创建后显式删除）
-      void testNodeNameBoundary(YomkDdsService *svc)
+      void testNodeNameBoundary(YomkDdsHandler *svc)
       {
             auto rempty = testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, ""));
             check(rempty.status == yomk::payload::ResStatus::Failed && rempty.msg.find("node name is empty") != std::string::npos,
@@ -166,7 +166,7 @@ namespace
       namespace dds = eprosima::fastdds::dds;
       namespace rtps = eprosima::fastdds::rtps;
 
-      // 闭环 4 白盒用例 XML：与 TestYomkDdsServiceLifecycle 服务层用例同构的三 profile 合法文件
+      // 闭环 4 白盒用例 XML：与 TestYomkDdsHandlerLifecycle 服务层用例同构的三 profile 合法文件
       // （按名 123 / 默认档 456 / 带 servers 789+192.168.1.1:7411）；NoDefault 版仅 xml_by_name
       // （回退态验证用），leaseDuration 为提取链最简可观察字段
       const char *kWhiteboxXml =
@@ -610,7 +610,7 @@ namespace
       // 子进程（组杀模式同 Part F）。端口用 11812 非缺省值：实证 env 串 port 解析全链路
       //（C-1 仅白盒覆盖解析）；A/B 故意异域（203/204，同 Part F——DS 不校验 domain_id，
       // 但须在服务层合法范围 [0,232] 内）
-      void testEnvDrivenConnectivity(YomkDdsService *svc)
+      void testEnvDrivenConnectivity(YomkDdsHandler *svc)
       {
             pid_t serverPid = fork();
             check(serverPid >= 0, "Part G: fork discovery server 子进程");
@@ -710,8 +710,8 @@ int main()
 {
       ::yomk::server().init();
 
-      auto *svc = new YomkDdsService(::yomk::server().instance().get());
-      check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+      auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
+      check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
       testLifecycle(svc);
       testDomainIdBoundary(svc);

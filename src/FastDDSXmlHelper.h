@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-#include "YomkDdsService.h"  // DDSServerInfo（平铺引号命中 include/；本头仅库内与测试树编译，src 头不安装）
+#include "YomkDdsHandler.h"  // DDSServerInfo（平铺引号命中 include/；本头仅库内与测试树编译，src 头不安装）
 
 namespace yomkdds_xml
 {

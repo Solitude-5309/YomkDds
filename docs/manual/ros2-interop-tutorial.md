@@ -44,7 +44,7 @@ source /opt/ros/humble/setup.bash
 
 ```cpp
 ::yomk::server().init();
-::yomk::server().srv<YomkDdsService>().create();
+::yomk::server().srv<YomkDdsHandler>().create();
 
 // 1. 创建节点（域 0 对齐 ROS2 默认域）
 auto resp = yomk::dds().node("interop_pub").domain(0).create();

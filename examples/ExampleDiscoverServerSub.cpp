@@ -38,7 +38,7 @@ static void onSignal(int)
 int main()
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsService>().create();
+    ::yomk::server().srv<YomkDdsHandler>().create();
 
     // 1. 创建节点：域 id 显式 200（DS 模式下可与对端异域）；省略双通道尾参 →
     //    直配串自动取环境变量（总开关开启时生效，participant 以 CLIENT 发现协议运行）

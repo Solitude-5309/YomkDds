@@ -3,7 +3,7 @@
  * @brief MC6：并发安全 + TSan 基线（多线程 invoke 锁正确性 / 并发收发 / teardown 竞态）
  *
  * 范围：MC0-MC5 均由单线程顺序驱动（回调虽在 FastDDS reader 线程触发，但主逻辑串行），双层锁
- *       （YomkDdsService::mtx_ 序列化所有 invoke；FastDDSNode::mtx_ 序列化节点内 3 张 map）与通用
+ *       （YomkDdsHandler::mtx_ 序列化所有 invoke；FastDDSNode::mtx_ 序列化节点内 3 张 map）与通用
  *       take() 的 reader 回调路径（on_data_available 在 reader 线程 take()+return_loan 借出交付）
  *       在真并发下的正确性从未被系统验证。本用例经 testInvoke(svc, ) 从多线程并发驱动，配合 off/asan/tsan
  *       三模式，实证锁正确性、并发收发数据完整性、以及 delete_node 与活跃回调的 teardown 竞态安全。
@@ -41,9 +41,9 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-// 引服务头：YomkDdsService + DDSNode/DDSTopic/DDSSubRequest/DDSPublish/DDSLoan/
+// 引服务头：YomkDdsHandler + DDSNode/DDSTopic/DDSSubRequest/DDSPublish/DDSLoan/
 // LoanSample/String + YOMK_* 宏
-#include "YomkDdsService.h"
+#include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MInt32
@@ -70,7 +70,7 @@ namespace
     }
 
     // ---- Part A1：并发 create_node 同名 → 每轮唯一赢家（service mtx_ 序列化 find-then-insert）----
-    void partA1_concurrentCreateNode(YomkDdsService *svc)
+    void partA1_concurrentCreateNode(YomkDdsHandler *svc)
     {
         constexpr int N = 8;
         constexpr int R = 20;
@@ -113,7 +113,7 @@ namespace
     }
 
     // ---- Part A2：并发 register_pub_topic 同名 → 每轮唯一赢家（node mtx_ + dup 守卫 count()>0）----
-    void partA2_concurrentRegister(YomkDdsService *svc)
+    void partA2_concurrentRegister(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "a2_node")).status == yomk::payload::ResStatus::Succeeded,
               "A2 创建 a2_node（供 20 轮并发注册竞争，避免每轮重建 participant）→ eOk");
@@ -157,7 +157,7 @@ namespace
     }
 
     // ---- Part A3：混合并发（唯一 topic 注册 / publish / loan / discard / version）→ 计数全 eOk ----
-    void partA3_mixedConcurrent(YomkDdsService *svc)
+    void partA3_mixedConcurrent(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "a3_node")).status == yomk::payload::ResStatus::Succeeded,
               "A3 创建 a3_node → eOk");
@@ -226,7 +226,7 @@ namespace
     }
 
     // ---- Part B：并发发布 + 订阅端到端（通用 take() reader 路径 + 回调契约在并发下）----
-    void partB_concurrentPubSub(YomkDdsService *svc)
+    void partB_concurrentPubSub(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "b_node")).status == yomk::payload::ResStatus::Succeeded,
               "B 创建 b_node → eOk");
@@ -309,7 +309,7 @@ namespace
     }
 
     // ---- Part C：delete_node 与活跃回调竞态（最高风险 teardown）----
-    void partC_teardownRace(YomkDdsService *svc)
+    void partC_teardownRace(YomkDdsHandler *svc)
     {
         constexpr int R = 10;
         // cb 捕获的状态为函数作用域，outlive 所有轮次与节点删除（teardown drain 后无回调再触碰）
@@ -391,8 +391,8 @@ int main()
     ::yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     partA1_concurrentCreateNode(svc);
     partA2_concurrentRegister(svc);

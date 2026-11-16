@@ -4,7 +4,7 @@
 /**
  * @brief Service endpoint URL constants for the YomkDds extension
  *
- * Grouped per service: core communication (YomkDdsService), type-agnostic
+ * Grouped per service: core communication (YomkDdsHandler), type-agnostic
  * debugging (YomkDdsDebugService), bag record/replay (YomkDdsBagService).
  * Endpoint behavior is documented by the YOMKDDS_* macros in YomkDdsAPI.h.
  *
@@ -17,43 +17,43 @@
 // @zh: note yomk::url 为开放命名空间，扩展按同风格追加；请求链一律引用常量，不裸写 URL 字面量
 namespace yomk::url
 {
-// --- YomkDdsService ---
+// --- YomkDdsHandler ---
 
 /** @brief Version query endpoint */
 // @zh: 版本查询端点
-inline constexpr std::string_view ddsVersion = "/YomkDdsService/version";
+inline constexpr std::string_view ddsVersion = "/YomkDdsHandler/version";
 
 /** @brief Fast DDS XML profiles load endpoint */
 // @zh: 加载 Fast DDS XML profiles 端点
-inline constexpr std::string_view ddsLoadXml = "/YomkDdsService/load_xml";
+inline constexpr std::string_view ddsLoadXml = "/YomkDdsHandler/load_xml";
 
 /** @brief Create a DDS node endpoint */
 // @zh: 创建 DDS 节点端点
-inline constexpr std::string_view ddsCreateNode = "/YomkDdsService/create_node";
+inline constexpr std::string_view ddsCreateNode = "/YomkDdsHandler/create_node";
 
 /** @brief Delete a DDS node endpoint */
 // @zh: 删除 DDS 节点端点
-inline constexpr std::string_view ddsDeleteNode = "/YomkDdsService/delete_node";
+inline constexpr std::string_view ddsDeleteNode = "/YomkDdsHandler/delete_node";
 
 /** @brief Register a publisher topic endpoint */
 // @zh: 注册发布主题端点
-inline constexpr std::string_view ddsRegisterPubTopic = "/YomkDdsService/register_pub_topic";
+inline constexpr std::string_view ddsRegisterPubTopic = "/YomkDdsHandler/register_pub_topic";
 
 /** @brief Register a subscriber topic endpoint */
 // @zh: 注册订阅主题端点
-inline constexpr std::string_view ddsRegisterSubTopic = "/YomkDdsService/register_sub_topic";
+inline constexpr std::string_view ddsRegisterSubTopic = "/YomkDdsHandler/register_sub_topic";
 
 /** @brief Publish one message endpoint */
 // @zh: 发布消息端点
-inline constexpr std::string_view ddsPublish = "/YomkDdsService/publish";
+inline constexpr std::string_view ddsPublish = "/YomkDdsHandler/publish";
 
 /** @brief Loan a publish buffer (zero-copy) endpoint */
 // @zh: 借出发布缓冲（零拷贝）端点
-inline constexpr std::string_view ddsLoan = "/YomkDdsService/loan";
+inline constexpr std::string_view ddsLoan = "/YomkDdsHandler/loan";
 
 /** @brief Discard an un-published loaned buffer endpoint */
 // @zh: 归还未发布的借出缓冲端点
-inline constexpr std::string_view ddsDiscardLoan = "/YomkDdsService/discard_loan";
+inline constexpr std::string_view ddsDiscardLoan = "/YomkDdsHandler/discard_loan";
 
 // --- YomkDdsDebugService ---
 

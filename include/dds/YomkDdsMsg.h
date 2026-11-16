@@ -16,7 +16,7 @@
 // to know it (unknownMacro is a tooling config need, not a source defect)
 // cppcheck-suppress unknownMacro
 
-// ===== YomkDdsService (structures in YomkDdsPayload.h) =====
+// ===== YomkDdsHandler (structures in YomkDdsPayload.h) =====
 YOMK_DEFINE_MSG(yomk::payload::DDSNode, DDSNode, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSXmlLoad, DDSXmlLoad, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSTopic, DDSTopic, msg)

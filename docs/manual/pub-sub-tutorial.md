@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 YomkDds 服务
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsService>().create();
+    ::yomk::server().srv<YomkDdsHandler>().create();
 
     // 2. 创建两个节点（每节点一个独立 DDS 参与者）
     yomk::dds().node("node_pub").create();

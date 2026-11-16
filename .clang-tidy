@@ -5,7 +5,7 @@
 # 禁用项理由：
 # - bugprone-macro-parentheses：include/YomkDdsAPI.h 全量为 API 包装宏，宏体含参数展开为设计使然
 # - bugprone-easily-swappable-parameters：相邻同型参数为消息结构体字段风格约定
-# - cppcoreguidelines-owning-memory：所有权协议以注释约定（src/YomkDdsService.cpp 文件头），
+# - cppcoreguidelines-owning-memory：所有权协议以注释约定（src/YomkDdsHandler.cpp 文件头），
 #   raw new/delete 为 FastDDS TopicDataType create_data/delete_data 惯用法，非 gsl owner 体系
 # - cppcoreguidelines-macro-usage：API 宏即产品形态（include/YomkDdsAPI.h）
 # - cppcoreguidelines-pro-bounds-array-to-pointer-decay：LoanableCollection buffer()[i] 为

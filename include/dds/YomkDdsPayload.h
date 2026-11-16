@@ -266,7 +266,7 @@ struct DDSServerInfo
     uint32_t port = kDdsDiscoveryDefaultPort;  // server listening port
 };
 
-// ===== YomkDdsService request/response payloads =====
+// ===== YomkDdsHandler request/response payloads =====
 
 /**
  * @brief create_node request

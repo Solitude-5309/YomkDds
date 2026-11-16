@@ -32,7 +32,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsService.h" // 服务 + DDSTopic/DDSSubRequest/DDSPublish + String + YOMK_* 宏
+#include "YomkDdsHandler.h" // 服务 + DDSTopic/DDSSubRequest/DDSPublish + String + YOMK_* 宏
 #include "YomkDdsMsg.h"
 
 // 引消息类型：YomkDdsStd::MFloat32/MFloat64/MInt64/MBool/MString/MByteArray 数据类
@@ -68,7 +68,7 @@ namespace
     // =========================================================================
     // Part A：主题/类型分支深化（pub 侧类型冲突 L215 + pub 侧复用 L183）
     // =========================================================================
-    void testTopicTypeBranches(YomkDdsService *svc)
+    void testTopicTypeBranches(YomkDdsHandler *svc)
     {
         // ---- A1：pub 侧类型冲突（sub 先占用 topic，pub 后注册不同类型 → getOrCreateTopic 冲突 L215）----
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "ta_node")).status == yomk::payload::ResStatus::Succeeded,
@@ -142,8 +142,8 @@ namespace
     struct IChannel
     {
         virtual ~IChannel() = default;
-        virtual void registerPubSub(YomkDdsService *svc) = 0;
-        virtual void send(YomkDdsService *svc) = 0;
+        virtual void registerPubSub(YomkDdsHandler *svc) = 0;
+        virtual void send(YomkDdsHandler *svc) = 0;
         virtual void assertRoundTrip() = 0;
         std::string label;
         std::string node;
@@ -160,7 +160,7 @@ namespace
         std::mutex mtx;
         std::atomic<int> received{0};
 
-        void registerPubSub(YomkDdsService *svc) override
+        void registerPubSub(YomkDdsHandler *svc) override
         {
             check(testInvoke(svc, "/register_pub_topic",
                               ::yomk::msgs::DDSTopic::shared(DDSTopic{node, topic, new PubSubT()}))
@@ -211,7 +211,7 @@ namespace
                   label + " register_sub → eOk");
         }
 
-        void send(YomkDdsService *svc) override
+        void send(YomkDdsHandler *svc) override
         {
             int cnt = 0;
             for (const auto &v : values)
@@ -282,7 +282,7 @@ namespace
     // =========================================================================
     // Part B：多类型边界 payload 端到端（6 代表类型，分阶段共享 discovery）
     // =========================================================================
-    void testMultiTypeBoundaryPayload(YomkDdsService *svc)
+    void testMultiTypeBoundaryPayload(YomkDdsHandler *svc)
     {
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "types_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 types_node → eOk");
@@ -393,8 +393,8 @@ int main()
     ::yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     testTopicTypeBranches(svc);
     testMultiTypeBoundaryPayload(svc);

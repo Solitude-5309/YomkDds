@@ -1,8 +1,8 @@
 /**
- * @file TestYomkDdsServiceLifecycle.cpp
+ * @file TestYomkDdsHandlerLifecycle.cpp
  * @brief 闭环 4：XML 配置通道 /load_xml 端点 + serverLocator 直配（服务层生命周期）
  *
- * 范围：/YomkDdsService/load_xml 端点五态（合法 / 路径不存在 / 空文件 / 格式非法 rc 回显 /
+ * 范围：/YomkDdsHandler/load_xml 端点五态（合法 / 路径不存在 / 空文件 / 格式非法 rc 回显 /
  *       重复 load 整体替换）+ xmlCache() 静态缓存白盒读回 + 时序语义（load 前 create_node
  *       现状零改动、load 后 create_node 合成链不阻断）+ create_node 非法 serverLocator
  *       容错回显（服务层 eNo 携带具体非法项）。
@@ -19,7 +19,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsService.h" // 服务/DDSNode/DDSXmlLoad/String/YOMK_* 宏 + xmlCache() 静态访问器
+#include "YomkDdsHandler.h" // 服务/DDSNode/DDSXmlLoad/String/YOMK_* 宏 + xmlCache() 静态访问器
 #include "YomkDdsMsg.h"
 
 #include <cstdint>
@@ -104,11 +104,11 @@ int main()
 {
     ::yomk::server().init();
 
-    auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     // ---- A：load 前时序（现状零改动）----
-    check(YomkDdsService::xmlCache().empty(), "进程内未 load → xmlCache() 为空串（未加载现状）");
+    check(YomkDdsHandler::xmlCache().empty(), "进程内未 load → xmlCache() 为空串（未加载现状）");
     check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "ts_before_node")).status == yomk::payload::ResStatus::Succeeded,
           "load 前 create_node → eOk（XML 未加载=提取链跳过，现状行为零改动）");
 
@@ -116,7 +116,7 @@ int main()
     auto notExist = testInvoke(svc, "/load_xml", mkLoad("/tmp/yomkdds_test_no_such_profiles.xml"));
     check(notExist.status == yomk::payload::ResStatus::Failed && notExist.msg.find("not readable") != std::string::npos,
           "load_xml 路径不存在 → eNo not readable（文件读入前回显）");
-    check(YomkDdsService::xmlCache().empty(), "失败 load 不落缓存 → xmlCache() 仍空");
+    check(YomkDdsHandler::xmlCache().empty(), "失败 load 不落缓存 → xmlCache() 仍空");
 
     const std::string emptyPath = "/tmp/yomkdds_test_empty_profiles.xml";
     check(writeTmpFile(emptyPath, ""), "写空 XML fixture → true");
@@ -130,16 +130,16 @@ int main()
     check(bad.status == yomk::payload::ResStatus::Failed && bad.msg.find("failed, rc=") != std::string::npos,
           "load_xml 格式非法 → eNo failed, rc=<N>（load_XML_profiles_file 显式检查返回码，rc 整值回显）");
     std::cout << "[OBSERVE] 非法 XML msg=\"" << bad.msg << "\"" << std::endl;
-    check(YomkDdsService::xmlCache().empty(), "非法 XML 不落缓存 → xmlCache() 仍空");
+    check(YomkDdsHandler::xmlCache().empty(), "非法 XML 不落缓存 → xmlCache() 仍空");
 
     // ---- E：load_xml 合法（缓存落定）----
     const std::string validPath = "/tmp/yomkdds_test_valid_profiles.xml";
     check(writeTmpFile(validPath, kTestXml), "写合法 XML fixture → true");
     auto ok = testInvoke(svc, "/load_xml", mkLoad(validPath));
     check(ok.status == yomk::payload::ResStatus::Succeeded, "load_xml 合法文件 → eOk（load_XML_profiles_file 实际校验通过）");
-    check(!YomkDdsService::xmlCache().empty() &&
-              YomkDdsService::xmlCache().find("xml_by_name") != std::string::npos &&
-              YomkDdsService::xmlCache().find("xml_default") != std::string::npos,
+    check(!YomkDdsHandler::xmlCache().empty() &&
+              YomkDdsHandler::xmlCache().find("xml_by_name") != std::string::npos &&
+              YomkDdsHandler::xmlCache().find("xml_default") != std::string::npos,
           "成功 load → xmlCache() 为文件 raw 串（含两 profile 名，节点层三级提取链取用）");
 
     // ---- F：load 后时序（合成链不阻断）----
@@ -155,9 +155,9 @@ int main()
     check(writeTmpFile(reloadedPath, kTestXmlReloaded), "写第二份合法 XML fixture → true");
     check(testInvoke(svc, "/load_xml", mkLoad(reloadedPath)).status == yomk::payload::ResStatus::Succeeded,
           "重复 load 第二份合法文件 → eOk（load_XML_profiles_file 注册表追加语义）");
-    check(!YomkDdsService::xmlCache().empty() &&
-              YomkDdsService::xmlCache().find("xml_reloaded") != std::string::npos &&
-              YomkDdsService::xmlCache().find("xml_by_name") == std::string::npos,
+    check(!YomkDdsHandler::xmlCache().empty() &&
+              YomkDdsHandler::xmlCache().find("xml_reloaded") != std::string::npos &&
+              YomkDdsHandler::xmlCache().find("xml_by_name") == std::string::npos,
           "重复 load → xmlCache() 为最新成功文件整体替换（非追加拼接）");
 
     // ---- H：create_node 非法 serverLocator 容错回显 ----
@@ -169,5 +169,5 @@ int main()
           "serverLocator 空项 → eNo 回显 empty server item");
     std::cout << "[OBSERVE] 越界 port msg=\"" << badPort.msg << "\"" << std::endl;
 
-    return testReport("TestYomkDdsServiceLifecycle");
+    return testReport("TestYomkDdsHandlerLifecycle");
 }

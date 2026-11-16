@@ -132,10 +132,10 @@ ExampleYomkDdsTopic
 
 预期观察到的关键输出（日志前缀与时间戳以实际运行环境为准）：
 
-- 依次打印 `=== YomkDdsService::getVersion ===`、`=== YomkDdsService::createNode ===` 等阶段标记；
-- `[SEND] 发布消息: Hello YomkDdsService 0` 至 `Hello YomkDdsService 4` 共 5 条发送日志；
+- 依次打印 `=== YomkDdsHandler::getVersion ===`、`=== YomkDdsHandler::createNode ===` 等阶段标记；
+- `[SEND] 发布消息: Hello YomkDdsHandler 0` 至 `Hello YomkDdsHandler 4` 共 5 条发送日志；
 - 交错的 `[RECV] 收到消息: ...` 接收日志（同进程内发布并被订阅回调收到）；
-- 结尾 `[RESULT] 接收=5/5 最后一条=Hello YomkDdsService 4`（首条消息可能因 discovery 时序丢失，偶尔为 4/5，属正常现象，详见 [quick-start.md](./quick-start.md) 排障一节）。
+- 结尾 `[RESULT] 接收=5/5 最后一条=Hello YomkDdsHandler 4`（首条消息可能因 discovery 时序丢失，偶尔为 4/5，属正常现象，详见 [quick-start.md](./quick-start.md) 排障一节）。
 
 程序自动退出、返回码为 0 即安装验证通过。
 

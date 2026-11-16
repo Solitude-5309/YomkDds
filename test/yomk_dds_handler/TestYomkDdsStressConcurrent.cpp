@@ -41,9 +41,9 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-// 引服务头：YomkDdsService + DDSNode/DDSTopic/DDSSubRequest/DDSPublish/DDSLoan/
+// 引服务头：YomkDdsHandler + DDSNode/DDSTopic/DDSSubRequest/DDSPublish/DDSLoan/
 // LoanSample/String + YOMK_* 宏
-#include "YomkDdsService.h"
+#include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MInt32
@@ -174,7 +174,7 @@ namespace
     }
 
     // ============================ C1：并发持续 publish/loan 量（writer-only）============================
-    void c1_concurrentPublishLoan(YomkDdsService *svc)
+    void c1_concurrentPublishLoan(YomkDdsHandler *svc)
     {
         const std::string node = "c1_node";
         constexpr int NTOPICS = 8; // 预注册少量 topic：实体有界，非 10 万 unique 注册
@@ -271,7 +271,7 @@ namespace
     }
 
     // ============================ C2：并发 node create/delete churn ============================
-    void c2_concurrentNodeChurn(YomkDdsService *svc)
+    void c2_concurrentNodeChurn(YomkDdsHandler *svc)
     {
         std::atomic<long> cbCount{0};
         auto cb = [&](const void *d)
@@ -393,7 +393,7 @@ namespace
     }
 
     // ============================ C3：并发 pub/sub + 活跃回调 at volume ============================
-    void c3_concurrentPubSubVolume(YomkDdsService *svc)
+    void c3_concurrentPubSubVolume(YomkDdsHandler *svc)
     {
         const std::string node = "c3_node";
         const std::string topic = "c3_topic";
@@ -485,8 +485,8 @@ int main()
 {
     ::yomk::server().init();
 
-    auto *svc = new YomkDdsService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     std::cout << "[CFG] STRESS_ITERS=" << STRESS_ITERS << " STRESS_CYCLES=" << STRESS_CYCLES
               << " threads=" << NTHREADS << " domain=" << TEST_DOMAIN << std::endl;

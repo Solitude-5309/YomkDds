@@ -276,7 +276,7 @@ static constexpr char kDomainEnv[] = "YOMKDDS_DDS_DOMAIN_ID";
 static constexpr char kDiscoverRoundsEnv[] = "YOMKDDS_DDS_DISCOVER_ROUNDS";
 
 // 发现服务器直配三环境变量：总开关 + UDP/TCP 双通道 server 聚合串（节点创建时经
-// DDSNode/DDSDebugNode/DDSBagNode 类内缺省初始化器读取，见 include/dds/YomkDdsService.h）。
+// DDSNode/DDSDebugNode/DDSBagNode 类内缺省初始化器读取，见 include/dds/YomkDdsHandler.h）。
 // 启动时无则分别创建并设默认值 false/空/空（进程内生效），并幂等持久化到 ~/.bashrc
 // 使新开任意终端可查看可继承；默认值与"未设置"行为完全一致（开关非 true/1、串空均
 // 回落多播发现），仅保证可见性，用户 export 改值即刻生效
@@ -285,7 +285,7 @@ static constexpr char kUdpDiscoverServersEnv[] = "YOMKDDS_UDP_DISCOVER_SERVERS";
 static constexpr char kTcpDiscoverServersEnv[] = "YOMKDDS_TCP_DISCOVER_SERVERS";
 
 // XML profiles 自动加载双环境变量：总开关 + profiles 文件路径（yomk::dds().load_cfg() 缺省形态
-// 经 DDSXmlLoad 类内缺省初始化器读取，见 include/dds/YomkDdsService.h）。启动时无则分别创建
+// 经 DDSXmlLoad 类内缺省初始化器读取，见 include/dds/YomkDdsHandler.h）。启动时无则分别创建
 // 并设默认值 false/空（进程内生效），并幂等持久化到 ~/.bashrc 使新开任意终端可查看可
 // 继承；开关开启且路径非空时各子命令创建节点前自动加载该 profiles（见 autoLoadXmlProfile），
 // 默认值与"未设置"行为完全一致（开关非 true/1 即不加载），仅保证可见性，用户 export
@@ -338,12 +338,12 @@ static bool autoLoadXmlProfile()
     {
         return true;
     }
-    // load_xml 端点在 /YomkDdsService 上，而本工具按需只注册调试/bag 服务——首次
+    // load_xml 端点在 /YomkDdsHandler 上，而本工具按需只注册调试/bag 服务——首次
     // 触发自动加载时补注册 dds 服务（static 守卫保证全进程仅注册一次）
-    static const bool ddsServiceReady = (::yomk::server().srv<YomkDdsService>().create() == 0);
+    static const bool ddsServiceReady = (::yomk::server().srv<YomkDdsHandler>().create() == 0);
     if (!ddsServiceReady)
     {
-        ::yomk::log().tag("yomkdds").error("register /YomkDdsService failed");
+        ::yomk::log().tag("yomkdds").error("register /YomkDdsHandler failed");
         return false;
     }
     auto resp = yomk::dds().load_cfg();

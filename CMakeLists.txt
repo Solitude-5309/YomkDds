@@ -5,7 +5,7 @@ include(cmake/AbiInfo.cmake)
 # YomkServer 版本检测模块：find_package(YomkServer) 之后调用 yomk_server_version_check()
 include(cmake/YomkServerVersionCheck.cmake)
 
-project(YomkDds VERSION 2.4.9 LANGUAGES CXX)
+project(YomkDds VERSION 2.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -42,7 +42,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/dds)
 
 # 编译为动态库
 add_library(${PROJECT_NAME} SHARED
-    src/YomkDdsService.cpp
+    src/YomkDdsHandler.cpp
     src/YomkDdsDebugService.cpp
     src/FastDDSNode.cpp
     src/FastDDSDebugNode.cpp

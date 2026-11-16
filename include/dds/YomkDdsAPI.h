@@ -1127,15 +1127,20 @@ public:
     }
     /**
      * @brief Show the bag metadata (pure file read, request terminator)
-     * @return Response carrying a StringArray of metadata lines, the first one empty
-     *         and the rest aligned with ros2 bag info; Invalid when YomkServer is not
-     *         initialized
+     * @return Response carrying a BagInfo packet: the metadata.json fields (files,
+     *         storageId, startTimeNs, durationNs, messageCount, topics with
+     *         topicName/typeName/qos/messageCount) plus bagSizeBytes for the recursive
+     *         directory size and serializationFormat; every displayed line, unit and
+     *         19-column alignment is rendered by the caller; Invalid when YomkServer is
+     *         not initialized
      * @note Does not need the bag node; fails when the path has no readable
      *       metadata.json
      */
     // @zh: 查看 bag 元信息（纯文件读的请求终结）
-    // @zh: return Response 携带 StringArray 元信息行集（首行为空行，与 ros2 bag info 对齐）；
-    // @zh: 未初始化返回 Invalid
+    // @zh: return Response 携带 BagInfo 包：metadata.json 字段（files/storageId/startTimeNs/
+    // @zh: durationNs/messageCount/topics（topicName/typeName/qos/messageCount））与目录递归总
+    // @zh: 字节 bagSizeBytes、单格式标识 serializationFormat；行标签、单位与 19 列对齐均由
+    // @zh: 调用方渲染；未初始化返回 Invalid
     // @zh: note 不经 bag 节点（无须 create()）；路径无 metadata.json/解析失败返回错误
     yomk::payload::Response info()
     {

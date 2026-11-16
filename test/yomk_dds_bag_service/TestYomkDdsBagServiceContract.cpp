@@ -17,7 +17,7 @@
  *      合法清单 + 未建节点 → eNo "bag node not created"（node_ 空检查先于触达节点层）；
  *   T7 /bag_info 纯文件读契约：解包双守卫；bagDir 空校验锁外前置（未建节点也报输入
  *      错误）；路径不存在报文件层错误（不依赖节点生命周期）；真实临时 bag 目录 →
- *      eOk + StringArray 首项空串（ros2 对齐空行）打包/解包保真与逐行内容透传。
+ *      eOk + BagInfo 结构化回执（metadata 字段 + 目录递归字节）打包/解包保真。
  *   T8 /bag_reindex 纯文件操作契约：解包双守卫；bagDir 空校验锁外前置；路径不存在报
  *      文件层错误（不依赖节点生命周期）；真实最小 mcap 临时目录 → eOk ok 且重建产物
  *      metadata.json 落盘（回执无数据载荷）。
@@ -198,7 +198,7 @@ namespace
               "/bag_record 合法包+未建节点 → eNo bag node not created（node_ 检查先于触达节点层）");
     }
 
-    // T7：/bag_info 纯文件读契约（不依赖节点生命周期；StringArray 空串首项保真）
+    // T7：/bag_info 纯文件读契约（不依赖节点生命周期；BagInfo 结构化回执保真）
     void testBagInfoContract(YomkDdsBagService *svc)
     {
         // bagDir 空校验锁外前置：未建节点也报输入错误（对齐 bagRecord topics 校验先例）
@@ -213,7 +213,7 @@ namespace
                   rMiss.msg.find("bag path [info_svc_miss] does not exist") != std::string::npos,
               "/bag_info 路径不存在 → eNo 文件层错误（不依赖节点生命周期）");
 
-        // 真实临时 bag 目录 → eOk + StringArray 逐行透传（含首项空串打包/解包保真）
+        // 真实临时 bag 目录 → eOk + BagInfo 结构化字段（行标签/单位/对齐由调用方渲染）
         namespace fs = std::filesystem;
         const std::string dir = "info_svc_t7";
         std::error_code ec;
@@ -238,20 +238,23 @@ namespace
         auto rOk = testInvoke(svc, "/bag_info", ::yomk::msgs::DDSBagInfo::shared(DDSBagInfo{dir}));
         check(rOk.status == yomk::payload::ResStatus::Succeeded && rOk.msg == "ok",
               "/bag_info 真实 bag 目录 → eOk ok");
-        auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(rOk.data);;
-        check(lines != nullptr && lines->d.size() == 9,
-              "回执可解包为 9 行 StringArray（节点层单主题契约行数）");
-        if (lines != nullptr && lines->d.size() == 9)
+        auto info = ::yomk::msgs::unpack<::yomk::msgs::BagInfo>(rOk.data);
+        check(info != nullptr, "回执可解包为 BagInfo 包（非 StringArray）");
+        if (info != nullptr)
         {
-            check(lines->d[0].empty(), "StringArray 首项空串保真（ros2 对齐空行往返不丢）");
-            check(lines->d[1].rfind("Files:", 0) == 0 &&
-                      lines->d[1].find("bag_0.mcap") != std::string::npos,
-                  "Files 行透传节点层内容（标签 + 文件名）");
-            check(lines->d[3] == "Storage id:        mcap", "Storage id 行透传（19 列标签）");
-            check(lines->d[8].rfind("Topic information:", 0) == 0 &&
-                      lines->d[8].find("/rt/a") != std::string::npos &&
-                      lines->d[8].find("Serialization Format: cdr") != std::string::npos,
-                  "Topic information 行透传（标签 + 主题 + 单格式标识）");
+            check(info->msg.files.size() == 1 && info->msg.files[0] == "bag_0.mcap",
+                  "BagInfo.files 透传 metadata relative_file_paths");
+            check(info->msg.storageId == "mcap", "BagInfo.storageId 透传");
+            check(info->msg.startTimeNs == 1570799349123456789ULL &&
+                      info->msg.durationNs == 12000000000ULL && info->msg.messageCount == 13,
+                  "BagInfo 起始/时长/计数透传（纳秒原值不解包）");
+            check(info->msg.serializationFormat == "cdr", "BagInfo.serializationFormat = cdr");
+            check(info->msg.bagSizeBytes == fs::file_size(dir + "/metadata.json", ec),
+                  "BagInfo.bagSizeBytes = 目录递归字节（本目录仅 metadata.json）");
+            check(info->msg.topics.size() == 1 && info->msg.topics[0].topicName == "/rt/a" &&
+                      info->msg.topics[0].typeName == "YomkDdsStd::MString" &&
+                      info->msg.topics[0].qos.empty() && info->msg.topics[0].messageCount == 5,
+                  "BagInfo.topics 透传 name/type/count（metadata 无 qos 键 → 空串）");
         }
         fs::remove_all(dir, ec);
     }

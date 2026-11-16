@@ -180,10 +180,10 @@ yomk::payload::Response YomkDdsBagService::bagInfo(YomkMsgPtr pkg)
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no bag dir given");
     }
 
-    // bagInfoText 为静态纯文件操作，不依赖 node_，不取 mtx_
-    std::vector<std::string> lines;
+    // bagInfo 为静态纯文件操作，不依赖 node_，不取 mtx_
+    FastDDSBagNode::BagInfo info;
     std::string error;
-    if (!FastDDSBagNode::bagInfoText(p->msg.bagDir, lines, &error))
+    if (!FastDDSBagNode::bagInfo(p->msg.bagDir, info, &error))
     {
         if (error.empty())
         {
@@ -192,7 +192,25 @@ yomk::payload::Response YomkDdsBagService::bagInfo(YomkMsgPtr pkg)
         ::yomk::log().tag("YomkDdsBagService::bagInfo").error("bag info failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
-    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::StringArray::shared(lines));
+
+    // 回执只回结构化数据（metadata.json 字段 + 目录递归总字节）；行标签、单位、人类可读
+    // 时间与 19 列对齐均由调用方（yomkdds）渲染
+    yomk::payload::BagInfo result;
+    result.files = info.files;
+    result.bagSizeBytes = info.bagSizeBytes;
+    result.storageId = info.storageId;
+    result.startTimeNs = info.startTimeNs;
+    result.durationNs = info.durationNs;
+    result.messageCount = info.messageCount;
+    result.serializationFormat = info.serializationFormat;
+    result.topics.reserve(info.topics.size());
+    for (const auto& topic : info.topics)
+    {
+        result.topics.push_back(yomk::payload::BagInfoTopic{
+                topic.topicName, topic.typeName, topic.qos, topic.messageCount});
+    }
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
+            ::yomk::msgs::BagInfo::shared(std::move(result)));
 }
 
 yomk::payload::Response YomkDdsBagService::bagReindex(YomkMsgPtr pkg)

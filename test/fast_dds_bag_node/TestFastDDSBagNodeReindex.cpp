@@ -4,7 +4,7 @@
  *
  * 范围：bagReindex 对 mcap::McapWriter 造的真实 bag 临时目录的重建断言（编号序收集、
  *       多分片合并、主题名升序、metadata.json 全字段与 _format 伴生键、无条件覆盖、
- *       无 summary 回退扫描）与失败路径契约；重建产物 bagInfoText 联动可读断言。
+ *       无 summary 回退扫描）与失败路径契约；重建产物 bagInfo 结构化读回断言。
  *       服务层回执链路归 TestYomkDdsBagServiceContract。
  * 覆盖：
  *   R1 单文件重建全字段（version/storage_identifier/relative_file_paths/starting_time
@@ -13,8 +13,8 @@
  *   R2 多分片合并（bag_0/1/2/10 编号序——bag_10 排 bag_2 之后非字典序；per-topic
  *      count 合并；starting=min、end=max → duration=全局跨度）；
  *   R3 metadata.json 已存在且损坏 → 覆盖重建成功；
- *   R4 metadata.json 缺失（核心场景）→ 重建成功且 bagInfoText 联动可读（首项空行 +
- *      Files/Duration/Start/End/Messages/Topic 行与重建值一致，Type 为恢复值）；
+ *   R4 metadata.json 缺失（核心场景）→ 重建成功且 bagInfo 结构化读回（files/storageId/
+ *      startTimeNs/durationNs/messageCount/topic 字段与重建值一致，Type 为恢复值）；
  *   R5 空消息分片（addChannel 无 write）→ 无 topic 条目、起止/时长/计数全 0；
  *   R6 无 summary 文件（noSummary 造法）→ AllowFallbackScan 回退重建成功；
  *   R7 空目录 → "empty directory"；有文件无匹配 → "no bag files found for reindexing"；
@@ -33,7 +33,7 @@
  */
 
 #include "TestCheck.h"
-#include "FastDDSBagNode.h" // 被测静态函数 bagReindex/bagInfoText（DDS-free 直测）
+#include "FastDDSBagNode.h" // 被测静态函数 bagReindex/bagInfo（DDS-free 直测）
 
 #include <mcap/writer.hpp> // 造真实 bag 文件（实现经链接库内单译元，仅声明头）
 
@@ -51,13 +51,6 @@
 namespace
 {
     constexpr std::uint64_t kSecondNs = 1000000000; // 1 秒的纳秒数（固定时间戳基础单位）
-    constexpr int kLabelWidth = 19;                 // info 标签列宽（"Topic information: " 宽度）
-
-    // 标签行期望值拼装（与节点侧 bagInfoLabeledLine 同构：标签补齐 19 列 + 内容）
-    std::string labeled(const std::string &label, const std::string &content)
-    {
-        return label + std::string(kLabelWidth - label.size(), ' ') + content;
-    }
 
     // 造真实 mcap 分片文件（写侧同款 open + Channel("cdr",0[,metadata]) + addChannel +
     // write + close）：messageCount 条消息 logTime 自 firstLogTimeNs 起 stepNs 递增；
@@ -136,7 +129,7 @@ namespace
 
 int main()
 {
-    // 固定时区：_format 伴生键与 bagInfoText Start/End 行人类可读段断言不随执行环境漂移
+    // 固定时区：_format 伴生键人类可读段断言不随执行环境漂移
     setenv("TZ", "UTC", 1);
     tzset();
 
@@ -263,7 +256,7 @@ int main()
         cleanupDir(dir);
     }
 
-    // ---- R4：metadata.json 缺失（核心场景）→ 重建成功且 bagInfoText 联动可读 ----
+    // ---- R4：metadata.json 缺失（核心场景）→ 重建成功且 bagInfo 结构化读回 ----
     {
         const std::string dir = "reindex_r4";
         cleanupDir(dir);
@@ -274,24 +267,19 @@ int main()
         std::string error;
         check(FastDDSBagNode::bagReindex(dir, &error), "R4 缺失 metadata 重建 → true");
         check(error.empty(), "R4 成功路径 error 为空");
-        std::vector<std::string> lines;
-        check(FastDDSBagNode::bagInfoText(dir, lines, nullptr), "R4 重建后 bagInfoText 联动可读");
-        check(lines.size() == 9, "R4 行数 = 9（空行 + 七段标签 + 单主题行）");
-        if (lines.size() == 9)
-        {
-            check(lines[0].empty(), "R4 首行为空行");
-            check(lines[1] == labeled("Files:", "bag_0.mcap"), "R4 Files 行");
-            check(lines[4] == labeled("Duration:", "2.000000000s"), "R4 Duration 行与重建值一致");
-            check(lines[5] == labeled("Start:", "Jan  1 1970 00:00:01.000000000 (1.000000000)"),
-                  "R4 Start 行（%e 空格填充日 + 9 位纳秒）");
-            check(lines[6] == labeled("End:", "Jan  1 1970 00:00:03.000000000 (3.000000000)"),
-                  "R4 End 行（= Start + duration）");
-            check(lines[7] == labeled("Messages:", "3"), "R4 Messages 行");
-            check(lines[8] == labeled("Topic information:",
-                              "Topic: /rt/a | Type: YomkDdsStd::MString | Count: 3 | "
-                              "Serialization Format: cdr"),
-                  "R4 Topic 行（Type 为恢复值，与重建产物一致）");
-        }
+        FastDDSBagNode::BagInfo infoOut;
+        check(FastDDSBagNode::bagInfo(dir, infoOut, nullptr), "R4 重建后 bagInfo 结构化读回");
+        check(infoOut.files.size() == 1 && infoOut.files[0] == "bag_0.mcap",
+              "R4 files = [bag_0.mcap]（与重建产物一致）");
+        check(infoOut.storageId == "mcap" && infoOut.serializationFormat == "cdr",
+              "R4 storageId/serializationFormat 与重建值一致");
+        check(infoOut.startTimeNs == kSecondNs, "R4 startTimeNs = 1s（重建值）");
+        check(infoOut.durationNs == 2 * kSecondNs, "R4 durationNs = 2s（= End - Start）");
+        check(infoOut.messageCount == 3, "R4 messageCount = 3");
+        check(infoOut.topics.size() == 1 && infoOut.topics[0].topicName == "/rt/a" &&
+                  infoOut.topics[0].typeName == "YomkDdsStd::MString" &&
+                  infoOut.topics[0].messageCount == 3,
+              "R4 单主题条目的 name/type（恢复值）/count 与重建产物一致");
         cleanupDir(dir);
     }
 

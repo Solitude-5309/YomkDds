@@ -13,7 +13,7 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 | 创建 bag 节点 | 链式 `yomk::dds().bag()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` | —（CLI 内部自动建删） | — |
 | 删除 bag 节点 | 链式 `yomk::dds().bag().quit()` | —（CLI 内部自动建删） | — |
 | 录制主题列表为 mcap bag | 链式 `yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()`（返回结构化 `RecordResult`） | `bag record` | **须**（库侧先 `yomk::dds().bag()...create()`） |
-| 查看 bag 元信息 | 链式 `yomk::dds().bag().dir(bagDir).info()` | `bag info` | 不须（纯文件读，无须 create_node） |
+| 查看 bag 元信息 | 链式 `yomk::dds().bag().dir(bagDir).info()`（返回结构化 `BagInfo`） | `bag info` | 不须（纯文件读，无须 create_node） |
 | 重建 bag 元信息 | 链式 `yomk::dds().bag().dir(bagDir).reindex()` | `bag reindex` | 不须（纯文件操作，无须 create_node） |
 | 转换 bag（过滤/裁剪/归并） | 链式 `yomk::dds().bag().in_bags({...}).out_cfg(path).convert()`（返回结构化 `ConvertResult`） | `bag convert` | 不须（纯文件操作，无须 create_node） |
 | 回放 bag | 链式 `yomk::dds().bag().dir(bagDir)[.rate(r)][.topics({...})][.loop()][.offset(sec)][.delay(sec)][.wait_acked(ms)][.remaps({...})][.read_ahead(n)][.qos_file(path)].play()` | `bag play` | **须**（库侧先 `yomk::dds().bag()...create()`）；CLI 自动创建并在退出前删除 bag 节点 |
@@ -122,7 +122,7 @@ yomkdds bag convert -i bag_in -o convert.json              # 单输入全缺省�
 yomkdds bag convert -i bag_a -i bag_b -o convert.json      # 多输入按 logTime 全局归并
 ```
 
-- **`yomk::dds().bag().dir(bagDir).info()`**：读 metadata.json 与目录递归总大小输出多行元信息文本（首行空行）；纯文件读不经 bag 节点（无须 create_node）；成功返回 StringArray（每项一行，首项为空行）；
+- **`yomk::dds().bag().dir(bagDir).info()`**：读 metadata.json 与目录递归总大小；纯文件读不经 bag 节点（无须 create_node）；成功返回 `BagInfo`（只回数据）：`files[]`（relative_file_paths 原序）/`bagSizeBytes`（目录递归总字节，含 metadata.json 自身）/`storageId`/`startTimeNs`/`durationNs`/`messageCount`/`serializationFormat`（当前单格式链路恒为 `cdr`）/`topics[]`（`BagInfoTopic`：`topicName`/`typeName`/`qos`/`messageCount`，保持 metadata 顺序）；行标签、单位换算（1024 进制/纳秒）、人类可读时间与 19 列对齐均由调用方渲染（CLI `bag info` 复现 `ros2 bag info` 文本）；
 - **`yomk::dds().bag().dir(bagDir).reindex()`**：从 mcap 分片（`<前缀>_<编号>.mcap` 编号升序）重建 metadata.json 并**无条件覆盖**写出（缺失/损坏均可重建；缺 summary 的中断残片回退 mcap 库级 `AllowFallbackScan` 线性扫描）；纯文件操作不经 bag 节点；成功返回 eOk（`msg == "ok"`，无数据载荷）；
 - **`yomk::dds().bag().in_bags({...}).out_cfg(path).convert()`**：读输入 bag 目录集与输出配置文件，把输入消息按配置过滤/裁剪/归并写为新 bag（多输入按 logTime 全局归并；转换透传原始 CDR 字节与消息时间戳/序号 ，不反序列化）；纯文件操作不经 bag 节点；in_bags/out_cfg 均必填（缺失分别返回 `in_bags are required` / `out_cfg(path) is required`）；成功返回 `ConvertResult`：`bags[]` 与 output_bags 条目一一对应（保持配置序，每项 `ConvertedBagStat`：`uri`/`messageCount`/`byteCount`/`topicCount`），`converted <uri>: N messages / M bytes / K topics` 行由调用方渲染。
 

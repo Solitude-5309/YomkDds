@@ -937,4 +937,59 @@ struct ConvertResult
     bool operator==(const ConvertResult& rhs) const { return tie() == rhs.tie(); }
     bool operator!=(const ConvertResult& rhs) const { return !(*this == rhs); }
 };
+
+/**
+ * @brief Per-topic entry of one bag's metadata
+ * @note qos is empty when metadata.json has no qos key (legacy bag) or records an
+ *       empty string (subscriber-only topic during recording)
+ */
+// @zh: 单个 bag 元信息中的逐主题条目
+// @zh: note metadata.json 无 qos 键（旧 bag）或记录空串（录制时仅订阅者主题）时 qos 为空
+struct BagInfoTopic
+{
+    std::string topicName;       // metadata.json topics_with_message_count[].topic_metadata.name
+    std::string typeName;        // raw DDS type name stored in the bag
+    std::string qos;             // "<RELIABILITY>,<DURABILITY>" snapshot, empty when absent
+    uint64_t messageCount = 0;   // messages stored for this topic
+
+    std::tuple<const std::string&, const std::string&, const std::string&, const uint64_t&> tie() const
+    {
+        return std::tie(topicName, typeName, qos, messageCount);
+    }
+
+    bool operator==(const BagInfoTopic& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const BagInfoTopic& rhs) const { return !(*this == rhs); }
+};
+
+/**
+ * @brief bag_info response: the metadata.json fields plus the recursive directory size
+ * @note Data only: every line (labels, unit suffixes, human-readable time, 19-column
+ *       alignment) is rendered by the caller (yomkdds); times stay in nanoseconds and
+ *       bagSizeBytes covers the whole directory, metadata.json included
+ */
+// @zh: bag_info 响应：metadata.json 字段 + 目录递归总大小
+// @zh: note 只回数据：行标签、单位、人类可读时间与 19 列对齐均由调用方（yomkdds）渲染；
+// @zh: 时间保留纳秒，bagSizeBytes 为目录递归总字节（含 metadata.json 自身）
+struct BagInfo
+{
+    std::vector<std::string> files;     // relative_file_paths, in bag order
+    uint64_t bagSizeBytes = 0;          // recursive directory size, metadata.json included
+    std::string storageId;              // storage_identifier, e.g. "mcap"
+    uint64_t startTimeNs = 0;           // starting_time.nanoseconds_since_epoch
+    uint64_t durationNs = 0;            // duration.nanoseconds
+    uint64_t messageCount = 0;          // message_count
+    std::string serializationFormat;    // single CDR pipeline, reported as "cdr"
+    std::vector<BagInfoTopic> topics;   // topics_with_message_count order
+
+    std::tuple<const std::vector<std::string>&, const uint64_t&, const std::string&, const uint64_t&,
+            const uint64_t&, const uint64_t&, const std::string&, const std::vector<BagInfoTopic>&>
+    tie() const
+    {
+        return std::tie(files, bagSizeBytes, storageId, startTimeNs, durationNs, messageCount,
+                serializationFormat, topics);
+    }
+
+    bool operator==(const BagInfo& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const BagInfo& rhs) const { return !(*this == rhs); }
+};
 }  // namespace yomk::payload

@@ -27,7 +27,7 @@
 | 子命令 | 职责 | 是否需要 bag 节点 | 库形态 |
 |---|---|---|---|
 | `yomkdds bag record` | 录制主题列表为 mcap bag（长驻阻塞至 Ctrl+C 收尾） | 经 bag 节点实现（CLI 自动建删） | `yomk::dds().bag().topics({...})….record()`（须先 `yomk::dds().bag()...create()` 自建 bag 节点） |
-| `yomkdds bag info` | 查看 bag 元信息（输出对齐 `ros2 bag info`） | 纯文件操作，无须节点 | `yomk::dds().bag().dir(bagDir).info()` |
+| `yomkdds bag info` | 查看 bag 元信息（输出对齐 `ros2 bag info`） | 纯文件操作，无须节点 | `yomk::dds().bag().dir(bagDir).info()`（返回结构化 `BagInfo`，文本由调用方渲染） |
 | `yomkdds bag play` | 按录制时间轴回放为真实 DDS 流量 | CLI 自动建删 bag 节点 | `yomk::dds().bag().dir(bagDir)[.rate/.topics/.loop/.offset/.delay/.wait_acked/.remaps/.read_ahead/.qos_file()].play()`（须先 `yomk::dds().bag()...create()` 自建 bag 节点） |
 | `yomkdds bag convert` | 按输出配置文件把一个或多个输入 bag 过滤/裁剪/合并写为新 bag | 纯文件操作，无须节点 | `yomk::dds().bag().in_bags({...}).out_cfg(path).convert()` |
 | `yomkdds bag reindex` | 从 mcap 分片重建被删/损坏的 `metadata.json` | 纯文件操作，无须节点 | `yomk::dds().bag().dir(bagDir).reindex()` |
@@ -150,7 +150,7 @@ yomkdds bag info <bag目录>
 yomkdds bag info bag_2026-10-02_19-37-33_726   # 查看第 1 步的录制产物
 ```
 
-读取 bag 目录下 `metadata.json` 与目录递归总大小，输出与 `ros2 bag info`（humble）逐行一致的元信息文本（多行文本逐行直出 stdout；纯本地文件读——不经 bag 节点、不创建任何 DDS 实体、不依赖域内状态）。输出样例与逐行含义见下文「预期输出」。
+读取 bag 目录下 `metadata.json` 与目录递归总大小，输出与 `ros2 bag info`（humble）逐行一致的元信息文本（多行文本逐行直出 stdout；纯本地文件读——不经 bag 节点、不创建任何 DDS 实体、不依赖域内状态）。库形态 `info()` 回结构化 `BagInfo`（只回数据），上述文本包括行标签、单位换算、人类可读时间与 19 列对齐均由 CLI 渲染。输出样例与逐行含义见下文「预期输出」。
 
 失败报错退出（exit 1）：`bag path [x] does not exist`（路径不存在）、`could not find metadata.json in bag directory [x]`（目录存在但无 metadata.json，非 bag 目录）、`parse metadata.json failed: ...`（metadata.json 非法 JSON）。
 

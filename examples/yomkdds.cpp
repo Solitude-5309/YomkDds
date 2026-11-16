@@ -1120,10 +1120,71 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
     return 0;
 }
 
+// bag info 渲染辅助（属业务层约定：节点层只回结构化数据，标签列宽/单位换算/人类可读时间
+// 均在此处决定，形态对齐 ros2 bag info）
+constexpr int kBagInfoLabelWidth = 19; // 标签列宽（"Topic information: " 宽度）
+constexpr int kBagInfoNsDigits = 9;    // 亚秒 9 位纳秒
+
+// 标签行：标签补齐 19 列后接内容（多主题/多分片续行由调用方再前缀同宽空格）
+static std::string bagInfoLabeledLine(const std::string &label, const std::string &content)
+{
+    std::string line = label;
+    if (line.size() < static_cast<size_t>(kBagInfoLabelWidth))
+    {
+        line.append(static_cast<size_t>(kBagInfoLabelWidth) - line.size(), ' ');
+    }
+    return line + content;
+}
+
+// 目录总字节 → "1023 B" / "1.0 KiB"（1024 进制；B 零小数，其余单位 1 位）
+static std::string formatBagSize(uint64_t bytes)
+{
+    constexpr double kBytesPerUnit = 1024.0;
+    constexpr int kSizeUnitCount = 5;
+    static const char *const kSizeUnits[kSizeUnitCount] = {"B", "KiB", "MiB", "GiB", "TiB"};
+    double size = static_cast<double>(bytes);
+    int index = 0;
+    while (size >= kBytesPerUnit && index < kSizeUnitCount - 1)
+    {
+        size /= kBytesPerUnit;
+        ++index;
+    }
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(index == 0 ? 0 : 1) << size << " "
+        << kSizeUnits[index];
+    return out.str();
+}
+
+// epoch 纳秒 → "Oct 11 2019 13:09:09.123456789 (1570799349.123456789)"（本地时区，%e 空格填充日）
+static std::string formatBagTimePoint(uint64_t epochNs)
+{
+    const uint64_t secs = epochNs / 1000000000ULL;
+    const uint64_t subNs = epochNs % 1000000000ULL;
+    const std::time_t timeVal = static_cast<std::time_t>(secs);
+    std::tm localTime{};
+    localtime_r(&timeVal, &localTime);
+    char timeBuf[32]{};
+    std::strftime(timeBuf, sizeof(timeBuf), "%b %e %Y %H:%M:%S", &localTime);
+    std::ostringstream out;
+    out << timeBuf << "." << std::setw(kBagInfoNsDigits) << std::setfill('0') << subNs << " ("
+        << secs << "." << std::setw(kBagInfoNsDigits) << std::setfill('0') << subNs << ")";
+    return out.str();
+}
+
+// 时长纳秒 → "12.000000000s"
+static std::string formatBagDuration(uint64_t durationNs)
+{
+    std::ostringstream out;
+    out << durationNs / 1000000000ULL << "." << std::setw(kBagInfoNsDigits) << std::setfill('0')
+        << durationNs % 1000000000ULL << "s";
+    return out.str();
+}
+
 // bag info 子命令：读 bag 目录下 metadata.json + 目录递归总大小，输出对齐 ros2 bag info
 // 的元信息文本（首行空行、Files/Bag size/Storage id/Duration/Start/End/Messages 与每主题
-// 一行 Topic information，续行 19 空格缩进对齐）；纯查询不建 bag 节点，服务端返回多行
-// 文本逐行打印，成功返回 0，失败（路径不存在/无 metadata/JSON 损坏）打印原因返回 1
+// 一行 Topic information，续行 19 空格缩进对齐）；纯查询不建 bag 节点，服务端返回结构化
+// BagInfo 载荷，行文本由本子命令渲染，成功返回 0，失败（路径不存在/无 metadata/JSON 损坏）
+// 打印原因返回 1
 static int runBagInfo(const std::string &bagDir)
 {
     ::yomk::server().init();
@@ -1136,14 +1197,61 @@ static int runBagInfo(const std::string &bagDir)
         return 1;
     }
 
-    // 逐行输出（首项为 ros2 对齐的空行，自然保留）
-    auto lines = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
-    if (lines != nullptr)
+    // 渲染属业务层：载荷只给数据（纳秒、字节数、主题清单），行文本与单位由 CLI 约定
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::BagInfo>(resp.data);
+    if (info == nullptr)
     {
-        for (const auto &line : lines->d)
+        ::yomk::log().tag("yomkdds").error("bag info failed: unexpected response payload");
+        return 1;
+    }
+    const auto &meta = info->msg;
+    std::cout << std::endl; // 首项空行（ros2 对齐）
+    if (meta.files.empty())
+    {
+        std::cout << bagInfoLabeledLine("Files:", "") << std::endl;
+    }
+    else
+    {
+        std::cout << bagInfoLabeledLine("Files:", meta.files.front()) << std::endl;
+        for (size_t i = 1; i < meta.files.size(); ++i)
         {
-            std::cout << line << std::endl;
+            std::cout << std::string(static_cast<size_t>(kBagInfoLabelWidth), ' ') << meta.files[i]
+                      << std::endl;
         }
+    }
+    std::cout << bagInfoLabeledLine("Bag size:", formatBagSize(meta.bagSizeBytes)) << std::endl;
+    std::cout << bagInfoLabeledLine("Storage id:", meta.storageId) << std::endl;
+    std::cout << bagInfoLabeledLine("Duration:", formatBagDuration(meta.durationNs)) << std::endl;
+    std::cout << bagInfoLabeledLine("Start:", formatBagTimePoint(meta.startTimeNs)) << std::endl;
+    std::cout << bagInfoLabeledLine("End:", formatBagTimePoint(meta.startTimeNs + meta.durationNs))
+              << std::endl;
+    std::cout << bagInfoLabeledLine("Messages:", std::to_string(meta.messageCount)) << std::endl;
+    bool firstTopic = true;
+    for (const auto &topic : meta.topics)
+    {
+        std::ostringstream line;
+        line << "Topic: " << topic.topicName << " | Type: " << topic.typeName;
+        // QoS 段可选：qos 空串（旧 bag / 仅订阅者主题录制）不展示
+        if (!topic.qos.empty())
+        {
+            line << " | QoS: " << topic.qos;
+        }
+        line << " | Count: " << topic.messageCount
+             << " | Serialization Format: " << meta.serializationFormat;
+        if (firstTopic)
+        {
+            std::cout << bagInfoLabeledLine("Topic information:", line.str()) << std::endl;
+            firstTopic = false;
+        }
+        else
+        {
+            std::cout << std::string(static_cast<size_t>(kBagInfoLabelWidth), ' ') << line.str()
+                      << std::endl;
+        }
+    }
+    if (firstTopic)
+    {
+        std::cout << bagInfoLabeledLine("Topic information:", "") << std::endl;
     }
     return 0;
 }

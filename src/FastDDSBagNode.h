@@ -77,6 +77,26 @@ public:
         uint64_t byteCount = 0;    // CDR 全量，含 encapsulation header
         uint64_t topicCount = 0;   // 该条目注册的 channel 数（含 0 条消息的主题）
     };
+    // bag info 的逐主题条目（metadata.json topics_with_message_count 原序）
+    struct BagInfoTopic
+    {
+        std::string topicName;
+        std::string typeName;  // bag 内存的原始 DDS 类型名
+        std::string qos;       // "<RELIABILITY>,<DURABILITY>"，无 qos 键/空串时为空
+        uint64_t messageCount = 0;
+    };
+    // bag info 回填集（metadata.json 字段 + 目录递归总大小），只回数据，行文本由调用方渲染
+    struct BagInfo
+    {
+        std::vector<std::string> files;   // relative_file_paths，保持 bag 内顺序
+        uint64_t bagSizeBytes = 0;        // 目录递归总字节（含 metadata.json 自身）
+        std::string storageId;            // storage_identifier
+        uint64_t startTimeNs = 0;         // starting_time.nanoseconds_since_epoch
+        uint64_t durationNs = 0;          // duration.nanoseconds
+        uint64_t messageCount = 0;
+        std::string serializationFormat;  // 录制链路单格式，固定 "cdr"
+        std::vector<BagInfoTopic> topics;
+    };
     // 仅可成功一次，失败/重复调用返回 false。spec/err 语义同 FastDDSNode::setDomainId
     // （XML 三级提取链——本节点无用户名，仅默认档可兜底；serverLocator 直配强制 CLIENT）。
     bool setDomainId(uint32_t domainId, const yomkdds_xml::ParticipantQosSpec& spec =
@@ -130,12 +150,11 @@ public:
             const std::vector<std::string>& topicRemaps = {},
             size_t readAheadQueueSize = kPlayReadAheadQueueSizeDefault,
             const std::string& qosOverridesPath = {});
-    // 读 bag 目录 metadata.json 组装 info 文本（纯文件操作 DDS-free，不经节点实例；输出
-    // 形态对齐 ros2 bag info）。outLines 每项一行（不含换行符，首项为空行）；失败返回
-    // false 并经 error 出参回填原因（路径不存在/无 metadata.json/解析失败）。bagDir 相对/
-    // 绝对路径均可。
-    static bool bagInfoText(const std::string& bagDir, std::vector<std::string>& outLines,
-            std::string* error = nullptr);
+    // 读 bag 目录 metadata.json 组装 info 数据（纯文件操作 DDS-free，不经节点实例；字段
+    // 对齐 ros2 bag info 语义）。outInfo 回填 metadata.json 字段与目录递归总字节；文本行、
+    // 单位与对齐形态均由调用方渲染。失败返回 false 并经 error 出参回填原因（路径不存在/
+    // 无 metadata.json/解析失败）。bagDir 相对/绝对路径均可。
+    static bool bagInfo(const std::string& bagDir, BagInfo& outInfo, std::string* error = nullptr);
     // 从 bag 目录内 mcap 分片文件重建 metadata.json（纯文件操作 DDS-free，不经节点实例；
     // metadata.json 缺失/损坏均可重建，无条件覆盖写出）。失败返回 false 并经 error 出参
     // 回填原因。bagDir 相对/绝对路径均可。

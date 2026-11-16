@@ -5,11 +5,11 @@
  * 范围：bagConvert 对 mcap::McapWriter 造的真实输入 bag 临时目录的转换断言（全缺省合并、
  *       主题展开精确/通配、时段裁剪含边界、输出分片滚动、多输入全局归并、旧格式拒转与
  *       类型/qos 冲突）与失败路径契约；产物 metadata.json 全字段 + 消息 logTime 读回升序断言 +
- *       bagInfoText 联动可读。服务层回执链路归 TestYomkDdsBagServiceContract。
+ *       bagInfo 结构化读回联动。服务层回执链路归 TestYomkDdsBagServiceContract。
  * 覆盖：
  *   C1 全缺省（单输入单条目仅 uri）→ 全主题全时段合并；metadata 对账（version/storage/
  *      relative_file_paths/starting_time+_format/duration+_format/message_count/topics
- *      name+count+type+qos 透传，输出 Channel.metadata 读回对账）+ bagInfoText 联动 9 行；
+ *      name+count+type+qos 透传，输出 Channel.metadata 读回对账）+ bagInfo 链路结构化读回；
  *      重复转换 → 输出目录已存在 fail；
  *   C2 topics 抽取：精确 + 通配混用 → 输出仅含展开集（未选主题不转换不入 metadata）；
  *      模式未命中 / 精确项不存在 / 两个 '*' → fail 精确文案；
@@ -38,7 +38,7 @@
  */
 
 #include "TestCheck.h"
-#include "FastDDSBagNode.h" // 被测静态函数 bagConvert/bagInfoText（DDS-free 直测）
+#include "FastDDSBagNode.h" // 被测静态函数 bagConvert/bagInfo（DDS-free 直测）
 
 #include <mcap/reader.hpp> // 转换产物消息读回（实现经链接库内单译元，仅声明头）
 #include <mcap/writer.hpp> // 造真实 bag 文件（同上）
@@ -261,11 +261,16 @@ int main()
         outReader.close();
         check(channelQosOk, "C1 输出 Channel.metadata type+qos 两键透传");
 
-        std::vector<std::string> infoLines;
-        check(FastDDSBagNode::bagInfoText(outDir, infoLines, &err), "C1 bagInfoText 联动可读");
-        check(infoLines.size() == 9 && infoLines[0].empty() &&
-                  infoLines[3] == "Storage id:        mcap",
-              "C1 info 文本 9 行对齐（首行空行 + Storage id）");
+        // 产物可直接被 bagInfo 读回（节点层只回数据，不断言文本形态）
+        FastDDSBagNode::BagInfo infoOut;
+        check(FastDDSBagNode::bagInfo(outDir, infoOut, &err), "C1 bagInfo 联动可读");
+        check(infoOut.storageId == "mcap" && infoOut.messageCount == 3 && infoOut.files.size() == 1 &&
+                  infoOut.files[0] == "bag_0.mcap" && infoOut.topics.size() == 1 &&
+                  infoOut.topics[0].topicName == "/rt/c1" &&
+                  infoOut.topics[0].typeName == "YomkDdsStd::MString" &&
+                  infoOut.topics[0].qos == "RELIABLE,VOLATILE" &&
+                  infoOut.topics[0].messageCount == 3,
+              "C1 bagInfo 结构化字段与产物 metadata 对账");
 
         stats.clear();
         err.clear();

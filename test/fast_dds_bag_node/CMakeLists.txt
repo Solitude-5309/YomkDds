@@ -21,7 +21,7 @@ set_tests_properties(TestFastDDSBagNodeRecord PROPERTIES
     ENVIRONMENT "LSAN_OPTIONS=suppressions=${CMAKE_SOURCE_DIR}/lsan.supp:print_suppressions=0;TSAN_OPTIONS=suppressions=${CMAKE_SOURCE_DIR}/tsan.supp:print_suppressions=0"
 )
 
-# bag info 用例：手写 metadata.json 临时目录直测静态函数 bagInfoText（输出全行断言 +
+# bag info 用例：手写 metadata.json 临时目录直测静态函数 bagInfo（结构化字段断言 +
 # 失败路径契约，DDS-free 无需域号），循 Validation 先例
 add_executable(TestFastDDSBagNodeInfo TestFastDDSBagNodeInfo.cpp)
 target_link_libraries(TestFastDDSBagNodeInfo PRIVATE yomkdds_under_test YomkDdsStdMsgs)

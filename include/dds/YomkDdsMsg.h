@@ -25,7 +25,7 @@ YOMK_DEFINE_MSG(yomk::payload::DDSPublish, DDSPublish, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSLoan, DDSLoan, msg)
 YOMK_DEFINE_MSG(yomk::payload::LoanSample, LoanSample, msg)
 
-// ===== YomkDdsDebugService =====
+// ===== YomkDdsDebugHandler =====
 YOMK_DEFINE_MSG(yomk::payload::DDSDebugNode, DDSDebugNode, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSDebugTopic, DDSDebugTopic, msg)
 YOMK_DEFINE_MSG(yomk::payload::DDSDebugList, DDSDebugList, msg)

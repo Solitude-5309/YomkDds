@@ -61,7 +61,7 @@
 | `yomk::dds().node(nodeName).topic(topicName).loan()` | 借出发送缓冲，返回值判空即失败判定（详见 [loan-zero-copy](docs/features/loan-zero-copy.md)） |
 | `yomk::dds().node(nodeName).topic(topicName).sample(sample).return_loan()` | 归还未发布的借出缓冲 |
 
-**调试服务（YomkDdsDebugService）** — 详见 [功能文档：调试服务](docs/features/debug-service.md)，等价 CLI 见 `yomkdds` 命令：
+**调试服务（YomkDdsDebugHandler）** — 详见 [功能文档：调试服务](docs/features/debug-service.md)，等价 CLI 见 `yomkdds` 命令：
 
 | 入口 | 简述 |
 |---|---|
@@ -124,7 +124,7 @@ cmake -S test -B test/build -DCMAKE_PREFIX_PATH="${YOMK_PREFIX_PATH:-/opt/yomk}"
 cmake --build test/build -j
 ```
 
-构建产物为 22 个测试可执行（位于 `test/build/harness/`、`test/build/yomk_dds_handler/`、`test/build/fast_dds_debug_node/`、`test/build/yomk_dds_debug_service/`、`test/build/yomk_dds_bag_service/`、`test/build/fast_dds_bag_node/`）：
+构建产物为 22 个测试可执行（位于 `test/build/harness/`、`test/build/yomk_dds_handler/`、`test/build/fast_dds_debug_node/`、`test/build/yomk_dds_debug_handler/`、`test/build/yomk_dds_bag_service/`、`test/build/fast_dds_bag_node/`）：
 
 > 另有 `test/build/ros2_interop/` 下的 `TestRos2InteropPub` / `TestRos2InteropSub` 两个 ROS2 真机互通判定程序，不注册 CTest，由 `./test/run_ros2_interop.sh` 手动驱动（详见 [ros2-interop.md](docs/features/ros2-interop.md)）。
 
@@ -133,7 +133,7 @@ cmake --build test/build -j
 | Harness (1) | TestHarnessSmoke（零 DDS 基座自检） |
 | YomkDdsHandler (10) | TestYomkDdsHandlerContract、TestYomkDdsHandlerLifecycle、TestYomkDdsNodeLifecycle、TestYomkDdsSetNaming、TestYomkDdsTopic、TestYomkDdsLoan、TestYomkDdsTypes、TestYomkDdsConcurrency、TestYomkDdsStressSerial、TestYomkDdsStressConcurrent |
 | FastDDSDebugNode (1) | TestFastDDSDebugNode（节点层守卫 + 发现→动态类型→订阅→JSON 输出端到端） |
-| YomkDdsDebugService (2) | TestYomkDdsDebugServiceContract（DDS-free 契约）、TestYomkDdsDebugServiceLifecycle（真实 DDS 生命周期） |
+| YomkDdsDebugHandler (2) | TestYomkDdsDebugHandlerContract（DDS-free 契约）、TestYomkDdsDebugHandlerLifecycle（真实 DDS 生命周期） |
 | YomkDdsBagService (2) | TestYomkDdsBagServiceContract（DDS-free 契约）、TestYomkDdsBagServiceLifecycle（真实 DDS 录制生命周期） |
 | FastDDSBagNode (6) | TestFastDDSBagNodeValidation（启动校验与输入校验分支，含通配展开判定）、TestFastDDSBagNodeRecord（发布→录制→Ctrl+C 收尾→落盘断言端到端，含通配模式录制）、TestFastDDSBagNodeInfo（bag info 静态函数直测）、TestFastDDSBagNodeReindex（bag reindex 静态函数直测）、TestFastDDSBagNodeConvert（bag convert 静态函数直测）、TestFastDDSBagNodePlay（节点层回放端到端） |
 
@@ -173,7 +173,7 @@ cmake --build test/build -j
 - ✅ YomkDdsHandler DDS 接口（节点管理/主题注册/发布）
 - ✅ Loan 借出机制（订阅端透明自动切换，发布端 loan/discard 接口）
 - ✅ 跨进程通信验证（ExampleYomkDdsPub/ExampleYomkDdsSub 双进程示例）
-- ✅ 类型无关调试（FastDDSDebugNode + YomkDdsDebugService + yomkdds 命令行工具）
+- ✅ 类型无关调试（FastDDSDebugNode + YomkDdsDebugHandler + yomkdds 命令行工具）
 - 🚧 更多数据类型支持
 
 ## 7 License

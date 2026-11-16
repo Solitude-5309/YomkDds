@@ -1,6 +1,6 @@
 # 功能文档：调试服务（域内观察与消息发布）
 
-> **本文档覆盖范围**：`YomkDdsDebugService` 调试服务与 `yomkdds` 命令行观察/发布能力的完整说明——调试节点模型、类型无关的域内观察原理（主题观察/列表/详情、节点列表/详情、类型反查、类型内省）、发布辅助与 JSON 载荷发布、收敛查询语义与错误边界。各命令的逐条实操与输出示例见 [CLI 观察手册](../manual/cli-observe-handbook.md) 与 [CLI 发布与内省手册](../manual/cli-publish-handbook.md)。
+> **本文档覆盖范围**：`YomkDdsDebugHandler` 调试服务与 `yomkdds` 命令行观察/发布能力的完整说明——调试节点模型、类型无关的域内观察原理（主题观察/列表/详情、节点列表/详情、类型反查、类型内省）、发布辅助与 JSON 载荷发布、收敛查询语义与错误边界。各命令的逐条实操与输出示例见 [CLI 观察手册](../manual/cli-observe-handbook.md) 与 [CLI 发布与内省手册](../manual/cli-publish-handbook.md)。
 
 ## 功能定位
 
@@ -9,7 +9,7 @@
 两个入口，能力对齐：
 
 - **库 API**：调试节点经链式 `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` 创建、`yomk::dds().debug().quit()` 退出，主题登记经 `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()`，主题清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()`（返回结构化载荷，三种展示形态由调用方自己拼），单主题详情经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()`，单主题发布示例经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()`，消息样本经 `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()`，发布经 `yomk::dds().debug().topic(topicName).payload(json)[.rounds(n)][.interval(ms)][.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()`，类型反查经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()`，类型内省经 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].interface_show()`，类型清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()`，节点清单经 `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()`，节点详情经 `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()`（全部定义于 `YomkDdsAPI.h`，链接 `YomkDds::YomkDds YomkServer::YomkServer`），库用户在代码中调用；
-- **CLI**：`yomkdds topic/node/interface` 命令经 `YomkDdsDebugService` 实现，各命令小节附等价库调用。
+- **CLI**：`yomkdds topic/node/interface` 命令经 `YomkDdsDebugHandler` 实现，各命令小节附等价库调用。
 
 ## 能力清单
 
@@ -91,7 +91,7 @@ using namespace yomk;
 int main(int argc, char *argv[])
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：一个进程至多一个，重复创建须先删除）
     auto resp = yomk::dds().debug().domain(0).create();
@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
 
 ```cpp
 ::yomk::server().init();
-::yomk::server().srv<YomkDdsDebugService>().create();
+::yomk::server().srv<YomkDdsDebugHandler>().create();
 auto resp = yomk::dds().debug().domain(0).create();      // 1. 创建调试节点
 // 2. 收敛查询：连续 5 次 200ms 快照不变即返回结构化 TopicInfoArray 包
 resp = yomk::dds().debug().rounds(5).interval(200).topics();
@@ -271,7 +271,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 
 ## 与其他功能的关系
 
-- **核心通信**：调试服务是独立服务域（`YomkDdsDebugService`），与业务节点互不干扰；节点名经 `yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds/.tcp_ds(serverLocator)].create()` 下沉到 DDS 参与者（随 SPDP 发现传播给同域对端），`node list`/`node info` 查到的即这些参与者，见 [core-communication.md](./core-communication.md)；
+- **核心通信**：调试服务是独立服务域（`YomkDdsDebugHandler`），与业务节点互不干扰；节点名经 `yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds/.tcp_ds(serverLocator)].create()` 下沉到 DDS 参与者（随 SPDP 发现传播给同域对端），`node list`/`node info` 查到的即这些参与者，见 [core-communication.md](./core-communication.md)；
 - **发现服务器**：调试节点支持 UDP/TCP 直配累积器（同域才可调试，跨网段调试须经 server），见 [discovery-server.md](./discovery-server.md)；
 - **QoS**：`topic print`/`topic hz`/`topic pub` 的 QoS 参数族（`--qos-ros`/`--qos-*`/`--qos-file` 优先级链）与库侧 `DDSQosProfile` 语义见 [qos-profiles.md](./qos-profiles.md)；
 - **ROS2 互通**：ROS2 rmw_fastrtps 端点不提供 XTypes TypeObject，观察其主题会触发类型不可重建告警、`interface show` 报 `type object for [...] not available`（互通判定以数据到达为准），见 [ros2-interop.md](./ros2-interop.md)；

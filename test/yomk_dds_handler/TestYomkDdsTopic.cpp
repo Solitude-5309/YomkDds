@@ -30,7 +30,7 @@
 // String + YOMK_* 宏
 #include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
-#include "YomkDdsDebugService.h" // YomkDdsDebugService + DDSDebugNode/DDSDebugInfo（QoS-B4 读回链路）
+#include "YomkDdsDebugHandler.h" // YomkDdsDebugHandler + DDSDebugNode/DDSDebugInfo（QoS-B4 读回链路）
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MString / MInt32 数据类
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType / MInt32PubSubType
@@ -268,7 +268,7 @@ namespace
     //     RELIABLE+TRANSIENT_LOCAL 双双不同）经调试节点 topic info -v 从发现数据
     //     读回断言两行 QoS，直证 profile 值落到端点；
     // 全哨兵缺省兼容：既有 T8/e2e 等用例的三参/四参聚合初始化（不带尾参）即全哨兵路径。
-    void testQosProfile(YomkDdsHandler *svc, YomkDdsDebugService *svcDebug)
+    void testQosProfile(YomkDdsHandler *svc, YomkDdsDebugHandler *svcDebug)
     {
         // B1：ros2 底座组合收发（invoke+四参/五参聚合尾参，与宏展开等价同链路）
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "qos1_node")).status == yomk::payload::ResStatus::Succeeded,
@@ -388,8 +388,8 @@ int main()
     auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
     check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
     // 调试服务（QoS-B4 从发现数据读回端点实际 QoS 用）
-    auto *svcDebug = new YomkDdsDebugService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svcDebug).add() == 0, "YomkDdsDebugService 注册成功");
+    auto *svcDebug = new YomkDdsDebugHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svcDebug).add() == 0, "YomkDdsDebugHandler 注册成功");
 
     testTopicRegistration(svc);
     testEndToEndPubSub(svc);

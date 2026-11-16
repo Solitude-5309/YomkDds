@@ -1,6 +1,6 @@
 #include "FastDDSDebugNode.h"
 
-#include "YomkDdsDebugService.h" // yomk::g_debugPubStop 持续发布停止标志（API 头内联定义）
+#include "YomkDdsDebugHandler.h" // yomk::g_debugPubStop 持续发布停止标志（API 头内联定义）
 
 #include <algorithm>
 #include <chrono>

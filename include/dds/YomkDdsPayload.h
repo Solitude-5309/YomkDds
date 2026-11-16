@@ -366,7 +366,7 @@ struct LoanSample
     void* sample = nullptr;
 };
 
-// ===== YomkDdsDebugService request payloads =====
+// ===== YomkDdsDebugHandler request payloads =====
 
 /** @brief debug create_node request (same env fallbacks as DDSNode) */
 // @zh: debug create_node 请求负载（环境变量回落语义同 DDSNode）
@@ -407,7 +407,7 @@ struct DDSDebugInfo
     uint32_t intervalMs = 0;
 };
 
-// ===== YomkDdsDebugService response payloads =====
+// ===== YomkDdsDebugHandler response payloads =====
 
 /** @brief Sentinel of the duration fields: -1 = infinite, other values are nanoseconds */
 // @zh: 时长字段哨兵：-1=无限，其余值即纳秒

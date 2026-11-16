@@ -17,11 +17,11 @@ using namespace yomk::payload;
 
 /** @brief Type-agnostic debugging service: discovery inspection, JSON message tap and probe publish */
 // @zh: 类型无关调试服务：发现观察、消息 JSON 旁路与探针发布
-class YomkDdsDebugService : public YomkService
+class YomkDdsDebugHandler : public YomkService
 {
 public:
-    YomkDdsDebugService(YomkServer* server);
-    virtual ~YomkDdsDebugService();
+    YomkDdsDebugHandler(YomkServer* server);
+    virtual ~YomkDdsDebugHandler();
     virtual int init() override;
 
 private:

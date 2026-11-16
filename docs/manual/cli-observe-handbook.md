@@ -15,7 +15,7 @@
 ## 前提与准备
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成编译安装：`yomkdds` 命令行工具位于 `<安装路径>/bin`，可直接运行；
-- 观察是**类型无关**的：工具经 `YomkDdsDebugService` 调试服务接入 Fast DDS 发现机制，自动解析远端类型建立订阅或查询，**无需 IDL 生成代码**，可观察任意 DDS 域（含 ROS2 端点，见排障一节的类型重建限制）；
+- 观察是**类型无关**的：工具经 `YomkDdsDebugHandler` 调试服务接入 Fast DDS 发现机制，自动解析远端类型建立订阅或查询，**无需 IDL 生成代码**，可观察任意 DDS 域（含 ROS2 端点，见排障一节的类型重建限制）；
 - 一个用于对照的发布端：本文全程以安装自带的 `ExampleYomkDdsPub`（节点 `pub_node`，以 1 Hz 发布 `hello_world` 主题）为被观察对象；
 - **域号**由环境变量 `YOMKDDS_DDS_DOMAIN_ID` 指定（合法范围 [0,232]，默认 0）：yomkdds 启动时无该变量则自动创建并默认 0，同时幂等写入 `~/.bashrc`（仅当其中无该变量时，带 `# added by yomkdds` 注释便于识别）——新开任意终端可直接 `echo $YOMKDDS_DDS_DOMAIN_ID` 查看并自动继承；已打开的终端须 `source ~/.bashrc` 或重开才生效。临时换域用 `export YOMKDDS_DDS_DOMAIN_ID=5`，或用 CLI 显式选项 `-D/--domain <N>` 单次指定（优先于环境变量，详见 [env-vars-reference.md](./env-vars-reference.md)），与被观察端保持一致是「互相可见」的第一前提；
 - 无多播/跨网段环境需接发现服务器时，配合三个直配环境变量 `YOMKDDS_USE_DISCOVER_SERVER` / `YOMKDDS_UDP_DISCOVER_SERVERS` / `YOMKDDS_TCP_DISCOVER_SERVERS` 使用，详见 [env-vars-reference.md](./env-vars-reference.md)；

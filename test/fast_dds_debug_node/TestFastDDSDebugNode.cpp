@@ -70,7 +70,7 @@
 #include "TestCheck.h"
 #include "FastDDSDebugNode.h"
 #include "FastDDSNode.h"
-#include "YomkDdsDebugService.h" // yomk::debugPubStop/debugPubReset（topicPub 期望建匹配中断用例）
+#include "YomkDdsDebugHandler.h" // yomk::debugPubStop/debugPubReset（topicPub 期望建匹配中断用例）
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MString 数据类（仅发布端使用）
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（仅发布端使用）

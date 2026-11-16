@@ -1,5 +1,5 @@
 // /bag_record、/bag_play 长驻阻塞期间持锁——锁保护 node_ 生命周期不被并发 deleteNode 破坏
-// （同 YomkDdsDebugService 持锁收敛约定）；停止经 yomk::g_bagRecordStop / g_bagPlayStop 由
+// （同 YomkDdsDebugHandler 持锁收敛约定）；停止经 yomk::g_bagRecordStop / g_bagPlayStop 由
 // SIGINT 处理函数异步置位，不依赖本服务其他端点。
 #include "YomkDdsBagService.h"
 #include "YomkDdsMsg.h"

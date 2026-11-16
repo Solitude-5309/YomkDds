@@ -14,7 +14,7 @@
 # 若某条抑制被证实掩盖 YomkDds 自有源码缺陷，应删除该条并修复源码。
 
 # ---- GCC 11.4 libtsan 死锁检测器假阳性定罪（2026-10，用户决策：维持 GCC 仅记录，不加抑制）----
-# 现象：TestFastDDSDebugNode / TestYomkDdsDebugServiceLifecycle 以 exit 66 失败，报 double lock
+# 现象：TestFastDDSDebugNode / TestYomkDdsDebugHandlerLifecycle 以 exit 66 失败，报 double lock
 #       （当前栈 setDomainId:512 / listTopics:612 / ~FastDDSDebugNode():473 / topicPub:1472，"首次加锁栈"指向更早的
 #       一次正常获取，如 listTopics:612←main:309）并级联双侧同锁的假 data race（如 dtor:474 写 vs
 #       workerLoop:2052 读 workerRunning_，双侧均标 "mutexes: write M1238"）。

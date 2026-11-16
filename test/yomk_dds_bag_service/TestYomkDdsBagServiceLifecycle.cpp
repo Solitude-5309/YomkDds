@@ -21,7 +21,7 @@
  *
  * 关键不变式：每个 eOk 创建的 bag 节点必须在 main 返回前经 /delete_node 显式删除，以规避
  *   YOMK 框架 atexit 服务析构晚于 FastDDS DomainParticipantFactory 单例销毁导致的静态析构
- *   顺序问题（同 TestYomkDdsDebugServiceLifecycle）。
+ *   顺序问题（同 TestYomkDdsDebugHandlerLifecycle）。
  *
  * 域号 200（对齐调试服务生命周期先例），与 bag 直测用例(201/202)错开，ctest 串行执行互不残留。
  *

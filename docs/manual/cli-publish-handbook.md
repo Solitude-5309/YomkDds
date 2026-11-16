@@ -16,7 +16,7 @@
 ## 前提与准备
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成编译安装：`yomkdds` 命令行工具位于 `<安装路径>/bin`，可直接运行；
-- 发布是**类型无关**的：工具经 `YomkDdsDebugService` 调试服务从发现数据重建 DynamicType 并解析 JSON 载荷，无需 IDL 生成代码；目标主题须有端点已在域内被发现（或使用 `-w N` 先等主题出现，见下文）；
+- 发布是**类型无关**的：工具经 `YomkDdsDebugHandler` 调试服务从发现数据重建 DynamicType 并解析 JSON 载荷，无需 IDL 生成代码；目标主题须有端点已在域内被发现（或使用 `-w N` 先等主题出现，见下文）；
 - **域号**由环境变量 `YOMKDDS_DDS_DOMAIN_ID` 指定（合法范围 [0,232]，默认 0）：yomkdds 启动时无该变量则自动创建并默认 0，幂等写入 `~/.bashrc`（带 `# added by yomkdds` 注释），已打开的终端须 `source ~/.bashrc` 或重开才生效；单次临时换域可用显式选项 `-D/--domain <N>`（优先于环境变量，详见 [env-vars-reference.md](./env-vars-reference.md)）；
 - **收敛次数**由环境变量 `YOMKDDS_DDS_DISCOVER_ROUNDS` 配置（默认 5，值须为 >=1 的整数，非法报错退出）：topic pub 全形态与 interface show/list 均按「每 ~200ms 轮询快照、连续 N 次不变即收敛」输出/发布；
 - 一个用于验证的订阅端（可选）：安装自带的 `ExampleYomkDdsSub`（节点 `sub_node`，订阅 `hello_world`），或另开终端跑 `yomkdds topic print hello_world`（见 [cli-observe-handbook.md](./cli-observe-handbook.md)）。

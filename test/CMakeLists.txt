@@ -50,7 +50,7 @@ message(STATUS "[test] YomkDds lib dir: ${YomkDds_LIB_DIR}")
 # 仅编译自有源码六个 TU；第三方以 IMPORTED/已安装库形式链接，不参与插桩
 add_library(yomkdds_under_test STATIC
     ${YOMKDDS_ROOT}/src/YomkDdsHandler.cpp
-    ${YOMKDDS_ROOT}/src/YomkDdsDebugService.cpp
+    ${YOMKDDS_ROOT}/src/YomkDdsDebugHandler.cpp
     ${YOMKDDS_ROOT}/src/FastDDSNode.cpp
     ${YOMKDDS_ROOT}/src/FastDDSDebugNode.cpp
     ${YOMKDDS_ROOT}/src/YomkDdsBagService.cpp
@@ -143,8 +143,8 @@ add_subdirectory(harness)
 add_subdirectory(yomk_dds_handler)
 # fast_dds_debug_node：类型无关调试订阅节点（守卫用例 + 发现→动态类型→订阅→JSON 输出端到端）
 add_subdirectory(fast_dds_debug_node)
-# yomk_dds_debug_service：调试服务两层测试（契约 DDS-free + 生命周期真实 DDS）
-add_subdirectory(yomk_dds_debug_service)
+# yomk_dds_debug_handler：调试服务两层测试（契约 DDS-free + 生命周期真实 DDS）
+add_subdirectory(yomk_dds_debug_handler)
 # fast_dds_bag_node：bag 录制节点两层测试（启动校验 + 录制收尾落盘真实 DDS）
 add_subdirectory(fast_dds_bag_node)
 # yomk_dds_bag_service：bag 服务两层测试（契约 DDS-free + 生命周期真实 DDS）

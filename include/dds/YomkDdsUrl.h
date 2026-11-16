@@ -5,7 +5,7 @@
  * @brief Service endpoint URL constants for the YomkDds extension
  *
  * Grouped per service: core communication (YomkDdsHandler), type-agnostic
- * debugging (YomkDdsDebugService), bag record/replay (YomkDdsBagService).
+ * debugging (YomkDdsDebugHandler), bag record/replay (YomkDdsBagService).
  * Endpoint behavior is documented by the YOMKDDS_* macros in YomkDdsAPI.h.
  *
  * @note yomk::url is an open namespace: extensions append constants in the
@@ -55,59 +55,59 @@ inline constexpr std::string_view ddsLoan = "/YomkDdsHandler/loan";
 // @zh: 归还未发布的借出缓冲端点
 inline constexpr std::string_view ddsDiscardLoan = "/YomkDdsHandler/discard_loan";
 
-// --- YomkDdsDebugService ---
+// --- YomkDdsDebugHandler ---
 
 /** @brief Create the debug node endpoint (single node per process) */
 // @zh: 创建调试节点端点（单节点模型）
-inline constexpr std::string_view ddsDebugCreateNode = "/YomkDdsDebugService/create_node";
+inline constexpr std::string_view ddsDebugCreateNode = "/YomkDdsDebugHandler/create_node";
 
 /** @brief Quit debugging and delete the debug node endpoint */
 // @zh: 退出调试（删除调试节点）端点
-inline constexpr std::string_view ddsDebugDeleteNode = "/YomkDdsDebugService/delete_node";
+inline constexpr std::string_view ddsDebugDeleteNode = "/YomkDdsDebugHandler/delete_node";
 
 /** @brief Register a topic-print observer endpoint */
 // @zh: 登记调试主题（逐条投递回调）端点
-inline constexpr std::string_view ddsDebugTopicPrint = "/YomkDdsDebugService/topic_print";
+inline constexpr std::string_view ddsDebugTopicPrint = "/YomkDdsDebugHandler/topic_print";
 
 /** @brief List discovered topics in the domain endpoint */
 // @zh: 列出域内主题端点
-inline constexpr std::string_view ddsDebugListTopics = "/YomkDdsDebugService/list_topics";
+inline constexpr std::string_view ddsDebugListTopics = "/YomkDdsDebugHandler/list_topics";
 
 /** @brief Query topic discovery details endpoint */
 // @zh: 查询主题详情端点
-inline constexpr std::string_view ddsDebugTopicInfo = "/YomkDdsDebugService/topic_info";
+inline constexpr std::string_view ddsDebugTopicInfo = "/YomkDdsDebugHandler/topic_info";
 
 /** @brief Reverse-lookup topics by data type name endpoint */
 // @zh: 按数据类型反查主题端点
-inline constexpr std::string_view ddsDebugTopicFind = "/YomkDdsDebugService/topic_find";
+inline constexpr std::string_view ddsDebugTopicFind = "/YomkDdsDebugHandler/topic_find";
 
 /** @brief Dump IDL struct of a data type endpoint */
 // @zh: 按类型名输出 IDL 结构端点
-inline constexpr std::string_view ddsDebugInterfaceShow = "/YomkDdsDebugService/interface_show";
+inline constexpr std::string_view ddsDebugInterfaceShow = "/YomkDdsDebugHandler/interface_show";
 
 /** @brief List all discovered data type names endpoint */
 // @zh: 列出全部类型名端点
-inline constexpr std::string_view ddsDebugInterfaceList = "/YomkDdsDebugService/interface_list";
+inline constexpr std::string_view ddsDebugInterfaceList = "/YomkDdsDebugHandler/interface_list";
 
 /** @brief Query a publishable example for a topic endpoint */
 // @zh: 查询主题发布示例端点
-inline constexpr std::string_view ddsDebugTopicExample = "/YomkDdsDebugService/topic_example";
+inline constexpr std::string_view ddsDebugTopicExample = "/YomkDdsDebugHandler/topic_example";
 
 /** @brief Query the message description (type name + JSON template) endpoint */
 // @zh: 查询消息描述两要素端点
-inline constexpr std::string_view ddsDebugTopicMsg = "/YomkDdsDebugService/topic_msg";
+inline constexpr std::string_view ddsDebugTopicMsg = "/YomkDdsDebugHandler/topic_msg";
 
 /** @brief Publish a JSON payload to a topic endpoint */
 // @zh: 发布 JSON 载荷消息端点
-inline constexpr std::string_view ddsDebugTopicPub = "/YomkDdsDebugService/topic_pub";
+inline constexpr std::string_view ddsDebugTopicPub = "/YomkDdsDebugHandler/topic_pub";
 
 /** @brief List named participants in the domain endpoint */
 // @zh: 列出域内节点端点
-inline constexpr std::string_view ddsDebugListNodes = "/YomkDdsDebugService/list_nodes";
+inline constexpr std::string_view ddsDebugListNodes = "/YomkDdsDebugHandler/list_nodes";
 
 /** @brief Query pub/sub topic lists of a named participant endpoint */
 // @zh: 查询节点发布/订阅清单端点
-inline constexpr std::string_view ddsDebugNodeInfo = "/YomkDdsDebugService/node_info";
+inline constexpr std::string_view ddsDebugNodeInfo = "/YomkDdsDebugHandler/node_info";
 
 // --- YomkDdsBagService ---
 

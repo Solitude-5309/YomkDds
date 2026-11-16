@@ -78,9 +78,9 @@ ALL_TESTS=(
     TestHarnessSmoke
     TestYomkDdsHandlerContract
     TestYomkDdsHandlerLifecycle
-    TestYomkDdsDebugServiceContract
+    TestYomkDdsDebugHandlerContract
     TestYomkDdsBagServiceContract
-    TestYomkDdsDebugServiceLifecycle
+    TestYomkDdsDebugHandlerLifecycle
     TestYomkDdsBagServiceLifecycle
     TestFastDDSDebugNode
     TestFastDDSBagNodeInfo

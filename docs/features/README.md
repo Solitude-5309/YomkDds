@@ -15,7 +15,7 @@ flowchart LR
 
     subgraph YomkDds["YomkDds API（经 YomkServer 服务注册）"]
         S1["YomkDdsHandler<br>核心通信"]
-        S2["YomkDdsDebugService<br>调试服务"]
+        S2["YomkDdsDebugHandler<br>调试服务"]
         S3["YomkDdsBagService<br>Bag 服务"]
     end
 
@@ -34,10 +34,10 @@ flowchart LR
 | 服务域 | 职责 | API 入口 | CLI 覆盖 |
 |---|---|---|---|
 | YomkDdsHandler | 节点生命周期、主题注册、发布订阅、Loan、XML 加载 | `yomk::dds()` 链式 | 不覆盖（编程能力） |
-| YomkDdsDebugService | 类型无关的域内观察（主题/节点/类型/端点）与 JSON 载荷发布 | `yomk::dds().debug()` 链式面 | `yomkdds topic/node/interface` 全部覆盖 |
+| YomkDdsDebugHandler | 类型无关的域内观察（主题/节点/类型/端点）与 JSON 载荷发布 | `yomk::dds().debug()` 链式面 | `yomkdds topic/node/interface` 全部覆盖 |
 | YomkDdsBagService | mcap 格式录制、元信息、重建索引、转换、回放 | `yomk::dds().bag()` 链式全分面（建删/录制/转换/元信息/回放） | `yomkdds bag` 全部覆盖（record/play 由 CLI 自动建删 bag 节点） |
 
-> 命名差异说明：核心通信实现类为 `YomkDdsHandler`，与调试/Bag 两个服务类 `YomkDdsDebugService` / `YomkDdsBagService` 同属 YomkServer 服务实体（三者均继承 `YomkService`，各自注册独立请求路由）。
+> 命名说明：核心通信与调试套件的实现类分别为 `YomkDdsHandler` / `YomkDdsDebugHandler`，Bag 套件仍为 `YomkDdsBagService`；三者均继承 `YomkService`，各自注册独立请求路由。
 
 > 除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，核心通信链式终结均返回 `yomk::payload::Response`，调用后须判 `status == yomk::payload::ResStatus::Succeeded`；失败时可读 `msg` 获取错误信息。
 

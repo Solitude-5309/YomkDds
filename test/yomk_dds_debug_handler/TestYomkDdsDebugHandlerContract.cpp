@@ -1,10 +1,10 @@
 /**
- * @file TestYomkDdsDebugServiceContract.cpp
- * @brief YomkDdsDebugService 服务层契约测试（DDS-free，白盒经服务器公开路由直接分发）
+ * @file TestYomkDdsDebugHandlerContract.cpp
+ * @brief YomkDdsDebugHandler 服务层契约测试（DDS-free，白盒经服务器公开路由直接分发）
  *
  * 范围：仅验证调试服务 14 端点在不触发任何 DDS 运行时（不创建 participant）前提下的
  *       输入校验与错误码契约；真实 DDS 生命周期（创建/删除/登记）归
- *       TestYomkDdsDebugServiceLifecycle，节点层守卫与端到端流量归 TestFastDDSDebugNode。
+ *       TestYomkDdsDebugHandlerLifecycle，节点层守卫与端到端流量归 TestFastDDSDebugNode。
  * 覆盖：
  *   T1 funcInfos 内省 14 端点齐全 + 未知端点 eNo；
  *   T2 /version 正常路径（eOk + 版本串契约 + 忽略 pkg）；
@@ -31,7 +31,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsDebugService.h" // 服务/DDSDebugNode/DDSDebugTopic/String/YOMK_* 宏
+#include "YomkDdsDebugHandler.h" // 服务/DDSDebugNode/DDSDebugTopic/String/YOMK_* 宏
 #include "YomkDdsMsg.h"
 
 #include <cstdint>
@@ -40,7 +40,7 @@
 namespace
 {
     // T2：/version 契约（不解包，忽略 pkg）
-    void testVersion(YomkDdsDebugService *svc)
+    void testVersion(YomkDdsDebugHandler *svc)
     {
         auto resp = testInvoke(svc, "/version");
         check(resp.status == yomk::payload::ResStatus::Succeeded, "/version 返回 eOk");
@@ -60,7 +60,7 @@ namespace
     // T3：/create_node、/topic_print、/list_topics、/topic_info、/list_nodes、/node_info 的解包双守卫
     // （nullptr / 异类包 / 改名伪造；DDSDebugInfo/DDSDebugList 只留 rounds/interval 后
     // 守卫包名不变，无需改断言）
-    void testUnpackGuards(YomkDdsDebugService *svc)
+    void testUnpackGuards(YomkDdsDebugHandler *svc)
     {
         auto checkGuards = [&](const char *ep, const char *expectName, YomkMsgPtr wrongPkg)
         {
@@ -94,7 +94,7 @@ namespace
     }
 
     // T4：/delete_node 特殊契约——单节点模型无参载荷，(void)pkg 不走解包守卫
-    void testNoPayloadEndpoints(YomkDdsDebugService *svc)
+    void testNoPayloadEndpoints(YomkDdsDebugHandler *svc)
     {
         // 未建节点：无论载荷形态，均在 node_ 空检查处早退（不触 DDS）
         auto checkNoPayload = [&](const char *ep)
@@ -118,7 +118,7 @@ namespace
     }
 
     // T5：/create_node domainId 越界前置拦截（锁外校验，不触 DDS）
-    void testCreateDomainBoundary(YomkDdsDebugService *svc)
+    void testCreateDomainBoundary(YomkDdsDebugHandler *svc)
     {
         auto r233 = testInvoke(svc, "/create_node", ::yomk::msgs::DDSDebugNode::shared(DDSDebugNode{233}));
         check(r233.status == yomk::payload::ResStatus::Failed &&
@@ -132,7 +132,7 @@ namespace
     }
 
     // T6：/topic_print 未建节点早退（node_ 空检查先于 output 空检查）
-    void testTopicPrintNoNode(YomkDdsDebugService *svc)
+    void testTopicPrintNoNode(YomkDdsDebugHandler *svc)
     {
         auto rEmptyCb = testInvoke(svc, "/topic_print", ::yomk::msgs::DDSDebugTopic::shared(DDSDebugTopic{"t_debug", nullptr}));
         check(rEmptyCb.status == yomk::payload::ResStatus::Failed &&
@@ -147,7 +147,7 @@ namespace
     }
 
     // T7：/topic_info 未建节点早退（node_ 空检查先于独立收敛触达）
-    void testTopicInfoNoNode(YomkDdsDebugService *svc)
+    void testTopicInfoNoNode(YomkDdsDebugHandler *svc)
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS；
         // 3 字段聚合初始化（topicName/stableRounds/intervalMs）即完整载荷（编译级验证）
@@ -158,7 +158,7 @@ namespace
     }
 
     // T8：/list_nodes 未建节点早退（node_ 空检查先于独立收敛触达）
-    void testListNodeNoNode(YomkDdsDebugService *svc)
+    void testListNodeNoNode(YomkDdsDebugHandler *svc)
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid = testInvoke(svc, "/list_nodes", ::yomk::msgs::DDSNodeList::shared(DDSNodeList{1, 50}));
@@ -168,7 +168,7 @@ namespace
     }
 
     // T9：/node_info 未建节点早退（node_ 空检查先于独立收敛触达）
-    void testNodeInfoNoNode(YomkDdsDebugService *svc)
+    void testNodeInfoNoNode(YomkDdsDebugHandler *svc)
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid =
@@ -179,7 +179,7 @@ namespace
     }
 
     // T10：/topic_find 未建节点早退（node_ 空检查先于独立收敛触达）
-    void testTopicFindNoNode(YomkDdsDebugService *svc)
+    void testTopicFindNoNode(YomkDdsDebugHandler *svc)
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid = testInvoke(svc, "/topic_find", ::yomk::msgs::DDSDebugFind::shared(DDSDebugFind{"t_no_node", 1, 50}));
@@ -189,7 +189,7 @@ namespace
     }
 
     // T11：/interface_show 未建节点早退（node_ 空检查先于独立收敛触达）
-    void testInterfaceShowNoNode(YomkDdsDebugService *svc)
+    void testInterfaceShowNoNode(YomkDdsDebugHandler *svc)
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid = testInvoke(svc,
@@ -200,7 +200,7 @@ namespace
     }
 
     // T11：/interface_list 未建节点早退（node_ 空检查先于独立收敛触达）
-    void testInterfaceListNoNode(YomkDdsDebugService *svc)
+    void testInterfaceListNoNode(YomkDdsDebugHandler *svc)
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid = testInvoke(svc,
@@ -211,7 +211,7 @@ namespace
     }
 
     // T12：/topic_example 未建节点早退（node_ 空检查先于独立收敛触达）
-    void testTopicExampleNoNode(YomkDdsDebugService *svc)
+    void testTopicExampleNoNode(YomkDdsDebugHandler *svc)
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid = testInvoke(svc,
@@ -222,7 +222,7 @@ namespace
     }
 
     // T13：/topic_pub 未建节点早退（node_ 空检查先于独立收敛触达）
-    void testTopicPubNoNode(YomkDdsDebugService *svc)
+    void testTopicPubNoNode(YomkDdsDebugHandler *svc)
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid = testInvoke(svc,
@@ -233,7 +233,7 @@ namespace
     }
 
     // T14：/topic_msg 未建节点早退（node_ 空检查先于独立收敛触达）
-    void testTopicMsgNoNode(YomkDdsDebugService *svc)
+    void testTopicMsgNoNode(YomkDdsDebugHandler *svc)
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid = testInvoke(svc,
@@ -249,8 +249,8 @@ int main()
     ::yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsDebugService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsDebugService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsDebugHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsDebugHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     // T1：内省——14 端点齐全
     auto infos = testFuncInfos(svc);
@@ -278,5 +278,5 @@ int main()
 
     check(testInvoke(svc, "/no_such_endpoint").status == yomk::payload::ResStatus::Failed, "未知端点返回 eNo");
 
-    return testReport("TestYomkDdsDebugServiceContract");
+    return testReport("TestYomkDdsDebugHandlerContract");
 }

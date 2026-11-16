@@ -5,7 +5,7 @@
 
 #include <yomk/server/YomkServerApi.h>
 #include "YomkDdsBagService.h"   // flat quoted includes: install tree, test tree and main tree all resolve same-dir
-#include "YomkDdsDebugService.h"
+#include "YomkDdsDebugHandler.h"
 #include "YomkDdsMsg.h"
 #include "YomkDdsHandler.h"
 #include "YomkDdsUrl.h"
@@ -385,7 +385,7 @@ public:
     }
 };
 
-// ===== YomkDdsDebugService — type-agnostic debugging =====
+// ===== YomkDdsDebugHandler — type-agnostic debugging =====
 // Every terminator returns yomk::payload::Response and requires a debug node created
 // first via yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create(), deleted via
 // yomk::dds().debug().quit(); topic registration is chained as
@@ -407,7 +407,7 @@ public:
 // NodeInfo / InterfaceInfo) instead of pre-rendered text; only the plain name-list
 // surfaces (topics/find_topics/interfaces/nodes) stay StringArray.
 // Full behavior: docs/features/debug-service.md
-// @zh: 调试 API（YomkDdsDebugService 端点，已全链式化，等价 CLI：yomkdds）
+// @zh: 调试 API（YomkDdsDebugHandler 端点，已全链式化，等价 CLI：yomkdds）
 // @zh: 均返回 yomk::payload::Response，且须先经
 // @zh: yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create() 创建调试节点，
 // @zh: 退出经 yomk::dds().debug().quit()；主题登记为

@@ -12,7 +12,7 @@
  * 创建并幂等写入 ~/.bashrc，使新开终端可查看继承）、discovery-server-tutorial 与
  * xml-profiles-tutorial；--help 输出为即用速查。
  *
- * 实现经 YomkDdsDebugService（yomk::dds().debug() 链式面）与 YomkDdsBagService（yomk::dds().bag() 链式面）
+ * 实现经 YomkDdsDebugHandler（yomk::dds().debug() 链式面）与 YomkDdsBagService（yomk::dds().bag() 链式面）
  * 驱动内部调试/录制节点；各子命令退出前 yomk::dds().debug().quit() 显式清理，规避
  * FastDDS 静态析构期段错误（同 ExampleYomkDdsSub 退出前 remove() 模式）。
  */
@@ -675,7 +675,7 @@ static bool loadQosFile(const std::string &path, DDSQosProfile &profile, std::st
 static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQosProfile &qos)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1325,7 +1325,7 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
         const DDSQosProfile &qos)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1549,7 +1549,7 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false,
                    bool verbose = false)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1626,7 +1626,7 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
                    bool verbose = false)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1675,7 +1675,7 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
 static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_t waitRounds)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1723,7 +1723,7 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
 static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t waitRounds)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1798,7 +1798,7 @@ static void printIdlInterface(std::ostream &os, const ::yomk::payload::Interface
 static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint32_t waitRounds)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1847,7 +1847,7 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
 static int runInterfaceList(uint32_t domainId, uint32_t waitRounds)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1970,7 +1970,7 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
         const std::string &outDir, uint32_t waitRounds)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -2060,7 +2060,7 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
 static int runTopicPubExample(uint32_t domainId, const std::string &topicName, uint32_t waitRounds)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -2126,7 +2126,7 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
         const DDSQosProfile &qos)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -2229,7 +2229,7 @@ static int runTopicPubJsonFile(uint32_t domainId, const std::string &topicName,
 static int runNodeList(uint32_t domainId, uint32_t waitRounds)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -2290,7 +2290,7 @@ static int runNodeList(uint32_t domainId, uint32_t waitRounds)
 static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t waitRounds)
 {
     ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugService>().create();
+    ::yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())

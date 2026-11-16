@@ -1,6 +1,6 @@
 /**
- * @file TestYomkDdsDebugServiceLifecycle.cpp
- * @brief YomkDdsDebugService 真实 DDS 生命周期测试
+ * @file TestYomkDdsDebugHandlerLifecycle.cpp
+ * @brief YomkDdsDebugHandler 真实 DDS 生命周期测试
  *
  * 范围：契约测试（DDS-free）刻意豁免的 /create_node 成功路径（经 setDomainId 创建真实
  *       participant）、/topic_print 登记契约与 /delete_node 析构清理，及 domainId 边界行为。
@@ -38,7 +38,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsDebugService.h" // 服务/DDSDebugNode/DDSDebugTopic/DDSDebugInfo/YOMK_* 宏
+#include "YomkDdsDebugHandler.h" // 服务/DDSDebugNode/DDSDebugTopic/DDSDebugInfo/YOMK_* 宏
 #include "YomkDdsMsg.h"
 #include "FastDDSDebugNode.h"    // qos 下传用例的直连 observer（发现 QoS 行读回）
 
@@ -106,8 +106,8 @@ int main()
 {
     ::yomk::server().init();
 
-    auto *svc = new YomkDdsDebugService(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsDebugService 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsDebugHandler(::yomk::server().instance().get());
+    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsDebugHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     // ---- A-1：生命周期（创建/重复创建/登记契约/删除/重建） ----
     check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN)).status == yomk::payload::ResStatus::Succeeded,
@@ -675,5 +675,5 @@ int main()
               badLoc.msg.find("port out of range") != std::string::npos,
           "create_node 非法尾参 serverLocator(port 越界) → eNo + 回显（不建节点）");
 
-    return testReport("TestYomkDdsDebugServiceLifecycle");
+    return testReport("TestYomkDdsDebugHandlerLifecycle");
 }

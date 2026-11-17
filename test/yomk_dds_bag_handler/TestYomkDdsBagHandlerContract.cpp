@@ -6,7 +6,7 @@
  *       输入校验与错误码契约；真实 DDS 生命周期（创建/录制/删除）归
  *       TestYomkDdsBagHandlerLifecycle，节点层校验与落盘归 TestFastDDSBagNode。
  * 覆盖：
- *   T1 funcInfos 内省 7 端点齐全 + 未知端点 eNo；
+ *   T1 funcInfos 内省 15 端点齐全 + 未知端点 eNo；
  *   T2 /version 正常路径（eOk + 版本串契约 + 忽略 pkg）；
  *   T3 /create_node、/bag_record 解包双守卫（nullptr / 异类包 / 改名伪造）；
  *   T4 /delete_node 特殊契约：单节点模型无参载荷，handler (void)pkg 不走解包守卫，未建节点时
@@ -417,13 +417,55 @@ int main()
     auto *svc = new YomkDdsBagHandler(yomk::server().instance().get());
     check(yomk::server().srv_ptr(svc).add() == 0, "YomkDdsBagHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
-    // T1：内省——8 端点齐全
+    // T1：内省——15 端点齐全
     auto infos = testFuncInfos(svc);
-    check(infos.size() == 8 && infos.count("/get_version") && infos.count("/create_node") &&
+    check(infos.size() == 15 && infos.count("/get_version") && infos.count("/create_node") &&
               infos.count("/record") && infos.count("/delete_node") &&
               infos.count("/get_info") && infos.count("/reindex") &&
-              infos.count("/convert") && infos.count("/play"),
-          "funcInfos 内省 8 端点齐全");
+              infos.count("/convert") && infos.count("/play") &&
+              infos.count("/stop_record") && infos.count("/pause_record") &&
+              infos.count("/resume_record") && infos.count("/stop_play") &&
+              infos.count("/pause_play") && infos.count("/resume_play") &&
+              infos.count("/set_play_rate"),
+          "funcInfos 内省 15 端点齐全");
+
+    // T1x：控制端点语义——五个 pkg 无关桥（nullptr/异类/无参均 eOk，无锁置位）+ /set_play_rate 守卫
+    auto checkCtrl = [&](const char *ep)
+    {
+        auto rNull = testInvoke(svc, ep, nullptr);
+        check(rNull.status == yomk::payload::ResStatus::Succeeded,
+              std::string(ep) + " nullptr 包 → eOk（无锁置位控制面标志）");
+        auto rWrong = testInvoke(svc, ep, yomk::msgs::String::shared("wrong"));
+        check(rWrong.status == yomk::payload::ResStatus::Succeeded,
+              std::string(ep) + " 异类包 → eOk（pkg 无关，控制桥不做解包守卫）");
+        auto rNoArg = testInvoke(svc, ep);
+        check(rNoArg.status == yomk::payload::ResStatus::Succeeded,
+              std::string(ep) + " 无载荷 → eOk（对齐无参宏形态）");
+    };
+    checkCtrl("/stop_record");
+    checkCtrl("/pause_record");
+    checkCtrl("/resume_record");
+    checkCtrl("/stop_play");
+    checkCtrl("/pause_play");
+    checkCtrl("/resume_play");
+
+    auto rateNull = testInvoke(svc, "/set_play_rate", nullptr);
+    check(rateNull.status == yomk::payload::ResStatus::Failed &&
+              rateNull.msg.find("pkg is null or pkg is not BagPlayRateRequest") != std::string::npos,
+          "/set_play_rate nullptr 包 → eNo 守卫");
+    auto rateWrong = testInvoke(svc, "/set_play_rate", yomk::msgs::String::shared("wrong"));
+    check(rateWrong.status == yomk::payload::ResStatus::Failed &&
+              rateWrong.msg.find("pkg is not BagPlayRateRequest") != std::string::npos,
+          "/set_play_rate 异类包 → eNo 守卫");
+    auto rateOk = testInvoke(svc, "/set_play_rate",
+        yomk::msgs::dds::BagPlayRateRequest::shared(BagPlayRateRequest{2.0}));
+    check(rateOk.status == yomk::payload::ResStatus::Succeeded && rateOk.msg == "rate set",
+          "/set_play_rate 2.0 → eOk rate set（倍率写入控制面）");
+    auto rateBad = testInvoke(svc, "/set_play_rate",
+        yomk::msgs::dds::BagPlayRateRequest::shared(BagPlayRateRequest{0.0}));
+    check(rateBad.status == yomk::payload::ResStatus::Failed &&
+              rateBad.msg.find("invalid playback rate") != std::string::npos,
+          "/set_play_rate 0.0 → eNo invalid playback rate（bagPlaySetRate 校验拒绝并保持原值）");
 
     testVersion(svc);
     testUnpackGuards(svc);

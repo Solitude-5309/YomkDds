@@ -271,7 +271,74 @@ int main()
             check(stat.bytes > 0, "统计项 bytes = 载荷字节（含 encapsulation header）");
         }
     }
+
+    // b) play 四件套：/play(loop) → /pause_play（冻结时间轴）→ /resume_play（重锚时间基准）→ /stop_play
+    {
+        std::atomic<int> playEpStatus{-1};
+        std::thread playEpThread([&]()
+        {
+            auto r = testInvoke(svc, "/play", yomk::msgs::dds::BagPlayRequest::shared(
+                BagPlayRequest{playBagDir, 1.0, {}, true}));
+            playEpStatus.store(static_cast<int>(r.status));
+        });
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));  // 预扫 + 进入回放循环
+
+        auto playPause = testInvoke(svc, "/pause_play", nullptr);
+        check(playPause.status == yomk::payload::ResStatus::Succeeded && playPause.msg == "pause requested",
+              "/pause_play → eOk（play 持锁阻塞期间并发可调度，无锁置位）");
+        check(yomk::ctrl::g_bagPlayPaused.paused(), "暂停态迁移：play paused 标志置位（时间轴冻结）");
+        std::this_thread::sleep_for(std::chrono::milliseconds(800));
+
+        auto playResume = testInvoke(svc, "/resume_play", nullptr);
+        check(playResume.status == yomk::payload::ResStatus::Succeeded && playResume.msg == "resume requested",
+              "/resume_play → eOk（恢复回放）");
+        check(!yomk::ctrl::g_bagPlayPaused.paused(), "恢复态迁移：play paused 标志清除（时间轴重锚）");
+
+        auto playStop = testInvoke(svc, "/stop_play", nullptr);
+        check(playStop.status == yomk::payload::ResStatus::Succeeded && playStop.msg == "stop requested",
+              "/stop_play → eOk（收尾回放）");
+        playEpThread.join();
+        check(playEpStatus.load() == static_cast<int>(yomk::payload::ResStatus::Succeeded),
+              "/stop_play 停止后阻塞的 play invoke 返回 eOk（PlayResult 计数带回）");
+    }
     std::filesystem::remove_all(playBagDir, ec);  // 回放输入用例收尾自清理
+
+    // ---- 闭环：record/play 的 UI 控制四件套端到端——开始/暂停/继续/停止。
+    // record/play 持锁长驻阻塞期间，控制端点无锁置位 ctrl 标志必须可并发调度：
+    // 阻塞 invoke 收尾返回并带回结构化统计（对齐 /stop_pub 闭环模式）。
+    // 暂停/继续经控制面标志状态断言迁移（暂停冻结写路径的深层行为由节点层
+    // TestFastDDSBagNodeRecord 以真实流量覆盖，此处验证协议桥到状态机的完整链路）
+
+    // a) record 四件套：/record → /pause_record（进入暂停态）→ /resume_record（恢复）→ /stop_record
+    std::atomic<int> recEpStatus{-1};
+    std::thread recEpThread([&]()
+    {
+        auto r = testInvoke(svc, "/record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{REC_TOPIC}}));
+        recEpStatus.store(static_cast<int>(r.status));
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(4000));  // 覆盖启动校验收敛窗，确保已进入录制循环
+
+    auto recPause = testInvoke(svc, "/pause_record", nullptr);
+    check(recPause.status == yomk::payload::ResStatus::Succeeded && recPause.msg == "pause requested",
+          "/pause_record → eOk（record 持锁阻塞期间并发可调度，无锁置位）");
+    check(yomk::ctrl::g_bagRecordPaused.paused(), "暂停态迁移：record paused 标志置位（写路径冻结）");
+    std::this_thread::sleep_for(std::chrono::milliseconds(800));
+
+    auto recResume = testInvoke(svc, "/resume_record", nullptr);
+    check(recResume.status == yomk::payload::ResStatus::Succeeded && recResume.msg == "resume requested",
+          "/resume_record → eOk（恢复录制）");
+    check(!yomk::ctrl::g_bagRecordPaused.paused(), "恢复态迁移：record paused 标志清除（写路径继续）");
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    auto recStop = testInvoke(svc, "/stop_record", nullptr);
+    check(recStop.status == yomk::payload::ResStatus::Succeeded && recStop.msg == "stop requested",
+          "/stop_record → eOk（收尾录制）");
+    check(!yomk::ctrl::g_bagRecordStop.stopped() == false,
+          "停止态迁移：record stop 标志置位");
+    recEpThread.join();
+    check(recEpStatus.load() == static_cast<int>(yomk::payload::ResStatus::Succeeded),
+          "/stop_record 停止后阻塞的 record invoke 返回 eOk（RecordResult 计数带回，含暂停后恢复的条目）");
+
 
     check(testInvoke(svc, "/delete_node").status == yomk::payload::ResStatus::Succeeded, "退出前显式删除（清理不变式）");
 

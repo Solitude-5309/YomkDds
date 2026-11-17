@@ -17,6 +17,7 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 | 重建 bag 元信息 | 链式 `yomk::dds().bag().dir(bagDir).reindex()` | `bag reindex` | 不须（纯文件操作，无须 create_node） |
 | 转换 bag（过滤/裁剪/归并） | 链式 `yomk::dds().bag().in_bags({...}).out_cfg(path).convert()`（返回结构化 `ConvertResult`） | `bag convert` | 不须（纯文件操作，无须 create_node） |
 | 回放 bag | 链式 `yomk::dds().bag().dir(bagDir)[.rate(r)][.topics({...})][.loop()][.offset(sec)][.delay(sec)][.wait_acked(ms)][.remaps({...})][.read_ahead(n)][.qos_file(path)].play()`（返回结构化 `PlayResult`） | `bag play` | **须**（库侧先 `yomk::dds().bag()...create()`）；CLI 自动创建并在退出前删除 bag 节点 |
+| 运行中控制（停止/暂停/调速） | 链式 `yomk::dds().bag().stop_record()/pause_record()/resume_record()/stop_play()/pause_play()/resume_play()/set_play_rate(r)`（端点 `/stop_record` `/pause_record` `/resume_record` `/stop_play` `/pause_play` `/resume_play` `/set_play_rate`） | `bag record`/`bag play` 运行期 Ctrl+C 与键盘交互 | —（控制桥：无锁置位 `yomk::ctrl` 控制面标志，`/record`、`/play` 持锁长驻阻塞期间仍可调用；远端前端/另一进程经客户端链路同样可用） |
 
 > 核心通信套件除链式 `loan()`（返回值即借出样本指针，判空即失败判定）外，其余链式终结均返回 `yomk::payload::Response`，调用后须判 `status == yomk::payload::ResStatus::Succeeded`；失败时可读 `msg` 获取错误信息。
 
@@ -32,7 +33,7 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 
 ### 录制（`yomk::dds().bag()...record()` / `bag record`）
 
-`yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()`（端点 `/YomkDdsBagHandler/record`）**长驻阻塞至 Ctrl+C**（SIGINT 经 `yomk::ctrl::g_bagRecordStop` 无锁置位）收尾返回。`topics()` 必填（缺失时终结直接返回 `topics are required`），其余四个累积器可选、次序不限；`out_dir()` 空 = 缺省时间戳目录名，`max_size()`/`max_duration()` 为单分片阈值（两条件同用时先到先分），`cache()` 为写缓存双缓冲字节数。CLI 形态：
+`yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()`（端点 `/YomkDdsBagHandler/record`）**长驻阻塞至 Ctrl+C**（SIGINT 经 `yomk::ctrl::g_bagRecordStop` 无锁置位，或经 `/stop_record` 端点协议级置位——远端 UI 停止链路）收尾返回。`topics()` 必填（缺失时终结直接返回 `topics are required`），其余四个累积器可选、次序不限；`out_dir()` 空 = 缺省时间戳目录名，`max_size()`/`max_duration()` 为单分片阈值（两条件同用时先到先分），`cache()` 为写缓存双缓冲字节数。CLI 形态：
 
 ```bash
 yomkdds bag record hello_world           # 录制单主题（默认域 0）

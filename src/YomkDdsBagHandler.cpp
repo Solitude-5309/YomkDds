@@ -32,6 +32,13 @@ int YomkDdsBagHandler::init()
     installFunc("/reindex", &YomkDdsBagHandler::reindex);
     installFunc("/convert", &YomkDdsBagHandler::convert);
     installFunc("/play", &YomkDdsBagHandler::play);
+    installFunc("/stop_record", &YomkDdsBagHandler::stopRecord);
+    installFunc("/pause_record", &YomkDdsBagHandler::pauseRecord);
+    installFunc("/resume_record", &YomkDdsBagHandler::resumeRecord);
+    installFunc("/stop_play", &YomkDdsBagHandler::stopPlay);
+    installFunc("/pause_play", &YomkDdsBagHandler::pausePlay);
+    installFunc("/resume_play", &YomkDdsBagHandler::resumePlay);
+    installFunc("/set_play_rate", &YomkDdsBagHandler::setPlayRate);
     installFunc("/delete_node", &YomkDdsBagHandler::deleteNode);
     return 0;
 }
@@ -394,4 +401,75 @@ yomk::payload::Response YomkDdsBagHandler::deleteNode(YomkMsgPtr pkg)
     }
     node_.reset();  // 析构按节点层内部顺序清理（reader → data → topic → subscriber → participant）
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
+}
+
+yomk::payload::Response YomkDdsBagHandler::stopRecord(YomkMsgPtr pkg)
+{
+    // 控制桥：无锁直置控制面标志，绝不取 mtx_——/record 持锁长驻阻塞期间本端点必须可调度
+    // （取锁即与运行中的录制互锁死）；录制循环轮询到置位即收尾返回并带回逐主题统计
+    (void)pkg;
+    yomk::ctrl::g_bagRecordStop.stop();
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "stop requested");
+}
+
+yomk::payload::Response YomkDdsBagHandler::pauseRecord(YomkMsgPtr pkg)
+{
+    // 无锁约束同 stopRecord；暂停冻结订阅写路径（逐条检查 paused），恢复由 /resume_record 语义侧控制
+    (void)pkg;
+    yomk::ctrl::g_bagRecordPaused.pause();
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "pause requested");
+}
+
+yomk::payload::Response YomkDdsBagHandler::resumeRecord(YomkMsgPtr pkg)
+{
+    // 无锁约束同 stopRecord；恢复后订阅写路径继续落盘（paused 逐条检查在写路径）
+    (void)pkg;
+    yomk::ctrl::g_bagRecordPaused.resume();
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "resume requested");
+}
+
+yomk::payload::Response YomkDdsBagHandler::stopPlay(YomkMsgPtr pkg)
+{
+    // 无锁约束同 stopRecord；回放线程在各阻塞处轮询置位，收尾返回并带回逐主题统计
+    (void)pkg;
+    yomk::ctrl::g_bagPlayStop.stop();
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "stop requested");
+}
+
+yomk::payload::Response YomkDdsBagHandler::pausePlay(YomkMsgPtr pkg)
+{
+    // 无锁约束同 stopPlay；暂停冻结时间轴（读线程被队列满反压自然停住）
+    (void)pkg;
+    yomk::ctrl::g_bagPlayPaused.pause();
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "pause requested");
+}
+
+yomk::payload::Response YomkDdsBagHandler::resumePlay(YomkMsgPtr pkg)
+{
+    // 无锁约束同 stopPlay；恢复后重锚时间基准（对齐 ros2 PlayerClock 语义）
+    (void)pkg;
+    yomk::ctrl::g_bagPlayPaused.resume();
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "resume requested");
+}
+
+yomk::payload::Response YomkDdsBagHandler::setPlayRate(YomkMsgPtr pkg)
+{
+    if (!pkg || pkg->name() != yomk::msgs::dds::BagPlayRateRequest::kName)
+    {
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagPlayRateRequest. ");
+    }
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::BagPlayRateRequest>(pkg);
+    if (!p)
+    {
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg[BagPlayRateRequest] is dynamic_pointer_cast failed. ");
+    }
+    // 无锁约束同 stopPlay；rate<=0 由 bagPlaySetRate 校验拒绝并保持原值
+    if (!yomk::ctrl::bagPlaySetRate(p->msg.rate))
+    {
+        yomk::log().tag("YomkDdsBagHandler::setPlayRate").error("invalid playback rate [", p->msg.rate, "]");
+        return yomk::payload::Response(yomk::payload::ResStatus::Failed, "invalid playback rate: must be > 0");
+    }
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "rate set");
 }

@@ -59,5 +59,6 @@ YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagReindexRequest, BagReindexRequest
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagConvertRequest, BagConvertRequest, msg)
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::ConvertResult, ConvertResult, msg)
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagPlayRequest, BagPlayRequest, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagPlayRateRequest, BagPlayRateRequest, msg)
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::PlayResult, PlayResult, msg)
 // clang-format on

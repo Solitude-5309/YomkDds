@@ -1546,6 +1546,93 @@ public:
         return yomk::server().url(yomk::url::ddsBagDeleteNode).msg(nullptr).request();
     }
     /**
+     * @brief Stop a recording session started by record() (request terminator)
+     * @return Response; always Succeeded when the server is initialized
+     * @note Protocol bridge to the process-local ctrl flag: the endpoint never
+     *       takes the service mutex, so it stays callable while record() is
+     *       blocking inside its loop — the loop finalizes and the blocked
+     *       record() call returns with the per-topic stats
+     */
+    // @zh: 停止 record() 发起的录制（请求终结）
+    // @zh: return Response；服务已初始化时恒 Succeeded
+    // @zh: note 协议桥接到进程内控制面标志：端点不取服务互斥量，record() 阻塞期间仍可
+    // @zh: 调用——录制收尾返回，被阻塞的 record() 调用带回逐主题统计
+    yomk::payload::Response stop_record()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsBagStopRecord).msg(nullptr).request();
+    }
+    /** @brief Pause a recording session (request terminator; write path freezes per message) */
+    // @zh: 暂停录制（请求终结；订阅写路径逐条冻结）
+    yomk::payload::Response pause_record()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsBagPauseRecord).msg(nullptr).request();
+    }
+    /** @brief Resume a paused recording session (request terminator; the write path continues) */
+    // @zh: 恢复暂停的录制（请求终结；订阅写路径继续落盘）
+    yomk::payload::Response resume_record()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsBagResumeRecord).msg(nullptr).request();
+    }
+    /** @brief Stop a playing session started by play() (request terminator) */
+    // @zh: 停止 play() 发起的回放（请求终结）
+    yomk::payload::Response stop_play()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsBagStopPlay).msg(nullptr).request();
+    }
+    /** @brief Pause a playing session (request terminator; freezes the timeline) */
+    // @zh: 暂停回放（请求终结；冻结时间轴）
+    yomk::payload::Response pause_play()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsBagPausePlay).msg(nullptr).request();
+    }
+    /** @brief Resume a paused playing session (request terminator; re-anchors the time base) */
+    // @zh: 恢复暂停的回放（请求终结；重锚时间基准）
+    yomk::payload::Response resume_play()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsBagResumePlay).msg(nullptr).request();
+    }
+    /**
+     * @brief Set the playback rate multiplier (request terminator; takes effect on subsequent scheduling)
+     * @param[in] rate Rate multiplier, must be > 0 (2.0 double speed, 0.5 half speed)
+     * @return Response; Failed with "invalid playback rate" when rate <= 0
+     */
+    // @zh: 设置回放速率倍率（请求终结；即时作用于后续消息调度）
+    // @zh: rate 倍率，必须 > 0（2.0 两倍速、0.5 半倍速）；rate<=0 返回 eNo invalid playback rate
+    yomk::payload::Response set_play_rate(double rate)
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsBagSetPlayRate)
+            .msg(yomk::msgs::dds::BagPlayRateRequest::shared(yomk::payload::dds::BagPlayRateRequest{rate}))
+            .request();
+    }
+    /**
      * @brief Open the bag-directory sub-facet for the given existing bag
      * @param[in] bagDir Bag directory to read/replay; must contain a readable
      *            metadata.json for info()/reindex(); empty is rejected by the node

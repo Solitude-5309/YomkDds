@@ -34,6 +34,13 @@ private:
     yomk::payload::Response reindex(YomkMsgPtr pkg);
     yomk::payload::Response convert(YomkMsgPtr pkg);
     yomk::payload::Response play(YomkMsgPtr pkg);
+    yomk::payload::Response stopRecord(YomkMsgPtr pkg);
+    yomk::payload::Response pauseRecord(YomkMsgPtr pkg);
+    yomk::payload::Response resumeRecord(YomkMsgPtr pkg);
+    yomk::payload::Response stopPlay(YomkMsgPtr pkg);
+    yomk::payload::Response pausePlay(YomkMsgPtr pkg);
+    yomk::payload::Response resumePlay(YomkMsgPtr pkg);
+    yomk::payload::Response setPlayRate(YomkMsgPtr pkg);
 
 private:
     // Single bag node: at most one per process, re-create requires delete

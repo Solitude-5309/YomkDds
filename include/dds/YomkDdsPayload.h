@@ -853,6 +853,13 @@ struct BagPlayRequest
     std::string qosOverridesPath = "";    // JSON: bag topic -> reliability/durability
 };
 
+/** @brief set_play_rate request (playback rate multiplier; 2.0 double speed, 0.5 half speed) */
+// @zh: set_play_rate 请求负载（回放速率倍率；2.0 两倍速、0.5 半倍速）
+struct BagPlayRateRequest
+{
+    double rate = 1.0;
+};
+
 // ===== YomkDdsBagHandler response payloads =====
 
 /**

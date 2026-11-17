@@ -142,4 +142,32 @@ inline constexpr std::string_view ddsBagConvert = "/YomkDdsBagHandler/convert";
 /** @brief Replay an mcap bag endpoint (blocking) */
 // @zh: 回放 bag 端点（阻塞）
 inline constexpr std::string_view ddsBagPlay = "/YomkDdsBagHandler/play";
+
+/** @brief Stop a recording session endpoint (protocol bridge to the ctrl flag) */
+// @zh: 停止录制会话端点（协议桥接到进程内控制面标志）
+inline constexpr std::string_view ddsBagStopRecord = "/YomkDdsBagHandler/stop_record";
+
+/** @brief Pause a recording session endpoint (protocol bridge to the ctrl flag) */
+// @zh: 暂停录制会话端点（协议桥接到进程内控制面标志）
+inline constexpr std::string_view ddsBagPauseRecord = "/YomkDdsBagHandler/pause_record";
+
+/** @brief Resume a paused recording session endpoint (protocol bridge to the ctrl flag) */
+// @zh: 恢复暂停的录制会话端点（协议桥接到进程内控制面标志）
+inline constexpr std::string_view ddsBagResumeRecord = "/YomkDdsBagHandler/resume_record";
+
+/** @brief Stop a playing session endpoint (protocol bridge to the ctrl flag) */
+// @zh: 停止回放会话端点（协议桥接到进程内控制面标志）
+inline constexpr std::string_view ddsBagStopPlay = "/YomkDdsBagHandler/stop_play";
+
+/** @brief Pause a playing session endpoint (protocol bridge to the ctrl flag) */
+// @zh: 暂停回放会话端点（协议桥接到进程内控制面标志）
+inline constexpr std::string_view ddsBagPausePlay = "/YomkDdsBagHandler/pause_play";
+
+/** @brief Resume a paused playing session endpoint (protocol bridge to the ctrl flag) */
+// @zh: 恢复暂停的回放会话端点（协议桥接到进程内控制面标志）
+inline constexpr std::string_view ddsBagResumePlay = "/YomkDdsBagHandler/resume_play";
+
+/** @brief Set the playback rate endpoint (protocol bridge to the ctrl flag) */
+// @zh: 设置回放速率端点（协议桥接到进程内控制面标志）
+inline constexpr std::string_view ddsBagSetPlayRate = "/YomkDdsBagHandler/set_play_rate";
 }  // namespace yomk::url

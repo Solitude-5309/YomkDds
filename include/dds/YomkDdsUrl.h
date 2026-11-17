@@ -101,6 +101,10 @@ inline constexpr std::string_view ddsDebugTopicMsg = "/YomkDdsDebugHandler/topic
 // @zh: 发布 JSON 载荷消息端点
 inline constexpr std::string_view ddsDebugTopicPub = "/YomkDdsDebugHandler/topic_pub";
 
+/** @brief Stop a repeating topic_pub session endpoint (protocol bridge to the ctrl flag) */
+// @zh: 停止持续发布会话端点（协议桥接到进程内控制面标志）
+inline constexpr std::string_view ddsDebugPubStop = "/YomkDdsDebugHandler/stop_pub";
+
 /** @brief List named participants in the domain endpoint */
 // @zh: 列出域内节点端点
 inline constexpr std::string_view ddsDebugListNodes = "/YomkDdsDebugHandler/list_nodes";

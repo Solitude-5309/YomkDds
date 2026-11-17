@@ -36,7 +36,8 @@ private:
     yomk::payload::Response interfaceList(YomkMsgPtr pkg);
     yomk::payload::Response topicExample(YomkMsgPtr pkg);
     yomk::payload::Response topicMsg(YomkMsgPtr pkg);
-    yomk::payload::Response topicPub(YomkMsgPtr pkg);
+    yomk::payload::Response startPub(YomkMsgPtr pkg);
+    yomk::payload::Response stopPub(YomkMsgPtr pkg);
     yomk::payload::Response listNodes(YomkMsgPtr pkg);
     yomk::payload::Response nodeInfo(YomkMsgPtr pkg);
     yomk::payload::Response deleteNode(YomkMsgPtr pkg);

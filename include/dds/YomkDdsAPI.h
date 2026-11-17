@@ -388,7 +388,8 @@ public:
 // ===== YomkDdsDebugHandler — type-agnostic debugging =====
 // Every terminator returns yomk::payload::Response and requires a debug node created
 // first via yomk::dds().debug()[.domain/.udp_ds/.tcp_ds()].create(), deleted via
-// yomk::dds().debug().quit(); topic registration is chained as
+// yomk::dds().debug().quit(); a repeating publish is stopped via
+// yomk::dds().debug().stop_pub(); topic registration is chained as
 // yomk::dds().debug().topic(name).out_cb(cb)[.qos(qos)].print(), the topic list as
 // yomk::dds().debug()[.rounds(n)][.interval(ms)].topics(), the single-topic details as
 // yomk::dds().debug().topic(name)[.rounds(n)][.interval(ms)].info(), the reverse
@@ -422,6 +423,8 @@ public:
 // @zh: 类型清单为 yomk::dds().debug()[.rounds(n)][.interval(ms)].interfaces()，节点清单为
 // @zh: yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()，节点详情为
 // @zh: yomk::dds().debug().node(name)[.rounds(n)][.interval(ms)].info()；
+// @zh: 持续发布经 yomk::dds().debug().stop_pub() 停止（/stop_pub 无锁桥接控制面标志，
+// @zh: publish() 阻塞期间仍可调用）；
 // @zh: list/info/find 组共用收敛语义：连续 stableRounds 次快照不变即返回，0 钳制为默认 5 次/200ms；
 // @zh: 查询与发布响应均为结构化包（TopicInfo / TopicExampleInfo / TopicMessageInfo /
 // @zh: TopicPublishInfo / NodeInfo / InterfaceInfo），不再回预渲染文本；
@@ -1037,6 +1040,30 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDebugDeleteNode).msg(nullptr).request();
+    }
+    /**
+     * @brief Stop a repeating publish started by publish() (request terminator)
+     * @return Response; always Succeeded when the server is initialized
+     * @note Protocol bridge to the process-local ctrl flag: the endpoint never
+     *       takes the service mutex, so it stays callable while publish() is
+     *       blocking inside a repeat loop — the loop exits and the blocked
+     *       publish() call returns with its total/failed counters. Same
+     *       effect as yomk::ctrl::g_debugPubStop.stop() in-process; usable
+     *       from another process (frontend UI) through the client chain
+     */
+    // @zh: 停止 publish() 发起的持续发布（请求终结）
+    // @zh: return Response；服务已初始化时恒 Succeeded
+    // @zh: note 协议桥接到进程内控制面标志：端点不取服务互斥量，publish() 阻塞于持续
+    // @zh: 循环期间仍可调用——循环退出后被阻塞的 publish() 调用带回 total/failed 计数；
+    // @zh: 与同进程直调 yomk::ctrl::g_debugPubStop.stop() 效果等价，远端（前端 UI）经
+    // @zh: 客户端链路同样可用
+    yomk::payload::Response stop_pub()
+    {
+        if (!requireServer())
+        {
+            return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
+        }
+        return yomk::server().url(yomk::url::ddsDebugPubStop).msg(nullptr).request();
     }
     /**
      * @brief Switch into the topic facet with the observed topic name

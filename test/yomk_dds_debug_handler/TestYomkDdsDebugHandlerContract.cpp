@@ -2,11 +2,11 @@
  * @file TestYomkDdsDebugHandlerContract.cpp
  * @brief YomkDdsDebugHandler 服务层契约测试（DDS-free，白盒经服务器公开路由直接分发）
  *
- * 范围：仅验证调试服务 14 端点在不触发任何 DDS 运行时（不创建 participant）前提下的
+ * 范围：仅验证调试服务 15 端点在不触发任何 DDS 运行时（不创建 participant）前提下的
  *       输入校验与错误码契约；真实 DDS 生命周期（创建/删除/登记）归
  *       TestYomkDdsDebugHandlerLifecycle，节点层守卫与端到端流量归 TestFastDDSDebugNode。
  * 覆盖：
- *   T1 funcInfos 内省 14 端点齐全 + 未知端点 eNo；
+ *   T1 funcInfos 内省 15 端点齐全 + 未知端点 eNo；
  *   T2 /version 正常路径（eOk + 版本串契约 + 忽略 pkg）；
  *   T3 /create_node、/topic_print、/list_topics、/topic_info、/topic_find、/interface_show、
  *      /interface_list、/topic_example、/topic_pub、/list_nodes、/node_info 解包双守卫
@@ -252,14 +252,26 @@ int main()
     auto *svc = new YomkDdsDebugHandler(yomk::server().instance().get());
     check(yomk::server().srv_ptr(svc).add() == 0, "YomkDdsDebugHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
-    // T1：内省——14 端点齐全
+    // T1：内省——15 端点齐全
     auto infos = testFuncInfos(svc);
-    check(infos.size() == 14 && infos.count("/version") && infos.count("/create_node") &&
+    check(infos.size() == 15 && infos.count("/version") && infos.count("/create_node") &&
               infos.count("/topic_print") && infos.count("/list_topics") && infos.count("/topic_info") &&
               infos.count("/topic_find") && infos.count("/interface_show") && infos.count("/interface_list") &&
               infos.count("/topic_example") && infos.count("/topic_msg") && infos.count("/topic_pub") &&
-              infos.count("/list_nodes") && infos.count("/node_info") && infos.count("/delete_node"),
-          "funcInfos 内省 14 端点齐全");
+              infos.count("/stop_pub") && infos.count("/list_nodes") && infos.count("/node_info") &&
+              infos.count("/delete_node"),
+          "funcInfos 内省 15 端点齐全");
+
+    // T1x：/stop_pub 协议级停止端点——pkg 无关（nullptr/异类/无参均 eOk），无锁置位控制面标志
+    auto stopNull = testInvoke(svc, "/stop_pub", nullptr);
+    check(stopNull.status == yomk::payload::ResStatus::Succeeded && stopNull.msg == "stop requested",
+          "/stop_pub nullptr 包 → eOk stop requested（无锁置位，不取服务互斥量）");
+    auto stopWrong = testInvoke(svc, "/stop_pub", yomk::msgs::String::shared("wrong"));
+    check(stopWrong.status == yomk::payload::ResStatus::Succeeded,
+          "/stop_pub 异类包 → eOk（pkg 无关，停止桥不做解包守卫）");
+    auto stopNoArg = testInvoke(svc, "/stop_pub");
+    check(stopNoArg.status == yomk::payload::ResStatus::Succeeded,
+          "/stop_pub 无载荷 → eOk（对齐无参宏形态）");
 
     testVersion(svc);
     testUnpackGuards(svc);

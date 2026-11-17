@@ -36,7 +36,8 @@ int YomkDdsDebugHandler::init()
     installFunc("/interface_list", &YomkDdsDebugHandler::interfaceList);
     installFunc("/topic_example", &YomkDdsDebugHandler::topicExample);
     installFunc("/topic_msg", &YomkDdsDebugHandler::topicMsg);
-    installFunc("/topic_pub", &YomkDdsDebugHandler::topicPub);
+    installFunc("/topic_pub", &YomkDdsDebugHandler::startPub);
+    installFunc("/stop_pub", &YomkDdsDebugHandler::stopPub);
     installFunc("/list_nodes", &YomkDdsDebugHandler::listNodes);
     installFunc("/node_info", &YomkDdsDebugHandler::nodeInfo);
     installFunc("/delete_node", &YomkDdsDebugHandler::deleteNode);
@@ -361,9 +362,9 @@ yomk::payload::Response YomkDdsDebugHandler::topicMsg(YomkMsgPtr pkg)
             yomk::msgs::dds::TopicMessageInfo::shared(std::move(info)));
 }
 
-yomk::payload::Response YomkDdsDebugHandler::topicPub(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsDebugHandler::startPub(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::DebugTopicPubRequest::kName)
+    if (!pkg || pkg->name() != yomk::msgs::dds::DebugTopicPubRequest::kName)
     {
         return yomk::payload::Response(
             yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugTopicPubRequest. ");
@@ -378,22 +379,34 @@ yomk::payload::Response YomkDdsDebugHandler::topicPub(YomkMsgPtr pkg)
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        yomk::log().tag("YomkDdsDebugHandler::topicPub").error("debug node not created");
+        yomk::log().tag("YomkDdsDebugHandler::startPub").error("debug node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "debug node not created");
     }
     // 持锁长驻阻塞；repeatIntervalMs>0 为持续发布模式，节点层周期发送直到 g_debugPubStop
-    // （CLI Ctrl+C）置位或发满 maxTimes 条；计数（含首轮）随结构化响应带回，单次发布同样非空
+    // （CLI Ctrl+C 或 /stop_pub）置位或发满 maxTimes 条；计数（含首轮）随结构化响应带回，
+    // 单次发布同样非空
     std::string error;
     yomk::payload::dds::TopicPublishInfo info;
     if (!node_->topicPub(p->msg.topicName, p->msg.json, info, error, p->msg.stableRounds,
                 p->msg.intervalMs, p->msg.repeatIntervalMs, p->msg.requiredSubscribers,
                 p->msg.maxTimes, p->msg.qos))
     {
-        yomk::log().tag("YomkDdsDebugHandler::topicPub").error("pub failed: ", error);
+        yomk::log().tag("YomkDdsDebugHandler::startPub").error("pub failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "delivered",
             yomk::msgs::dds::TopicPublishInfo::shared(std::move(info)));
+}
+
+yomk::payload::Response YomkDdsDebugHandler::stopPub(YomkMsgPtr pkg)
+{
+    // pkg 无关：本端点是协议级停止的桥——无锁直置进程内控制面标志。
+    // 绝不可取 mtx_：此刻可能正有 startPub 持锁长驻阻塞（repeat 循环），取锁即互锁死；
+    // 发布循环轮询到置位即收尾返回，被阻塞的 startPub 调用带回 total/failed 计数。
+    // 期望建匹配等待期（waiting for subscribers）置位同样中断并报错返回。
+    (void)pkg;
+    yomk::ctrl::g_debugPubStop.stop();
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "stop requested");
 }
 
 yomk::payload::Response YomkDdsDebugHandler::topicInfo(YomkMsgPtr pkg)

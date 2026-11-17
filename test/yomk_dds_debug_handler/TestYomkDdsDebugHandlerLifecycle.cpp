@@ -517,6 +517,25 @@ int main()
                           "qos 下传持续模式停止后 invoke 返回 eOk");
                 }
 
+                // /stop_pub 协议级停止端点（闭环 3）：startPub 持锁长驻阻塞期间，主线程
+                // invoke /stop_pub（无锁置位 ctrl 标志，不取 mtx_）→ 发布循环收尾返回，
+                // 阻塞的 invoke 带回计数 eOk——远端 UI 停止链路的进程内等价验证
+                {
+                    std::atomic<int> stopCaseStatus{-1};
+                    std::thread stopCaseThread([&]() {
+                        auto r = testInvoke(svc, "/topic_pub", yomk::msgs::dds::DebugTopicPubRequest::shared(
+                            DebugTopicPubRequest{HIT_TOPIC, R"({"data":"t_pub_stop"})", 2, 50, 100, 0, 0}));
+                        stopCaseStatus.store(static_cast<int>(r.status));
+                    });
+                    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+                    auto stopResp = testInvoke(svc, "/stop_pub", nullptr);
+                    check(stopResp.status == yomk::payload::ResStatus::Succeeded && stopResp.msg == "stop requested",
+                          "/stop_pub → eOk（startPub 持锁阻塞期间并发可调度，无锁置位）");
+                    stopCaseThread.join();
+                    check(stopCaseStatus.load() == static_cast<int>(yomk::payload::ResStatus::Succeeded),
+                          "/stop_pub 停止后阻塞的 topic_pub invoke 返回 eOk（total/failed 计数带回）");
+                }
+
                 // topic_msg：结构化载荷（topicName/typeName/json，展示文本由 CLI 渲染）
                 auto msgHit = testInvoke(svc, "/topic_msg", yomk::msgs::dds::DebugTopicMsgRequest::shared(DebugTopicMsgRequest{HIT_TOPIC, 5, 100}));
                 check(msgHit.status == yomk::payload::ResStatus::Succeeded && msgHit.data != nullptr,

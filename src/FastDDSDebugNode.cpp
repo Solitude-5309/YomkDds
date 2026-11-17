@@ -1,6 +1,6 @@
 #include "FastDDSDebugNode.h"
 
-#include "YomkDdsDebugHandler.h" // yomk::g_debugPubStop 持续发布停止标志（API 头内联定义）
+#include "YomkDdsDebugHandler.h" // yomk::ctrl::g_debugPubStop 持续发布停止标志（YomkDdsControlFlag.h 定义）
 
 #include <algorithm>
 #include <chrono>
@@ -1665,7 +1665,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
     info.topicName = topicName;
     info.total = 1;
     info.failed = 0;
-    yomk::debugPubReset();  // 复位上次会话残留的停止请求，此后 SIGINT 置位才对本轮生效
+    yomk::ctrl::g_debugPubStop.reset();  // 复位上次会话残留的停止请求，此后 SIGINT 置位才对本轮生效
     if (stableRounds == 0)
     {
         stableRounds = kDefaultStableRounds;
@@ -1693,7 +1693,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         bool topicFound = false;
         while (true)
         {
-            if (yomk::g_debugPubStop.load())
+            if (yomk::ctrl::g_debugPubStop.stopped())
             {
                 topicInterrupted = true;
                 break;
@@ -1791,7 +1791,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         bool interrupted = false;
         while (true)
         {
-            if (yomk::g_debugPubStop.load())
+            if (yomk::ctrl::g_debugPubStop.stopped())
             {
                 interrupted = true;
                 break;
@@ -1960,10 +1960,10 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         uint32_t failCount = 0;
         const auto interval = std::chrono::milliseconds(repeatIntervalMs);
         auto next = std::chrono::steady_clock::now() + interval;
-        while (!yomk::g_debugPubStop.load() && (maxTimes == 0 || sent < maxTimes))
+        while (!yomk::ctrl::g_debugPubStop.stopped() && (maxTimes == 0 || sent < maxTimes))
         {
             std::this_thread::sleep_until(next);
-            if (yomk::g_debugPubStop.load())
+            if (yomk::ctrl::g_debugPubStop.stopped())
             {
                 break;
             }
@@ -1989,7 +1989,7 @@ bool FastDDSDebugNode::topicPub(const std::string& topicName, const std::string&
         // 发满 maxTimes 退出（非 Ctrl+C）：writer 即将销毁、末条消息失去重传窗口，销毁前保底
         // 排空 200ms 等异步传输落地；排空必须在 delete_datawriter 之前（writer 销毁即切断重传路径）
         static constexpr uint32_t kPubDrainMs = 200;
-        if (maxTimes > 0 && !yomk::g_debugPubStop.load())
+        if (maxTimes > 0 && !yomk::ctrl::g_debugPubStop.stopped())
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(kPubDrainMs));
         }

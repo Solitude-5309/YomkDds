@@ -55,7 +55,7 @@ static std::atomic<bool> g_stop{false}; // SIGINT（Ctrl+C）退出标志
 static void onSignal(int)
 {
     g_stop.store(true);
-    yomk::debugPubStop(); // topic pub -r 持续发布：无锁置位（async-signal-safe），节点层发布循环读它退出
+    yomk::ctrl::g_debugPubStop.stop(); // topic pub -r 持续发布：无锁置位（async-signal-safe），节点层发布循环读它退出
     yomk::bagRecordStop(); // bag record：无锁置位（async-signal-safe），节点层录制循环读它收尾退出
     yomk::bagPlayStop();   // bag play：无锁置位（async-signal-safe），节点层回放循环读它收尾退出
 }
@@ -2143,7 +2143,7 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
     // 2. 收敛后发布（ack 自适应确认）；未发现（未指定 -w 时，指定 -w 则等待主题出现）/
     //    载荷不合法/未确认/等待被中断均报错退出。
     //    无条件注册 SIGINT 处理（同 print/hz 框架）：缺省即 1Hz 持续发送必须可 Ctrl+C
-    //    停止，Ctrl+C 经 yomk::debugPubStop 置停止标志（无锁 store，async-signal-safe）
+    //    停止，Ctrl+C 经 yomk::ctrl::g_debugPubStop.stop() 置停止标志（无锁 store，async-signal-safe）
     //    ——-w 等待期中断报错退出，持续循环退出并回传 total/failed
     std::signal(SIGINT, onSignal);
     if (maxTimes > 0)

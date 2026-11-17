@@ -469,7 +469,7 @@ int main()
                 // 下传链路（聚合尾参→handler 解包→node_->topicPub）完整走到 DDS，QoS
                 // 落端点经直连 observer（独立 FastDDSDebugNode）发现读回断言（HIT_TOPIC
                 // 上 hitParticipant 远端 writer 在场，命中需 ≥2 端点且全端点扫描，svc
-                // writer 的 BE+VOL 与 peer 默认底座双差异无歧义）；debugPubStop 停止
+                // writer 的 BE+VOL 与 peer 默认底座双差异无歧义）；g_debugPubStop.stop() 停止
                 // 持续发布后 invoke 返回
                 {
                     DDSQosProfile pubQos;
@@ -498,7 +498,7 @@ int main()
                             std::this_thread::sleep_for(std::chrono::milliseconds(100));
                         }
                     }
-                    yomk::debugPubStop();
+                    yomk::ctrl::g_debugPubStop.stop();
                     pubQosThread.join();
                     check(obSeen, "qos 下传用例 observer 读回 svc 发布 writer 端点详情");
                     bool obRel = false;

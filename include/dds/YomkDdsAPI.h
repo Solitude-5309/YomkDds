@@ -551,14 +551,14 @@ public:
      *            until the stop flag or max_times() is reached; 0 = publish once
      * @return Reference to self for chaining
      * @note Applies to publish() only; stop a repeating publish through
-     *       yomk::debugPubStop (async-signal-safe) and reset it with
-     *       yomk::debugPubReset() before a new session
+     *       yomk::ctrl::g_debugPubStop.stop() (async-signal-safe) and reset it with
+     *       yomk::ctrl::g_debugPubStop.reset() before a new session
      */
     // @zh: 累积 publish() 的持续发布周期
     // @zh: repeatMs >0 为持续发布（直到停止标志置位或发满 max_times() 条）；0 = 单次发布
     // @zh: return 自身链式引用
-    // @zh: note 仅作用于 publish()；持续发布经 yomk::debugPubStop 停止（async-signal-safe），
-    // @zh: 再次发起前宜先 yomk::debugPubReset() 复位
+    // @zh: note 仅作用于 publish()；持续发布经 yomk::ctrl::g_debugPubStop.stop() 停止（async-signal-safe），
+    // @zh: 再次发起前宜先 yomk::ctrl::g_debugPubStop.reset() 复位
     DdsDebugTopicBuilder& repeat(uint32_t repeatMs)
     {
         m_repeatMs = repeatMs;
@@ -706,16 +706,16 @@ public:
      *         initialized or payload() was not accumulated
      * @note Blocking until the first-round convergence and, for RELIABLE peers, until
      *       acknowledgment; repeat() keeps the chain alive until the stop flag or
-     *       max_times(). Stop a repeating publish through yomk::debugPubStop
-     *       (async-signal-safe) and reset it with yomk::debugPubReset() before a new
+     *       max_times(). Stop a repeating publish through yomk::ctrl::g_debugPubStop.stop()
+     *       (async-signal-safe) and reset it with yomk::ctrl::g_debugPubStop.reset() before a new
      *       session
      */
     // @zh: 按累积的 JSON 载荷发布到目标主题（请求终结）
     // @zh: return Response 携带 TopicPublishInfo 包（单次与持续模式均有）：主题名与 total（含首轮，
     // @zh: 单次发布即 1）、failed（持续模式的 write 失败数）；未初始化或未累积 payload() 载荷时返回 Invalid
     // @zh: note 阻塞至首轮收敛完成（RELIABLE 订阅端还等送达确认）；repeat() 使其持续至停止标志
-    // @zh: 置位或发满 max_times()；持续发布经 yomk::debugPubStop 停止（async-signal-safe），
-    // @zh: 再次发起前宜先 yomk::debugPubReset() 复位
+    // @zh: 置位或发满 max_times()；持续发布经 yomk::ctrl::g_debugPubStop.stop() 停止（async-signal-safe），
+    // @zh: 再次发起前宜先 yomk::ctrl::g_debugPubStop.reset() 复位
     yomk::payload::Response publish()
     {
         if (!requireServer())

@@ -230,7 +230,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 |---|---|
 | `payload(json)` | **必填**载荷（形态同 `pub_example()`/`sample_to_json()` 模板）；未累积时 `publish()` 返回 `payload(json) is required`，首轮另做完整强校验 |
 | `required(n)` | >0 为期望建匹配订阅端数门槛（matched 达标才发布否则一直等待，0=自动收敛；对应 CLI `-w/--wait N`） |
-| `repeat(ms)` | >0 进入持续发布模式（首轮校验后按该周期重复 write 尽力而为，经 `yomk::debugPubStop` 无锁置位退出，再次发起持续发布前宜先 `yomk::debugPubReset()` 复位停止标志（防上次会话残留置位导致循环秒退）），对应 CLI `-r/--rate N`（CLI 侧频率换算：发送间隔 = round(1000/rate) ms，下限 1ms） |
+| `repeat(ms)` | >0 进入持续发布模式（首轮校验后按该周期重复 write 尽力而为，经 `yomk::ctrl::g_debugPubStop.stop()` 无锁置位退出，再次发起持续发布前宜先 `yomk::ctrl::g_debugPubStop.reset()` 复位停止标志（防上次会话残留置位导致循环秒退）），对应 CLI `-r/--rate N`（CLI 侧频率换算：发送间隔 = round(1000/rate) ms，下限 1ms） |
 | `max_times(n)` | >0 为条数上限（发满排空 200ms 后返回；对应 CLI `-t/--times N`，含首轮） |
 | `qos(qos)` | 临时发布 writer 的 QoS 描述 `DDSQosProfile`，全哨兵=既有固定值 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL，ROS2 底座建议 `ros2DefaultPublisher()`；CLI 侧经 `--qos-ros`/`--qos-*`/`--qos-file` 指定 |
 | `rounds(n)` / `interval(ms)` | 首轮发现收敛次数/轮询间隔，缺省/0 钳制为 5 次/200ms；与同分面查询终结共用累积器 |

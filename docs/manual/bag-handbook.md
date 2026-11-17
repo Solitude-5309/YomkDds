@@ -422,7 +422,7 @@ reindexing complete
 
 ## 延伸阅读
 
-- [../features/bag-service.md](../features/bag-service.md)——bag 功能能力清单、参数总表与链式 `yomk::dds().bag()` 等价调用（含 `yomk::ctrl::g_bagRecordStop/Pause/Resume`、`yomk::ctrl::bagPlaySetRate` 库侧接口）
+- [../features/bag-service.md](../features/bag-service.md)——bag 功能能力清单、参数总表与链式 `yomk::dds().bag()` 等价调用（含 `yomk::ctrl::g_bagRecordStop`/`g_bagRecordPaused` 的 stop/pause/resume 方法、`yomk::ctrl::bagPlaySetRate` 库侧接口）
 - [cli-observe-handbook.md](./cli-observe-handbook.md)——`topic print`/`topic list`/`topic info` 等观察命令，与回放验证配合使用
 - [cli-publish-handbook.md](./cli-publish-handbook.md)——`topic pub` 手工发布消息，演练中可替代 `ExampleYomkDdsPub` 作发布端
 - [env-vars-reference.md](./env-vars-reference.md)——域号等公共环境变量（bag 命令域号经 `YOMKDDS_DDS_DOMAIN_ID` 选择）

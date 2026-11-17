@@ -62,12 +62,14 @@ flowchart LR
 | 调试 | 按类型反查主题 | `yomk::dds().debug().type(name).find_topics()` | `topic type` / `topic find` | [debug-service.md](./debug-service.md) |
 | 调试 | 类型内省（成员表与依赖闭包） | `yomk::dds().debug().type(name).interface_show()`（结构化 `InterfaceInfo`）/ `yomk::dds().debug().interfaces()` | `interface show` / `interface list` | [debug-service.md](./debug-service.md) |
 | 调试 | 发布示例与 JSON 载荷发布 | `yomk::dds().debug().topic(name).pub_example()` / `.sample_to_json()` / `.payload(json)….publish()`（返回结构化 `TopicExampleInfo` / `TopicMessageInfo` / `TopicPublishInfo`） | `topic pub` | [debug-service.md](./debug-service.md) |
+| 调试 | 持续发布停止（协议级控制） | `yomk::dds().debug().stop_pub()`（`publish()` 阻塞期间仍可调用，远端可调） | Ctrl+C / — | [debug-service.md](./debug-service.md) |
 | Bag | 创建/删除 bag 节点 | `yomk::dds().bag()[.domain/.udp_ds/.tcp_ds()].create()` / `yomk::dds().bag().quit()` | —（CLI 自动建删） | [bag-service.md](./bag-service.md) |
 | Bag | 录制到 mcap（分片/缓存/暂停/通配） | `yomk::dds().bag().topics({...})….record()`（结构化 `RecordResult`） | `bag record` | [bag-service.md](./bag-service.md) |
 | Bag | 查看 bag 元信息 | `yomk::dds().bag().dir(bagDir).info()`（结构化 `BagInfo`） | `bag info` | [bag-service.md](./bag-service.md) |
 | Bag | 重建 bag 元信息 | `yomk::dds().bag().dir(bagDir).reindex()` | `bag reindex` | [bag-service.md](./bag-service.md) |
 | Bag | 转换 bag（过滤/裁剪/归并） | `yomk::dds().bag().in_bags({...}).out_cfg(path).convert()`（结构化 `ConvertResult`） | `bag convert` | [bag-service.md](./bag-service.md) |
 | Bag | 回放 bag | `yomk::dds().bag().dir(bagDir)[.rate/.topics/.loop/.offset/.delay/.wait_acked/.remaps/.read_ahead/.qos_file()].play()`（结构化 `PlayResult`；须先 `yomk::dds().bag()...create()`） | `bag play`（CLI 自动建删 bag 节点） | [bag-service.md](./bag-service.md) |
+| Bag | 运行中控制（停止/暂停/继续/调速） | `yomk::dds().bag().stop_record()/pause_record()/resume_record()/stop_play()/pause_play()/resume_play()/set_play_rate(r)`（控制桥：无锁置位 `yomk::ctrl` 标志，录制/回放阻塞期间仍可调用，远端可调） | 运行期 Ctrl+C 与键盘交互 | [bag-service.md](./bag-service.md) |
 
 ## 三、文档导航
 

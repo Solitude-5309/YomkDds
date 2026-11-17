@@ -77,6 +77,7 @@
 | `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].pub_example()` | 查询主题发布示例（返回结构化 `TopicExampleInfo`：主题名/类型名/`InterfaceInfo` 反射树/JSON 默认值模板） |
 | `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].sample_to_json()` | 查询消息描述（返回结构化 `TopicMessageInfo`：主题名/类型名/紧凑 JSON 样本） |
 | `yomk::dds().debug().topic(topicName).payload(json)[.repeat(ms)][.required(n)][.max_times(n)][.qos(qos)].publish()` | 发布 JSON 载荷消息（返回结构化 `TopicPublishInfo`：主题名/已发条数/失败计数；支持持续发布/条数上限/QoS 累积） |
+| `yomk::dds().debug().stop_pub()` | 停止持续发布（协议级控制：`publish()` 阻塞期间仍可调用，远端前端/另一进程经客户端链路同样可用） |
 | `yomk::dds().debug().quit()` | 退出调试（删除调试节点） |
 
 **Bag 服务（YomkDdsBagHandler）** — 详见 [功能文档：Bag 录制/回放](docs/features/bag-service.md)：
@@ -90,6 +91,7 @@
 | `yomk::dds().bag().dir(bagDir).reindex()` | 从 mcap 分片重建 metadata.json（纯文件操作） |
 | `yomk::dds().bag().in_bags({...}).out_cfg(path).convert()` | 按配置过滤/裁剪/归并转换 bag（纯文件操作；返回结构化 `ConvertResult`） |
 | `yomk::dds().bag().dir(bagDir)[.rate(r)][.topics({...})][.loop()][.offset(sec)][.delay(sec)][.wait_acked(ms)][.remaps({...})][.read_ahead(n)][.qos_file(path)].play()` | 按录制时间轴回放 bag（须先自建 bag 节点；CLI `bag play` 自动建删；返回结构化 `PlayResult`） |
+| `yomk::dds().bag().stop_record()/pause_record()/resume_record()/stop_play()/pause_play()/resume_play()/set_play_rate(r)` | 运行中控制（协议级：`/record`、`/play` 持锁长驻阻塞期间仍可调用，远端前端/另一进程经客户端链路同样可用；同进程等价于直调 `yomk::ctrl` 控制面标志） |
 
 安装后可直接运行的 CLI 工具 **`yomkdds`**（位于 `<安装路径>/bin`）：`topic print/list/info/type/find/hz/pub`、`interface show/list`、`node list/info`、`bag record/info/reindex/convert/play`，用法见 [yomkdds 观察手册](docs/manual/cli-observe-handbook.md) 与 [yomkdds 发布与内省手册](docs/manual/cli-publish-handbook.md)。
 

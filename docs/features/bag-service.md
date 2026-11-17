@@ -156,7 +156,7 @@ yomkdds bag play bag_in --qos-profile-overrides-path qos.json   # 按主题覆�
 | `yomk::ctrl::bagPlayGetRate()` | 查询当前倍率（对齐 ros2 `~/get_rate`） |
 | `yomk::ctrl::bagPlayReset()` | 发起回放前调用：复位停止与暂停标志 + 倍率复位 1.0（防上次会话残留导致秒退/开播即冻住/倍率漂移） |
 
-录制侧配套：`yomk::ctrl::g_bagRecordStop.stop()`（Ctrl+C 置位收尾）、`yomk::ctrl::g_bagRecordPaused.pause()`/`yomk::ctrl::g_bagRecordPaused.resume()`（暂停期照常 take 排空但丢弃不写）、`yomk::ctrl::bagRecordReset()`（双复位停止+暂停，防上次会话残留表现为"何都不录"）。
+录制侧配套：`yomk::ctrl::g_bagRecordStop.stop()`（Ctrl+C 置位收尾）、`yomk::ctrl::g_bagRecordPaused.pause()`/`yomk::ctrl::g_bagRecordPaused.resume()`（暂停期照常 take 排空但丢弃不写）、`yomk::ctrl::bagRecordReset()`（双复位停止+暂停，防上次会话残留表现为"什么都不录"）。
 
 ## 参数与约束
 

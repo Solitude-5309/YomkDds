@@ -48,8 +48,8 @@ using namespace yomk;
 int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 YomkDds 服务
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsHandler>().create();
 
     // 2. 创建节点（domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
     yomk::dds().node("qos_node").create();
@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
     {
         auto *msg = static_cast<const YomkDdsStd::MString *>(data);
         received++;
-        ::yomk::log().tag("QosExample").info("[RECV] ", msg->data());
+        yomk::log().tag("QosExample").info("[RECV] ", msg->data());
     };
     yomk::dds().node("qos_node").topic("qos_topic").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
 
@@ -76,13 +76,13 @@ int main(int argc, char *argv[])
         YomkDdsStd::MString msg;
         msg.data("hello " + std::to_string(i));
         yomk::dds().node("qos_node").topic("qos_topic").data(&msg).pub();
-        ::yomk::log().tag("QosExample").info("[SEND] ", msg.data());
+        yomk::log().tag("QosExample").info("[SEND] ", msg.data());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // 6. 等待接收完成后删除节点
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    ::yomk::log().tag("QosExample").info("received=", received.load(), "/5");
+    yomk::log().tag("QosExample").info("received=", received.load(), "/5");
     yomk::dds().node("qos_node").remove();
     return 0;
 }

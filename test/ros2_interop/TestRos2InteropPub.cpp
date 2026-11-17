@@ -39,14 +39,14 @@ static void onSignal(int)
 
 int main()
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsHandler>().create();
 
     // 创建节点（域 0 对齐 ROS2 默认域）
     auto resp = yomk::dds().node("interop_pub").domain(0).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("TestRos2InteropPub").error("create node failed: ", resp.msg);
+        yomk::log().tag("TestRos2InteropPub").error("create node failed: ", resp.msg);
         return 1;
     }
 
@@ -57,7 +57,7 @@ int main()
     resp = yomk::dds().node("interop_pub").topic("rt/chatter_interop").type(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("TestRos2InteropPub").error("register pub topic failed: ", resp.msg);
+        yomk::log().tag("TestRos2InteropPub").error("register pub topic failed: ", resp.msg);
         yomk::dds().node("interop_pub").remove();
         return 1;
     }
@@ -72,11 +72,11 @@ int main()
         resp = yomk::dds().node("interop_pub").topic("rt/chatter_interop").data(&msg).pub();
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
-            ::yomk::log().tag("TestRos2InteropPub").error("[SEND] publish failed");
+            yomk::log().tag("TestRos2InteropPub").error("[SEND] publish failed");
         }
         else
         {
-            ::yomk::log().tag("TestRos2InteropPub").info("[SEND] ", msg.data());
+            yomk::log().tag("TestRos2InteropPub").info("[SEND] ", msg.data());
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
@@ -85,7 +85,7 @@ int main()
     resp = yomk::dds().node("interop_pub").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("TestRos2InteropPub").error("delete node failed: ", resp.msg);
+        yomk::log().tag("TestRos2InteropPub").error("delete node failed: ", resp.msg);
         return 1;
     }
     return 0;

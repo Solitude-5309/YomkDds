@@ -21,46 +21,46 @@ using namespace yomk;
 // 覆盖 create_node / register_pub_topic / register_sub_topic / publish / delete_node 全流程。
 int main(int argc, char* argv[])
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsHandler>().create();
 
     // 查看版本（链式 version() 返回 Response，解包/打印由调用方处理）
-    ::yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::getVersion ===");
+    yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::getVersion ===");
     auto vresp = yomk::dds().version();
     if (vresp.status == yomk::payload::ResStatus::Succeeded)
     {
-        auto ver = ::yomk::msgs::unpack<::yomk::msgs::String>(vresp.data);
+        auto ver = yomk::msgs::unpack<yomk::msgs::String>(vresp.data);
         if (ver)
         {
-            ::yomk::log().tag("YomkDdsHandler").info(ver->d);
+            yomk::log().tag("YomkDdsHandler").info(ver->d);
         }
     }
     else
     {
-        ::yomk::log().tag("YomkDdsHandler").error("getVersion failed: ", vresp.msg);
+        yomk::log().tag("YomkDdsHandler").error("getVersion failed: ", vresp.msg);
     }
 
     // 1. 创建节点（每节点一个独立 DDS 参与者）
-    ::yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::createNode ===");
+    yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::createNode ===");
     auto resp = yomk::dds().node("node0").create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleYomkDdsTopic").error("create node failed: ", resp.msg);
+        yomk::log().tag("ExampleYomkDdsTopic").error("create node failed: ", resp.msg);
         return 1;
     }
 
     // 2. 注册发布主题（type 所有权移交 FastDDSNode）
-    ::yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::registerPubTopic ===");
+    yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::registerPubTopic ===");
     resp = yomk::dds().node("node0").topic("dds_demo_topic").type(new YomkDdsStd::MStringPubSubType()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleYomkDdsTopic").error("register pub topic failed: ", resp.msg);
+        yomk::log().tag("ExampleYomkDdsTopic").error("register pub topic failed: ", resp.msg);
         yomk::dds().node("node0").remove();
         return 1;
     }
 
     // 3. 注册订阅主题：回调中累加计数并记录最后一条消息
-    ::yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::registerSubTopic ===");
+    yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::registerSubTopic ===");
     std::atomic<int> received{0};
     std::mutex msgMtx;
     std::string lastMsg;
@@ -71,18 +71,18 @@ int main(int argc, char* argv[])
         std::lock_guard<std::mutex> lock(msgMtx);
         lastMsg = msg->data();
         received++;
-        ::yomk::log().tag("ExampleYomkDdsTopic").info("[RECV] 收到消息: ", msg->data());
+        yomk::log().tag("ExampleYomkDdsTopic").info("[RECV] 收到消息: ", msg->data());
     };
     resp = yomk::dds().node("node0").topic("dds_demo_topic").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleYomkDdsTopic").error("register sub topic failed: ", resp.msg);
+        yomk::log().tag("ExampleYomkDdsTopic").error("register sub topic failed: ", resp.msg);
         yomk::dds().node("node0").remove();
         return 1;
     }
 
     // 4. 等待 DDS discovery 完成后发布 5 条消息
-    ::yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::publish ===");
+    yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::publish ===");
     std::this_thread::sleep_for(std::chrono::seconds(1));
     for (int i = 0; i < 5; ++i)
     {
@@ -91,10 +91,10 @@ int main(int argc, char* argv[])
         resp = yomk::dds().node("node0").topic("dds_demo_topic").data(&msg).pub();
         if (resp.status != yomk::payload::ResStatus::Succeeded)
         {
-            ::yomk::log().tag("ExampleYomkDdsTopic").error("[SEND] 发布失败: ", msg.data(), " status=", static_cast<int>(resp.status));
+            yomk::log().tag("ExampleYomkDdsTopic").error("[SEND] 发布失败: ", msg.data(), " status=", static_cast<int>(resp.status));
             break;
         }
-        ::yomk::log().tag("ExampleYomkDdsTopic").info("[SEND] 发布消息: ", msg.data());
+        yomk::log().tag("ExampleYomkDdsTopic").info("[SEND] 发布消息: ", msg.data());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
@@ -105,14 +105,14 @@ int main(int argc, char* argv[])
         std::lock_guard<std::mutex> lock(msgMtx);
         lastMsgCopy = lastMsg;
     }
-    ::yomk::log().tag("ExampleYomkDdsTopic").info("[RESULT] 接收=", received.load(), "/5 最后一条=", lastMsgCopy);
+    yomk::log().tag("ExampleYomkDdsTopic").info("[RESULT] 接收=", received.load(), "/5 最后一条=", lastMsgCopy);
 
     // 6. 退出前销毁节点，确保 DDS 实体在 FastDDS 静态资源销毁前清理
-    ::yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::deleteNode ===");
+    yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::deleteNode ===");
     resp = yomk::dds().node("node0").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleYomkDdsTopic").error("delete node failed: ", resp.msg);
+        yomk::log().tag("ExampleYomkDdsTopic").error("delete node failed: ", resp.msg);
         return 1;
     }
     return 0;

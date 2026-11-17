@@ -90,14 +90,14 @@ using namespace yomk;
 
 int main(int argc, char *argv[])
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：一个进程至多一个，重复创建须先删除）
     auto resp = yomk::dds().debug().domain(0).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("DebugExample").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("DebugExample").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
         { std::cout << text << std::endl; }).print();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("DebugExample").error("register debug topic failed: ", resp.msg);
+        yomk::log().tag("DebugExample").error("register debug topic failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("DebugExample").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("DebugExample").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -126,12 +126,12 @@ int main(int argc, char *argv[])
 收敛查询链式调用的等价序列（以 `yomkdds topic list` 为例，流程同构）：
 
 ```cpp
-::yomk::server().init();
-::yomk::server().srv<YomkDdsDebugHandler>().create();
+yomk::server().init();
+yomk::server().srv<YomkDdsDebugHandler>().create();
 auto resp = yomk::dds().debug().domain(0).create();      // 1. 创建调试节点
 // 2. 收敛查询：连续 5 次 200ms 快照不变即返回结构化 TopicInfoArray 包
 resp = yomk::dds().debug().rounds(5).interval(200).topics();
-auto arr = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicInfoArray>(resp.data);
+auto arr = yomk::msgs::unpack<yomk::msgs::dds::TopicInfoArray>(resp.data);
 if (arr != nullptr)
 {
     // 终端形态由调用方决定：此处仅打主题名（附类型名同理，取 typeName）

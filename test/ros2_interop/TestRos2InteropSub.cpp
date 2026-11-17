@@ -41,14 +41,14 @@ static void onSignal(int)
 
 int main()
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsHandler>().create();
 
     // 创建节点（域 0 对齐 ROS2 默认域）
     auto resp = yomk::dds().node("interop_sub").domain(0).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("TestRos2InteropSub").error("create node failed: ", resp.msg);
+        yomk::log().tag("TestRos2InteropSub").error("create node failed: ", resp.msg);
         return 1;
     }
 
@@ -75,7 +75,7 @@ int main()
     resp = yomk::dds().node("interop_sub").topic("rt/chatter_interop_rev").type(type).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("TestRos2InteropSub").error("register sub topic failed: ", resp.msg);
+        yomk::log().tag("TestRos2InteropSub").error("register sub topic failed: ", resp.msg);
         yomk::dds().node("interop_sub").remove();
         return 1;
     }
@@ -91,7 +91,7 @@ int main()
     resp = yomk::dds().node("interop_sub").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("TestRos2InteropSub").error("delete node failed: ", resp.msg);
+        yomk::log().tag("TestRos2InteropSub").error("delete node failed: ", resp.msg);
         return 1;
     }
     return received.load() >= 3 ? 0 : 1;

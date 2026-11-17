@@ -319,7 +319,7 @@ static void persistDefaultEnv(const char *name, const char *value, const char *n
     std::ofstream out(bashrc, std::ios::app);
     if (!out)
     {
-        ::yomk::log().tag("yomkdds").error("persist default env failed: cannot append ", bashrc);
+        yomk::log().tag("yomkdds").error("persist default env failed: cannot append ", bashrc);
         return;
     }
     out << "\n# added by yomkdds: " << note << "\n"
@@ -340,16 +340,16 @@ static bool autoLoadXmlProfile()
     }
     // load_xml 端点在 /YomkDdsHandler 上，而本工具按需只注册调试/bag 服务——首次
     // 触发自动加载时补注册 dds 服务（static 守卫保证全进程仅注册一次）
-    static const bool ddsServiceReady = (::yomk::server().srv<YomkDdsHandler>().create() == 0);
+    static const bool ddsServiceReady = (yomk::server().srv<YomkDdsHandler>().create() == 0);
     if (!ddsServiceReady)
     {
-        ::yomk::log().tag("yomkdds").error("register /YomkDdsHandler failed");
+        yomk::log().tag("yomkdds").error("register /YomkDdsHandler failed");
         return false;
     }
     auto resp = yomk::dds().load_cfg();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("auto load xml profile [", path, "] failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("auto load xml profile [", path, "] failed: ", resp.msg);
         return false;
     }
     return true;
@@ -674,8 +674,8 @@ static bool loadQosFile(const std::string &path, DDSQosProfile &profile, std::st
 // 订阅 reader 的 QoS 描述（全哨兵=Fast DDS 默认底座）
 static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQosProfile &qos)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -685,7 +685,7 @@ static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQo
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -697,14 +697,14 @@ static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQo
     resp = yomk::dds().debug().topic(topicName).out_cb(onMessage).qos(qos).print();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("register debug topic failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("register debug topic failed: ", resp.msg);
         yomk::dds().debug().quit(); // 登记失败路径同样须清理已建调试节点
         return 1;
     }
 
     // 3. 监听 Ctrl+C，主循环等待退出信号
     std::signal(SIGINT, onSignal);
-    ::yomk::log().tag("yomkdds").info("debug printing topic \"", topicName, "\" on domain ", std::to_string(domainId), ", press Ctrl+C to exit");
+    yomk::log().tag("yomkdds").info("debug printing topic \"", topicName, "\" on domain ", std::to_string(domainId), ", press Ctrl+C to exit");
     while (!g_stop.load())
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -714,7 +714,7 @@ static int runPrint(uint32_t domainId, const std::string &topicName, const DDSQo
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -731,8 +731,8 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
                      const std::string &outputDir, bool startPaused, uint64_t maxBagSize,
                      uint64_t maxBagDurationSec, uint64_t maxCacheSize)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsBagHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsBagHandler>().create();
 
     // 1. 复位双标志（防上次会话残留置位导致秒退/不录）后创建 bag 节点（单节点模型）
     yomk::bagRecordReset();
@@ -747,7 +747,7 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
     auto resp = yomk::dds().bag().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create bag node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create bag node failed: ", resp.msg);
         return 1;
     }
 
@@ -779,7 +779,7 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
     {
         startSuffix += ", press p to pause, r to resume, Ctrl+C to stop";
     }
-    ::yomk::log().tag("yomkdds").info("recording topics from ", std::to_string(topics.size()), " list item(s) on domain ", std::to_string(domainId), startSuffix);
+    yomk::log().tag("yomkdds").info("recording topics from ", std::to_string(topics.size()), " list item(s) on domain ", std::to_string(domainId), startSuffix);
 
     // 3. 键盘监听线程（始终启动，tty 下生效）：SPACE=start，p=pause，r=resume，Ctrl+C 退出
     //    poll() 100ms 超时轮询：每次超时后检查 g_bagRecordStop，Ctrl+C 后最多 100ms 内干净退出
@@ -840,17 +840,17 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
                .max_size(maxBagSize).max_duration(maxBagDurationSec).cache(maxCacheSize).record();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("bag record failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("bag record failed: ", resp.msg);
         yomk::dds().bag().quit(); // 失败路径同样须清理已建 bag 节点
         return 2;
     }
 
     // 4. 输出统计（渲染属业务层）：解包 RecordResult，首行 bag 目录，其后每主题一行
     //    "topic: N 条 / M 字节"；载荷只给数据，行文本与单位由 CLI 约定
-    auto rec = ::yomk::msgs::unpack<::yomk::msgs::dds::RecordResult>(resp.data);
+    auto rec = yomk::msgs::unpack<yomk::msgs::dds::RecordResult>(resp.data);
     if (rec == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("bag record failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("bag record failed: unexpected response payload");
         yomk::dds().bag().quit();
         return 2;
     }
@@ -865,7 +865,7 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
     resp = yomk::dds().bag().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("delete bag node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("delete bag node failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -926,8 +926,8 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
         const std::vector<std::string> &playTopicRemaps, long long playReadAheadQueueSize,
         const std::string &playQosOverridesPath)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsBagHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsBagHandler>().create();
 
     // 1. 复位双标志（防上次会话残留置位导致秒退/开播即冻）后创建 bag 节点（单节点模型）；
     //    暂停态启动：先置位再发起播放（对齐 record 先例——服务 handler 只清 stop 不清
@@ -944,7 +944,7 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
     auto resp = yomk::dds().bag().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create bag node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create bag node failed: ", resp.msg);
         return 1;
     }
 
@@ -1006,7 +1006,7 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
         ? ", started paused, press SPACE to start, p/r to pause/resume, +/- rate, Ctrl+C to stop"
         : ", press p to pause, r to resume, +/- rate, Ctrl+C to stop";
     const char *loopNote = loop ? ", looping" : "";
-    ::yomk::log().tag("yomkdds").info("replaying bag [", bagDir, "] on domain ", std::to_string(domainId), rateNote, offsetNote, delayNote, ackNote, remapNote, queueNote, qosNote, loopNote, startSuffix);
+    yomk::log().tag("yomkdds").info("replaying bag [", bagDir, "] on domain ", std::to_string(domainId), rateNote, offsetNote, delayNote, ackNote, remapNote, queueNote, qosNote, loopNote, startSuffix);
 
     // 3. 键盘监听线程（tty 下生效）：SPACE=start（仅暂停态），p=pause（仅运行态），
     //    r=resume（仅暂停态，与 record 键位一致），+/-=rate ±10%，Ctrl+C 退出
@@ -1097,16 +1097,16 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
     resp = play.play();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("bag play failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("bag play failed: ", resp.msg);
         yomk::dds().bag().quit(); // 失败路径同样须清理已建 bag 节点
         return 2;
     }
 
     // 5. 输出统计（渲染属业务层：载荷只给目录与逐主题计数/字节）
-    auto played = ::yomk::msgs::unpack<::yomk::msgs::dds::PlayResult>(resp.data);
+    auto played = yomk::msgs::unpack<yomk::msgs::dds::PlayResult>(resp.data);
     if (played == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("bag play failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("bag play failed: unexpected response payload");
         yomk::dds().bag().quit(); // 失败路径同样须清理已建 bag 节点
         return 1;
     }
@@ -1121,7 +1121,7 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
     resp = yomk::dds().bag().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("delete bag node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("delete bag node failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -1194,21 +1194,21 @@ static std::string formatBagDuration(uint64_t durationNs)
 // 打印原因返回 1
 static int runBagInfo(const std::string &bagDir)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsBagHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsBagHandler>().create();
 
     auto resp = yomk::dds().bag().dir(bagDir).info();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("bag info failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("bag info failed: ", resp.msg);
         return 1;
     }
 
     // 渲染属业务层：载荷只给数据（纳秒、字节数、主题清单），行文本与单位由 CLI 约定
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::BagInfo>(resp.data);
+    auto info = yomk::msgs::unpack<yomk::msgs::dds::BagInfo>(resp.data);
     if (info == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("bag info failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("bag info failed: unexpected response payload");
         return 1;
     }
     const auto &meta = info->msg;
@@ -1270,13 +1270,13 @@ static int runBagInfo(const std::string &bagDir)
 // 打印原因返回 1
 static int runBagReindex(const std::string &bagDir)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsBagHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsBagHandler>().create();
 
     auto resp = yomk::dds().bag().dir(bagDir).reindex();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("bag reindex failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("bag reindex failed: ", resp.msg);
         return 1;
     }
 
@@ -1291,21 +1291,21 @@ static int runBagReindex(const std::string &bagDir)
 // 打印原因返回 1
 static int runBagConvert(const std::vector<std::string> &inputs, const std::string &cfgPath)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsBagHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsBagHandler>().create();
 
     auto resp = yomk::dds().bag().in_bags(inputs).out_cfg(cfgPath).convert();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("bag convert failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("bag convert failed: ", resp.msg);
         return 1;
     }
 
     // 输出统计（渲染属业务层）：载荷只给数据（uri/条数/字节/通道数），行文本由 CLI 约定
-    auto result = ::yomk::msgs::unpack<::yomk::msgs::dds::ConvertResult>(resp.data);
+    auto result = yomk::msgs::unpack<yomk::msgs::dds::ConvertResult>(resp.data);
     if (result == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("bag convert failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("bag convert failed: unexpected response payload");
         return 1;
     }
     for (const auto &bag : result->msg.bags)
@@ -1324,8 +1324,8 @@ static int runBagConvert(const std::vector<std::string> &inputs, const std::stri
 static int runHz(uint32_t domainId, const std::string &topicName, size_t windowSize,
         const DDSQosProfile &qos)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1335,7 +1335,7 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -1363,7 +1363,7 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
     resp = yomk::dds().debug().topic(topicName).out_cb(onMessage).qos(qos).print();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("register debug topic failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("register debug topic failed: ", resp.msg);
         yomk::dds().debug().quit(); // 登记失败路径同样须清理已建调试节点
         return 1;
     }
@@ -1371,7 +1371,7 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
     // 3. 主循环每秒打印一次统计（对齐 ros2 1s 打印线程节奏）：无新消息（末消息时间戳未变）
     // 跳过；窗口空（尚无完整间隔，仅收到 0/1 条消息）跳过——首条消息前静默
     std::signal(SIGINT, onSignal);
-    ::yomk::log().tag("yomkdds").info("measuring hz of topic \"", topicName, "\" on domain ", std::to_string(domainId), ", press Ctrl+C to exit");
+    yomk::log().tag("yomkdds").info("measuring hz of topic \"", topicName, "\" on domain ", std::to_string(domainId), ", press Ctrl+C to exit");
     auto lastPrinted = hzLast;
     std::cout << std::fixed;
     while (!g_stop.load())
@@ -1411,7 +1411,7 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -1548,8 +1548,8 @@ static void printTopicInfo(std::ostream &os, const yomk::payload::dds::TopicInfo
 static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false,
                    bool verbose = false)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1559,7 +1559,7 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false,
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -1568,18 +1568,18 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false,
     resp = yomk::dds().debug().rounds(waitRounds).interval(200).topics();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("list topics failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("list topics failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicInfoArray>(resp.data);
+    auto arr = yomk::msgs::unpack<yomk::msgs::dds::TopicInfoArray>(resp.data);
     if (arr == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("list topics failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("list topics failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
-    const std::vector<::yomk::payload::dds::TopicInfo> &rows = arr->d.d;
+    const std::vector<yomk::payload::dds::TopicInfo> &rows = arr->d.d;
     if (rows.empty())
     {
         std::cout << "no topics discovered on domain " << domainId << std::endl;
@@ -1611,7 +1611,7 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false,
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -1625,8 +1625,8 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false,
 static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t waitRounds,
                    bool verbose = false)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1636,7 +1636,7 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -1645,14 +1645,14 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
     resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).info();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("topic info failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("topic info failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicInfo>(resp.data);
+    auto info = yomk::msgs::unpack<yomk::msgs::dds::TopicInfo>(resp.data);
     if (info == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("topic info failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("topic info failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
@@ -1663,7 +1663,7 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -1674,8 +1674,8 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
 // 脚本 $() 取用）；未发现主题报错退出（无 Ctrl+C 循环，查完即退）
 static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_t waitRounds)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1685,7 +1685,7 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -1693,14 +1693,14 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
     resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).info();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("topic type failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("topic type failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicInfo>(resp.data);
+    auto info = yomk::msgs::unpack<yomk::msgs::dds::TopicInfo>(resp.data);
     if (info == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("topic type failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("topic type failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
@@ -1711,7 +1711,7 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -1722,8 +1722,8 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
 // 无 Ctrl+C 循环，查完即退
 static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t waitRounds)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1733,7 +1733,7 @@ static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -1741,14 +1741,14 @@ static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t
     resp = yomk::dds().debug().type(typeName).rounds(waitRounds).interval(200).find_topics();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("topic find failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("topic find failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    auto arr = yomk::msgs::unpack<yomk::msgs::StringArray>(resp.data);;
     if (arr == nullptr || arr->d.empty())
     {
-        ::yomk::log().tag("yomkdds").error("topic find failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("topic find failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
@@ -1762,14 +1762,14 @@ static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
 }
 
 // IDL 渲染（展示层职责）：服务端只回成员表，此处只加 IDL 语法（struct 头 / 4 空格缩进 / 结尾分号）
-static void printIdlType(std::ostream &os, const ::yomk::payload::dds::InterfaceType &type)
+static void printIdlType(std::ostream &os, const yomk::payload::dds::InterfaceType &type)
 {
     os << "struct " << type.typeName << " {\n";
     for (const auto &member : type.members)
@@ -1781,7 +1781,7 @@ static void printIdlType(std::ostream &os, const ::yomk::payload::dds::Interface
 
 // 完整 interface 渲染：依赖 struct 定义按拓扑序前置输出（被依赖者在前），块间空行；最后输出主
 // struct（无依赖时输出与旧版逐字相同）
-static void printIdlInterface(std::ostream &os, const ::yomk::payload::dds::InterfaceInfo &info)
+static void printIdlInterface(std::ostream &os, const yomk::payload::dds::InterfaceInfo &info)
 {
     for (const auto &dep : info.dependencies)
     {
@@ -1797,8 +1797,8 @@ static void printIdlInterface(std::ostream &os, const ::yomk::payload::dds::Inte
 // 无 Ctrl+C 循环，查完即退
 static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint32_t waitRounds)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1808,7 +1808,7 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -1816,14 +1816,14 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
     resp = yomk::dds().debug().type(typeName).rounds(waitRounds).interval(200).interface_show();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("interface show failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("interface show failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::InterfaceInfo>(resp.data);
+    auto info = yomk::msgs::unpack<yomk::msgs::dds::InterfaceInfo>(resp.data);
     if (info == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("interface show failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("interface show failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
@@ -1835,7 +1835,7 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -1846,8 +1846,8 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
 // 无 Ctrl+C 循环，查完即退
 static int runInterfaceList(uint32_t domainId, uint32_t waitRounds)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1857,7 +1857,7 @@ static int runInterfaceList(uint32_t domainId, uint32_t waitRounds)
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -1865,14 +1865,14 @@ static int runInterfaceList(uint32_t domainId, uint32_t waitRounds)
     resp = yomk::dds().debug().rounds(waitRounds).interval(200).interfaces();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("interface list failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("interface list failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    auto arr = yomk::msgs::unpack<yomk::msgs::StringArray>(resp.data);;
     if (arr == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("interface list failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("interface list failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
@@ -1886,7 +1886,7 @@ static int runInterfaceList(uint32_t domainId, uint32_t waitRounds)
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -1969,8 +1969,8 @@ static std::string prettyJson(const std::string &json, int indentBase = 0)
 static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
         const std::string &outDir, uint32_t waitRounds)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -1980,7 +1980,7 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -1988,14 +1988,14 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
     resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).sample_to_json();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("topic msg failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("topic msg failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicMessageInfo>(resp.data);
+    auto info = yomk::msgs::unpack<yomk::msgs::dds::TopicMessageInfo>(resp.data);
     if (info == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("topic msg failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("topic msg failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
@@ -2011,7 +2011,7 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
     if (!dir.empty() &&
             (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)))
     {
-        ::yomk::log().tag("yomkdds").error("output directory not found: ", dir);
+        yomk::log().tag("yomkdds").error("output directory not found: ", dir);
         yomk::dds().debug().quit();
         return 1;
     }
@@ -2033,7 +2033,7 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
     std::ofstream out(filePath);
     if (!out)
     {
-        ::yomk::log().tag("yomkdds").error("cannot open file for write: ", filePath);
+        yomk::log().tag("yomkdds").error("cannot open file for write: ", filePath);
         yomk::dds().debug().quit();
         return 1;
     }
@@ -2047,7 +2047,7 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -2059,8 +2059,8 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
 // IDL 语法与发布命令均为展示层拼装
 static int runTopicPubExample(uint32_t domainId, const std::string &topicName, uint32_t waitRounds)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -2070,7 +2070,7 @@ static int runTopicPubExample(uint32_t domainId, const std::string &topicName, u
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -2078,14 +2078,14 @@ static int runTopicPubExample(uint32_t domainId, const std::string &topicName, u
     resp = yomk::dds().debug().topic(topicName).rounds(waitRounds).interval(200).pub_example();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("topic example failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("topic example failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicExampleInfo>(resp.data);
+    auto info = yomk::msgs::unpack<yomk::msgs::dds::TopicExampleInfo>(resp.data);
     if (info == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("topic example failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("topic example failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
@@ -2104,7 +2104,7 @@ static int runTopicPubExample(uint32_t domainId, const std::string &topicName, u
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -2125,8 +2125,8 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
         uint32_t waitRounds, double rateHz, uint32_t requiredSubs, uint32_t maxTimes,
         const DDSQosProfile &qos)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -2136,7 +2136,7 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -2148,11 +2148,11 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
     std::signal(SIGINT, onSignal);
     if (maxTimes > 0)
     {
-        ::yomk::log().tag("yomkdds").info("publishing to topic \"", topicName, "\" at ", std::to_string(rateHz), " Hz, limit ", std::to_string(maxTimes), " messages, press Ctrl+C to stop");
+        yomk::log().tag("yomkdds").info("publishing to topic \"", topicName, "\" at ", std::to_string(rateHz), " Hz, limit ", std::to_string(maxTimes), " messages, press Ctrl+C to stop");
     }
     else
     {
-        ::yomk::log().tag("yomkdds").info("publishing to topic \"", topicName, "\" at ", std::to_string(rateHz), " Hz, press Ctrl+C to stop");
+        yomk::log().tag("yomkdds").info("publishing to topic \"", topicName, "\" at ", std::to_string(rateHz), " Hz, press Ctrl+C to stop");
     }
     const auto repeatIntervalMs =
         std::max<uint32_t>(1, static_cast<uint32_t>(std::lround(1000.0 / rateHz)));
@@ -2160,15 +2160,15 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
             .repeat(repeatIntervalMs).required(requiredSubs).max_times(maxTimes).qos(qos).publish();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("topic pub failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("topic pub failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
     // 发布计数：响应携带 TopicPublishInfo（单次与持续模式均有），total 含首轮
-    auto stat = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicPublishInfo>(resp.data);
+    auto stat = yomk::msgs::unpack<yomk::msgs::dds::TopicPublishInfo>(resp.data);
     if (stat == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("topic pub failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("topic pub failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
@@ -2179,7 +2179,7 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -2197,13 +2197,13 @@ static int runTopicPubJsonFile(uint32_t domainId, const std::string &topicName,
         const std::string &jsonFile, uint32_t waitRounds, double rateHz, uint32_t requiredSubs,
         uint32_t maxTimes, const DDSQosProfile &qos)
 {
-    ::yomk::server().init();
+    yomk::server().init();
 
     // 1. 读文件：文件不存在/打不开报错退出（此时尚未创建调试节点，无需 DEBUG_QUIT）
     std::ifstream in(jsonFile);
     if (!in)
     {
-        ::yomk::log().tag("yomkdds").error("cannot open json file: ", jsonFile);
+        yomk::log().tag("yomkdds").error("cannot open json file: ", jsonFile);
         return 1;
     }
     std::ostringstream buf;
@@ -2212,7 +2212,7 @@ static int runTopicPubJsonFile(uint32_t domainId, const std::string &topicName,
     const auto first = raw.find_first_not_of(" \t\r\n");
     if (first == std::string::npos)
     {
-        ::yomk::log().tag("yomkdds").error("json file is empty: ", jsonFile);
+        yomk::log().tag("yomkdds").error("json file is empty: ", jsonFile);
         return 1;
     }
     const auto last = raw.find_last_not_of(" \t\r\n");
@@ -2228,8 +2228,8 @@ static int runTopicPubJsonFile(uint32_t domainId, const std::string &topicName,
 // 跳过），按名称排序；调试节点自身不在自身发现回调中，天然不列出（无 Ctrl+C 循环，查完即退）
 static int runNodeList(uint32_t domainId, uint32_t waitRounds)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -2239,7 +2239,7 @@ static int runNodeList(uint32_t domainId, uint32_t waitRounds)
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -2248,14 +2248,14 @@ static int runNodeList(uint32_t domainId, uint32_t waitRounds)
     resp = yomk::dds().debug().rounds(waitRounds).interval(200).nodes();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("node list failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("node list failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(resp.data);;
+    auto arr = yomk::msgs::unpack<yomk::msgs::StringArray>(resp.data);;
     if (arr == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("node list failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("node list failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
@@ -2276,7 +2276,7 @@ static int runNodeList(uint32_t domainId, uint32_t waitRounds)
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;
@@ -2289,8 +2289,8 @@ static int runNodeList(uint32_t domainId, uint32_t waitRounds)
 // 空清单仅打段头）；段头与缩进均为展示层拼装；未发现节点名报错退出（查完即退）
 static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t waitRounds)
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsDebugHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsDebugHandler>().create();
 
     // 1. 创建调试节点（单节点模型：重复创建须先删除）
     if (!autoLoadXmlProfile())
@@ -2300,7 +2300,7 @@ static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t 
     auto resp = yomk::dds().debug().domain(domainId).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("create debug node failed: ", resp.msg);
         return 1;
     }
 
@@ -2309,14 +2309,14 @@ static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t 
     resp = yomk::dds().debug().node(nodeName).rounds(waitRounds).interval(200).info();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("node info failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("node info failed: ", resp.msg);
         yomk::dds().debug().quit();
         return 1;
     }
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::NodeInfo>(resp.data);
+    auto info = yomk::msgs::unpack<yomk::msgs::dds::NodeInfo>(resp.data);
     if (info == nullptr)
     {
-        ::yomk::log().tag("yomkdds").error("node info failed: unexpected response payload");
+        yomk::log().tag("yomkdds").error("node info failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
@@ -2337,7 +2337,7 @@ static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t 
     resp = yomk::dds().debug().quit();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
+        yomk::log().tag("yomkdds").error("debug quit failed: ", resp.msg);
         return 1;
     }
     return 0;

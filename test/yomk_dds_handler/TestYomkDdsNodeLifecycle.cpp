@@ -75,7 +75,7 @@ namespace
       // 构造 /create_node 请求包
       YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName)
       {
-            return ::yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
+            return yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
       }
 
       // Part A-1：生命周期——创建/重名/同域共存/删除/重复删除
@@ -91,14 +91,14 @@ namespace
             check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "node_b")).status == yomk::payload::ResStatus::Succeeded,
                   "创建 node_b → eOk（与 node_a 同域共存，各自独立 participant）");
 
-            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_a")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("node_a")).status == yomk::payload::ResStatus::Succeeded,
                   "删除 node_a → eOk（析构清理 participant）");
 
-            auto del2 = testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_a"));
+            auto del2 = testInvoke(svc, "/delete_node", yomk::msgs::String::shared("node_a"));
             check(del2.status == yomk::payload::ResStatus::Failed && del2.msg.find("not exists") != std::string::npos,
                   "重复删除 node_a → eNo not exists");
 
-            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_b")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("node_b")).status == yomk::payload::ResStatus::Succeeded,
                   "删除 node_b → eOk");
       }
 
@@ -107,12 +107,12 @@ namespace
       {
             check(testInvoke(svc, "/create_node", mkNode(0, "node_d0")).status == yomk::payload::ResStatus::Succeeded,
                   "domainId=0 → eOk（有效域下界）");
-            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_d0")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("node_d0")).status == yomk::payload::ResStatus::Succeeded,
                   "删除 node_d0 → eOk");
 
             check(testInvoke(svc, "/create_node", mkNode(232, "node_d232")).status == yomk::payload::ResStatus::Succeeded,
                   "domainId=232 → eOk（有效域上界，FastDDS 端口算术上限）");
-            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("node_d232")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("node_d232")).status == yomk::payload::ResStatus::Succeeded,
                   "删除 node_d232 → eOk");
 
             auto r233 = testInvoke(svc, "/create_node", mkNode(233, "node_d233"));
@@ -135,13 +135,13 @@ namespace
 
             check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "x")).status == yomk::payload::ResStatus::Succeeded,
                   "nodeName 单字符 x → eOk");
-            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("x")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("x")).status == yomk::payload::ResStatus::Succeeded,
                   "删除单字符节点 → eOk");
 
             const std::string longName(1024, 'N');
             check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, longName)).status == yomk::payload::ResStatus::Succeeded,
                   "nodeName 1024B 超长 → eOk（无长度校验）");
-            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(longName)).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared(longName)).status == yomk::payload::ResStatus::Succeeded,
                   "删除超长名节点 → eOk");
       }
 
@@ -665,12 +665,12 @@ namespace
 
             std::atomic<int> recvCount{0};
             check(testInvoke(svc, "/register_sub_topic",
-                      ::yomk::msgs::dds::SubRequest::shared(SubRequest{"env_sub_node", "env_conn_topic", new YomkDdsStd::MStringPubSubType(),
+                      yomk::msgs::dds::SubRequest::shared(SubRequest{"env_sub_node", "env_conn_topic", new YomkDdsStd::MStringPubSubType(),
                               [&recvCount](const void *) { recvCount.fetch_add(1, std::memory_order_relaxed); }}))
                       .status == yomk::payload::ResStatus::Succeeded,
                   "Part G: env_sub_node 登记 env_conn_topic 订阅（收到即计数）");
             check(testInvoke(svc, "/register_pub_topic",
-                      ::yomk::msgs::dds::Topic::shared(Topic{"env_pub_node", "env_conn_topic", new YomkDdsStd::MStringPubSubType()}))
+                      yomk::msgs::dds::Topic::shared(Topic{"env_pub_node", "env_conn_topic", new YomkDdsStd::MStringPubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
                   "Part G: env_pub_node 登记 env_conn_topic 发布");
 
@@ -682,7 +682,7 @@ namespace
             {
                   msg.data("env-conn-" + std::to_string(i));
                   (void)testInvoke(svc, "/publish",
-                        ::yomk::msgs::dds::Publish::shared(Publish{"env_pub_node", "env_conn_topic", &msg}));
+                        yomk::msgs::dds::Publish::shared(Publish{"env_pub_node", "env_conn_topic", &msg}));
                   std::this_thread::sleep_for(std::chrono::milliseconds(100));
                   received = recvCount.load(std::memory_order_relaxed) > 0;
             }
@@ -694,9 +694,9 @@ namespace
             }
 
             // 收尾：删节点（关键不变式）→ 清 env → 组杀 server 整组（模式同 Part F）
-            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("env_pub_node")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("env_pub_node")).status == yomk::payload::ResStatus::Succeeded,
                   "Part G: 删除 env_pub_node → eOk");
-            check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("env_sub_node")).status == yomk::payload::ResStatus::Succeeded,
+            check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("env_sub_node")).status == yomk::payload::ResStatus::Succeeded,
                   "Part G: 删除 env_sub_node → eOk");
             unsetenv("YOMKDDS_USE_DISCOVER_SERVER");
             unsetenv("YOMKDDS_UDP_DISCOVER_SERVERS");
@@ -708,10 +708,10 @@ namespace
 
 int main()
 {
-      ::yomk::server().init();
+      yomk::server().init();
 
-      auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
-      check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
+      auto *svc = new YomkDdsHandler(yomk::server().instance().get());
+      check(yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
       testLifecycle(svc);
       testDomainIdBoundary(svc);

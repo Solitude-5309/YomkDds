@@ -40,26 +40,26 @@ yomk::payload::Response YomkDdsBagHandler::getVersion(YomkMsgPtr pkg)
 {
     (void)pkg;  // 无参数载荷
     std::string version = "YomkDds v" YOMKDDS_VERSION_STRING;
-    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", ::yomk::msgs::String::shared(version));
+    return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok", yomk::msgs::String::shared(version));
 }
 
 yomk::payload::Response YomkDdsBagHandler::createNode(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != ::yomk::msgs::dds::BagNode::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::BagNode::kName)
     {
-        return ::yomk::payload::Response(
-            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagNode. ");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagNode. ");
     }
-    auto p = std::dynamic_pointer_cast<::yomk::msgs::dds::BagNode>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::BagNode>(pkg);
     if (!p)
     {
-        return ::yomk::payload::Response(
-            ::yomk::payload::ResStatus::Failed, " pkg[BagNode] is dynamic_pointer_cast failed. ");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg[BagNode] is dynamic_pointer_cast failed. ");
     };
 
     if (p->msg.domainId > kMaxDomainId)
     {
-        ::yomk::log().tag("YomkDdsBagHandler::createNode").error("domainId [", p->msg.domainId, "] out of valid range [0,232]");
+        yomk::log().tag("YomkDdsBagHandler::createNode").error("domainId [", p->msg.domainId, "] out of valid range [0,232]");
         return yomk::payload::Response(
             yomk::payload::ResStatus::Failed, "domainId [" + std::to_string(p->msg.domainId) + "] out of valid range [0,232]");
     }
@@ -67,7 +67,7 @@ yomk::payload::Response YomkDdsBagHandler::createNode(YomkMsgPtr pkg)
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ != nullptr)
     {
-        ::yomk::log().tag("YomkDdsBagHandler::createNode").error("bag node already exists, delete it first");
+        yomk::log().tag("YomkDdsBagHandler::createNode").error("bag node already exists, delete it first");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "bag node already exists, delete it first");
     }
 
@@ -81,7 +81,7 @@ yomk::payload::Response YomkDdsBagHandler::createNode(YomkMsgPtr pkg)
     std::string nodeErr;
     if (!node->setDomainId(p->msg.domainId, spec, &nodeErr))
     {
-        ::yomk::log().tag("YomkDdsBagHandler::createNode").error("create bag node failed: ", nodeErr.empty() ? "setDomainId error" : nodeErr);
+        yomk::log().tag("YomkDdsBagHandler::createNode").error("create bag node failed: ", nodeErr.empty() ? "setDomainId error" : nodeErr);
         return yomk::payload::Response(
             yomk::payload::ResStatus::Failed,
             "create bag node failed: " + (nodeErr.empty() ? "setDomainId error" : nodeErr));
@@ -92,29 +92,29 @@ yomk::payload::Response YomkDdsBagHandler::createNode(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsBagHandler::bagRecord(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != ::yomk::msgs::dds::BagRecord::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::BagRecord::kName)
     {
-        return ::yomk::payload::Response(
-            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagRecord. ");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagRecord. ");
     }
-    auto p = std::dynamic_pointer_cast<::yomk::msgs::dds::BagRecord>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::BagRecord>(pkg);
     if (!p)
     {
-        return ::yomk::payload::Response(
-            ::yomk::payload::ResStatus::Failed, " pkg[BagRecord] is dynamic_pointer_cast failed. ");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg[BagRecord] is dynamic_pointer_cast failed. ");
     };
 
     // 纯输入校验锁外前置：不触 DDS，未建节点时也可先报出明确的输入问题
     if (p->msg.topics.empty())
     {
-        ::yomk::log().tag("YomkDdsBagHandler::bagRecord").error("no topics given");
+        yomk::log().tag("YomkDdsBagHandler::bagRecord").error("no topics given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no topics given");
     }
     for (const auto& topic : p->msg.topics)
     {
         if (topic.empty())
         {
-            ::yomk::log().tag("YomkDdsBagHandler::bagRecord").error("empty topic name in topic list");
+            yomk::log().tag("YomkDdsBagHandler::bagRecord").error("empty topic name in topic list");
             return yomk::payload::Response(yomk::payload::ResStatus::Failed, "empty topic name in topic list");
         }
     }
@@ -122,7 +122,7 @@ yomk::payload::Response YomkDdsBagHandler::bagRecord(YomkMsgPtr pkg)
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        ::yomk::log().tag("YomkDdsBagHandler::bagRecord").error("bag node not created");
+        yomk::log().tag("YomkDdsBagHandler::bagRecord").error("bag node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "bag node not created");
     }
 
@@ -141,7 +141,7 @@ yomk::payload::Response YomkDdsBagHandler::bagRecord(YomkMsgPtr pkg)
         {
             error = "bag record failed";  // 兜底，避免空 msg
         }
-        ::yomk::log().tag("YomkDdsBagHandler::bagRecord").error("record failed: ", error);
+        yomk::log().tag("YomkDdsBagHandler::bagRecord").error("record failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
 
@@ -156,27 +156,27 @@ yomk::payload::Response YomkDdsBagHandler::bagRecord(YomkMsgPtr pkg)
                 yomk::payload::dds::BagTopicStat{stat.topic, stat.type, stat.count, stat.bytes});
     }
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
-            ::yomk::msgs::dds::RecordResult::shared(std::move(result)));
+            yomk::msgs::dds::RecordResult::shared(std::move(result)));
 }
 
 yomk::payload::Response YomkDdsBagHandler::bagInfo(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != ::yomk::msgs::dds::BagInfoRequest::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::BagInfoRequest::kName)
     {
-        return ::yomk::payload::Response(
-            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagInfoRequest. ");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagInfoRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<::yomk::msgs::dds::BagInfoRequest>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::BagInfoRequest>(pkg);
     if (!p)
     {
-        return ::yomk::payload::Response(
-            ::yomk::payload::ResStatus::Failed, " pkg[BagInfoRequest] is dynamic_pointer_cast failed. ");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg[BagInfoRequest] is dynamic_pointer_cast failed. ");
     };
 
     // bagDir 空校验锁外前置（对齐 bagRecord 的纯输入校验先例：不触节点状态）
     if (p->msg.bagDir.empty())
     {
-        ::yomk::log().tag("YomkDdsBagHandler::bagInfo").error("no bag dir given");
+        yomk::log().tag("YomkDdsBagHandler::bagInfo").error("no bag dir given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no bag dir given");
     }
 
@@ -189,7 +189,7 @@ yomk::payload::Response YomkDdsBagHandler::bagInfo(YomkMsgPtr pkg)
         {
             error = "bag info failed";  // 兜底，避免空 msg
         }
-        ::yomk::log().tag("YomkDdsBagHandler::bagInfo").error("bag info failed: ", error);
+        yomk::log().tag("YomkDdsBagHandler::bagInfo").error("bag info failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
 
@@ -210,27 +210,27 @@ yomk::payload::Response YomkDdsBagHandler::bagInfo(YomkMsgPtr pkg)
                 topic.topicName, topic.typeName, topic.qos, topic.messageCount});
     }
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
-            ::yomk::msgs::dds::BagInfo::shared(std::move(result)));
+            yomk::msgs::dds::BagInfo::shared(std::move(result)));
 }
 
 yomk::payload::Response YomkDdsBagHandler::bagReindex(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != ::yomk::msgs::dds::BagReindex::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::BagReindex::kName)
     {
-        return ::yomk::payload::Response(
-            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagReindex. ");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagReindex. ");
     }
-    auto p = std::dynamic_pointer_cast<::yomk::msgs::dds::BagReindex>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::BagReindex>(pkg);
     if (!p)
     {
-        return ::yomk::payload::Response(
-            ::yomk::payload::ResStatus::Failed, " pkg[BagReindex] is dynamic_pointer_cast failed. ");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg[BagReindex] is dynamic_pointer_cast failed. ");
     };
 
     // 纯输入校验锁外前置（同 bagRecord 先例：不触节点状态）
     if (p->msg.bagDir.empty())
     {
-        ::yomk::log().tag("YomkDdsBagHandler::bagReindex").error("no bag dir given");
+        yomk::log().tag("YomkDdsBagHandler::bagReindex").error("no bag dir given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no bag dir given");
     }
 
@@ -242,7 +242,7 @@ yomk::payload::Response YomkDdsBagHandler::bagReindex(YomkMsgPtr pkg)
         {
             error = "bag reindex failed";  // 兜底，避免空 msg
         }
-        ::yomk::log().tag("YomkDdsBagHandler::bagReindex").error("bag reindex failed: ", error);
+        yomk::log().tag("YomkDdsBagHandler::bagReindex").error("bag reindex failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
@@ -250,27 +250,27 @@ yomk::payload::Response YomkDdsBagHandler::bagReindex(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsBagHandler::bagConvert(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != ::yomk::msgs::dds::BagConvert::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::BagConvert::kName)
     {
-        return ::yomk::payload::Response(
-            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagConvert. ");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagConvert. ");
     }
-    auto p = std::dynamic_pointer_cast<::yomk::msgs::dds::BagConvert>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::BagConvert>(pkg);
     if (!p)
     {
-        return ::yomk::payload::Response(
-            ::yomk::payload::ResStatus::Failed, " pkg[BagConvert] is dynamic_pointer_cast failed. ");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg[BagConvert] is dynamic_pointer_cast failed. ");
     };
 
     // 纯输入校验锁外前置（同上先例）
     if (p->msg.inputs.empty())
     {
-        ::yomk::log().tag("YomkDdsBagHandler::bagConvert").error("no input bag dir given");
+        yomk::log().tag("YomkDdsBagHandler::bagConvert").error("no input bag dir given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no input bag dir given");
     }
     if (p->msg.cfgPath.empty())
     {
-        ::yomk::log().tag("YomkDdsBagHandler::bagConvert").error("no config file given");
+        yomk::log().tag("YomkDdsBagHandler::bagConvert").error("no config file given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no config file given");
     }
 
@@ -283,7 +283,7 @@ yomk::payload::Response YomkDdsBagHandler::bagConvert(YomkMsgPtr pkg)
         {
             error = "bag convert failed";  // 兜底，避免空 msg
         }
-        ::yomk::log().tag("YomkDdsBagHandler::bagConvert").error("bag convert failed: ", error);
+        yomk::log().tag("YomkDdsBagHandler::bagConvert").error("bag convert failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
 
@@ -297,53 +297,53 @@ yomk::payload::Response YomkDdsBagHandler::bagConvert(YomkMsgPtr pkg)
                 stat.uri, stat.messageCount, stat.byteCount, stat.topicCount});
     }
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
-            ::yomk::msgs::dds::ConvertResult::shared(std::move(result)));
+            yomk::msgs::dds::ConvertResult::shared(std::move(result)));
 }
 
 yomk::payload::Response YomkDdsBagHandler::bagPlay(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != ::yomk::msgs::dds::BagPlay::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::BagPlay::kName)
     {
-        return ::yomk::payload::Response(
-            ::yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagPlay. ");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not BagPlay. ");
     }
-    auto p = std::dynamic_pointer_cast<::yomk::msgs::dds::BagPlay>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::BagPlay>(pkg);
     if (!p)
     {
-        return ::yomk::payload::Response(
-            ::yomk::payload::ResStatus::Failed, " pkg[BagPlay] is dynamic_pointer_cast failed. ");
+        return yomk::payload::Response(
+            yomk::payload::ResStatus::Failed, " pkg[BagPlay] is dynamic_pointer_cast failed. ");
     };
 
     // 纯输入校验锁外前置（同 bagRecord 先例：不触节点状态）
     if (p->msg.bagDir.empty())
     {
-        ::yomk::log().tag("YomkDdsBagHandler::bagPlay").error("no bag dir given");
+        yomk::log().tag("YomkDdsBagHandler::bagPlay").error("no bag dir given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no bag dir given");
     }
     // 纯输入校验锁外前置（同上先例）
     if (p->msg.playbackRate <= 0.0)
     {
-        ::yomk::log().tag("YomkDdsBagHandler::bagPlay").error("invalid playback rate");
+        yomk::log().tag("YomkDdsBagHandler::bagPlay").error("invalid playback rate");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "invalid playback rate");
     }
     // 负值非法：有意偏离 ros2 API 层“告警忽略按 0 播”，快速失败暴露拼写错误
     // （对齐 ros2 CLI check_not_negative_float 拦截形态）
     if (p->msg.startOffset < 0.0)
     {
-        ::yomk::log().tag("YomkDdsBagHandler::bagPlay").error("invalid start offset");
+        yomk::log().tag("YomkDdsBagHandler::bagPlay").error("invalid start offset");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "invalid start offset");
     }
     // 只拒负值（0 为合法缺省）；有意偏离 ros2 API 层负值告警按 0 播，快速失败暴露拼写错误
     if (p->msg.delay < 0.0)
     {
-        ::yomk::log().tag("YomkDdsBagHandler::bagPlay").error("invalid delay");
+        yomk::log().tag("YomkDdsBagHandler::bagPlay").error("invalid delay");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "invalid delay");
     }
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        ::yomk::log().tag("YomkDdsBagHandler::bagPlay").error("bag node not created");
+        yomk::log().tag("YomkDdsBagHandler::bagPlay").error("bag node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "bag node not created");
     }
 
@@ -364,7 +364,7 @@ yomk::payload::Response YomkDdsBagHandler::bagPlay(YomkMsgPtr pkg)
         {
             error = "bag play failed";  // 兜底，避免空 msg
         }
-        ::yomk::log().tag("YomkDdsBagHandler::bagPlay").error("play failed: ", error);
+        yomk::log().tag("YomkDdsBagHandler::bagPlay").error("play failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
 
@@ -379,7 +379,7 @@ yomk::payload::Response YomkDdsBagHandler::bagPlay(YomkMsgPtr pkg)
                 stat.topic, stat.type, stat.count, stat.bytes});
     }
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
-            ::yomk::msgs::dds::PlayResult::shared(std::move(result)));
+            yomk::msgs::dds::PlayResult::shared(std::move(result)));
 }
 
 yomk::payload::Response YomkDdsBagHandler::deleteNode(YomkMsgPtr pkg)
@@ -389,7 +389,7 @@ yomk::payload::Response YomkDdsBagHandler::deleteNode(YomkMsgPtr pkg)
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        ::yomk::log().tag("YomkDdsBagHandler::deleteNode").error("bag node not created");
+        yomk::log().tag("YomkDdsBagHandler::deleteNode").error("bag node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "bag node not created");
     }
     node_.reset();  // 析构按节点层内部顺序清理（reader → data → topic → subscriber → participant）

@@ -91,21 +91,21 @@ namespace
 
     YomkMsgPtr mkLoad(const std::string &xmlPath)
     {
-        return ::yomk::msgs::dds::XmlLoad::shared(XmlLoad{xmlPath});
+        return yomk::msgs::dds::XmlLoad::shared(XmlLoad{xmlPath});
     }
 
     YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName, const std::string &serverLocator = "")
     {
-        return ::yomk::msgs::dds::Node::shared(Node{nodeName, domainId, serverLocator});
+        return yomk::msgs::dds::Node::shared(Node{nodeName, domainId, serverLocator});
     }
 } // namespace
 
 int main()
 {
-    ::yomk::server().init();
+    yomk::server().init();
 
-    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(yomk::server().instance().get());
+    check(yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     // ---- A：load 前时序（现状零改动）----
     check(YomkDdsHandler::xmlCache().empty(), "进程内未 load → xmlCache() 为空串（未加载现状）");
@@ -145,9 +145,9 @@ int main()
     // ---- F：load 后时序（合成链不阻断）----
     check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "ts_after_node")).status == yomk::payload::ResStatus::Succeeded,
           "load 后 create_node → eOk（participant 按三级提取链合成，QoS 字段级读回见 NodeLifecycle）");
-    check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("ts_before_node")).status == yomk::payload::ResStatus::Succeeded,
+    check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("ts_before_node")).status == yomk::payload::ResStatus::Succeeded,
           "删除 ts_before_node → eOk");
-    check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("ts_after_node")).status == yomk::payload::ResStatus::Succeeded,
+    check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("ts_after_node")).status == yomk::payload::ResStatus::Succeeded,
           "删除 ts_after_node → eOk（关键不变式：退出前清理）");
 
     // ---- G：重复 load 整体替换 ----

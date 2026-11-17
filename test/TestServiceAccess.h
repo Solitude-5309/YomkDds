@@ -18,11 +18,11 @@
 // 白盒直驱服务端点：等价于 3.x 之前的 svc->invoke(funcName, pkg)
 inline yomk::payload::Response testInvoke(YomkService* svc, std::string_view funcName, YomkMsgPtr pkg = nullptr)
 {
-    return ::yomk::server().instance()->request(std::string(svc->name()) + std::string(funcName), pkg);
+    return yomk::server().instance()->request(std::string(svc->name()) + std::string(funcName), pkg);
 }
 
 // 白盒内省服务端点：等价于 3.x 之前的 svc->funcInfos()
 inline std::map<std::string, yomk::payload::FuncInfo> testFuncInfos(YomkService* svc)
 {
-    return ::yomk::server().instance()->serviceFuncInfos(svc->name());
+    return yomk::server().instance()->serviceFuncInfos(svc->name());
 }

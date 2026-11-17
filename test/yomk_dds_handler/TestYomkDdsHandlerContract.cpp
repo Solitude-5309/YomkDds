@@ -29,7 +29,7 @@ namespace
         check(resp.status == yomk::payload::ResStatus::Succeeded, "/version 返回 eOk");
         check(resp.msg == "ok", "/version msg == ok");
 
-        auto ver = ::yomk::msgs::unpack<::yomk::msgs::String>(resp.data);;
+        auto ver = yomk::msgs::unpack<yomk::msgs::String>(resp.data);;
         check(ver != nullptr, "/version data 可解包为 String");
         if (ver != nullptr)
         {
@@ -67,13 +67,13 @@ namespace
                   std::string(ep) + " : 改名伪造命中第二守卫(dynamic_pointer_cast 失败) eNo");
         };
 
-        checkGuards("/create_node", ::yomk::msgs::dds::Node::kName, ::yomk::msgs::String::shared("wrong"));
-        checkGuards("/delete_node", ::yomk::msgs::String::kName, ::yomk::msgs::dds::Node::shared(Node{"wrong", 0}));
-        checkGuards("/register_pub_topic", ::yomk::msgs::dds::Topic::kName, ::yomk::msgs::String::shared("wrong"));
-        checkGuards("/register_sub_topic", ::yomk::msgs::dds::SubRequest::kName, ::yomk::msgs::String::shared("wrong"));
-        checkGuards("/publish", ::yomk::msgs::dds::Publish::kName, ::yomk::msgs::String::shared("wrong"));
-        checkGuards("/loan", ::yomk::msgs::dds::Loan::kName, ::yomk::msgs::String::shared("wrong"));
-        checkGuards("/discard_loan", ::yomk::msgs::dds::Loan::kName, ::yomk::msgs::String::shared("wrong"));
+        checkGuards("/create_node", yomk::msgs::dds::Node::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/delete_node", yomk::msgs::String::kName, yomk::msgs::dds::Node::shared(Node{"wrong", 0}));
+        checkGuards("/register_pub_topic", yomk::msgs::dds::Topic::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/register_sub_topic", yomk::msgs::dds::SubRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/publish", yomk::msgs::dds::Publish::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/loan", yomk::msgs::dds::Loan::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/discard_loan", yomk::msgs::dds::Loan::kName, yomk::msgs::String::shared("wrong"));
     }
 
     // T3：6 个查节点端点的"节点不存在"早退（合法包 + 不存在 nodeName → eNo，不触达 DDS）
@@ -88,22 +88,22 @@ namespace
                   std::string(ep) + " : 节点不存在早退 eNo（不触达 DDS）");
         };
 
-        checkNodeGone("/delete_node", ::yomk::msgs::String::shared(ghost));
-        checkNodeGone("/register_pub_topic", ::yomk::msgs::dds::Topic::shared(Topic{ghost, "t", nullptr}));
-        checkNodeGone("/register_sub_topic", ::yomk::msgs::dds::SubRequest::shared(SubRequest{ghost, "t", nullptr, nullptr}));
-        checkNodeGone("/publish", ::yomk::msgs::dds::Publish::shared(Publish{ghost, "t", nullptr}));
-        checkNodeGone("/loan", ::yomk::msgs::dds::Loan::shared(Loan{ghost, "t", nullptr}));
-        checkNodeGone("/discard_loan", ::yomk::msgs::dds::Loan::shared(Loan{ghost, "t", nullptr}));
+        checkNodeGone("/delete_node", yomk::msgs::String::shared(ghost));
+        checkNodeGone("/register_pub_topic", yomk::msgs::dds::Topic::shared(Topic{ghost, "t", nullptr}));
+        checkNodeGone("/register_sub_topic", yomk::msgs::dds::SubRequest::shared(SubRequest{ghost, "t", nullptr, nullptr}));
+        checkNodeGone("/publish", yomk::msgs::dds::Publish::shared(Publish{ghost, "t", nullptr}));
+        checkNodeGone("/loan", yomk::msgs::dds::Loan::shared(Loan{ghost, "t", nullptr}));
+        checkNodeGone("/discard_loan", yomk::msgs::dds::Loan::shared(Loan{ghost, "t", nullptr}));
     }
 } // namespace
 
 int main()
 {
-    ::yomk::server().init();
+    yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(yomk::server().instance().get());
+    check(yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     // 内省：9 个 dds 端点均已注册（闭环 4 增 /load_xml）
     auto infos = testFuncInfos(svc);

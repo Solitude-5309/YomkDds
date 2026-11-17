@@ -62,7 +62,7 @@ namespace
     // 构造 /create_node 请求包
     YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName)
     {
-        return ::yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
+        return yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
     }
 
     // =========================================================================
@@ -74,14 +74,14 @@ namespace
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "ta_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 ta_node(domain 200) → eOk");
         check(testInvoke(svc, "/register_sub_topic",
-                          ::yomk::msgs::dds::SubRequest::shared(SubRequest{"ta_node", "shared_t", new YomkDdsStd::MInt32PubSubType(), nullptr}))
+                          yomk::msgs::dds::SubRequest::shared(SubRequest{"ta_node", "shared_t", new YomkDdsStd::MInt32PubSubType(), nullptr}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "A1 sub 先占用 shared_t(MInt32) → eOk（topics_[shared_t] 绑定 MInt32）");
         check(testInvoke(svc, "/register_pub_topic",
-                          ::yomk::msgs::dds::Topic::shared(Topic{"ta_node", "shared_t", new YomkDdsStd::MStringPubSubType()}))
+                          yomk::msgs::dds::Topic::shared(Topic{"ta_node", "shared_t", new YomkDdsStd::MStringPubSubType()}))
                       .status == yomk::payload::ResStatus::Failed,
               "A1 pub 侧类型冲突 → eNo（getOrCreateTopic MInt32≠MString 返回 nullptr，L215；MString 孤儿类型由 participant 清理不泄漏）");
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("ta_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("ta_node")).status == yomk::payload::ResStatus::Succeeded,
               "删除 ta_node → eOk");
 
         // ---- A2：pub 侧复用（sub 先建 MInt32_1，pub 后复用同类型 MInt32_2 → L183 复用 + register_type 重复）----
@@ -98,11 +98,11 @@ namespace
             received++;
         };
         check(testInvoke(svc, "/register_sub_topic",
-                          ::yomk::msgs::dds::SubRequest::shared(SubRequest{"tb_node", "reuse_t", new YomkDdsStd::MInt32PubSubType(), cb}))
+                          yomk::msgs::dds::SubRequest::shared(SubRequest{"tb_node", "reuse_t", new YomkDdsStd::MInt32PubSubType(), cb}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "A2 sub 先建 reuse_t(MInt32_1) → eOk");
         check(testInvoke(svc, "/register_pub_topic",
-                          ::yomk::msgs::dds::Topic::shared(Topic{"tb_node", "reuse_t", new YomkDdsStd::MInt32PubSubType()}))
+                          yomk::msgs::dds::Topic::shared(Topic{"tb_node", "reuse_t", new YomkDdsStd::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "A2 pub 侧复用同类型 → eOk（getOrCreateTopic 复用 L183 + register_type PRECONDITION_NOT_MET，MInt32_2 由 pubTopics_ 持有不泄漏）");
 
@@ -113,7 +113,7 @@ namespace
         {
             YomkDdsStd::MInt32 m;
             m.data(777);
-            if (testInvoke(svc, "/publish", ::yomk::msgs::dds::Publish::shared(Publish{"tb_node", "reuse_t", &m}))
+            if (testInvoke(svc, "/publish", yomk::msgs::dds::Publish::shared(Publish{"tb_node", "reuse_t", &m}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 pubOk++;
@@ -132,7 +132,7 @@ namespace
         check(r > 0 && lv == 777, "A2 复用 topic pub→sub 连通（received>0 且 lastValue==777，走通用 take() 交付）");
         std::cout << "[OBSERVE] A2 reuse received=" << r << "/" << N << " lastValue=" << lv << std::endl;
 
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("tb_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("tb_node")).status == yomk::payload::ResStatus::Succeeded,
               "删除 tb_node → eOk");
     }
 
@@ -163,7 +163,7 @@ namespace
         void registerPubSub(YomkDdsHandler *svc) override
         {
             check(testInvoke(svc, "/register_pub_topic",
-                              ::yomk::msgs::dds::Topic::shared(Topic{node, topic, new PubSubT()}))
+                              yomk::msgs::dds::Topic::shared(Topic{node, topic, new PubSubT()}))
                           .status == yomk::payload::ResStatus::Succeeded,
                   label + " register_pub → eOk");
             auto cb = [this](const void *d)
@@ -206,7 +206,7 @@ namespace
                 received++;
             };
             check(testInvoke(svc, "/register_sub_topic",
-                              ::yomk::msgs::dds::SubRequest::shared(SubRequest{node, topic, new PubSubT(), cb}))
+                              yomk::msgs::dds::SubRequest::shared(SubRequest{node, topic, new PubSubT(), cb}))
                           .status == yomk::payload::ResStatus::Succeeded,
                   label + " register_sub → eOk");
         }
@@ -218,7 +218,7 @@ namespace
             {
                 MsgT m;
                 m.data(v); // 标量/字符串/序列 setter 同构（void data(const ValueT&)）
-                if (testInvoke(svc, "/publish", ::yomk::msgs::dds::Publish::shared(Publish{node, topic, &m}))
+                if (testInvoke(svc, "/publish", yomk::msgs::dds::Publish::shared(Publish{node, topic, &m}))
                         .status == yomk::payload::ResStatus::Succeeded)
                 {
                     cnt++;
@@ -383,18 +383,18 @@ namespace
             c->assertRoundTrip();
         }
 
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("types_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("types_node")).status == yomk::payload::ResStatus::Succeeded,
               "删除 types_node → eOk（析构 6 reader 停止回调，Channel 仍存活至本函数结束）");
     }
 } // namespace
 
 int main()
 {
-    ::yomk::server().init();
+    yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(yomk::server().instance().get());
+    check(yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     testTopicTypeBranches(svc);
     testMultiTypeBoundaryPayload(svc);

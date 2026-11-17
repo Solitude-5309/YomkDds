@@ -66,7 +66,7 @@ namespace
     // 构造 /create_node 请求包
     YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName)
     {
-        return ::yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
+        return yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
     }
 
     // ---- Part A1：并发 create_node 同名 → 每轮唯一赢家（service mtx_ 序列化 find-then-insert）----
@@ -102,7 +102,7 @@ namespace
                 ++oneWinnerRounds;
             }
             // 删除本轮唯一赢家创建的节点，为下一轮重置（否则下一轮全员命中 already-exists → eNo）
-            if (testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("a1_race_node")).status == yomk::payload::ResStatus::Succeeded)
+            if (testInvoke(svc, "/delete_node", yomk::msgs::String::shared("a1_race_node")).status == yomk::payload::ResStatus::Succeeded)
             {
                 ++delOk;
             }
@@ -134,7 +134,7 @@ namespace
                     while (!go.load(std::memory_order_acquire)) { std::this_thread::yield(); }
                     // 每线程 new 一个 type；loser 的 type 由 registerPubTopic 首守卫在锁内 delete（P1 契约）
                     if (testInvoke(svc, "/register_pub_topic",
-                            ::yomk::msgs::dds::Topic::shared(Topic{"a2_node", topic, new YomkDdsStd::MInt32PubSubType()}))
+                            yomk::msgs::dds::Topic::shared(Topic{"a2_node", topic, new YomkDdsStd::MInt32PubSubType()}))
                             .status == yomk::payload::ResStatus::Succeeded)
                     {
                         okCount.fetch_add(1);
@@ -152,7 +152,7 @@ namespace
         }
         check(oneWinnerRounds == R,
               "A2 并发 register_pub_topic 同名：20 轮每轮恰 1 eOk、7 eNo（node mtx_ + dup 守卫 count()>0）");
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("a2_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("a2_node")).status == yomk::payload::ResStatus::Succeeded,
               "A2 删除 a2_node → eOk（清理 20 个竞胜 topic 的 writer；asan 验证 140 个 loser type 零泄漏）");
     }
 
@@ -175,7 +175,7 @@ namespace
                 while (!go.load(std::memory_order_acquire)) { std::this_thread::yield(); }
                 // 并发注册各自唯一主题（node mtx_ 序列化 pubTopics_/topics_ map 插入与 register_type）
                 if (testInvoke(svc, "/register_pub_topic",
-                        ::yomk::msgs::dds::Topic::shared(Topic{"a3_node", topic, new YomkDdsStd::MInt32PubSubType()}))
+                        yomk::msgs::dds::Topic::shared(Topic{"a3_node", topic, new YomkDdsStd::MInt32PubSubType()}))
                         .status == yomk::payload::ResStatus::Succeeded)
                 {
                     regOk.fetch_add(1);
@@ -185,27 +185,27 @@ namespace
                 {
                     const int32_t v = t * 1000 + i;
                     msg.data(v);
-                    if (testInvoke(svc, "/publish", ::yomk::msgs::dds::Publish::shared(Publish{"a3_node", topic, &msg}))
+                    if (testInvoke(svc, "/publish", yomk::msgs::dds::Publish::shared(Publish{"a3_node", topic, &msg}))
                             .status == yomk::payload::ResStatus::Succeeded)
                     {
                         pubOk.fetch_add(1);
                     }
                     // loan(MInt32,alignof=4)→池内填值→discard：并发借出各得独立池样本，复用的 happens-before 由 mtx_ 建立
-                    auto lresp = testInvoke(svc, "/loan", ::yomk::msgs::dds::Loan::shared(Loan{"a3_node", topic, nullptr}));
-                    auto lres = ::yomk::msgs::unpack<::yomk::msgs::dds::LoanSample>(lresp.data);;
+                    auto lresp = testInvoke(svc, "/loan", yomk::msgs::dds::Loan::shared(Loan{"a3_node", topic, nullptr}));
+                    auto lres = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(lresp.data);;
                     void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
                     if (lresp.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
                     {
                         loanOk.fetch_add(1);
                         static_cast<YomkDdsStd::MInt32 *>(s)->data(v);
-                        if (testInvoke(svc, "/discard_loan", ::yomk::msgs::dds::Loan::shared(Loan{"a3_node", topic, s}))
+                        if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::Loan::shared(Loan{"a3_node", topic, s}))
                                 .status == yomk::payload::ResStatus::Succeeded)
                         {
                             discOk.fetch_add(1);
                         }
                     }
                     // version：只读端点不取 mtx_，与并发写共存（验证 getVersion 无锁读线程安全）
-                    if (testInvoke(svc, "/version", ::yomk::msgs::String::shared("")).status == yomk::payload::ResStatus::Succeeded)
+                    if (testInvoke(svc, "/version", yomk::msgs::String::shared("")).status == yomk::payload::ResStatus::Succeeded)
                     {
                         verOk.fetch_add(1);
                     }
@@ -221,7 +221,7 @@ namespace
         check(loanOk.load() == T * K, "A3 并发 loan 1600 全部 eOk（plain MInt32 池借出，8 线程并发不耗尽）");
         check(discOk.load() == T * K, "A3 并发 discard_loan 1600 全部 eOk（归还池样本，无残留借出）");
         check(verOk.load() == T * K, "A3 并发 version 1600 全部 eOk（只读无锁端点与写并发安全）");
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("a3_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("a3_node")).status == yomk::payload::ResStatus::Succeeded,
               "A3 删除 a3_node → eOk（终态一致）");
     }
 
@@ -231,7 +231,7 @@ namespace
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "b_node")).status == yomk::payload::ResStatus::Succeeded,
               "B 创建 b_node → eOk");
         check(testInvoke(svc, "/register_pub_topic",
-                          ::yomk::msgs::dds::Topic::shared(Topic{"b_node", "b_topic", new YomkDdsStd::MInt32PubSubType()}))
+                          yomk::msgs::dds::Topic::shared(Topic{"b_node", "b_topic", new YomkDdsStd::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "B register_pub_topic b_topic(MInt32) → eOk");
 
@@ -247,7 +247,7 @@ namespace
             got.push_back(v);
         };
         check(testInvoke(svc, "/register_sub_topic",
-                          ::yomk::msgs::dds::SubRequest::shared(SubRequest{"b_node", "b_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
+                          yomk::msgs::dds::SubRequest::shared(SubRequest{"b_node", "b_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "B register_sub_topic b_topic(callback) → eOk");
 
@@ -268,7 +268,7 @@ namespace
                 for (int i = 0; i < K; ++i)
                 {
                     msg.data(t * 1000 + i); // 全局唯一编码：tid*1000+seq
-                    if (testInvoke(svc, "/publish", ::yomk::msgs::dds::Publish::shared(Publish{"b_node", "b_topic", &msg}))
+                    if (testInvoke(svc, "/publish", yomk::msgs::dds::Publish::shared(Publish{"b_node", "b_topic", &msg}))
                             .status == yomk::payload::ResStatus::Succeeded)
                     {
                         pubOk.fetch_add(1);
@@ -304,7 +304,7 @@ namespace
         check(allValid, "B 所有收到值可解码(tid∈[0,4),seq∈[0,250))→ 单 reader 线程顺序 drain data_ 无并发撕裂/串值");
         std::cout << "[OBSERVE] B received=" << r << "/" << (P * K) << std::endl;
 
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("b_node")).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("b_node")).status == yomk::payload::ResStatus::Succeeded,
               "B 删除 b_node → eOk（析构 reader 停止回调，捕获状态仍存活）");
     }
 
@@ -332,13 +332,13 @@ namespace
                 ++createOk;
             }
             if (testInvoke(svc, "/register_sub_topic",
-                            ::yomk::msgs::dds::SubRequest::shared(SubRequest{"c_node", "c_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
+                            yomk::msgs::dds::SubRequest::shared(SubRequest{"c_node", "c_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regSubOk;
             }
             if (testInvoke(svc, "/register_pub_topic",
-                            ::yomk::msgs::dds::Topic::shared(Topic{"c_node", "c_topic", new YomkDdsStd::MInt32PubSubType()}))
+                            yomk::msgs::dds::Topic::shared(Topic{"c_node", "c_topic", new YomkDdsStd::MInt32PubSubType()}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regPubOk;
@@ -353,7 +353,7 @@ namespace
                 while (!stop.load(std::memory_order_acquire))
                 {
                     msg.data(r);
-                    testInvoke(svc, "/publish", ::yomk::msgs::dds::Publish::shared(Publish{"c_node", "c_topic", &msg}));
+                    testInvoke(svc, "/publish", yomk::msgs::dds::Publish::shared(Publish{"c_node", "c_topic", &msg}));
                     std::this_thread::sleep_for(std::chrono::milliseconds(2));
                 } });
 
@@ -361,7 +361,7 @@ namespace
 
             // teardown 竞态核心：发布流 + 回调进行中删除节点
             // （~FastDDSNode 持 service mtx_，先 delete_datareader 阻塞 drain 回调，后 delete_data）
-            if (testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("c_node")).status == yomk::payload::ResStatus::Succeeded)
+            if (testInvoke(svc, "/delete_node", yomk::msgs::String::shared("c_node")).status == yomk::payload::ResStatus::Succeeded)
             {
                 ++delOk;
             }
@@ -388,11 +388,11 @@ namespace
 
 int main()
 {
-    ::yomk::server().init();
+    yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(yomk::server().instance().get());
+    check(yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     partA1_concurrentCreateNode(svc);
     partA2_concurrentRegister(svc);

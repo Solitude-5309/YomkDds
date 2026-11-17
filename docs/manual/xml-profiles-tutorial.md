@@ -85,8 +85,8 @@ using namespace yomk;
 
 int main()
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsHandler>().create();
     // 查看版本（链式 version() 返回 Response，解包/打印由调用方处理）
     auto vresp = yomk::dds().version();
     if (vresp.status == yomk::payload::ResStatus::Succeeded)
@@ -99,7 +99,7 @@ int main()
     auto resp = yomk::dds().xml("/path/to/profiles.xml").load_cfg();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("XmlProfilesDemo").error("load xml failed: ", resp.msg);
+        yomk::log().tag("XmlProfilesDemo").error("load xml failed: ", resp.msg);
         return 1;
     }
 
@@ -107,14 +107,14 @@ int main()
     resp = yomk::dds().node("xml_node").domain(0).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("XmlProfilesDemo").error("create xml_node failed: ", resp.msg);
+        yomk::log().tag("XmlProfilesDemo").error("create xml_node failed: ", resp.msg);
         return 1;
     }
 
     resp = yomk::dds().node("other_node").domain(0).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("XmlProfilesDemo").error("create other_node failed: ", resp.msg);
+        yomk::log().tag("XmlProfilesDemo").error("create other_node failed: ", resp.msg);
         yomk::dds().node("xml_node").remove();
         return 1;
     }

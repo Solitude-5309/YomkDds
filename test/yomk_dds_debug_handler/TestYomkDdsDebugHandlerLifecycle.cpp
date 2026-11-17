@@ -68,46 +68,46 @@ namespace
     // 构造 /create_node 请求包
     YomkMsgPtr mkNode(uint32_t domainId)
     {
-        return ::yomk::msgs::dds::DebugNode::shared(DebugNode{domainId});
+        return yomk::msgs::dds::DebugNode::shared(DebugNode{domainId});
     }
 
     // 构造 /topic_print 请求包（no-op 输出回调：登记路径不产生真实流量）
     YomkMsgPtr mkPrint(const std::string &topicName)
     {
-        return ::yomk::msgs::dds::DebugTopic::shared(DebugTopic{topicName, [](const std::string &) {}});
+        return yomk::msgs::dds::DebugTopic::shared(DebugTopic{topicName, [](const std::string &) {}});
     }
 
     // 构造 /list_topics 请求包（stableRounds=1 单次快照路径，免收敛等待）
     YomkMsgPtr mkList()
     {
-        return ::yomk::msgs::dds::DebugList::shared(DebugList{1, 100});
+        return yomk::msgs::dds::DebugList::shared(DebugList{1, 100});
     }
 
     // 构造 /topic_info 请求包（未发现用例传 rounds=1 走单次快照快速路径；命中用例传收敛参数）
     YomkMsgPtr mkInfo(const std::string &topicName, uint32_t stableRounds, uint32_t intervalMs)
     {
-        return ::yomk::msgs::dds::DebugInfo::shared(DebugInfo{topicName, stableRounds, intervalMs});
+        return yomk::msgs::dds::DebugInfo::shared(DebugInfo{topicName, stableRounds, intervalMs});
     }
 
     // 构造 /list_nodes 请求包（stableRounds=1 单次快照路径，免收敛等待）
     YomkMsgPtr mkNodeList()
     {
-        return ::yomk::msgs::dds::NodeList::shared(NodeList{1, 50});
+        return yomk::msgs::dds::NodeList::shared(NodeList{1, 50});
     }
 
     // 构造 /node_info 请求包（未发现用例传 rounds=1 走单次快照快速路径；命中用例传收敛参数）
     YomkMsgPtr mkNodeInfo(const std::string &nodeName, uint32_t stableRounds, uint32_t intervalMs)
     {
-        return ::yomk::msgs::dds::NodeInfoRequest::shared(NodeInfoRequest{nodeName, stableRounds, intervalMs});
+        return yomk::msgs::dds::NodeInfoRequest::shared(NodeInfoRequest{nodeName, stableRounds, intervalMs});
     }
 } // namespace
 
 int main()
 {
-    ::yomk::server().init();
+    yomk::server().init();
 
-    auto *svc = new YomkDdsDebugHandler(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsDebugHandler 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsDebugHandler(yomk::server().instance().get());
+    check(yomk::server().srv_ptr(svc).add() == 0, "YomkDdsDebugHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     // ---- A-1：生命周期（创建/重复创建/登记契约/删除/重建） ----
     check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN)).status == yomk::payload::ResStatus::Succeeded,
@@ -118,17 +118,17 @@ int main()
     auto listed = testInvoke(svc, "/list_topics", mkList());
     check(listed.status == yomk::payload::ResStatus::Succeeded && listed.data != nullptr,
           "list_topics（入域无 writer，单次快照）→ eOk（空列表路径）");
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicInfoArray>(listed.data);
+    auto arr = yomk::msgs::unpack<yomk::msgs::dds::TopicInfoArray>(listed.data);
     check(arr != nullptr && arr->d.d.empty(), "list_topics 返回包可解包为空 TopicInfoArray");
 
     // interface_list：同域无任何类型，空集按 find 族语义 eNo（收敛参数链路同直通节点层）
-    auto ifaceListMiss = testInvoke(svc, "/interface_list", ::yomk::msgs::dds::DebugInterfaceList::shared(DebugInterfaceList{1, 50}));
+    auto ifaceListMiss = testInvoke(svc, "/interface_list", yomk::msgs::dds::DebugInterfaceList::shared(DebugInterfaceList{1, 50}));
     check(ifaceListMiss.status == yomk::payload::ResStatus::Failed &&
           ifaceListMiss.msg.find("no interface types discovered") != std::string::npos,
           "interface_list 空域 → eNo no interface types discovered（find 族语义）");
 
     // topic_example：同域无此主题，eNo（收敛参数链路同直通节点层）
-    auto topicExampleMiss = testInvoke(svc, "/topic_example", ::yomk::msgs::dds::DebugTopicExample::shared(DebugTopicExample{"t_example_miss", 1, 50}));
+    auto topicExampleMiss = testInvoke(svc, "/topic_example", yomk::msgs::dds::DebugTopicExample::shared(DebugTopicExample{"t_example_miss", 1, 50}));
     check(topicExampleMiss.status == yomk::payload::ResStatus::Failed &&
           topicExampleMiss.msg.find("topic [t_example_miss] not found") != std::string::npos,
           "topic_example 空域未发现主题 → eNo topic [...] not found（info 族语义）");
@@ -138,13 +138,13 @@ int main()
           "topic_example 空域 msg 仍为第一层文本（未误归类为 TypeObject 不可得）");
 
     // topic_pub：同域无此主题，eNo（发布前的发现收敛失败即早退，不建任何发布实体）
-    auto topicPubMiss = testInvoke(svc, "/topic_pub", ::yomk::msgs::dds::DebugTopicPub::shared(DebugTopicPub{"t_pub_miss", "{}", 1, 50}));
+    auto topicPubMiss = testInvoke(svc, "/topic_pub", yomk::msgs::dds::DebugTopicPub::shared(DebugTopicPub{"t_pub_miss", "{}", 1, 50}));
     check(topicPubMiss.status == yomk::payload::ResStatus::Failed &&
           topicPubMiss.msg.find("topic [t_pub_miss] not found") != std::string::npos,
           "topic_pub 空域未发现主题 → eNo topic [...] not found（发布前早退）");
 
     // topic_msg：同域无此主题，eNo（收敛参数链路同直通节点层）
-    auto topicMsgMiss = testInvoke(svc, "/topic_msg", ::yomk::msgs::dds::DebugTopicMsg::shared(DebugTopicMsg{"t_msg_miss", 1, 50}));
+    auto topicMsgMiss = testInvoke(svc, "/topic_msg", yomk::msgs::dds::DebugTopicMsg::shared(DebugTopicMsg{"t_msg_miss", 1, 50}));
     check(topicMsgMiss.status == yomk::payload::ResStatus::Failed &&
           topicMsgMiss.msg.find("topic [t_msg_miss] not found") != std::string::npos,
           "topic_msg 空域未发现主题 → eNo topic [...] not found（info 族语义）");
@@ -156,7 +156,7 @@ int main()
     auto listedNodes = testInvoke(svc, "/list_nodes", mkNodeList());
     check(listedNodes.status == yomk::payload::ResStatus::Succeeded && listedNodes.data != nullptr,
           "list_nodes（入域无命名参与者，单次快照）→ eOk（空列表路径）");
-    auto nodeArr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(listedNodes.data);;
+    auto nodeArr = yomk::msgs::unpack<yomk::msgs::StringArray>(listedNodes.data);;
     check(nodeArr != nullptr && nodeArr->d.empty(), "list_nodes 返回包可解包为空 StringArray");
 
     // topic_info 未发现主题：node_ 已建、域内无该主题，单次快照快速路径 → eNo
@@ -169,7 +169,7 @@ int main()
     check(dup.status == yomk::payload::ResStatus::Failed && dup.msg.find("already exists") != std::string::npos,
           "重复创建 → eNo already exists（单节点模型，须先 delete）");
 
-    auto emptyCb = testInvoke(svc, "/topic_print", ::yomk::msgs::dds::DebugTopic::shared(DebugTopic{"t_debug_a", nullptr}));
+    auto emptyCb = testInvoke(svc, "/topic_print", yomk::msgs::dds::DebugTopic::shared(DebugTopic{"t_debug_a", nullptr}));
     check(emptyCb.status == yomk::payload::ResStatus::Failed &&
               emptyCb.msg.find("output callback is empty") != std::string::npos,
           "topicPrint 空回调 → eNo output callback is empty");
@@ -242,10 +242,10 @@ int main()
         {
             // peer 后于调试节点入域——调试节点经活动发现（PDP 组播）收到 DISCOVERED_PARTICIPANT，
             // 收敛窗口覆盖发现延迟；late joiner 反向时序已由 TestFastDDSDebugNode 覆盖
-            auto hitNodes = testInvoke(svc, "/list_nodes", ::yomk::msgs::dds::NodeList::shared(NodeList{5, 100}));
+            auto hitNodes = testInvoke(svc, "/list_nodes", yomk::msgs::dds::NodeList::shared(NodeList{5, 100}));
             check(hitNodes.status == yomk::payload::ResStatus::Succeeded && hitNodes.data != nullptr,
                   "list_nodes(5,100ms) → eOk（参与者发现收敛命中）");
-            auto nodesArr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(hitNodes.data);;
+            auto nodesArr = yomk::msgs::unpack<yomk::msgs::StringArray>(hitNodes.data);;
             check(nodesArr != nullptr, "list_nodes 返回包可解包为 StringArray");
             bool hasPeer = false;
             bool noBadLine = true;  // 每行非空、非 "/" 且不含 GUID 串特征 '|'（无效名参与者跳过的证据）
@@ -307,13 +307,13 @@ int main()
             {
                 // list_topics 预热仅为本用例时序前置（late joiner 经 EDP 重放发现信息）；
                 // topic_info 内部独立收敛查询，不依赖 list_topics
-                auto warm = testInvoke(svc, "/list_topics", ::yomk::msgs::dds::DebugList::shared(DebugList{5, 100}));
+                auto warm = testInvoke(svc, "/list_topics", yomk::msgs::dds::DebugList::shared(DebugList{5, 100}));
                 check(warm.status == yomk::payload::ResStatus::Succeeded, "list_topics(5,100ms) 预热 → eOk（发现时序前置）");
 
                 auto hit = testInvoke(svc, "/topic_info", mkInfo(HIT_TOPIC, 5, 100));
                 check(hit.status == yomk::payload::ResStatus::Succeeded && hit.data != nullptr,
                       "topicInfo(t_info_hit,5,100ms) → eOk（独立收敛命中）");
-                auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicInfo>(hit.data);
+                auto info = yomk::msgs::unpack<yomk::msgs::dds::TopicInfo>(hit.data);
                 check(info != nullptr, "topicInfo 返回包可解包为结构化 TopicInfo");
                 if (info != nullptr)
                 {
@@ -346,9 +346,9 @@ int main()
 
                 // list 结构化载荷：域 200 纯净仅 HIT_TOPIC 一个主题，类型名恒在载荷内
                 // （是否渲染为 "主题名 [类型名]" 由调用方决定，服务层不出行文本）
-                auto listHit = testInvoke(svc, "/list_topics", ::yomk::msgs::dds::DebugList::shared(DebugList{5, 100}));
+                auto listHit = testInvoke(svc, "/list_topics", yomk::msgs::dds::DebugList::shared(DebugList{5, 100}));
                 check(listHit.status == yomk::payload::ResStatus::Succeeded, "list_topics(5,100ms) → eOk");
-                auto listInfos = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicInfoArray>(listHit.data);
+                auto listInfos = yomk::msgs::unpack<yomk::msgs::dds::TopicInfoArray>(listHit.data);
                 std::vector<yomk::payload::dds::TopicInfo> listRows;
                 if (listInfos != nullptr)
                 {
@@ -364,14 +364,14 @@ int main()
                 // topic find：按类型名精确匹配反查（域 200 纯净唯一类型）→ 唯一行 HIT_TOPIC；
                 // 未匹配类型报错退出（info 族语义，可发现类型名拼写错误）
                 auto findHit = testInvoke(svc,
-                        "/topic_find", ::yomk::msgs::dds::DebugFind::shared(DebugFind{"YomkDdsStd::MString", 5, 100}));
+                        "/topic_find", yomk::msgs::dds::DebugFind::shared(DebugFind{"YomkDdsStd::MString", 5, 100}));
                 check(findHit.status == yomk::payload::ResStatus::Succeeded,
                       "topic_find(YomkDdsStd::MString,5,100ms) → eOk（按类型反查命中）");
-                auto findArr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(findHit.data);;
+                auto findArr = yomk::msgs::unpack<yomk::msgs::StringArray>(findHit.data);;
                 check(findArr != nullptr && findArr->d.size() == 1 && findArr->d[0] == HIT_TOPIC,
                       "topic_find 命中唯一行为主题名（类型精确匹配，按主题名排序）");
                 auto findMiss = testInvoke(svc,
-                        "/topic_find", ::yomk::msgs::dds::DebugFind::shared(DebugFind{"Not::Exist", 1, 50}));
+                        "/topic_find", yomk::msgs::dds::DebugFind::shared(DebugFind{"Not::Exist", 1, 50}));
                 check(findMiss.status == yomk::payload::ResStatus::Failed &&
                           findMiss.msg.find("type [Not::Exist] not found") != std::string::npos,
                       "topic_find 未匹配类型 → eNo type [Not::Exist] not found（info 族语义）");
@@ -379,10 +379,10 @@ int main()
                 // interface show：按类型名输出反射成员表 + struct 依赖闭包（域 200 纯净唯一类型，
                 // TypeObject 经 TypeLookup 已就绪）→ root 成员恰一个 data/string 且无依赖；
                 // 未发现类型报错（find 族语义）
-                auto ifaceHit = testInvoke(svc, "/interface_show", ::yomk::msgs::dds::DebugInterfaceShow::shared(DebugInterfaceShow{"YomkDdsStd::MString", 5, 100}));
+                auto ifaceHit = testInvoke(svc, "/interface_show", yomk::msgs::dds::DebugInterfaceShow::shared(DebugInterfaceShow{"YomkDdsStd::MString", 5, 100}));
                 check(ifaceHit.status == yomk::payload::ResStatus::Succeeded,
                       "interface_show(YomkDdsStd::MString,5,100ms) → eOk（按类型名命中）");
-                auto ifacePkg = ::yomk::msgs::unpack<::yomk::msgs::dds::InterfaceInfo>(ifaceHit.data);
+                auto ifacePkg = yomk::msgs::unpack<yomk::msgs::dds::InterfaceInfo>(ifaceHit.data);
                 check(ifacePkg != nullptr && ifacePkg->msg.root.typeName == "YomkDdsStd::MString",
                       "interface_show 载荷为 InterfaceInfo 且 root.typeName 为查询类型名");
                 check(ifacePkg != nullptr && ifacePkg->msg.root.members.size() == 1 &&
@@ -397,7 +397,7 @@ int main()
                               << " members=" << ifacePkg->msg.root.members.size()
                               << " deps=" << ifacePkg->msg.dependencies.size() << std::endl;
                 }
-                auto ifaceMiss = testInvoke(svc, "/interface_show", ::yomk::msgs::dds::DebugInterfaceShow::shared(DebugInterfaceShow{"Not::Exist", 1, 50}));
+                auto ifaceMiss = testInvoke(svc, "/interface_show", yomk::msgs::dds::DebugInterfaceShow::shared(DebugInterfaceShow{"Not::Exist", 1, 50}));
                 check(ifaceMiss.status == yomk::payload::ResStatus::Failed &&
                           ifaceMiss.msg.find("type [Not::Exist] not found") != std::string::npos,
                       "interface_show 未发现类型 → eNo type [Not::Exist] not found（find 族语义）");
@@ -407,10 +407,10 @@ int main()
                       "interface_show 未发现类型 msg 仍为第一层文本");
 
                 // interface_list：hit 域内唯一类型名（去重后单行，interface show 配套导航）
-                auto ifaceListHit = testInvoke(svc, "/interface_list", ::yomk::msgs::dds::DebugInterfaceList::shared(DebugInterfaceList{1, 50}));
+                auto ifaceListHit = testInvoke(svc, "/interface_list", yomk::msgs::dds::DebugInterfaceList::shared(DebugInterfaceList{1, 50}));
                 check(ifaceListHit.status == yomk::payload::ResStatus::Succeeded && ifaceListHit.data != nullptr,
                       "interface_list 命中 → eOk（发现缓存收集类型名）");
-                auto ifaceListArr = ::yomk::msgs::unpack<::yomk::msgs::StringArray>(ifaceListHit.data);;
+                auto ifaceListArr = yomk::msgs::unpack<yomk::msgs::StringArray>(ifaceListHit.data);;
                 check(ifaceListArr != nullptr && ifaceListArr->d.size() == 1 &&
                           ifaceListArr->d[0] == "YomkDdsStd::MString",
                       "interface_list 去重清单唯一行 == YomkDdsStd::MString");
@@ -421,10 +421,10 @@ int main()
 
                 // topic_example：结构化载荷（topicName/typeName/interfaceInfo/json）——
                 // 展示文本（Type/IDL/example 命令）由 CLI 渲染，服务层不再出 StringArray
-                auto exampleHit = testInvoke(svc, "/topic_example", ::yomk::msgs::dds::DebugTopicExample::shared(DebugTopicExample{HIT_TOPIC, 5, 100}));
+                auto exampleHit = testInvoke(svc, "/topic_example", yomk::msgs::dds::DebugTopicExample::shared(DebugTopicExample{HIT_TOPIC, 5, 100}));
                 check(exampleHit.status == yomk::payload::ResStatus::Succeeded && exampleHit.data != nullptr,
                       "topic_example(hello_world,5,100ms) → eOk（发布示例命中）");
-                auto examplePkg = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicExampleInfo>(exampleHit.data);
+                auto examplePkg = yomk::msgs::unpack<yomk::msgs::dds::TopicExampleInfo>(exampleHit.data);
                 check(examplePkg != nullptr, "topic_example 返回包可解包为结构化 TopicExampleInfo");
                 if (examplePkg != nullptr)
                 {
@@ -448,18 +448,18 @@ int main()
                 }
 
                 // topic_pub：writer 在场（默认 RELIABLE）→ 发现收敛+匹配收敛+write 一次+ack 确认
-                auto pubHit = testInvoke(svc, "/topic_pub", ::yomk::msgs::dds::DebugTopicPub::shared(DebugTopicPub{HIT_TOPIC, R"({"data":"t_pub_once"})", 5, 100}));
+                auto pubHit = testInvoke(svc, "/topic_pub", yomk::msgs::dds::DebugTopicPub::shared(DebugTopicPub{HIT_TOPIC, R"({"data":"t_pub_once"})", 5, 100}));
                 check(pubHit.status == yomk::payload::ResStatus::Succeeded &&
                           pubHit.msg.find("delivered") != std::string::npos,
                       "topic_pub(hello_world, 合法 JSON) → eOk delivered（ack 确认送达）");
-                auto pubPkg = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicPublishInfo>(pubHit.data);
+                auto pubPkg = yomk::msgs::unpack<yomk::msgs::dds::TopicPublishInfo>(pubHit.data);
                 check(pubPkg != nullptr && pubPkg->msg.topicName == HIT_TOPIC,
                       "topic_pub 载荷为 TopicPublishInfo 且 topicName 回填目标主题");
                 check(pubPkg != nullptr && pubPkg->msg.total == 1 && pubPkg->msg.failed == 0,
                       "topic_pub 单次模式统计 total=1/failed=0（写成功一次无失败）");
 
                 // 非法 JSON：解析失败不建 writer，不发布
-                auto pubBad = testInvoke(svc, "/topic_pub", ::yomk::msgs::dds::DebugTopicPub::shared(DebugTopicPub{HIT_TOPIC, "{bad", 1, 50}));
+                auto pubBad = testInvoke(svc, "/topic_pub", yomk::msgs::dds::DebugTopicPub::shared(DebugTopicPub{HIT_TOPIC, "{bad", 1, 50}));
                 check(pubBad.status == yomk::payload::ResStatus::Failed &&
                           pubBad.msg.find("invalid json") != std::string::npos,
                       "topic_pub 非法 JSON → eNo invalid json for type [...]（不触 DDS 发布）");
@@ -477,7 +477,7 @@ int main()
                     pubQos.durability = DDSDurability::VOLATILE;
                     std::atomic<int> pubQosStatus{-1};
                     std::thread pubQosThread([&]() {
-                        auto r = testInvoke(svc, "/topic_pub", ::yomk::msgs::dds::DebugTopicPub::shared(DebugTopicPub{HIT_TOPIC,
+                        auto r = testInvoke(svc, "/topic_pub", yomk::msgs::dds::DebugTopicPub::shared(DebugTopicPub{HIT_TOPIC,
                             R"({"data":"t_pub_qos"})", 5, 100, 100, 0, 0, pubQos}));
                         pubQosStatus.store(static_cast<int>(r.status));
                     });
@@ -518,10 +518,10 @@ int main()
                 }
 
                 // topic_msg：结构化载荷（topicName/typeName/json，展示文本由 CLI 渲染）
-                auto msgHit = testInvoke(svc, "/topic_msg", ::yomk::msgs::dds::DebugTopicMsg::shared(DebugTopicMsg{HIT_TOPIC, 5, 100}));
+                auto msgHit = testInvoke(svc, "/topic_msg", yomk::msgs::dds::DebugTopicMsg::shared(DebugTopicMsg{HIT_TOPIC, 5, 100}));
                 check(msgHit.status == yomk::payload::ResStatus::Succeeded && msgHit.data != nullptr,
                       "topic_msg(hello_world,5,100ms) → eOk（消息描述命中）");
-                auto msgPkg = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicMessageInfo>(msgHit.data);
+                auto msgPkg = yomk::msgs::unpack<yomk::msgs::dds::TopicMessageInfo>(msgHit.data);
                 check(msgPkg != nullptr, "topic_msg 返回包可解包为结构化 TopicMessageInfo");
                 if (msgPkg != nullptr)
                 {
@@ -591,13 +591,13 @@ int main()
             {
                 // list_topics 预热仅为本用例时序前置（late joiner 经 EDP 重放发现信息）；
                 // node_info 内部独立收敛查询，不依赖 list_topics
-                auto warm = testInvoke(svc, "/list_topics", ::yomk::msgs::dds::DebugList::shared(DebugList{5, 100}));
+                auto warm = testInvoke(svc, "/list_topics", yomk::msgs::dds::DebugList::shared(DebugList{5, 100}));
                 check(warm.status == yomk::payload::ResStatus::Succeeded, "list_topics(5,100ms) 预热 → eOk（发现时序前置）");
 
                 auto hitNodeInfo = testInvoke(svc, "/node_info", mkNodeInfo(PEER_NAME, 5, 100));
                 check(hitNodeInfo.status == yomk::payload::ResStatus::Succeeded && hitNodeInfo.data != nullptr,
                       "nodeInfo(test-svc-nodeinfo,5,100ms) → eOk（独立收敛命中）");
-                auto nodePkg = ::yomk::msgs::unpack<::yomk::msgs::dds::NodeInfo>(hitNodeInfo.data);
+                auto nodePkg = yomk::msgs::unpack<yomk::msgs::dds::NodeInfo>(hitNodeInfo.data);
                 check(nodePkg != nullptr, "nodeInfo 返回包可解包为结构化 NodeInfo");
                 if (nodePkg != nullptr)
                 {
@@ -664,13 +664,13 @@ int main()
     // ---- A-3：闭环 4 serverLocator 尾参直调（DebugNode{domainId, serverLocator} 聚合初始化
     // 经服务层 createNode 组 spec 直达节点层；server 不在场 CLIENT 仍创建成功，非法串回显不建节点）----
     check(testInvoke(svc, "/create_node",
-              ::yomk::msgs::dds::DebugNode::shared(DebugNode{TEST_DOMAIN, "127.0.0.1:11811"})).status ==
+              yomk::msgs::dds::DebugNode::shared(DebugNode{TEST_DOMAIN, "127.0.0.1:11811"})).status ==
               yomk::payload::ResStatus::Succeeded,
           "create_node 尾参 serverLocator 直配 → eOk（CLIENT+127.0.0.1:11811，server 不在场）");
     check(testInvoke(svc, "/delete_node").status == yomk::payload::ResStatus::Succeeded, "删除尾参直配节点 → eOk");
 
     auto badLoc = testInvoke(svc, "/create_node",
-                      ::yomk::msgs::dds::DebugNode::shared(DebugNode{TEST_DOMAIN, "10.0.0.1:99999"}));
+                      yomk::msgs::dds::DebugNode::shared(DebugNode{TEST_DOMAIN, "10.0.0.1:99999"}));
     check(badLoc.status == yomk::payload::ResStatus::Failed &&
               badLoc.msg.find("port out of range") != std::string::npos,
           "create_node 非法尾参 serverLocator(port 越界) → eNo + 回显（不建节点）");

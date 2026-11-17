@@ -61,8 +61,8 @@ using namespace yomk;
 int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 YomkDds 服务
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsHandler>().create();
     // 查看版本（链式 version() 返回 Response，解包/打印由调用方处理）
     auto vresp = yomk::dds().version();
     if (vresp.status == yomk::payload::ResStatus::Succeeded)
@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
     {
         auto *msg = static_cast<const YomkDdsStd::MString *>(data);
         received++;
-        ::yomk::log().tag("PubSubExample").info("[RECV] ", msg->data());
+        yomk::log().tag("PubSubExample").info("[RECV] ", msg->data());
     };
     yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
 
@@ -94,13 +94,13 @@ int main(int argc, char *argv[])
         YomkDdsStd::MString msg;
         msg.data("hello " + std::to_string(i));
         yomk::dds().node("node0").topic("my_topic").data(&msg).pub();
-        ::yomk::log().tag("PubSubExample").info("[SEND] ", msg.data());
+        yomk::log().tag("PubSubExample").info("[SEND] ", msg.data());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // 6. 等待接收完成（首条消息可能因 discovery 时序丢失）
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    ::yomk::log().tag("PubSubExample").info("received=", received.load(), "/5");
+    yomk::log().tag("PubSubExample").info("received=", received.load(), "/5");
 
     // 7. 退出前删除节点（显式销毁 DDS 实体）
     yomk::dds().node("node0").remove();
@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
 
 | 片段 | 作用 |
 |---|---|
-| `::yomk::server().init()` + `::yomk::server().srv<YomkDdsHandler>().create()` | 初始化 YomkServer 框架并启动 YomkDds 服务（`yomk/server/YomkServerApi.h` 提供）；每个使用 YomkDds API 的程序开头都需要 |
+| `yomk::server().init()` + `yomk::server().srv<YomkDdsHandler>().create()` | 初始化 YomkServer 框架并启动 YomkDds 服务（`yomk/server/YomkServerApi.h` 提供）；每个使用 YomkDds API 的程序开头都需要 |
 | `yomk::dds().version()` | 版本查询，返回 Response 携带 String 版本串，解包/打印由调用方处理 |
 | `yomk::dds().node("node0").create()` | 创建节点，每节点一个独立 DDS 参与者；domainId 缺省取环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0，合法范围 [0,232]） |
 | `yomk::dds().node(...).topic(...).type(...).create_pub() / ...create_sub()` | 在节点上注册发布/订阅主题；type() 实参为 `new XxxPubSubType()`，**所有权移交服务端，调用后 caller 不再持有/释放** |

@@ -63,8 +63,8 @@ void onSignal(int) { bagRecordStop(); }  // 无锁原子置位，录制循环读
 
 int main()
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsBagHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsBagHandler>().create();
 
     // 1. 复位残留停止标志（防上次会话置位导致秒退）后创建 bag 节点（单节点模型）
     bagRecordReset();
@@ -93,7 +93,7 @@ int main()
     // 4. 成功回执 RecordResult（只回数据）：bagDir + 逐主题 BagTopicStat
     //    （topicName/typeName/count/bytes，保持录制清单顺序）；目录行与 "topic: N 条 / M 字节"
     //    行文本由调用方渲染，展示格式自行约定
-    auto rec = ::yomk::msgs::unpack<::yomk::msgs::dds::RecordResult>(resp.data);
+    auto rec = yomk::msgs::unpack<yomk::msgs::dds::RecordResult>(resp.data);
     if (rec != nullptr)
     {
         std::cout << rec->msg.bagDir << "\n";

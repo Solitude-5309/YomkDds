@@ -77,15 +77,15 @@ yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLo
 发布端关键代码（节选自 `examples/ExampleDiscoverServerPub.cpp`，完整程序见仓库源文件）：
 
 ```cpp
-::yomk::server().init();
-::yomk::server().srv<YomkDdsHandler>().create();
+yomk::server().init();
+yomk::server().srv<YomkDdsHandler>().create();
 
 // 1. 创建节点：域 id 显式 100（DS 模式下可与对端异域）；省略双通道直配 →
 //    直配串自动取环境变量（总开关开启时生效，participant 以 CLIENT 发现协议运行）
 auto resp = yomk::dds().node("ds_pub_node").domain(100).create();
 if (resp.status != yomk::payload::ResStatus::Succeeded)
 {
-    ::yomk::log().tag("ExampleDiscoverServerPub").error("create node failed: ", resp.msg);
+    yomk::log().tag("ExampleDiscoverServerPub").error("create node failed: ", resp.msg);
     return 1;
 }
 
@@ -119,7 +119,7 @@ auto onMessage = [&](const void* data)
 {
     auto* msg = static_cast<const YomkDdsStd::MString*>(data);
     received++;
-    ::yomk::log().tag("ExampleDiscoverServerSub").info("[RECV] ", msg->data());
+    yomk::log().tag("ExampleDiscoverServerSub").info("[RECV] ", msg->data());
 };
 resp = yomk::dds().node("ds_sub_node").topic("ds_hello_world").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
 ```

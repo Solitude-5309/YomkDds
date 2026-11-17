@@ -30,14 +30,14 @@ static void onSignal(int)
 
 int main()
 {
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsHandler>().create();
 
     // 创建节点（域 0 对齐 ROS2 默认域）
     auto resp = yomk::dds().node("interop_sub").domain(0).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleRos2InteropSub").error("create node failed: ", resp.msg);
+        yomk::log().tag("ExampleRos2InteropSub").error("create node failed: ", resp.msg);
         return 1;
     }
 
@@ -49,7 +49,7 @@ int main()
     {
         auto* msg = static_cast<const YomkDdsStd::MString*>(data);
         received++;
-        ::yomk::log().tag("ExampleRos2InteropSub").info("[RECV] ", msg->data());
+        yomk::log().tag("ExampleRos2InteropSub").info("[RECV] ", msg->data());
     };
     // QoS 用 ROS2 订阅端默认底座：BEST_EFFORT requested 对任意 offered（含 ros2 topic
     // pub 与 YomkDds pub 的 RELIABLE）均可匹配（create_sub() 头文件注释同口径）
@@ -57,7 +57,7 @@ int main()
         yomk::dds().node("interop_sub").topic("rt/chatter_interop").type(type).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleRos2InteropSub").error("register sub topic failed: ", resp.msg);
+        yomk::log().tag("ExampleRos2InteropSub").error("register sub topic failed: ", resp.msg);
         yomk::dds().node("interop_sub").remove();
         return 1;
     }
@@ -74,7 +74,7 @@ int main()
     resp = yomk::dds().node("interop_sub").remove();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
-        ::yomk::log().tag("ExampleRos2InteropSub").error("delete node failed: ", resp.msg);
+        yomk::log().tag("ExampleRos2InteropSub").error("delete node failed: ", resp.msg);
         return 1;
     }
     std::cout << "[QUIT] received total=" << received.load() << std::endl;

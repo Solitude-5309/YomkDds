@@ -28,8 +28,8 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 调用任何 `yomk::dds()` 链式端点之前，必须先执行以下两步（初始化 YomkServer 框架并启动 YomkDds 服务）：
 
 ```cpp
-::yomk::server().init();
-::yomk::server().srv<YomkDdsHandler>().create();
+yomk::server().init();
+yomk::server().srv<YomkDdsHandler>().create();
 ```
 
 ### 最小闭环示例（普通发布订阅）
@@ -52,8 +52,8 @@ using namespace yomk;
 int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 YomkDds 服务
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsHandler>().create();
     // 查看版本（链式 version() 返回 Response，解包/打印由调用方处理）
     auto vresp = yomk::dds().version();
     if (vresp.status == yomk::payload::ResStatus::Succeeded)
@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
     {
         auto *msg = static_cast<const YomkDdsStd::MString *>(data);
         received++;
-        ::yomk::log().tag("PubSubExample").info("[RECV] ", msg->data());
+        yomk::log().tag("PubSubExample").info("[RECV] ", msg->data());
     };
     yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
 
@@ -85,13 +85,13 @@ int main(int argc, char *argv[])
         YomkDdsStd::MString msg;
         msg.data("hello " + std::to_string(i));
         yomk::dds().node("node0").topic("my_topic").data(&msg).pub();
-        ::yomk::log().tag("PubSubExample").info("[SEND] ", msg.data());
+        yomk::log().tag("PubSubExample").info("[SEND] ", msg.data());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     // 6. 等待接收完成（首条消息可能因 discovery 时序丢失）
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    ::yomk::log().tag("PubSubExample").info("received=", received.load(), "/5");
+    yomk::log().tag("PubSubExample").info("received=", received.load(), "/5");
 
     // 7. 退出前删除节点（显式销毁 DDS 实体）
     yomk::dds().node("node0").remove();

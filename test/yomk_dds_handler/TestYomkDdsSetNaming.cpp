@@ -59,14 +59,14 @@ namespace
     // 构造 /create_node 请求包
     YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName)
     {
-        return ::yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
+        return yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
     }
 
     // 构造 /register_pub_topic 请求包（type 所有权移交服务端）
     YomkMsgPtr mkPub(const std::string &nodeName, const std::string &topicName,
                      YomkDdsStd::MStringPubSubType *type)
     {
-        return ::yomk::msgs::dds::Topic::shared(Topic{nodeName, topicName, type});
+        return yomk::msgs::dds::Topic::shared(Topic{nodeName, topicName, type});
     }
 
     // 构造 /register_sub_topic 请求包
@@ -74,14 +74,14 @@ namespace
                      YomkDdsStd::MStringPubSubType *type,
                      std::function<void(const void *)> cb)
     {
-        return ::yomk::msgs::dds::SubRequest::shared(SubRequest{nodeName, topicName, type, cb});
+        return yomk::msgs::dds::SubRequest::shared(SubRequest{nodeName, topicName, type, cb});
     }
 
     // 构造 /publish 请求包（负载第三参为非 const 指针，与 Publish 契约一致）
     YomkMsgPtr mkPubMsg(const std::string &nodeName, const std::string &topicName,
                         YomkDdsStd::MString *msg)
     {
-        return ::yomk::msgs::dds::Publish::shared(Publish{nodeName, topicName, msg});
+        return yomk::msgs::dds::Publish::shared(Publish{nodeName, topicName, msg});
     }
 
     // S3 探针：stdout/stderr fd 级捕获（设施思路同 TestFastDDSDebugNode，双流各一管道）。
@@ -260,10 +260,10 @@ namespace
                   "S1 topicInfo 读回 typeName == std_msgs::msg::dds_::String_（发现名即新名）");
         }
 
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("setname_pub")).status ==
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("setname_pub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S1 删除 setname_pub → eOk（退出前清理不变式）");
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("setname_sub")).status ==
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("setname_sub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S1 删除 setname_sub → eOk（退出前清理不变式）");
     }
@@ -326,10 +326,10 @@ namespace
         }
         std::cout << std::endl;
 
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("mismatch_pub")).status ==
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("mismatch_pub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S2 删除 mismatch_pub → eOk（退出前清理不变式）");
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("mismatch_sub")).status ==
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("mismatch_sub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S2 删除 mismatch_sub → eOk（退出前清理不变式）");
     }
@@ -416,10 +416,10 @@ namespace
         eprosima::fastdds::dds::Log::UnsetCategoryFilter();
         eprosima::fastdds::dds::Log::SetVerbosity(eprosima::fastdds::dds::Log::Kind::Warning);
 
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("probe_pub")).status ==
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("probe_pub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S3 删除 probe_pub → eOk（退出前清理不变式）");
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared("probe_sub")).status ==
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("probe_sub")).status ==
                   yomk::payload::ResStatus::Succeeded,
               "S3 删除 probe_sub → eOk（退出前清理不变式）");
     }
@@ -427,11 +427,11 @@ namespace
 
 int main()
 {
-    ::yomk::server().init();
+    yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(yomk::server().instance().get());
+    check(yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     testSymmetricRename(svc);
     testAsymmetricIsolation(svc);

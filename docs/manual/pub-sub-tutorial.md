@@ -93,8 +93,8 @@ using namespace yomk;
 int main(int argc, char *argv[])
 {
     // 1. 初始化框架并启动 YomkDds 服务
-    ::yomk::server().init();
-    ::yomk::server().srv<YomkDdsHandler>().create();
+    yomk::server().init();
+    yomk::server().srv<YomkDdsHandler>().create();
 
     // 2. 创建两个节点（每节点一个独立 DDS 参与者）
     yomk::dds().node("node_pub").create();
@@ -110,13 +110,13 @@ int main(int argc, char *argv[])
     {
         auto *msg = static_cast<const YomkDdsStd::MString *>(data);
         recvA++;
-        ::yomk::log().tag("MultiTopicExample").info("[RECV A] ", msg->data());
+        yomk::log().tag("MultiTopicExample").info("[RECV A] ", msg->data());
     };
     auto onB = [&](const void *data)
     {
         auto *msg = static_cast<const YomkDdsStd::MInt32 *>(data);
         recvB++;
-        ::yomk::log().tag("MultiTopicExample").info("[RECV B] ", msg->data());
+        yomk::log().tag("MultiTopicExample").info("[RECV B] ", msg->data());
     };
     yomk::dds().node("node_sub").topic("topic_a").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onA).create_sub();
     yomk::dds().node("node_sub").topic("topic_b").type(new YomkDdsStd::MInt32PubSubType()).sub_cb(onB).create_sub();
@@ -138,8 +138,8 @@ int main(int argc, char *argv[])
 
     // 5. 等待接收完成
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    ::yomk::log().tag("MultiTopicExample").info("topic_a received=", recvA.load(), "/5");
-    ::yomk::log().tag("MultiTopicExample").info("topic_b received=", recvB.load(), "/5");
+    yomk::log().tag("MultiTopicExample").info("topic_a received=", recvA.load(), "/5");
+    yomk::log().tag("MultiTopicExample").info("topic_b received=", recvB.load(), "/5");
 
     // 6. 退出前逐个删除节点
     yomk::dds().node("node_pub").remove();

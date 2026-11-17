@@ -80,7 +80,7 @@ namespace
     // 构造 /create_node 请求包
     YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName)
     {
-        return ::yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
+        return yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
     }
 
     // ============================ 资源采样器（Linux /proc，零第三方依赖）============================
@@ -206,13 +206,13 @@ namespace
                 ++createOk;
             }
             if (testInvoke(svc, "/register_pub_topic",
-                            ::yomk::msgs::dds::Topic::shared(Topic{name, "s1_topic", new YomkDdsStd::MInt32PubSubType()}))
+                            yomk::msgs::dds::Topic::shared(Topic{name, "s1_topic", new YomkDdsStd::MInt32PubSubType()}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regPubOk;
             }
             if (testInvoke(svc, "/register_sub_topic",
-                            ::yomk::msgs::dds::SubRequest::shared(SubRequest{name, "s1_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
+                            yomk::msgs::dds::SubRequest::shared(SubRequest{name, "s1_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regSubOk;
@@ -220,8 +220,8 @@ namespace
             // 少量 loan→填值→(publish|discard)：每轮固定小量，聚焦 create/teardown 资源回收
             for (int i = 0; i < 5; ++i)
             {
-                auto lr = testInvoke(svc, "/loan", ::yomk::msgs::dds::Loan::shared(Loan{name, "s1_topic", nullptr}));
-                auto lres = ::yomk::msgs::unpack<::yomk::msgs::dds::LoanSample>(lr.data);;
+                auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::Loan::shared(Loan{name, "s1_topic", nullptr}));
+                auto lres = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(lr.data);;
                 void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
                 if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
                 {
@@ -229,20 +229,20 @@ namespace
                     static_cast<YomkDdsStd::MInt32 *>(s)->data(i);
                     if (i % 2 == 0)
                     {
-                        if (testInvoke(svc, "/publish", ::yomk::msgs::dds::Publish::shared(Publish{name, "s1_topic", s}))
+                        if (testInvoke(svc, "/publish", yomk::msgs::dds::Publish::shared(Publish{name, "s1_topic", s}))
                                 .status == yomk::payload::ResStatus::Succeeded)
                         {
                             ++pubOk;
                         }
                     }
-                    else if (testInvoke(svc, "/discard_loan", ::yomk::msgs::dds::Loan::shared(Loan{name, "s1_topic", s}))
+                    else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::Loan::shared(Loan{name, "s1_topic", s}))
                                  .status == yomk::payload::ResStatus::Succeeded)
                     {
                         ++discOk;
                     }
                 }
             }
-            if (testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(name)).status == yomk::payload::ResStatus::Succeeded)
+            if (testInvoke(svc, "/delete_node", yomk::msgs::String::shared(name)).status == yomk::payload::ResStatus::Succeeded)
             {
                 ++delOk;
             }
@@ -293,7 +293,7 @@ namespace
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, node)).status == yomk::payload::ResStatus::Succeeded,
               "S2 创建持久 s2_node → eOk");
         check(testInvoke(svc, "/register_pub_topic",
-                          ::yomk::msgs::dds::Topic::shared(Topic{node, topic, new YomkDdsStd::MInt32PubSubType()}))
+                          yomk::msgs::dds::Topic::shared(Topic{node, topic, new YomkDdsStd::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "S2 register_pub_topic s2_topic(MInt32,writer-only) → eOk");
 
@@ -306,8 +306,8 @@ namespace
         auto oneOp = [&](long i)
         {
             ++loanAttempts;
-            auto lr = testInvoke(svc, "/loan", ::yomk::msgs::dds::Loan::shared(Loan{node, topic, nullptr}));
-            auto lres = ::yomk::msgs::unpack<::yomk::msgs::dds::LoanSample>(lr.data);;
+            auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::Loan::shared(Loan{node, topic, nullptr}));
+            auto lres = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(lr.data);;
             void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
             if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
             {
@@ -315,13 +315,13 @@ namespace
                 static_cast<YomkDdsStd::MInt32 *>(s)->data(static_cast<int32_t>(i & 0x7fffffff));
                 if (i % 2 == 0)
                 {
-                    if (testInvoke(svc, "/publish", ::yomk::msgs::dds::Publish::shared(Publish{node, topic, s}))
+                    if (testInvoke(svc, "/publish", yomk::msgs::dds::Publish::shared(Publish{node, topic, s}))
                             .status == yomk::payload::ResStatus::Succeeded)
                     {
                         ++pubOk;
                     }
                 }
-                else if (testInvoke(svc, "/discard_loan", ::yomk::msgs::dds::Loan::shared(Loan{node, topic, s}))
+                else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::Loan::shared(Loan{node, topic, s}))
                              .status == yomk::payload::ResStatus::Succeeded)
                 {
                     ++discOk;
@@ -395,7 +395,7 @@ namespace
                   << static_cast<long>(lateOps) << " ops/s"
                   << " | rssKB " << pre.rssKB << "->" << post.rssKB << " (informational)" << std::endl;
 
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(node)).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared(node)).status == yomk::payload::ResStatus::Succeeded,
               "S2 删除 s2_node → eOk（writer 池随节点析构释放）");
     }
 
@@ -425,13 +425,13 @@ namespace
         {
             const std::string t = "s3_topic_" + std::to_string(i);
             if (testInvoke(svc, "/register_pub_topic",
-                            ::yomk::msgs::dds::Topic::shared(Topic{node, t, new YomkDdsStd::MInt32PubSubType()}))
+                            yomk::msgs::dds::Topic::shared(Topic{node, t, new YomkDdsStd::MInt32PubSubType()}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regPubOk;
             }
             if (testInvoke(svc, "/register_sub_topic",
-                            ::yomk::msgs::dds::SubRequest::shared(SubRequest{node, t, new YomkDdsStd::MInt32PubSubType(), cb}))
+                            yomk::msgs::dds::SubRequest::shared(SubRequest{node, t, new YomkDdsStd::MInt32PubSubType(), cb}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regSubOk;
@@ -448,7 +448,7 @@ namespace
         check(grown.fds > base.fds || grown.rssKB > base.rssKB,
               "S3 实体增长可观测（fd 或 RSS 较基线上升，证明注册确分配了资源）");
 
-        check(testInvoke(svc, "/delete_node", ::yomk::msgs::String::shared(node)).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared(node)).status == yomk::payload::ResStatus::Succeeded,
               "S3 删除 s3_node → eOk（~FastDDSNode 整体回收 400 实体）");
 
         std::this_thread::sleep_for(std::chrono::seconds(2)); // 等异步 teardown 释放 fd/线程/内存
@@ -470,11 +470,11 @@ namespace
 
 int main()
 {
-    ::yomk::server().init();
+    yomk::server().init();
 
     // 注册被测服务：所有权移交框架（shared_ptr 持有），init() 内部调用后 weak_from_this() 方有效
-    auto *svc = new YomkDdsHandler(::yomk::server().instance().get());
-    check(::yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
+    auto *svc = new YomkDdsHandler(yomk::server().instance().get());
+    check(yomk::server().srv_ptr(svc).add() == 0, "YomkDdsHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     std::cout << "[CFG] STRESS_ITERS=" << STRESS_ITERS << " STRESS_CYCLES=" << STRESS_CYCLES
               << " domain=" << TEST_DOMAIN << std::endl;

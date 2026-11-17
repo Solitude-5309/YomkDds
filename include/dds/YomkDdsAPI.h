@@ -233,7 +233,7 @@ public:
         }
         auto resp = yomk::server().url(yomk::url::ddsLoan)
             .msg(yomk::msgs::dds::LoanRequest::shared(
-                yomk::payload::dds::LoanRequest{std::move(m_nodeName), std::move(m_topicName), nullptr}))
+                yomk::payload::dds::LoanRequest{std::move(m_nodeName), std::move(m_topicName)}))
             .request();
         if (resp.status != yomk::payload::ResStatus::Succeeded || !resp.data)
         {
@@ -270,8 +270,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDiscardLoan)
-            .msg(yomk::msgs::dds::LoanRequest::shared(
-                yomk::payload::dds::LoanRequest{std::move(m_nodeName), std::move(m_topicName), m_sample}))
+            .msg(yomk::msgs::dds::DiscardLoanRequest::shared(
+                yomk::payload::dds::DiscardLoanRequest{std::move(m_nodeName), std::move(m_topicName), m_sample}))
             .request();
     }
 };

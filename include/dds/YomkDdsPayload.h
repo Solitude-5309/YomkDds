@@ -342,12 +342,22 @@ struct PublishRequest
 };
 
 /**
- * @brief loan / discard_loan request
- * @note sample is ignored for loan; carries the pointer to return for discard
+ * @brief loan request
  */
-// @zh: loan / discard_loan 请求负载
-// @zh: note loan 请求忽略 sample；discard 请求携带待归还的借出指针
+// @zh: loan 请求负载
 struct LoanRequest
+{
+    std::string nodeName;
+    std::string topicName;
+};
+
+/**
+ * @brief discard_loan request
+ * @note sample carries the loaned pointer to return to the writer pool
+ */
+// @zh: discard_loan 请求负载
+// @zh: note sample 携带待归还的借出指针
+struct DiscardLoanRequest
 {
     std::string nodeName;
     std::string topicName;

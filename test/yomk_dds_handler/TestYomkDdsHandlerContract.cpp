@@ -73,7 +73,7 @@ namespace
         checkGuards("/register_sub_topic", yomk::msgs::dds::RegisterSubTopicRequest::kName, yomk::msgs::String::shared("wrong"));
         checkGuards("/publish", yomk::msgs::dds::PublishRequest::kName, yomk::msgs::String::shared("wrong"));
         checkGuards("/loan", yomk::msgs::dds::LoanRequest::kName, yomk::msgs::String::shared("wrong"));
-        checkGuards("/discard_loan", yomk::msgs::dds::LoanRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/discard_loan", yomk::msgs::dds::DiscardLoanRequest::kName, yomk::msgs::String::shared("wrong"));
     }
 
     // T3：6 个查节点端点的"节点不存在"早退（合法包 + 不存在 nodeName → eNo，不触达 DDS）
@@ -92,8 +92,8 @@ namespace
         checkNodeGone("/register_pub_topic", yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{ghost, "t", nullptr}));
         checkNodeGone("/register_sub_topic", yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{ghost, "t", nullptr, nullptr}));
         checkNodeGone("/publish", yomk::msgs::dds::PublishRequest::shared(PublishRequest{ghost, "t", nullptr}));
-        checkNodeGone("/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{ghost, "t", nullptr}));
-        checkNodeGone("/discard_loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{ghost, "t", nullptr}));
+        checkNodeGone("/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{ghost, "t"}));
+        checkNodeGone("/discard_loan", yomk::msgs::dds::DiscardLoanRequest::shared(DiscardLoanRequest{ghost, "t", nullptr}));
     }
 } // namespace
 

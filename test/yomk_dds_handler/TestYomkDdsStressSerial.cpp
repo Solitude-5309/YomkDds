@@ -220,7 +220,7 @@ namespace
             // 少量 loan→填值→(publish|discard)：每轮固定小量，聚焦 create/teardown 资源回收
             for (int i = 0; i < 5; ++i)
             {
-                auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{name, "s1_topic", nullptr}));
+                auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{name, "s1_topic"}));
                 auto lres = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(lr.data);;
                 void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
                 if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
@@ -235,7 +235,7 @@ namespace
                             ++pubOk;
                         }
                     }
-                    else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{name, "s1_topic", s}))
+                    else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::DiscardLoanRequest::shared(DiscardLoanRequest{name, "s1_topic", s}))
                                  .status == yomk::payload::ResStatus::Succeeded)
                     {
                         ++discOk;
@@ -306,7 +306,7 @@ namespace
         auto oneOp = [&](long i)
         {
             ++loanAttempts;
-            auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{node, topic, nullptr}));
+            auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{node, topic}));
             auto lres = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(lr.data);;
             void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
             if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
@@ -321,7 +321,7 @@ namespace
                         ++pubOk;
                     }
                 }
-                else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{node, topic, s}))
+                else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::DiscardLoanRequest::shared(DiscardLoanRequest{node, topic, s}))
                              .status == yomk::payload::ResStatus::Succeeded)
                 {
                     ++discOk;

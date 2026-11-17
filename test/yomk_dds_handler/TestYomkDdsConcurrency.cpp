@@ -191,14 +191,14 @@ namespace
                         pubOk.fetch_add(1);
                     }
                     // loan(MInt32,alignof=4)→池内填值→discard：并发借出各得独立池样本，复用的 happens-before 由 mtx_ 建立
-                    auto lresp = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{"a3_node", topic, nullptr}));
+                    auto lresp = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{"a3_node", topic}));
                     auto lres = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(lresp.data);;
                     void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
                     if (lresp.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
                     {
                         loanOk.fetch_add(1);
                         static_cast<YomkDdsStd::MInt32 *>(s)->data(v);
-                        if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{"a3_node", topic, s}))
+                        if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::DiscardLoanRequest::shared(DiscardLoanRequest{"a3_node", topic, s}))
                                 .status == yomk::payload::ResStatus::Succeeded)
                         {
                             discOk.fetch_add(1);

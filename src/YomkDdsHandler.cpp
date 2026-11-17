@@ -1,7 +1,7 @@
 // 内存所有权协议（贯穿全部 handler，无法从签名推导）：
 //   type（RegisterPubTopicRequest/RegisterSubTopicRequest.type）caller new、服务端全路径接管，无论成败均由本服务 delete；
 //   data（PublishRequest.data）借用（非所有权），publish 同步写入后归 caller 管理；
-//   sample（LoanRequest/LoanSample.sample）从 writer 池借出，经 write（发布）或 discard（归还）交回中间件。
+//   sample（DiscardLoanRequest.sample/LoanSample.sample）从 writer 池借出，经 write（发布）或 discard（归还）交回中间件。
 #include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
 
@@ -321,16 +321,16 @@ yomk::payload::Response YomkDdsHandler::loan(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsHandler::discardLoan(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::LoanRequest::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DiscardLoanRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not LoanRequest. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DiscardLoanRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::LoanRequest>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DiscardLoanRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[LoanRequest] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DiscardLoanRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);

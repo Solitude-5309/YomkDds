@@ -25,6 +25,7 @@ YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::RegisterPubTopicRequest, RegisterPub
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::RegisterSubTopicRequest, RegisterSubTopicRequest, msg)
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::PublishRequest, PublishRequest, msg)
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::LoanRequest, LoanRequest, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DiscardLoanRequest, DiscardLoanRequest, msg)
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::LoanSample, LoanSample, msg)
 
 // ===== YomkDdsDebugHandler =====

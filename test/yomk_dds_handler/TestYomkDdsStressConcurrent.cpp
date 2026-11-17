@@ -219,7 +219,7 @@ namespace
                     const int tidx = (i % 2 == 0) ? t : (t + NTHREADS);
                     const std::string topic = "c1_topic_" + std::to_string(tidx);
                     loanAttempts.fetch_add(1, std::memory_order_relaxed);
-                    auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{node, topic, nullptr}));
+                    auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{node, topic}));
                     auto lres = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(lr.data);;
                     void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
                     if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
@@ -234,7 +234,7 @@ namespace
                                 pubOk.fetch_add(1, std::memory_order_relaxed);
                             }
                         }
-                        else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{node, topic, s}))
+                        else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::DiscardLoanRequest::shared(DiscardLoanRequest{node, topic, s}))
                                      .status == yomk::payload::ResStatus::Succeeded)
                         {
                             discOk.fetch_add(1, std::memory_order_relaxed);
@@ -307,7 +307,7 @@ namespace
                 }
                 for (int i = 0; i < 3; ++i)
                 {
-                    auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{name, "c2_topic", nullptr}));
+                    auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{name, "c2_topic"}));
                     auto lres = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(lr.data);;
                     void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
                     if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
@@ -320,7 +320,7 @@ namespace
                         }
                         else
                         {
-                            testInvoke(svc, "/discard_loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{name, "c2_topic", s}));
+                            testInvoke(svc, "/discard_loan", yomk::msgs::dds::DiscardLoanRequest::shared(DiscardLoanRequest{name, "c2_topic", s}));
                         }
                     }
                 }

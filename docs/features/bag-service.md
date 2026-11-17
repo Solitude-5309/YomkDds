@@ -93,7 +93,7 @@ int main()
     // 4. 成功回执 RecordResult（只回数据）：bagDir + 逐主题 BagTopicStat
     //    （topicName/typeName/count/bytes，保持录制清单顺序）；目录行与 "topic: N 条 / M 字节"
     //    行文本由调用方渲染，展示格式自行约定
-    auto rec = ::yomk::msgs::unpack<::yomk::msgs::RecordResult>(resp.data);
+    auto rec = ::yomk::msgs::unpack<::yomk::msgs::dds::RecordResult>(resp.data);
     if (rec != nullptr)
     {
         std::cout << rec->msg.bagDir << "\n";

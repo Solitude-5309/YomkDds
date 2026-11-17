@@ -1,6 +1,6 @@
 #pragma once
 // Maintainer notes: single home for every YOMKDDS_* request/response structure,
-// callback type, QoS description and config helper (namespace yomk::payload).
+// callback type, QoS description and config helper (namespace yomk::payload::dds).
 // Public headers keep zero fastdds dependency; message declarations live in
 // YomkDdsMsg.h, service classes in the per-service headers.
 
@@ -15,7 +15,7 @@
 #include <tuple>
 #include <vector>
 
-namespace yomk::payload
+namespace yomk::payload::dds
 {
 // ===== Config helpers (used by payload default initializers and callers) =====
 
@@ -277,7 +277,7 @@ struct DDSServerInfo
 // @zh: create_node 请求负载
 // @zh: note 可缺省字段经类内缺省初始化器读环境变量；直配聚合串格式 "ip[:port]"，
 // @zh: 多 server 分号分隔，非法串创建失败并回显原因
-struct DDSNode
+struct Node
 {
     std::string nodeName;  // unique node name, must not be empty
     uint32_t domainId = YomkDdsDefaultDomainId();                               // DDS domain id [0,232]
@@ -292,7 +292,7 @@ struct DDSNode
  */
 // @zh: load_xml 请求负载
 // @zh: note 成功仅证明文件可解析并缓存；后续 create_node 按三级提取链叠加
-struct DDSXmlLoad
+struct XmlLoad
 {
     std::string xmlPath = YomkDdsDefaultXmlProfilePath();  // relative or absolute
 };
@@ -304,7 +304,7 @@ struct DDSXmlLoad
  */
 // @zh: register_pub_topic 请求负载
 // @zh: warning type（TopicDataType*）所有权移交服务端，无论成败调用后 caller 不再持有/释放
-struct DDSTopic
+struct Topic
 {
     std::string nodeName;
     std::string topicName;
@@ -314,11 +314,11 @@ struct DDSTopic
 
 /**
  * @brief register_sub_topic request
- * @warning Same type ownership transfer as DDSTopic
+ * @warning Same type ownership transfer as Topic
  */
 // @zh: register_sub_topic 请求负载
-// @zh: warning type 所有权语义同 DDSTopic
-struct DDSSubRequest
+// @zh: warning type 所有权语义同 Topic
+struct SubRequest
 {
     std::string nodeName;
     std::string topicName;
@@ -334,7 +334,7 @@ struct DDSSubRequest
  */
 // @zh: publish 请求负载
 // @zh: note data 为借用（非所有权）：publish 同步写入，caller 保留并自行管理其生命周期
-struct DDSPublish
+struct Publish
 {
     std::string nodeName;
     std::string topicName;
@@ -347,7 +347,7 @@ struct DDSPublish
  */
 // @zh: loan / discard_loan 请求负载
 // @zh: note loan 请求忽略 sample；discard 请求携带待归还的借出指针
-struct DDSLoan
+struct Loan
 {
     std::string nodeName;
     std::string topicName;
@@ -368,9 +368,9 @@ struct LoanSample
 
 // ===== YomkDdsDebugHandler request payloads =====
 
-/** @brief debug create_node request (same env fallbacks as DDSNode) */
-// @zh: debug create_node 请求负载（环境变量回落语义同 DDSNode）
-struct DDSDebugNode
+/** @brief debug create_node request (same env fallbacks as Node) */
+// @zh: debug create_node 请求负载（环境变量回落语义同 Node）
+struct DebugNode
 {
     uint32_t domainId = YomkDdsDefaultDomainId();                               // DDS domain id [0,232]
     std::string udpDiscoverServerLocator = YomkDdsDefaultUdpDiscoverServers();  // UDP channel
@@ -383,7 +383,7 @@ struct DDSDebugNode
  */
 // @zh: topic_print 请求负载
 // @zh: warning 空输出回调拒绝
-struct DDSDebugTopic
+struct DebugTopic
 {
     std::string topicName;      // topic to observe
     DDSDebugOutputFunc output;  // user-defined output callback
@@ -392,7 +392,7 @@ struct DDSDebugTopic
 
 /** @brief list_topics request (0 values are clamped to defaults 5 rounds / 200ms) */
 // @zh: list_topics 请求负载（0 值由节点层钳制为默认 5 次/200ms）
-struct DDSDebugList
+struct DebugList
 {
     uint32_t stableRounds = 0;  // consecutive unchanged-snapshot rounds required
     uint32_t intervalMs = 0;    // snapshot polling interval in milliseconds
@@ -400,7 +400,7 @@ struct DDSDebugList
 
 /** @brief topic_info request (independent convergence parameters) */
 // @zh: topic_info 请求负载（独立收敛参数）
-struct DDSDebugInfo
+struct DebugInfo
 {
     std::string topicName = "";  // topic to query
     uint32_t stableRounds = 0;
@@ -703,7 +703,7 @@ struct NodeInfo
 
 /** @brief list_nodes request (independent convergence parameters) */
 // @zh: list_nodes 请求负载（独立收敛参数）
-struct DDSNodeList
+struct NodeList
 {
     uint32_t stableRounds = 0;
     uint32_t intervalMs = 0;
@@ -711,7 +711,7 @@ struct DDSNodeList
 
 /** @brief node_info request (independent convergence parameters) */
 // @zh: node_info 请求负载（独立收敛参数）
-struct DDSNodeInfo
+struct NodeInfoRequest
 {
     std::string nodeName = "";  // participant_name exact match
     uint32_t stableRounds = 0;
@@ -720,7 +720,7 @@ struct DDSNodeInfo
 
 /** @brief topic_find request (type name exact match) */
 // @zh: topic_find 请求负载（类型名精确匹配）
-struct DDSDebugFind
+struct DebugFind
 {
     std::string typeName = "";
     uint32_t stableRounds = 0;
@@ -729,7 +729,7 @@ struct DDSDebugFind
 
 /** @brief interface_show request (IDL struct dump by type name) */
 // @zh: interface_show 请求负载（按类型名输出 IDL 结构）
-struct DDSDebugInterfaceShow
+struct DebugInterfaceShow
 {
     std::string typeName = "";
     uint32_t stableRounds = 0;
@@ -738,7 +738,7 @@ struct DDSDebugInterfaceShow
 
 /** @brief interface_list request (all discovered type names, deduplicated) */
 // @zh: interface_list 请求负载（全部已发现类型名，去重排序）
-struct DDSDebugInterfaceList
+struct DebugInterfaceList
 {
     uint32_t stableRounds = 0;
     uint32_t intervalMs = 0;
@@ -746,7 +746,7 @@ struct DDSDebugInterfaceList
 
 /** @brief topic_example request (Type/IDL/example command three-part lines) */
 // @zh: topic_example 请求负载（Type/IDL/example 命令三段行集）
-struct DDSDebugTopicExample
+struct DebugTopicExample
 {
     std::string topicName = "";  // exact match
     uint32_t stableRounds = 0;
@@ -755,7 +755,7 @@ struct DDSDebugTopicExample
 
 /** @brief topic_msg request (type name + compact msg JSON, exactly two lines) */
 // @zh: topic_msg 请求负载（类型名 + 紧凑 msg JSON，恰两行）
-struct DDSDebugTopicMsg
+struct DebugTopicMsg
 {
     std::string topicName = "";  // exact match
     uint32_t stableRounds = 0;
@@ -771,7 +771,7 @@ struct DDSDebugTopicMsg
 // @zh: topic_pub 请求负载（JSON 载荷发布，首轮完整强校验）
 // @zh: note requiredSubscribers>0 为期望建匹配订阅端数门槛；repeatIntervalMs>0 为持续发布
 // @zh: 模式，直至停止标志置位或发满 maxTimes 条
-struct DDSDebugTopicPub
+struct DebugTopicPub
 {
     std::string topicName = "";        // target topic, must be discovered
     std::string json = "";             // payload, same shape as the topic_example template
@@ -785,9 +785,9 @@ struct DDSDebugTopicPub
 
 // ===== YomkDdsBagHandler request payloads =====
 
-/** @brief bag create_node request (same env fallbacks as DDSNode) */
-// @zh: bag create_node 请求负载（环境变量回落语义同 DDSNode）
-struct DDSBagNode
+/** @brief bag create_node request (same env fallbacks as Node) */
+// @zh: bag create_node 请求负载（环境变量回落语义同 Node）
+struct BagNode
 {
     uint32_t domainId = YomkDdsDefaultDomainId();                               // DDS domain id [0,232]
     std::string udpDiscoverServerLocator = YomkDdsDefaultUdpDiscoverServers();  // UDP channel
@@ -796,7 +796,7 @@ struct DDSBagNode
 
 /** @brief bag_record request (blocking until recording finishes) */
 // @zh: bag_record 请求负载（阻塞至录制收尾）
-struct DDSBagRecord
+struct BagRecord
 {
     std::vector<std::string> topics;  // at least 1; wildcard "*" item supported
     std::string outputDir;            // empty = timestamped default bag_<...>
@@ -807,21 +807,21 @@ struct DDSBagRecord
 
 /** @brief bag_info request (pure file read, no bag node needed) */
 // @zh: bag_info 请求负载（纯文件读，不经 bag 节点）
-struct DDSBagInfo
+struct BagInfoRequest
 {
     std::string bagDir = "";  // must contain metadata.json
 };
 
 /** @brief bag_reindex request (pure file op, rebuilds metadata.json) */
 // @zh: bag_reindex 请求负载（纯文件操作，重建 metadata.json）
-struct DDSBagReindex
+struct BagReindex
 {
     std::string bagDir = "";  // metadata.json may be missing/corrupted
 };
 
 /** @brief bag_convert request (filter/merge inputs into new bags) */
 // @zh: bag_convert 请求负载（按配置过滤合并输入为新 bag）
-struct DDSBagConvert
+struct BagConvert
 {
     std::vector<std::string> inputs;  // at least 1, duplicates rejected
     std::string cfgPath = "";         // JSON config, top-level output_bags array
@@ -829,7 +829,7 @@ struct DDSBagConvert
 
 /** @brief bag_play request (blocking until all messages are played) */
 // @zh: bag_play 请求负载（阻塞至全部消息播毕）
-struct DDSBagPlay
+struct BagPlay
 {
     std::string bagDir = "";              // must contain metadata.json
     double playbackRate = 1.0;            // >0; 2.0 double speed
@@ -1017,4 +1017,4 @@ struct PlayResult
     bool operator==(const PlayResult& rhs) const { return tie() == rhs.tie(); }
     bool operator!=(const PlayResult& rhs) const { return !(*this == rhs); }
 };
-}  // namespace yomk::payload
+}  // namespace yomk::payload::dds

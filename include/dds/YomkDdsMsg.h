@@ -2,59 +2,61 @@
 
 #include "YomkDdsPayload.h"
 
-// Maintainer notes: the single home of all YOMK_DEFINE_MSG declarations
+// Maintainer notes: the single home of all YOMK_DEFINE_MSG_NS declarations
 // (four-suite Msg piece, same design as the SDK's Yomk{Module}Msg.h).
 // New request/response message: define the structure in YomkDdsPayload.h and
-// append one YOMK_DEFINE_MSG here — never declare message packages elsewhere.
+// append one YOMK_DEFINE_MSG_NS here — never declare message packages elsewhere.
+// All messages register into the dds sub-root (yomk::msgs::dds::...) so the
+// suite's message names never collide with other suites in yomk::msgs.
 // User payload types (MString/MInt32..., namespace YomkDdsStd) are
 // fastddsgen-generated from msg/YomkDdsStdMsgs.idl and installed as the
 // separate entry <yomk/dds/YomkDdsStdMsgs.hpp> (types + PubSubTypes); include
 // it directly when needed, not through this header.
 
 // clang-format off
-// YOMK_DEFINE_MSG is a third-party YomkServer macro; cppcheck needs --library
+// YOMK_DEFINE_MSG_NS is a third-party YomkServer macro; cppcheck needs --library
 // to know it (unknownMacro is a tooling config need, not a source defect)
 // cppcheck-suppress unknownMacro
 
 // ===== YomkDdsHandler (structures in YomkDdsPayload.h) =====
-YOMK_DEFINE_MSG(yomk::payload::DDSNode, DDSNode, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSXmlLoad, DDSXmlLoad, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSTopic, DDSTopic, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSSubRequest, DDSSubRequest, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSPublish, DDSPublish, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSLoan, DDSLoan, msg)
-YOMK_DEFINE_MSG(yomk::payload::LoanSample, LoanSample, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::Node, Node, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::XmlLoad, XmlLoad, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::Topic, Topic, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::SubRequest, SubRequest, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::Publish, Publish, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::Loan, Loan, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::LoanSample, LoanSample, msg)
 
 // ===== YomkDdsDebugHandler =====
-YOMK_DEFINE_MSG(yomk::payload::DDSDebugNode, DDSDebugNode, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSDebugTopic, DDSDebugTopic, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSDebugList, DDSDebugList, msg)
-YOMK_DEFINE_MSG(yomk::payload::TopicInfoArray, TopicInfoArray, d)
-YOMK_DEFINE_MSG(yomk::payload::DDSDebugInfo, DDSDebugInfo, msg)
-YOMK_DEFINE_MSG(yomk::payload::TopicInfo, TopicInfo, msg)
-YOMK_DEFINE_MSG(yomk::payload::InterfaceInfo, InterfaceInfo, msg)
-YOMK_DEFINE_MSG(yomk::payload::TopicExampleInfo, TopicExampleInfo, msg)
-YOMK_DEFINE_MSG(yomk::payload::TopicMessageInfo, TopicMessageInfo, msg)
-YOMK_DEFINE_MSG(yomk::payload::TopicPublishInfo, TopicPublishInfo, msg)
-YOMK_DEFINE_MSG(yomk::payload::NodeInfo, NodeInfo, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSNodeList, DDSNodeList, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSNodeInfo, DDSNodeInfo, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSDebugFind, DDSDebugFind, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSDebugInterfaceShow, DDSDebugInterfaceShow, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSDebugInterfaceList, DDSDebugInterfaceList, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSDebugTopicExample, DDSDebugTopicExample, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSDebugTopicMsg, DDSDebugTopicMsg, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSDebugTopicPub, DDSDebugTopicPub, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DebugNode, DebugNode, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DebugTopic, DebugTopic, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DebugList, DebugList, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::TopicInfoArray, TopicInfoArray, d)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DebugInfo, DebugInfo, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::TopicInfo, TopicInfo, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::InterfaceInfo, InterfaceInfo, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::TopicExampleInfo, TopicExampleInfo, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::TopicMessageInfo, TopicMessageInfo, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::TopicPublishInfo, TopicPublishInfo, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::NodeInfo, NodeInfo, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::NodeList, NodeList, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::NodeInfoRequest, NodeInfoRequest, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DebugFind, DebugFind, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DebugInterfaceShow, DebugInterfaceShow, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DebugInterfaceList, DebugInterfaceList, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DebugTopicExample, DebugTopicExample, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DebugTopicMsg, DebugTopicMsg, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DebugTopicPub, DebugTopicPub, msg)
 
 // ===== YomkDdsBagHandler =====
-YOMK_DEFINE_MSG(yomk::payload::DDSBagNode, DDSBagNode, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSBagRecord, DDSBagRecord, msg)
-YOMK_DEFINE_MSG(yomk::payload::RecordResult, RecordResult, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSBagInfo, DDSBagInfo, msg)
-YOMK_DEFINE_MSG(yomk::payload::BagInfo, BagInfo, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSBagReindex, DDSBagReindex, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSBagConvert, DDSBagConvert, msg)
-YOMK_DEFINE_MSG(yomk::payload::ConvertResult, ConvertResult, msg)
-YOMK_DEFINE_MSG(yomk::payload::DDSBagPlay, DDSBagPlay, msg)
-YOMK_DEFINE_MSG(yomk::payload::PlayResult, PlayResult, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagNode, BagNode, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagRecord, BagRecord, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::RecordResult, RecordResult, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagInfoRequest, BagInfoRequest, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagInfo, BagInfo, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagReindex, BagReindex, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagConvert, BagConvert, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::ConvertResult, ConvertResult, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagPlay, BagPlay, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::PlayResult, PlayResult, msg)
 // clang-format on

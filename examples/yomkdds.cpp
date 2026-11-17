@@ -276,7 +276,7 @@ static constexpr char kDomainEnv[] = "YOMKDDS_DDS_DOMAIN_ID";
 static constexpr char kDiscoverRoundsEnv[] = "YOMKDDS_DDS_DISCOVER_ROUNDS";
 
 // 发现服务器直配三环境变量：总开关 + UDP/TCP 双通道 server 聚合串（节点创建时经
-// DDSNode/DDSDebugNode/DDSBagNode 类内缺省初始化器读取，见 include/dds/YomkDdsHandler.h）。
+// Node/DebugNode/BagNode 类内缺省初始化器读取，见 include/dds/YomkDdsHandler.h）。
 // 启动时无则分别创建并设默认值 false/空/空（进程内生效），并幂等持久化到 ~/.bashrc
 // 使新开任意终端可查看可继承；默认值与"未设置"行为完全一致（开关非 true/1、串空均
 // 回落多播发现），仅保证可见性，用户 export 改值即刻生效
@@ -285,7 +285,7 @@ static constexpr char kUdpDiscoverServersEnv[] = "YOMKDDS_UDP_DISCOVER_SERVERS";
 static constexpr char kTcpDiscoverServersEnv[] = "YOMKDDS_TCP_DISCOVER_SERVERS";
 
 // XML profiles 自动加载双环境变量：总开关 + profiles 文件路径（yomk::dds().load_cfg() 缺省形态
-// 经 DDSXmlLoad 类内缺省初始化器读取，见 include/dds/YomkDdsHandler.h）。启动时无则分别创建
+// 经 XmlLoad 类内缺省初始化器读取，见 include/dds/YomkDdsHandler.h）。启动时无则分别创建
 // 并设默认值 false/空（进程内生效），并幂等持久化到 ~/.bashrc 使新开任意终端可查看可
 // 继承；开关开启且路径非空时各子命令创建节点前自动加载该 profiles（见 autoLoadXmlProfile），
 // 默认值与"未设置"行为完全一致（开关非 true/1 即不加载），仅保证可见性，用户 export
@@ -847,7 +847,7 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
 
     // 4. 输出统计（渲染属业务层）：解包 RecordResult，首行 bag 目录，其后每主题一行
     //    "topic: N 条 / M 字节"；载荷只给数据，行文本与单位由 CLI 约定
-    auto rec = ::yomk::msgs::unpack<::yomk::msgs::RecordResult>(resp.data);
+    auto rec = ::yomk::msgs::unpack<::yomk::msgs::dds::RecordResult>(resp.data);
     if (rec == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("bag record failed: unexpected response payload");
@@ -1103,7 +1103,7 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
     }
 
     // 5. 输出统计（渲染属业务层：载荷只给目录与逐主题计数/字节）
-    auto played = ::yomk::msgs::unpack<::yomk::msgs::PlayResult>(resp.data);
+    auto played = ::yomk::msgs::unpack<::yomk::msgs::dds::PlayResult>(resp.data);
     if (played == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("bag play failed: unexpected response payload");
@@ -1205,7 +1205,7 @@ static int runBagInfo(const std::string &bagDir)
     }
 
     // 渲染属业务层：载荷只给数据（纳秒、字节数、主题清单），行文本与单位由 CLI 约定
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::BagInfo>(resp.data);
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::BagInfo>(resp.data);
     if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("bag info failed: unexpected response payload");
@@ -1302,7 +1302,7 @@ static int runBagConvert(const std::vector<std::string> &inputs, const std::stri
     }
 
     // 输出统计（渲染属业务层）：载荷只给数据（uri/条数/字节/通道数），行文本由 CLI 约定
-    auto result = ::yomk::msgs::unpack<::yomk::msgs::ConvertResult>(resp.data);
+    auto result = ::yomk::msgs::unpack<::yomk::msgs::dds::ConvertResult>(resp.data);
     if (result == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("bag convert failed: unexpected response payload");
@@ -1422,7 +1422,7 @@ static int runHz(uint32_t domainId, const std::string &topicName, size_t windowS
 // 展示形态（三行 / 【-v】逐端点详情段）全部在此决定；文本口径与旧服务层拼装逐字一致
 static std::string formatDurationNs(int64_t ns)
 {
-    if (ns == yomk::payload::kInfiniteDurationNs)
+    if (ns == yomk::payload::dds::kInfiniteDurationNs)
     {
         return "Infinite";
     }
@@ -1441,7 +1441,7 @@ static std::string formatDurationNs(int64_t ns)
 
 // 端点 QoS 行集：ROS2 对齐组恒在，DDS 扩展组按 publisher/subscription 专属字段与
 // *Advertised 标记追加（未公告项显式标 not advertised，不静默跳过）
-static std::vector<std::string> endpointQosLines(const yomk::payload::TopicEndpointQos &qos,
+static std::vector<std::string> endpointQosLines(const yomk::payload::dds::TopicEndpointQos &qos,
                                                 bool publisher)
 {
     std::vector<std::string> lines;
@@ -1506,7 +1506,7 @@ static std::vector<std::string> endpointQosLines(const yomk::payload::TopicEndpo
 }
 
 // 单端点详情段：首行为空行（与上一段/计数行隔开），后接固定四行头 + QoS 行集
-static void printEndpointBlock(std::ostream &os, const yomk::payload::TopicEndpointInfo &endpoint,
+static void printEndpointBlock(std::ostream &os, const yomk::payload::dds::TopicEndpointInfo &endpoint,
                                bool publisher)
 {
     os << "\nNode name: " << endpoint.nodeName
@@ -1520,7 +1520,7 @@ static void printEndpointBlock(std::ostream &os, const yomk::payload::TopicEndpo
 }
 
 // 单主题详情：三行形态（Type/Publisher count/Subscription count）或缺省三行 + 逐端点详情段
-static void printTopicInfo(std::ostream &os, const yomk::payload::TopicInfo &info, bool verbose)
+static void printTopicInfo(std::ostream &os, const yomk::payload::dds::TopicInfo &info, bool verbose)
 {
     if (!verbose)
     {
@@ -1572,14 +1572,14 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false,
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = ::yomk::msgs::unpack<::yomk::msgs::TopicInfoArray>(resp.data);
+    auto arr = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicInfoArray>(resp.data);
     if (arr == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("list topics failed: unexpected response payload");
         yomk::dds().debug().quit();
         return 1;
     }
-    const std::vector<::yomk::payload::TopicInfo> &rows = arr->d.d;
+    const std::vector<::yomk::payload::dds::TopicInfo> &rows = arr->d.d;
     if (rows.empty())
     {
         std::cout << "no topics discovered on domain " << domainId << std::endl;
@@ -1649,7 +1649,7 @@ static int runInfo(uint32_t domainId, const std::string &topicName, uint32_t wai
         yomk::dds().debug().quit();
         return 1;
     }
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::TopicInfo>(resp.data);
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicInfo>(resp.data);
     if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("topic info failed: unexpected response payload");
@@ -1697,7 +1697,7 @@ static int runTopicType(uint32_t domainId, const std::string &topicName, uint32_
         yomk::dds().debug().quit();
         return 1;
     }
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::TopicInfo>(resp.data);
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicInfo>(resp.data);
     if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("topic type failed: unexpected response payload");
@@ -1769,7 +1769,7 @@ static int runTopicFind(uint32_t domainId, const std::string &typeName, uint32_t
 }
 
 // IDL 渲染（展示层职责）：服务端只回成员表，此处只加 IDL 语法（struct 头 / 4 空格缩进 / 结尾分号）
-static void printIdlType(std::ostream &os, const ::yomk::payload::InterfaceType &type)
+static void printIdlType(std::ostream &os, const ::yomk::payload::dds::InterfaceType &type)
 {
     os << "struct " << type.typeName << " {\n";
     for (const auto &member : type.members)
@@ -1781,7 +1781,7 @@ static void printIdlType(std::ostream &os, const ::yomk::payload::InterfaceType 
 
 // 完整 interface 渲染：依赖 struct 定义按拓扑序前置输出（被依赖者在前），块间空行；最后输出主
 // struct（无依赖时输出与旧版逐字相同）
-static void printIdlInterface(std::ostream &os, const ::yomk::payload::InterfaceInfo &info)
+static void printIdlInterface(std::ostream &os, const ::yomk::payload::dds::InterfaceInfo &info)
 {
     for (const auto &dep : info.dependencies)
     {
@@ -1820,7 +1820,7 @@ static int runInterfaceShow(uint32_t domainId, const std::string &typeName, uint
         yomk::dds().debug().quit();
         return 1;
     }
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::InterfaceInfo>(resp.data);
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::InterfaceInfo>(resp.data);
     if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("interface show failed: unexpected response payload");
@@ -1992,7 +1992,7 @@ static int runTopicPubMsgFile(uint32_t domainId, const std::string &topicName,
         yomk::dds().debug().quit();
         return 1;
     }
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::TopicMessageInfo>(resp.data);
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicMessageInfo>(resp.data);
     if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("topic msg failed: unexpected response payload");
@@ -2082,7 +2082,7 @@ static int runTopicPubExample(uint32_t domainId, const std::string &topicName, u
         yomk::dds().debug().quit();
         return 1;
     }
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::TopicExampleInfo>(resp.data);
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicExampleInfo>(resp.data);
     if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("topic example failed: unexpected response payload");
@@ -2165,7 +2165,7 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
         return 1;
     }
     // 发布计数：响应携带 TopicPublishInfo（单次与持续模式均有），total 含首轮
-    auto stat = ::yomk::msgs::unpack<::yomk::msgs::TopicPublishInfo>(resp.data);
+    auto stat = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicPublishInfo>(resp.data);
     if (stat == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("topic pub failed: unexpected response payload");
@@ -2313,7 +2313,7 @@ static int runNodeInfo(uint32_t domainId, const std::string &nodeName, uint32_t 
         yomk::dds().debug().quit();
         return 1;
     }
-    auto info = ::yomk::msgs::unpack<::yomk::msgs::NodeInfo>(resp.data);
+    auto info = ::yomk::msgs::unpack<::yomk::msgs::dds::NodeInfo>(resp.data);
     if (info == nullptr)
     {
         ::yomk::log().tag("yomkdds").error("node info failed: unexpected response payload");

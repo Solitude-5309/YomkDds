@@ -67,7 +67,7 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsLoadXml)
-            .msg(yomk::msgs::DDSXmlLoad::shared(yomk::payload::DDSXmlLoad{std::move(m_xmlPath)}))
+            .msg(yomk::msgs::dds::XmlLoad::shared(yomk::payload::dds::XmlLoad{std::move(m_xmlPath)}))
             .request();
     }
 };
@@ -86,8 +86,8 @@ class DdsTopicBuilder
     std::string m_nodeName;
     std::string m_topicName;
     void* m_type = nullptr;
-    yomk::payload::DDSQosProfile m_qos;
-    yomk::payload::DDSCallbackFunc m_callback;
+    yomk::payload::dds::DDSQosProfile m_qos;
+    yomk::payload::dds::DDSCallbackFunc m_callback;
     void* m_data = nullptr;
     void* m_sample = nullptr;
 public:
@@ -121,7 +121,7 @@ public:
     // @zh: qos 端点 QoS 描述 DDSQosProfile；全哨兵=Fast DDS 默认底座，ROS2 用
     // @zh: DDSQosProfile::ros2DefaultPublisher()
     // @zh: return 自身链式引用
-    DdsTopicBuilder& qos(yomk::payload::DDSQosProfile qos)
+    DdsTopicBuilder& qos(yomk::payload::dds::DDSQosProfile qos)
     {
         m_qos = std::move(qos);
         return *this;
@@ -139,8 +139,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsRegisterPubTopic)
-            .msg(yomk::msgs::DDSTopic::shared(
-                yomk::payload::DDSTopic{std::move(m_nodeName), std::move(m_topicName), m_type, std::move(m_qos)}))
+            .msg(yomk::msgs::dds::Topic::shared(
+                yomk::payload::dds::Topic{std::move(m_nodeName), std::move(m_topicName), m_type, std::move(m_qos)}))
             .request();
     }
     /**
@@ -152,7 +152,7 @@ public:
     // @zh: 累积订阅回调
     // @zh: callback 每收到一条消息调用一次；消息实例指针仅回调期间有效
     // @zh: return 自身链式引用
-    DdsTopicBuilder& sub_cb(yomk::payload::DDSCallbackFunc callback)
+    DdsTopicBuilder& sub_cb(yomk::payload::dds::DDSCallbackFunc callback)
     {
         m_callback = std::move(callback);
         return *this;
@@ -176,8 +176,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "sub_cb() callback is required");
         }
         return yomk::server().url(yomk::url::ddsRegisterSubTopic)
-            .msg(yomk::msgs::DDSSubRequest::shared(
-                yomk::payload::DDSSubRequest{std::move(m_nodeName), std::move(m_topicName), m_type, std::move(m_callback), std::move(m_qos)}))
+            .msg(yomk::msgs::dds::SubRequest::shared(
+                yomk::payload::dds::SubRequest{std::move(m_nodeName), std::move(m_topicName), m_type, std::move(m_callback), std::move(m_qos)}))
             .request();
     }
     /**
@@ -209,8 +209,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsPublish)
-            .msg(yomk::msgs::DDSPublish::shared(
-                yomk::payload::DDSPublish{std::move(m_nodeName), std::move(m_topicName), m_data}))
+            .msg(yomk::msgs::dds::Publish::shared(
+                yomk::payload::dds::Publish{std::move(m_nodeName), std::move(m_topicName), m_data}))
             .request();
     }
     /**
@@ -232,14 +232,14 @@ public:
             return nullptr;
         }
         auto resp = yomk::server().url(yomk::url::ddsLoan)
-            .msg(yomk::msgs::DDSLoan::shared(
-                yomk::payload::DDSLoan{std::move(m_nodeName), std::move(m_topicName), nullptr}))
+            .msg(yomk::msgs::dds::Loan::shared(
+                yomk::payload::dds::Loan{std::move(m_nodeName), std::move(m_topicName), nullptr}))
             .request();
         if (resp.status != yomk::payload::ResStatus::Succeeded || !resp.data)
         {
             return nullptr;
         }
-        auto loan = yomk::msgs::unpack<yomk::msgs::LoanSample>(resp.data);
+        auto loan = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(resp.data);
         return loan ? loan->msg.sample : nullptr;
     }
     /**
@@ -270,8 +270,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDiscardLoan)
-            .msg(yomk::msgs::DDSLoan::shared(
-                yomk::payload::DDSLoan{std::move(m_nodeName), std::move(m_topicName), m_sample}))
+            .msg(yomk::msgs::dds::Loan::shared(
+                yomk::payload::dds::Loan{std::move(m_nodeName), std::move(m_topicName), m_sample}))
             .request();
     }
 };
@@ -285,9 +285,9 @@ public:
 class DdsNodeBuilder
 {
     std::string m_nodeName;
-    uint32_t m_domainId = yomk::payload::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
-    std::string m_udpDiscoverServerLocator = yomk::payload::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
-    std::string m_tcpDiscoverServerLocator = yomk::payload::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
+    uint32_t m_domainId = yomk::payload::dds::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
+    std::string m_udpDiscoverServerLocator = yomk::payload::dds::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
+    std::string m_tcpDiscoverServerLocator = yomk::payload::dds::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
 public:
     explicit DdsNodeBuilder(std::string nodeName)
         : m_nodeName(std::move(nodeName))
@@ -361,8 +361,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsCreateNode)
-            .msg(yomk::msgs::DDSNode::shared(
-                yomk::payload::DDSNode{std::move(m_nodeName), m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
+            .msg(yomk::msgs::dds::Node::shared(
+                yomk::payload::dds::Node{std::move(m_nodeName), m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
             .request();
     }
     /**
@@ -446,8 +446,8 @@ public:
 class DdsDebugTopicBuilder
 {
     std::string m_topicName;
-    yomk::payload::DDSDebugOutputFunc m_output;
-    yomk::payload::DDSQosProfile m_qos;
+    yomk::payload::dds::DDSDebugOutputFunc m_output;
+    yomk::payload::dds::DDSQosProfile m_qos;
     uint32_t m_stableRounds = 0;  // info() 等查询首轮收敛次数；0 由节点层钳制为默认 5 次
     uint32_t m_intervalMs = 0;    // info() 等查询轮询间隔；0 由节点层钳制为默认 200ms
     std::string m_payload;        // publish() 载荷：payload() 置位
@@ -471,7 +471,7 @@ public:
     // @zh: callback DDSDebugOutputFunc，投递发生在 DDS reader 线程，须线程安全且快速返回
     // @zh: return 自身链式引用
     // @zh: warning 空回调由 print() 拒绝
-    DdsDebugTopicBuilder& out_cb(yomk::payload::DDSDebugOutputFunc callback)
+    DdsDebugTopicBuilder& out_cb(yomk::payload::dds::DDSDebugOutputFunc callback)
     {
         m_output = std::move(callback);
         return *this;
@@ -487,7 +487,7 @@ public:
     // @zh: qos DDSQosProfile；print() 全哨兵保持 BEST_EFFORT+VOLATILE depth 1，
     // @zh: publish() 全哨兵保持 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL
     // @zh: return 自身链式引用
-    DdsDebugTopicBuilder& qos(yomk::payload::DDSQosProfile qos)
+    DdsDebugTopicBuilder& qos(yomk::payload::dds::DDSQosProfile qos)
     {
         m_qos = std::move(qos);
         return *this;
@@ -618,8 +618,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "out_cb() callback is required");
         }
         return yomk::server().url(yomk::url::ddsDebugTopicPrint)
-            .msg(yomk::msgs::DDSDebugTopic::shared(
-                yomk::payload::DDSDebugTopic{std::move(m_topicName), std::move(m_output), std::move(m_qos)}))
+            .msg(yomk::msgs::dds::DebugTopic::shared(
+                yomk::payload::dds::DebugTopic{std::move(m_topicName), std::move(m_output), std::move(m_qos)}))
             .request();
     }
     /**
@@ -643,8 +643,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDebugTopicInfo)
-            .msg(yomk::msgs::DDSDebugInfo::shared(
-                yomk::payload::DDSDebugInfo{std::move(m_topicName), m_stableRounds, m_intervalMs}))
+            .msg(yomk::msgs::dds::DebugInfo::shared(
+                yomk::payload::dds::DebugInfo{std::move(m_topicName), m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -669,8 +669,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDebugTopicExample)
-            .msg(yomk::msgs::DDSDebugTopicExample::shared(
-                yomk::payload::DDSDebugTopicExample{std::move(m_topicName), m_stableRounds, m_intervalMs}))
+            .msg(yomk::msgs::dds::DebugTopicExample::shared(
+                yomk::payload::dds::DebugTopicExample{std::move(m_topicName), m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -694,8 +694,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDebugTopicMsg)
-            .msg(yomk::msgs::DDSDebugTopicMsg::shared(
-                yomk::payload::DDSDebugTopicMsg{std::move(m_topicName), m_stableRounds, m_intervalMs}))
+            .msg(yomk::msgs::dds::DebugTopicMsg::shared(
+                yomk::payload::dds::DebugTopicMsg{std::move(m_topicName), m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -727,8 +727,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "payload(json) is required");
         }
         return yomk::server().url(yomk::url::ddsDebugTopicPub)
-            .msg(yomk::msgs::DDSDebugTopicPub::shared(
-                yomk::payload::DDSDebugTopicPub{std::move(m_topicName), std::move(m_payload),
+            .msg(yomk::msgs::dds::DebugTopicPub::shared(
+                yomk::payload::dds::DebugTopicPub{std::move(m_topicName), std::move(m_payload),
                     m_stableRounds, m_intervalMs, m_repeatMs, m_requiredSubs, m_maxTimes,
                     std::move(m_qos)}))
             .request();
@@ -799,8 +799,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDebugTopicFind)
-            .msg(yomk::msgs::DDSDebugFind::shared(
-                yomk::payload::DDSDebugFind{std::move(m_typeName), m_stableRounds, m_intervalMs}))
+            .msg(yomk::msgs::dds::DebugFind::shared(
+                yomk::payload::dds::DebugFind{std::move(m_typeName), m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -833,8 +833,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDebugInterfaceShow)
-            .msg(yomk::msgs::DDSDebugInterfaceShow::shared(
-                yomk::payload::DDSDebugInterfaceShow{std::move(m_typeName), m_stableRounds, m_intervalMs}))
+            .msg(yomk::msgs::dds::DebugInterfaceShow::shared(
+                yomk::payload::dds::DebugInterfaceShow{std::move(m_typeName), m_stableRounds, m_intervalMs}))
             .request();
     }
 };
@@ -908,8 +908,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDebugNodeInfo)
-            .msg(yomk::msgs::DDSNodeInfo::shared(
-                yomk::payload::DDSNodeInfo{std::move(m_nodeName), m_stableRounds, m_intervalMs}))
+            .msg(yomk::msgs::dds::NodeInfoRequest::shared(
+                yomk::payload::dds::NodeInfoRequest{std::move(m_nodeName), m_stableRounds, m_intervalMs}))
             .request();
     }
 };
@@ -926,9 +926,9 @@ public:
 // @zh: 或交出 topic()/type()/node() 子分面
 class DdsDebugBuilder
 {
-    uint32_t m_domainId = yomk::payload::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
-    std::string m_udpDiscoverServerLocator = yomk::payload::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
-    std::string m_tcpDiscoverServerLocator = yomk::payload::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
+    uint32_t m_domainId = yomk::payload::dds::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
+    std::string m_udpDiscoverServerLocator = yomk::payload::dds::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
+    std::string m_tcpDiscoverServerLocator = yomk::payload::dds::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
     uint32_t m_stableRounds = 0;                                                                 // 0 由节点层钳制为默认 5 次
     uint32_t m_intervalMs = 0;                                                                   // 0 由节点层钳制为默认 200ms
 public:
@@ -1015,8 +1015,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDebugCreateNode)
-            .msg(yomk::msgs::DDSDebugNode::shared(
-                yomk::payload::DDSDebugNode{m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
+            .msg(yomk::msgs::dds::DebugNode::shared(
+                yomk::payload::dds::DebugNode{m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
             .request();
     }
     /**
@@ -1096,8 +1096,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDebugListTopics)
-            .msg(yomk::msgs::DDSDebugList::shared(
-                yomk::payload::DDSDebugList{m_stableRounds, m_intervalMs}))
+            .msg(yomk::msgs::dds::DebugList::shared(
+                yomk::payload::dds::DebugList{m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -1119,8 +1119,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDebugInterfaceList)
-            .msg(yomk::msgs::DDSDebugInterfaceList::shared(
-                yomk::payload::DDSDebugInterfaceList{m_stableRounds, m_intervalMs}))
+            .msg(yomk::msgs::dds::DebugInterfaceList::shared(
+                yomk::payload::dds::DebugInterfaceList{m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -1143,8 +1143,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsDebugListNodes)
-            .msg(yomk::msgs::DDSNodeList::shared(
-                yomk::payload::DDSNodeList{m_stableRounds, m_intervalMs}))
+            .msg(yomk::msgs::dds::NodeList::shared(
+                yomk::payload::dds::NodeList{m_stableRounds, m_intervalMs}))
             .request();
     }
 };
@@ -1195,7 +1195,7 @@ class DdsBagDirBuilder
     double m_playDelaySec = 0.0;                                            // 每轮开播延迟秒，须 >0
     int64_t m_playWaitAckedMs = -1;                                         // -1 不等确认 / 0 永等 / >0 每主题超时
     std::vector<std::string> m_playRemaps;                                  // "old:=new" 重映射规则
-    size_t m_playReadAhead = yomk::payload::kBagPlayReadAheadQueueSize;     // 预读队列深度，须 >=1
+    size_t m_playReadAhead = yomk::payload::dds::kBagPlayReadAheadQueueSize;     // 预读队列深度，须 >=1
     std::string m_playQosFile;                                              // 空 = 不加载 QoS 覆盖文件
 public:
     explicit DdsBagDirBuilder(std::string bagDir)
@@ -1226,7 +1226,7 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsBagInfo)
-            .msg(yomk::msgs::DDSBagInfo::shared(yomk::payload::DDSBagInfo{std::move(m_bagDir)}))
+            .msg(yomk::msgs::dds::BagInfoRequest::shared(yomk::payload::dds::BagInfoRequest{std::move(m_bagDir)}))
             .request();
     }
     /**
@@ -1247,7 +1247,7 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsBagReindex)
-            .msg(yomk::msgs::DDSBagReindex::shared(yomk::payload::DDSBagReindex{std::move(m_bagDir)}))
+            .msg(yomk::msgs::dds::BagReindex::shared(yomk::payload::dds::BagReindex{std::move(m_bagDir)}))
             .request();
     }
     /**
@@ -1400,8 +1400,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsBagPlay)
-            .msg(yomk::msgs::DDSBagPlay::shared(
-                yomk::payload::DDSBagPlay{std::move(m_bagDir), m_playRate, std::move(m_playTopics),
+            .msg(yomk::msgs::dds::BagPlay::shared(
+                yomk::payload::dds::BagPlay{std::move(m_bagDir), m_playRate, std::move(m_playTopics),
                     m_playLoop, m_playOffsetSec, m_playDelaySec, m_playWaitAckedMs,
                     std::move(m_playRemaps), m_playReadAhead, std::move(m_playQosFile)}))
             .request();
@@ -1421,9 +1421,9 @@ public:
 // @zh: create()/quit()/record()/convert() 收束；dir() 交出 bag 目录子分面
 class DdsBagBuilder
 {
-    uint32_t m_domainId = yomk::payload::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
-    std::string m_udpDiscoverServerLocator = yomk::payload::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
-    std::string m_tcpDiscoverServerLocator = yomk::payload::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
+    uint32_t m_domainId = yomk::payload::dds::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
+    std::string m_udpDiscoverServerLocator = yomk::payload::dds::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
+    std::string m_tcpDiscoverServerLocator = yomk::payload::dds::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
 
     std::vector<std::string> m_recordTopics;
     bool m_hasRecordTopics = false;        // topics() 必填标记：未累积即终结返回错误
@@ -1495,8 +1495,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsBagCreateNode)
-            .msg(yomk::msgs::DDSBagNode::shared(
-                yomk::payload::DDSBagNode{m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
+            .msg(yomk::msgs::dds::BagNode::shared(
+                yomk::payload::dds::BagNode{m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
             .request();
     }
     /**
@@ -1634,8 +1634,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "topics are required");
         }
         return yomk::server().url(yomk::url::ddsBagRecord)
-            .msg(yomk::msgs::DDSBagRecord::shared(
-                yomk::payload::DDSBagRecord{std::move(m_recordTopics), std::move(m_recordOutDir),
+            .msg(yomk::msgs::dds::BagRecord::shared(
+                yomk::payload::dds::BagRecord{std::move(m_recordTopics), std::move(m_recordOutDir),
                     m_recordMaxSize, m_recordMaxDurationSec, m_recordCacheSize}))
             .request();
     }
@@ -1704,8 +1704,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "out_cfg(path) is required");
         }
         return yomk::server().url(yomk::url::ddsBagConvert)
-            .msg(yomk::msgs::DDSBagConvert::shared(
-                yomk::payload::DDSBagConvert{std::move(m_convertInBags), std::move(m_convertOutCfg)}))
+            .msg(yomk::msgs::dds::BagConvert::shared(
+                yomk::payload::dds::BagConvert{std::move(m_convertInBags), std::move(m_convertOutCfg)}))
             .request();
     }
 };
@@ -1813,7 +1813,7 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsLoadXml)
-            .msg(yomk::msgs::DDSXmlLoad::shared(yomk::payload::DDSXmlLoad{}))
+            .msg(yomk::msgs::dds::XmlLoad::shared(yomk::payload::dds::XmlLoad{}))
             .request();
     }
 };

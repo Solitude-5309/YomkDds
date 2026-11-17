@@ -93,14 +93,14 @@ public:
     // true 并填充完整 TopicInfo（主题名/类型名/收发计数/逐端点名与结构化 QoS）；快照相等性含
     // 端点详情。0 值钳制默认 5 次/200ms；最长阻塞约 stableRounds*intervalMs。未入域
     // error="debug node not created"，未发现 error="topic [...] not found"。
-    bool topicInfo(const std::string& topicName, yomk::payload::TopicInfo& info,
+    bool topicInfo(const std::string& topicName, yomk::payload::dds::TopicInfo& info,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
     // 收敛查询全部已发现主题的完整详情（与 listTopics/topicInfo 各自独立收敛）：取集规则同
     // listTopics（writer ∪ reader），逐主题填 TopicInfo 后按主题名排序；域内无主题返回 true
     // 且 topics 为空。0 值钳制默认 5 次/200ms。未入域 false（error="debug node not created"）。
-    bool listTopicInfos(std::vector<yomk::payload::TopicInfo>& topics,
+    bool listTopicInfos(std::vector<yomk::payload::dds::TopicInfo>& topics,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
@@ -120,7 +120,7 @@ public:
     // (topicName, typeName) 排序的结构化端点清单（类型名原样，不做风格转换）。
     // 未入域 error="debug node not created"，无此名参与者 error="node [...] not found"。
     bool nodeInfo(const std::string& nodeName,
-            yomk::payload::NodeInfo& info,
+            yomk::payload::dds::NodeInfo& info,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
@@ -131,7 +131,7 @@ public:
     // TypeObject 不可得 "type object for [...] not available"（ROS2 rmw_fastrtps 等不参与 XTypes
     // 类型发现的端点即此情形）、顶层非 struct "type [...] is not a struct, ..."。
     bool interfaceShow(const std::string& typeName,
-            yomk::payload::InterfaceInfo& info,
+            yomk::payload::dds::InterfaceInfo& info,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
@@ -140,14 +140,14 @@ public:
     // 输入格式对称，可直接作为发布载荷）。IDL 语法、段标题与发布命令均为展示层职责，由调用方渲染。
     // 失败按步骤各自归类回填 error，不统一报 not found；最长阻塞约 2*stableRounds*intervalMs。
     bool topicExample(const std::string& topicName,
-            yomk::payload::TopicExampleInfo& info,
+            yomk::payload::dds::TopicExampleInfo& info,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
     // 收敛查询指定主题的消息描述（类型名 + JSON 发布模板，供导出消息描述文件用；落盘属调用方
     // 职责，请求不携带输出路径）。失败按步骤各自归类回填 error；最长阻塞约 stableRounds*intervalMs。
     bool topicMsg(const std::string& topicName,
-            yomk::payload::TopicMessageInfo& info,
+            yomk::payload::dds::TopicMessageInfo& info,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
             std::string* error = nullptr);
@@ -167,7 +167,7 @@ public:
     // info 回填目标主题名与发布计数：total 含首轮（单次发布即 1），failed 仅持续模式的 write
     // 失败；token 不区分模式，单次发布同样给出 total=1/failed=0。
     bool topicPub(const std::string& topicName, const std::string& json,
-            yomk::payload::TopicPublishInfo& info,
+            yomk::payload::dds::TopicPublishInfo& info,
             std::string& error,
             uint32_t stableRounds = kDefaultStableRounds,
             uint32_t intervalMs = kDefaultIntervalMs,
@@ -179,27 +179,27 @@ public:
 private:
     // Precondition: 调用方须已持 seenMtx_；主题未发现返回 false，命中则填满 info（含主题名、
     // 类型名、收发计数与逐端点结构化 QoS）。仅读发现缓存，不触及节点状态。
-    bool fillTopicInfoLocked(const std::string& topicName, yomk::payload::TopicInfo& info);
+    bool fillTopicInfoLocked(const std::string& topicName, yomk::payload::dds::TopicInfo& info);
     // Precondition: 调用方已完成入域检查
     bool waitForTopicsStable(std::vector<std::pair<std::string, std::string>>& topics,
             uint32_t stableRounds, uint32_t intervalMs);
     // Precondition: 调用方已完成入域检查
-    bool waitForTopicInfoStable(const std::string& topicName, yomk::payload::TopicInfo& info,
+    bool waitForTopicInfoStable(const std::string& topicName, yomk::payload::dds::TopicInfo& info,
             uint32_t stableRounds, uint32_t intervalMs);
     // Precondition: 调用方已完成入域检查
-    bool waitForTopicInfosStable(std::vector<yomk::payload::TopicInfo>& topics,
+    bool waitForTopicInfosStable(std::vector<yomk::payload::dds::TopicInfo>& topics,
             uint32_t stableRounds, uint32_t intervalMs);
     // Precondition: 调用方已完成入域检查
     bool waitForNodesStable(std::vector<std::string>& names,
             uint32_t stableRounds, uint32_t intervalMs);
     // Precondition: 调用方已完成入域检查
     bool waitForNodeInfoStable(const std::string& nodeName,
-            yomk::payload::NodeInfo& info,
+            yomk::payload::dds::NodeInfo& info,
             uint32_t stableRounds, uint32_t intervalMs);
     // Precondition: 调用方已完成入域检查；失败按收敛末轮实际原因归类写 error
     // （类型名未出现 / TypeObject 不可得 / 反射采集失败三态）。
     bool waitForInterfaceStable(const std::string& typeName,
-            yomk::payload::InterfaceInfo& info,
+            yomk::payload::dds::InterfaceInfo& info,
             uint32_t stableRounds, uint32_t intervalMs,
             std::string* error = nullptr);
     // DynamicType → 成员表（成员按 MemberId 升序 == 声明序，idlTypeNameOf 产出类型文本）；

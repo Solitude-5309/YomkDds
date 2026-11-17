@@ -14,6 +14,7 @@
 #include <mutex>
 class FastDDSDebugNode;
 using namespace yomk::payload;
+using namespace yomk::payload::dds;
 
 /** @brief Type-agnostic debugging service: discovery inspection, JSON message tap and probe publish */
 // @zh: 类型无关调试服务：发现观察、消息 JSON 旁路与探针发布

@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
 auto resp = yomk::dds().debug().domain(0).create();      // 1. 创建调试节点
 // 2. 收敛查询：连续 5 次 200ms 快照不变即返回结构化 TopicInfoArray 包
 resp = yomk::dds().debug().rounds(5).interval(200).topics();
-auto arr = ::yomk::msgs::unpack<::yomk::msgs::TopicInfoArray>(resp.data);
+auto arr = ::yomk::msgs::unpack<::yomk::msgs::dds::TopicInfoArray>(resp.data);
 if (arr != nullptr)
 {
     // 终端形态由调用方决定：此处仅打主题名（附类型名同理，取 typeName）

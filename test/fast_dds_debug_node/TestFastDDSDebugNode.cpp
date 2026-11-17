@@ -332,7 +332,7 @@ int main()
               "未 setDomainId 时 nodeList → false（participant 未创建）");
         check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 nodeList 的 error 含 debug node not created");
-        yomk::payload::InterfaceInfo ifaceGuard;
+        yomk::payload::dds::InterfaceInfo ifaceGuard;
         guardErr.clear();
         check(!dbg.interfaceShow("Any::Type", ifaceGuard, 5, 200, &guardErr),
               "未 setDomainId 时 interfaceShow → false（participant 未创建）");
@@ -345,25 +345,25 @@ int main()
               "未入域 subscribeTopic 的 error 含 debug node not created");
         // 补齐剩余 4 个入口的未入域守卫（topicInfo / nodeInfo / topicExample / topicMsg），
         // 使节点层 7 处 participant_ == nullptr 分支全覆盖
-        yomk::payload::TopicInfo guardInfo;
+        yomk::payload::dds::TopicInfo guardInfo;
         guardErr.clear();
         check(!dbg.topicInfo(TEST_TOPIC, guardInfo, 5, 200, &guardErr),
               "未 setDomainId 时 topicInfo → false（participant 未创建）");
         check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 topicInfo 的 error 含 debug node not created");
-        yomk::payload::NodeInfo guardNodeInfo;
+        yomk::payload::dds::NodeInfo guardNodeInfo;
         guardErr.clear();
         check(!dbg.nodeInfo("any-node", guardNodeInfo, 5, 200, &guardErr),
               "未 setDomainId 时 nodeInfo → false（participant 未创建）");
         check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 nodeInfo 的 error 含 debug node not created");
-        yomk::payload::TopicExampleInfo exampleGuard;
+        yomk::payload::dds::TopicExampleInfo exampleGuard;
         guardErr.clear();
         check(!dbg.topicExample(TEST_TOPIC, exampleGuard, 5, 200, &guardErr),
               "未 setDomainId 时 topicExample → false（participant 未创建）");
         check(guardErr.find("debug node not created") != std::string::npos,
               "未入域 topicExample 的 error 含 debug node not created");
-        yomk::payload::TopicMessageInfo guardMsgInfo;
+        yomk::payload::dds::TopicMessageInfo guardMsgInfo;
         guardErr.clear();
         check(!dbg.topicMsg(TEST_TOPIC, guardMsgInfo, 5, 200, &guardErr),
               "未 setDomainId 时 topicMsg → false（participant 未创建）");
@@ -582,7 +582,7 @@ int main()
                 // topicInfo 不依赖 listTopics，此调用仅为本用例的时序前置
                 std::vector<std::pair<std::string, std::string>> listed;
                 check(dbg.listTopics(listed, 5, 100), "listTopics(5,100ms) → true（计数场景收敛）");
-                yomk::payload::TopicInfo info;
+                yomk::payload::dds::TopicInfo info;
                 check(dbg.topicInfo(COUNT_TOPIC, info, 5, 100),
                       "topicInfo(t_info_counts,5,100ms) → true（独立收敛查询命中）");
                 check(info.typeName == "YomkDdsStd::MString",
@@ -598,7 +598,7 @@ int main()
                           << " type=" << info.typeName << std::endl;
 
                 // 未发现主题：单次快照快速路径（stableRounds=1 免等待）→ false
-                yomk::payload::TopicInfo missInfo;
+                yomk::payload::dds::TopicInfo missInfo;
                 check(!dbg.topicInfo("t_not_exist", missInfo, 1, 50),
                       "topicInfo(t_not_exist,1,50) → false（未发现主题，单次快照快速路径）");
                 check(missInfo.publishers.empty() && missInfo.subscriptions.empty(),
@@ -741,7 +741,7 @@ int main()
         check(slashParticipant != nullptr, "slash peer participant 创建成功（显式 qos.name(\"/\")）");
 
         FastDDSDebugNode dbg;
-        yomk::payload::NodeInfo nodeInfo1;
+        yomk::payload::dds::NodeInfo nodeInfo1;
         check(!dbg.nodeInfo(NODEINFO_PEER_NAME, nodeInfo1),
               "未 setDomainId 时 nodeInfo → false（participant 未创建）");
         check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（节点信息场景）");
@@ -778,8 +778,8 @@ int main()
         check(hasSub, "nodeInfo subscribers 含 (t_nodeinfo_sub, YomkDdsStd::MString)（reader GUID 前缀归属）");
         check(noAnon, "nodeInfo 不含匿名 peer 的 t_nodeinfo_anon（GUID 前缀归属隔离）");
         // 端点清单排序契约：(topicName, typeName) 升序（NodeEndpoint 无 operator<，显式比较）
-        const auto endpointLess = [](const yomk::payload::NodeEndpoint& a,
-                                     const yomk::payload::NodeEndpoint& b)
+        const auto endpointLess = [](const yomk::payload::dds::NodeEndpoint& a,
+                                     const yomk::payload::dds::NodeEndpoint& b)
         { return std::tie(a.topicName, a.typeName) < std::tie(b.topicName, b.typeName); };
         check(std::is_sorted(nodeInfo1.publishers.begin(), nodeInfo1.publishers.end(), endpointLess),
               "nodeInfo publishers 按 (topicName, typeName) 升序");
@@ -790,14 +790,14 @@ int main()
                   << " subs=" << nodeInfo1.subscribers.size() << std::endl;
 
         // not-found：单次快照快速路径（stableRounds=1 免等待）→ false
-        yomk::payload::NodeInfo missNodeInfo;
+        yomk::payload::dds::NodeInfo missNodeInfo;
         check(!dbg.nodeInfo("t_no_such_node", missNodeInfo, 1, 50),
               "nodeInfo(t_no_such_node,1,50) → false（未发现该名参与者，单次快照快速路径）");
         check(missNodeInfo.publishers.empty() && missNodeInfo.subscribers.empty(),
               "nodeInfo 未命中时两端点清单为空");
 
         // "/" 名可查：slash peer 已入域且无端点 → true 且两清单为空（名称过滤不在节点层）
-        yomk::payload::NodeInfo slashNodeInfo;
+        yomk::payload::dds::NodeInfo slashNodeInfo;
         check(dbg.nodeInfo("/", slashNodeInfo, 5, 100),
               "nodeInfo(\"/\",5,100ms) → true（\"/\" 名参与者存在，可查）");
         check(slashNodeInfo.nodeName == "/", "nodeInfo(\"/\") nodeName 为 \"/\" 原样");
@@ -805,13 +805,13 @@ int main()
               "nodeInfo(\"/\") 两端点清单为空（slash peer 无端点）");
 
         // 收敛一致性：重复调用载荷相等
-        yomk::payload::NodeInfo nodeInfo1Again;
+        yomk::payload::dds::NodeInfo nodeInfo1Again;
         check(dbg.nodeInfo(NODEINFO_PEER_NAME, nodeInfo1Again, 5, 100),
               "nodeInfo 重复调用 → true（收敛后查询）");
         check(nodeInfo1Again == nodeInfo1, "nodeInfo 重复调用载荷与首调一致（收敛快照一致性）");
 
         // topic info 结构化端点详情（归属节点名 + FastDDS 原生 GUID + 结构化 QoS 字段）
-        yomk::payload::TopicInfo vInfo;
+        yomk::payload::dds::TopicInfo vInfo;
         check(dbg.topicInfo(NODEINFO_PUB_TOPIC, vInfo, 5, 100),
             "topicInfo(t_nodeinfo_pub) → true（writer 端点详情命中）");
         check(vInfo.typeName == "YomkDdsStd::MString" && vInfo.publisherCount == 1,
@@ -825,7 +825,7 @@ int main()
             "writer 结构化 QoS 回填 reliability/durability 枚举名（RELIABLE/TRANSIENT_LOCAL 底座）");
         std::cout << "[OBSERVE] writer qos reliability=" << writerQos.reliability
                   << " durability=" << writerQos.durability << std::endl;
-        yomk::payload::TopicInfo vInfoSub;
+        yomk::payload::dds::TopicInfo vInfoSub;
         check(dbg.topicInfo(NODEINFO_SUB_TOPIC, vInfoSub, 5, 100),
             "topicInfo(t_nodeinfo_sub) → true（reader 端点详情命中）");
         check(vInfoSub.subscriptionCount == 1 && vInfoSub.subscriptions.size() == 1 &&
@@ -834,7 +834,7 @@ int main()
         std::cout << "[OBSERVE] writer guid=" << vInfo.publishers[0].guid
                   << " reader guid=" << vInfoSub.subscriptions[0].guid << std::endl;
         // 未发现主题：结构化载荷保持空清单（单次快照快速路径）
-        yomk::payload::TopicInfo missInfo;
+        yomk::payload::dds::TopicInfo missInfo;
         check(!dbg.topicInfo("t_not_exist_verbose", missInfo, 1, 50),
             "topicInfo(t_not_exist_verbose) → false（未发现主题）");
         check(missInfo.publishers.empty() && missInfo.subscriptions.empty(),
@@ -842,7 +842,7 @@ int main()
 
         // interface show：按类型名输出反射成员表 + struct 依赖闭包（TypeObject→DynamicType
         // 纯类型内省，不建订阅；peer 的 MString writer 在场，TypeInformation 经 TypeLookup 已就绪）
-        yomk::payload::InterfaceInfo iface;
+        yomk::payload::dds::InterfaceInfo iface;
         check(dbg.interfaceShow("YomkDdsStd::MString", iface, 5, 100),
               "interfaceShow(YomkDdsStd::MString,5,100ms) → true（writer 在场类型命中）");
         check(iface.root.typeName == "YomkDdsStd::MString",
@@ -858,7 +858,7 @@ int main()
                   << " deps=" << iface.dependencies.size() << std::endl;
         // 未发现类型：单次快照快速路径 → false 且载荷保持为空，error 回填"类型名未出现"
         // 归类文本（不是 TypeObject 不可得，后者需裸类型端点才能触发）
-        yomk::payload::InterfaceInfo ifaceMiss;
+        yomk::payload::dds::InterfaceInfo ifaceMiss;
         std::string ifaceMissErr;
         check(!dbg.interfaceShow("Not::Exist", ifaceMiss, 1, 50, &ifaceMissErr),
               "interfaceShow(Not::Exist,1,50ms) → false（未发现类型）");
@@ -871,7 +871,7 @@ int main()
 
         // 嵌套 struct 依赖闭包：MUCharMultiArray → MultiArrayLayout → sequence<MultiArrayDimension>
         // （dim 是序列元素类型中的 struct：验证容器穿透 + 去重 + 拓扑序）
-        yomk::payload::InterfaceInfo nested;
+        yomk::payload::dds::InterfaceInfo nested;
         check(dbg.interfaceShow("YomkDdsStd::MUCharMultiArray", nested, 5, 100),
               "interfaceShow(MUCharMultiArray) → true（嵌套 struct 类型命中）");
         check(nested.root.members.size() == 2 && nested.root.members[0].name == "layout",
@@ -904,7 +904,7 @@ int main()
 
         // topicExample / topicMsg 未发现主题：error 回填步骤 1 的 topic [...] not found
         // （第一层文本逐字不变，与 topicPub 既有措辞一致）
-        yomk::payload::TopicExampleInfo exampleMiss;
+        yomk::payload::dds::TopicExampleInfo exampleMiss;
         std::string exampleMissErr;
         check(!dbg.topicExample("t_not_exist_example", exampleMiss, 1, 50, &exampleMissErr),
               "topicExample(t_not_exist_example,1,50ms) → false（未发现主题）");
@@ -913,7 +913,7 @@ int main()
               "未发现主题时 topicExample 载荷各字段保持为空");
         check(exampleMissErr.find("topic [t_not_exist_example] not found") != std::string::npos,
               "topicExample 未发现主题的 error 为 topic [...] not found");
-        yomk::payload::TopicMessageInfo msgMiss;
+        yomk::payload::dds::TopicMessageInfo msgMiss;
         std::string msgMissErr;
         check(!dbg.topicMsg("t_not_exist_msg", msgMiss, 1, 50, &msgMissErr),
               "topicMsg(t_not_exist_msg,1,50ms) → false（未发现主题）");
@@ -979,7 +979,7 @@ int main()
 
                 // 命中：RELIABLE 订阅者在场 → ack 确认路径（wait_for_acknowledgments）
                 std::string pubErr;
-                yomk::payload::TopicPublishInfo pubStat1;
+                yomk::payload::dds::TopicPublishInfo pubStat1;
                 check(dbg.topicPub(PUB_TOPIC, R"({"data":"t_pub_once_payload"})", pubStat1, pubErr),
                       "topicPub(t_pub_once, RELIABLE reader 在场) → true（ack 确认送达）");
                 check(pubErr.empty(), "topicPub 命中路径 error 为空");
@@ -987,14 +987,14 @@ int main()
 
                 // 非法 JSON：解析失败不建 writer，不发布
                 std::string jsonErr;
-                yomk::payload::TopicPublishInfo pubStat2;
+                yomk::payload::dds::TopicPublishInfo pubStat2;
                 check(!dbg.topicPub(PUB_TOPIC, "{bad", pubStat2, jsonErr), "topicPub 非法 JSON → false");
                 check(jsonErr.find("invalid json") != std::string::npos,
                       "非法 JSON error 含 invalid json");
 
                 // 未发现主题：发现收敛后仍无此主题
                 std::string missErr;
-                yomk::payload::TopicPublishInfo pubStat3;
+                yomk::payload::dds::TopicPublishInfo pubStat3;
                 check(!dbg.topicPub("t_pub_no_such", "{}", pubStat3, missErr),
                       "topicPub 未发现主题 → false");
                 check(missErr.find("not found") != std::string::npos,
@@ -1042,7 +1042,7 @@ int main()
                 check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（退化场景）");
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 std::string beErr;
-                yomk::payload::TopicPublishInfo pubStat4;
+                yomk::payload::dds::TopicPublishInfo pubStat4;
                 check(dbg.topicPub(BE_TOPIC, R"({"data":"be_payload"})", pubStat4, beErr),
                       "topicPub(t_pub_besteff, 全 BEST_EFFORT) → true（退化尽力而为路径）");
                 check(listener.received_.load(), "BEST_EFFORT 订阅端也收到消息（尽力而为送达）");
@@ -1100,7 +1100,7 @@ int main()
                 // 等幽灵 reader 进调试节点缓存（topicPub 内部再做发现/匹配收敛）
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 std::string gxErr;
-                yomk::payload::TopicPublishInfo pubStat5;
+                yomk::payload::dds::TopicPublishInfo pubStat5;
                 check(!dbg.topicPub(GX_TOPIC, R"({"data":"gx"})", pubStat5, gxErr),
                       "topicPub(t_pub_ghost, RELIABLE 订阅者在场却无一匹配) → false");
                 check(gxErr.find("not all matched") != std::string::npos,
@@ -1164,7 +1164,7 @@ int main()
                 check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（离线清理场景）");
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 std::string err1;
-                yomk::payload::TopicPublishInfo pubStat6;
+                yomk::payload::dds::TopicPublishInfo pubStat6;
                 check(dbg.topicPub(OFF_TOPIC, R"({"data":"off1"})", pubStat6, err1),
                       "topicPub(t_pub_offline) 第一次 → true（RELIABLE reader 在场 ack 确认）");
 
@@ -1173,7 +1173,7 @@ int main()
                 reader = nullptr;
                 std::this_thread::sleep_for(std::chrono::milliseconds(2000));
                 std::string err2;
-                yomk::payload::TopicPublishInfo pubStat7;
+                yomk::payload::dds::TopicPublishInfo pubStat7;
                 check(dbg.topicPub(OFF_TOPIC, R"({"data":"off2"})", pubStat7, err2),
                       "reader 退出后再发布 → true（离线清理生效不误报）");
                 check(err2.empty(), "清理后再发布 error 为空");
@@ -1235,7 +1235,7 @@ int main()
                 // 按位置传参：stableRounds=5, intervalMs=200, repeatIntervalMs=0,
                 // requiredSubscribers=1（reader 已在场，等待首轮即达标进入稳定收敛与发布）
                 std::string wsErr;
-                yomk::payload::TopicPublishInfo pubStat8;
+                yomk::payload::dds::TopicPublishInfo pubStat8;
                 check(dbg.topicPub(WS_TOPIC, R"({"data":"ws1"})", pubStat8, wsErr, 5, 200, 0, 1),
                       "topicPub(requiredSubscribers=1, RELIABLE reader 在场) → true（达标即发）");
                 check(wsErr.empty(), "达标即发 error 为空");
@@ -1297,7 +1297,7 @@ int main()
                     stopperDone.store(true);
                 });
                 std::string wiErr;
-                yomk::payload::TopicPublishInfo pubStat9;
+                yomk::payload::dds::TopicPublishInfo pubStat9;
                 check(!dbg.topicPub(WI_TOPIC, R"({"data":"wi"})", pubStat9, wiErr, 5, 200, 0, 1),
                       "topicPub(requiredSubscribers=1, 无订阅端) 阻塞等待中停止标志置位 → false");
                 check(wiErr.find("interrupted") != std::string::npos,
@@ -1339,7 +1339,7 @@ int main()
             ntStopperDone.store(true);
         });
         std::string ntErr;
-        yomk::payload::TopicPublishInfo pubStat10;
+        yomk::payload::dds::TopicPublishInfo pubStat10;
         check(!dbg.topicPub("t_pub_wait_notopic", R"({"data":"nt"})", pubStat10, ntErr, 5, 200, 0, 1),
               "topicPub(requiredSubscribers=1, 主题未发现) 等待主题出现中置位 → false");
         check(ntErr.find("interrupted") != std::string::npos,
@@ -1391,7 +1391,7 @@ int main()
                 // D：位置传参 stableRounds=5, intervalMs=50（加速节拍）, repeatIntervalMs=50,
                 // requiredSubscribers=0, maxTimes=3 → 发满 3 条（含首轮）即停（排空 200ms 后返回）
                 std::string mtErr;
-                yomk::payload::TopicPublishInfo pubStat11;
+                yomk::payload::dds::TopicPublishInfo pubStat11;
                 check(dbg.topicPub(MT_TOPIC, R"({"data":"mt"})", pubStat11, mtErr, 5, 50, 50, 0, 3),
                       "topicPub(maxTimes=3) → true（发满即停，排空 200ms 后返回）");
                 check(mtErr.empty(), "发满即停 error 为空");
@@ -1402,7 +1402,7 @@ int main()
                 // E：requiredSubscribers=1（reader 在场等待首轮即达标）+ maxTimes=2 →
                 // 等匹配达标后恰发 2 条退出（-w 与 -t 正交叠加）
                 std::string mwErr;
-                yomk::payload::TopicPublishInfo pubStat12;
+                yomk::payload::dds::TopicPublishInfo pubStat12;
                 check(dbg.topicPub(MW_TOPIC, R"({"data":"mw"})", pubStat12, mwErr, 5, 50, 50, 1, 2),
                       "topicPub(requiredSubscribers=1, maxTimes=2) → true（匹配达标后发满即停）");
                 check(mwErr.empty(), "叠加场景 error 为空");
@@ -1466,11 +1466,11 @@ int main()
                 check(dbg.setDomainId(TEST_DOMAIN), "被测端 setDomainId(200) → true（裸类型场景）");
 
                 // ① 发现层：writer 端点信息进缓存，类型名原样可见（与真类型端点无差别）
-                yomk::payload::TopicInfo plainInfo;
+                yomk::payload::dds::TopicInfo plainInfo;
                 bool plainSeen = false;
                 for (int i = 0; i < 50 && !plainSeen; ++i)
                 {
-                    plainInfo = yomk::payload::TopicInfo{};
+                    plainInfo = yomk::payload::dds::TopicInfo{};
                     plainSeen = dbg.topicInfo(PLAIN_TOPIC, plainInfo, 1, 50);
                     if (!plainSeen)
                     {
@@ -1483,7 +1483,7 @@ int main()
 
                 // ② 类型重建层：TypeObject 不可得 → interfaceShow / topicExample / topicMsg
                 // 均归类为 not available，且不得包含 not found（区分第一层"未发现"）
-                yomk::payload::InterfaceInfo plainIface;
+                yomk::payload::dds::InterfaceInfo plainIface;
                 std::string plainErr;
                 check(!dbg.interfaceShow("Plain::NoTypeObject", plainIface, 5, 100, &plainErr),
                       "interfaceShow(裸类型) → false（TypeObject 不可得）");
@@ -1493,14 +1493,14 @@ int main()
                       "interfaceShow error 不含笼统 not found（第二层与第一层已区分）");
                 std::cout << "[OBSERVE] plain interfaceShow error |" << plainErr << "|" << std::endl;
 
-                yomk::payload::TopicExampleInfo plainExample;
+                yomk::payload::dds::TopicExampleInfo plainExample;
                 plainErr.clear();
                 check(!dbg.topicExample(PLAIN_TOPIC, plainExample, 5, 100, &plainErr),
                       "topicExample(裸类型) → false（步骤 2 TypeObject 不可得）");
                 check(plainErr.find("not available") != std::string::npos &&
                           plainErr.find("not found") == std::string::npos,
                       "topicExample error 为 not available（不再报 topic not found）");
-                yomk::payload::TopicMessageInfo plainMsgInfo;
+                yomk::payload::dds::TopicMessageInfo plainMsgInfo;
                 std::string plainMsgErr;
                 check(!dbg.topicMsg(PLAIN_TOPIC, plainMsgInfo, 5, 100, &plainMsgErr),
                       "topicMsg(裸类型) → false（步骤 2 TypeObject 不可得）");
@@ -1508,7 +1508,7 @@ int main()
                           plainMsgErr.find("not found") == std::string::npos,
                       "topicMsg error 为 not available");
                 std::string plainPubErr;
-                yomk::payload::TopicPublishInfo pubStat13;
+                yomk::payload::dds::TopicPublishInfo pubStat13;
                 check(!dbg.topicPub(PLAIN_TOPIC, "{}", pubStat13, plainPubErr, 5, 100),
                       "topicPub(裸类型) → false（类型重建失败）");
                 check(plainPubErr.find("not available") != std::string::npos,
@@ -1611,11 +1611,11 @@ int main()
         // 辅助：轮询读回端点详情（等发现/建订就绪，最多约 4s×快照窗）；minCount 为命中所需
         // 端点数下限（pub 用例读回含 peer+topicPub 两个 writer，peer 先被发现时不能提前命中）
         auto waitEndpoints = [&observer](const char *topic, bool wantPubs,
-                std::vector<yomk::payload::TopicEndpointInfo> &out, size_t minCount = 1) {
-            yomk::payload::TopicInfo info;
+                std::vector<yomk::payload::dds::TopicEndpointInfo> &out, size_t minCount = 1) {
+            yomk::payload::dds::TopicInfo info;
             for (int i = 0; i < 40; ++i)
             {
-                info = yomk::payload::TopicInfo{};
+                info = yomk::payload::dds::TopicInfo{};
                 if (observer.topicInfo(topic, info, 2, 100))
                 {
                     out = wantPubs ? info.publishers : info.subscriptions;
@@ -1631,7 +1631,7 @@ int main()
         };
         // 辅助：任一端点的结构化字段命中（全端点扫描——读回端点含 peer 与被测端两个 writer，
         // peer 显式 QoS 与目标值双差异故命中无歧义）；未公告项以 "not advertised" 查询
-        auto hasQosField = [](const std::vector<yomk::payload::TopicEndpointInfo> &detail,
+        auto hasQosField = [](const std::vector<yomk::payload::dds::TopicEndpointInfo> &detail,
                 const char *key, const char *value) {
             const std::string k(key);
             const std::string v(value);
@@ -1678,7 +1678,7 @@ int main()
         };
         // 辅助：枚举型 QoS 字段全员回填（ROS2 对齐组 reliability/durability/liveliness +
         // 扩展组 ownership/destinationOrder），空串即视为未采集
-        auto alignFieldsOk = [](const yomk::payload::TopicEndpointInfo &ep) {
+        auto alignFieldsOk = [](const yomk::payload::dds::TopicEndpointInfo &ep) {
             const auto &q = ep.qos;
             return !q.reliability.empty() && !q.durability.empty() &&
                     !q.liveliness.empty() && !q.ownership.empty() &&
@@ -1706,14 +1706,14 @@ int main()
             beVo.durability = DDSDurability::VOLATILE;
             std::thread pubThread([&]() {
                 std::string pErr;
-                yomk::payload::TopicPublishInfo pubStat14;
+                yomk::payload::dds::TopicPublishInfo pubStat14;
                 const bool ok = dbg.topicPub(BE_TOPIC, R"({"data":"qos_be"})", pubStat14, pErr, 5, 100,
                         100, 0, 0, beVo);
                 std::cout << "[OBSERVE] topicPub(be) ok=" << ok << " err=|" << pErr
                           << "| total=" << pubStat14.total << " failed=" << pubStat14.failed
                           << std::endl;
             });
-            std::vector<yomk::payload::TopicEndpointInfo> pubDetail;
+            std::vector<yomk::payload::dds::TopicEndpointInfo> pubDetail;
             const bool seen = waitEndpoints(BE_TOPIC, true, pubDetail, 2);
             yomk::debugPubStop();  // 停止持续发布（发布线程 join 后 dbg 析构）
             pubThread.join();
@@ -1763,12 +1763,12 @@ int main()
             std::this_thread::sleep_for(std::chrono::milliseconds(300));
             std::thread pubThread([&]() {
                 std::string pErr;
-                yomk::payload::TopicPublishInfo pubStat15;
+                yomk::payload::dds::TopicPublishInfo pubStat15;
                 const bool ok = dbg.topicPub(DEF_TOPIC, R"({"data":"qos_def"})", pubStat15, pErr, 5, 100, 100);
                 std::cout << "[OBSERVE] topicPub(def) ok=" << ok << " err=|" << pErr << "|"
                           << std::endl;
             });
-            std::vector<yomk::payload::TopicEndpointInfo> defDetail;
+            std::vector<yomk::payload::dds::TopicEndpointInfo> defDetail;
             const bool seenDef = waitEndpoints(DEF_TOPIC, true, defDetail, 2);
             yomk::debugPubStop();
             pubThread.join();
@@ -1830,7 +1830,7 @@ int main()
             check(got, "显式 RELIABLE reader（requested==offered）收到消息（异步建订链路终端实证）");
 
             // observer 读回被测端 reader 端点（结构化 subscriptions 清单）
-            std::vector<yomk::payload::TopicEndpointInfo> subDetail;
+            std::vector<yomk::payload::dds::TopicEndpointInfo> subDetail;
             const bool seenSub = waitEndpoints(SUB_TOPIC, false, subDetail);
             check(seenSub, "观察节点读回被测端 reader 端点详情（建订完成实证）");
             for (const auto &ep : subDetail)
@@ -1888,7 +1888,7 @@ int main()
                       "requested RELIABLE > offered BEST_EFFORT 不匹配 → 收 0 条（翻译生效反证）");
             }
             // reader 建立实证：observer 读回 Subscribers 段 Reliability: RELIABLE
-            std::vector<yomk::payload::TopicEndpointInfo> msDetail;
+            std::vector<yomk::payload::dds::TopicEndpointInfo> msDetail;
             const bool seenMs = waitEndpoints(MS_TOPIC, false, msDetail);
             check(seenMs, "反证用例 reader 建立 成功（读回端点详情）");
             check(hasQosField(msDetail, "Reliability", "RELIABLE"),
@@ -1928,7 +1928,7 @@ int main()
     
         // 3. interfaceShow(新名) 收敛成功——"tid 恒定"机制实证：TypeObjectRegistry 按 tid
         //    查型与名字无关，TypeObject 结构元数据完整 → 成员表 + 依赖闭包
-        yomk::payload::InterfaceInfo snIface;
+        yomk::payload::dds::InterfaceInfo snIface;
         check(dbg.interfaceShow(kRosTypeName, snIface),
               "set_name 用例 interfaceShow(新名) → true（TypeObject 按 tid 可查，名字无关）");
         check(snIface.root.typeName == kRosTypeName && !snIface.root.members.empty(),
@@ -1936,7 +1936,7 @@ int main()
     
         // 4. topicPub：按发现名重建动态类型 + 临时 writer 发布成功（复用阶段②③设施）
         std::string snPubErr;
-        yomk::payload::TopicPublishInfo pubStat16;
+        yomk::payload::dds::TopicPublishInfo pubStat16;
         check(dbg.topicPub(SN_TOPIC, R"({"data":"setname-pub-payload"})", pubStat16, snPubErr),
               "set_name 用例 topicPub 按发现名重建动态类型发布 → true");
     }

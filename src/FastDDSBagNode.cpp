@@ -1225,7 +1225,7 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
             ins.first->second.register_type(participant_);
         }
 
-        Topic* topicHandle = participant_->create_topic(topic, typeName, TOPIC_QOS_DEFAULT);
+        eprosima::fastdds::dds::Topic* topicHandle = participant_->create_topic(topic, typeName, TOPIC_QOS_DEFAULT);
         if (topicHandle == nullptr)
         {
             rollback();
@@ -2462,7 +2462,7 @@ bool loadPlayQosOverrides(const std::string& path,
 // 供退出确认等待筛 RELIABLE writer——BEST_EFFORT 不参与 ackNack 直接跳过)
 struct PlayWriterEntry
 {
-    Topic* topic = nullptr;
+    eprosima::fastdds::dds::Topic* topic = nullptr;
     DataWriter* writer = nullptr;
     bool reliable = false;  // 发布 QoS 是否 RELIABLE(创建时从预扫 qosCfg 取,收尾等待用)
     std::string published;  // 发布主题名(bag 原名经 remap 映射后的真实发布名,收尾等待告警用)
@@ -3048,7 +3048,7 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
                 {
                     typeIns.first->second.register_type(participant_);
                 }
-                Topic* topicHandle =
+                eprosima::fastdds::dds::Topic* topicHandle =
                     participant_->create_topic(pubTopic, pt.type, TOPIC_QOS_DEFAULT);
                 if (topicHandle == nullptr)
                 {

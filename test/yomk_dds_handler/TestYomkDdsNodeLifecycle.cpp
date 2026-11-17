@@ -28,7 +28,7 @@
  *     Server we don't impose domain ids to be the same"；跨域丢弃仅存在于简单发现
  *     PDPSimple 的基类校验），互通即域号与 server 无关的实证；多播 PDP 被禁，发现必经 server。
  *   Part G（闭环 1 env 直配端到端）：C-2d 白盒（开关门控/大小写与 1 兼容/server 串透传/
- *     DDSNode 缺省尾参与 DDSDebugNode/DDSBagNode 无参全缺省聚合初始化器读回——闭环 2
+ *     Node 缺省尾参与 DebugNode/BagNode 无参全缺省聚合初始化器读回——闭环 2
  *     三字段对齐）+ 服务级端到端——setenv 开关+UDP 串后经
  *     /create_node 创建（请求不携带 locator，聚合初始化器自动读 env），spawn 同款
  *     discovery server 子进程（组杀模式同 Part F，端口 11812 非缺省值实证 env 串 port
@@ -44,11 +44,11 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsHandler.h" // 服务/DDSNode/String/YOMK_* 宏
+#include "YomkDdsHandler.h" // 服务/Node/String/YOMK_* 宏
 #include "YomkDdsMsg.h"
 #include "FastDDSNode.h"    // Part B 直接单元测试 setDomainId
-#include "YomkDdsDebugHandler.h" // C-2d：DDSDebugNode 无参全缺省聚合初始化 env 读回
-#include "YomkDdsBagHandler.h"   // C-2d：DDSBagNode 无参全缺省聚合初始化 env 读回
+#include "YomkDdsDebugHandler.h" // C-2d：DebugNode 无参全缺省聚合初始化 env 读回
+#include "YomkDdsBagHandler.h"   // C-2d：BagNode 无参全缺省聚合初始化 env 读回
 // Part C-E 白盒：yomkdds_xml 三件套（parseServerLocator/applyDiscoveryServers/
 // participantQosFromXml）
 #include "FastDDSXmlHelper.h"
@@ -75,7 +75,7 @@ namespace
       // 构造 /create_node 请求包
       YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName)
       {
-            return ::yomk::msgs::DDSNode::shared(DDSNode{nodeName, domainId});
+            return ::yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
       }
 
       // Part A-1：生命周期——创建/重名/同域共存/删除/重复删除
@@ -356,7 +356,7 @@ namespace
                   "Part C: 多 TCP server → TCPv4 描述符仍只注入一个");
 
             // C-2d 环境变量直配 helper 白盒：开关门控 + 大小写/1 兼容 + server 串
-            // 原样透传（解析校验在节点层）+ DDSNode 缺省尾参聚合初始化器读回。
+            // 原样透传（解析校验在节点层）+ Node 缺省尾参聚合初始化器读回。
             // setenv/unsetenv 直接驱动，收尾全清避免 env 残留影响后续 Part
             {
                 // 三变量全未设置 → 开关 false、双 server 串恒空（=不直配）
@@ -378,31 +378,31 @@ namespace
                 check(YomkDdsDefaultTcpDiscoverServers() == "10.0.0.7",
                       "Part C: 开关 true → TCP 串原样返回（port 缺省由节点层解析）");
 
-                // DDSNode 缺省尾参聚合初始化：双通道字段经默认成员初始化器读 env
-                DDSNode envProbe{"env_probe"};
+                // Node 缺省尾参聚合初始化：双通道字段经默认成员初始化器读 env
+                Node envProbe{"env_probe"};
                 check(envProbe.udpDiscoverServerLocator == "10.0.0.9:11811;10.0.0.8" &&
                           envProbe.tcpDiscoverServerLocator == "10.0.0.7",
-                      "Part C: DDSNode 缺省尾参聚合初始化 → 双通道字段经 env 初始化器读回");
+                      "Part C: Node 缺省尾参聚合初始化 → 双通道字段经 env 初始化器读回");
 
                 // Debug/Bag 节点同款对齐（闭环 2）：无参全缺省聚合初始化 → 三字段均经
                 // 默认成员初始化器读 env（域号 + 开关门控双 server 串）
                 setenv("YOMKDDS_DDS_DOMAIN_ID", "5", 1);
-                DDSDebugNode dbgProbe{};
-                DDSBagNode bagProbe{};
+                DebugNode dbgProbe{};
+                BagNode bagProbe{};
                 check(dbgProbe.domainId == 5 &&
                           dbgProbe.udpDiscoverServerLocator == "10.0.0.9:11811;10.0.0.8" &&
                           dbgProbe.tcpDiscoverServerLocator == "10.0.0.7" &&
                           bagProbe.domainId == 5 &&
                           bagProbe.udpDiscoverServerLocator == "10.0.0.9:11811;10.0.0.8" &&
                           bagProbe.tcpDiscoverServerLocator == "10.0.0.7",
-                      "Part C: DDSDebugNode/DDSBagNode 无参聚合初始化 → 三字段均经 env 初始化器读回");
+                      "Part C: DebugNode/BagNode 无参聚合初始化 → 三字段均经 env 初始化器读回");
 
                 // 开关 false：两 server 串变量被忽略恒空（即使已设置）；域号 helper 不受
                 // 开关门控（Debug/Bag 同款字段一并读回验证）
                 setenv("YOMKDDS_USE_DISCOVER_SERVER", "false", 1);
-                DDSNode offProbe{"off_probe"};
-                DDSDebugNode dbgOff{};
-                DDSBagNode bagOff{};
+                Node offProbe{"off_probe"};
+                DebugNode dbgOff{};
+                BagNode bagOff{};
                 check(YomkDdsDefaultUdpDiscoverServers().empty() &&
                           YomkDdsDefaultTcpDiscoverServers().empty() &&
                           offProbe.udpDiscoverServerLocator.empty() &&
@@ -606,7 +606,7 @@ namespace
       }
 
       // Part G：闭环 1 env 直配端到端（服务级）——setenv 开关+UDP 串后经 /create_node 创建
-      // （请求不携带 locator，DDSNode 聚合初始化器自动读 env），spawn 同款 discovery server
+      // （请求不携带 locator，Node 聚合初始化器自动读 env），spawn 同款 discovery server
       // 子进程（组杀模式同 Part F）。端口用 11812 非缺省值：实证 env 串 port 解析全链路
       //（C-1 仅白盒覆盖解析）；A/B 故意异域（203/204，同 Part F——DS 不校验 domain_id，
       // 但须在服务层合法范围 [0,232] 内）
@@ -646,16 +646,16 @@ namespace
                   return;
             }
 
-            // env 直配：开关 + UDP 串（port 11812 非缺省）。此后 DDSNode 聚合初始化器自动
+            // env 直配：开关 + UDP 串（port 11812 非缺省）。此后 Node 聚合初始化器自动
             // 读 env——A/B 创建请求不携带 locator
             setenv("YOMKDDS_USE_DISCOVER_SERVER", "true", 1);
             setenv("YOMKDDS_UDP_DISCOVER_SERVERS", "127.0.0.1:11812", 1);
 
             // 聚合读回探针：创建请求即此形态（缺省尾参字段经 env 初始化器取值）
-            DDSNode envProbe{"env_probe"};
+            Node envProbe{"env_probe"};
             check(envProbe.udpDiscoverServerLocator == "127.0.0.1:11812" &&
                       envProbe.tcpDiscoverServerLocator.empty(),
-                  "Part G: DDSNode 缺省尾参聚合初始化 → udp 串 127.0.0.1:11812 / tcp 空");
+                  "Part G: Node 缺省尾参聚合初始化 → udp 串 127.0.0.1:11812 / tcp 空");
 
             // 服务级创建（无 locator）：聚合初始化器读 env → 双节点直配 CLIENT 连 11812 server
             check(testInvoke(svc, "/create_node", mkNode(203, "env_pub_node")).status == yomk::payload::ResStatus::Succeeded,
@@ -665,12 +665,12 @@ namespace
 
             std::atomic<int> recvCount{0};
             check(testInvoke(svc, "/register_sub_topic",
-                      ::yomk::msgs::DDSSubRequest::shared(DDSSubRequest{"env_sub_node", "env_conn_topic", new YomkDdsStd::MStringPubSubType(),
+                      ::yomk::msgs::dds::SubRequest::shared(SubRequest{"env_sub_node", "env_conn_topic", new YomkDdsStd::MStringPubSubType(),
                               [&recvCount](const void *) { recvCount.fetch_add(1, std::memory_order_relaxed); }}))
                       .status == yomk::payload::ResStatus::Succeeded,
                   "Part G: env_sub_node 登记 env_conn_topic 订阅（收到即计数）");
             check(testInvoke(svc, "/register_pub_topic",
-                      ::yomk::msgs::DDSTopic::shared(DDSTopic{"env_pub_node", "env_conn_topic", new YomkDdsStd::MStringPubSubType()}))
+                      ::yomk::msgs::dds::Topic::shared(Topic{"env_pub_node", "env_conn_topic", new YomkDdsStd::MStringPubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
                   "Part G: env_pub_node 登记 env_conn_topic 发布");
 
@@ -682,7 +682,7 @@ namespace
             {
                   msg.data("env-conn-" + std::to_string(i));
                   (void)testInvoke(svc, "/publish",
-                        ::yomk::msgs::DDSPublish::shared(DDSPublish{"env_pub_node", "env_conn_topic", &msg}));
+                        ::yomk::msgs::dds::Publish::shared(Publish{"env_pub_node", "env_conn_topic", &msg}));
                   std::this_thread::sleep_for(std::chrono::milliseconds(100));
                   received = recvCount.load(std::memory_order_relaxed) > 0;
             }

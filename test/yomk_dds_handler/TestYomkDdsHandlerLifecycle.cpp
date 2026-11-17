@@ -19,7 +19,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsHandler.h" // 服务/DDSNode/DDSXmlLoad/String/YOMK_* 宏 + xmlCache() 静态访问器
+#include "YomkDdsHandler.h" // 服务/Node/XmlLoad/String/YOMK_* 宏 + xmlCache() 静态访问器
 #include "YomkDdsMsg.h"
 
 #include <cstdint>
@@ -91,12 +91,12 @@ namespace
 
     YomkMsgPtr mkLoad(const std::string &xmlPath)
     {
-        return ::yomk::msgs::DDSXmlLoad::shared(DDSXmlLoad{xmlPath});
+        return ::yomk::msgs::dds::XmlLoad::shared(XmlLoad{xmlPath});
     }
 
     YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName, const std::string &serverLocator = "")
     {
-        return ::yomk::msgs::DDSNode::shared(DDSNode{nodeName, domainId, serverLocator});
+        return ::yomk::msgs::dds::Node::shared(Node{nodeName, domainId, serverLocator});
     }
 } // namespace
 

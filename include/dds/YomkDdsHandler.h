@@ -16,6 +16,7 @@
 #include <string>
 class FastDDSNode;
 using namespace yomk::payload;
+using namespace yomk::payload::dds;
 
 /** @brief Core communication service: node lifecycle, pub/sub endpoints and zero-copy loan */
 // @zh: 核心通信服务：节点生命周期、发布/订阅端点与零拷贝借出

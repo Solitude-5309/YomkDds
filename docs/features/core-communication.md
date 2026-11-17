@@ -141,7 +141,7 @@ auto onMessage = [&](const void *data)
 | 4 | `yomk::dds().node("ds_dual_node").domain(0).udp_ds("127.0.0.1:11811").tcp_ds("127.0.0.1:42100").create()` | UDP+TCP 双通道直配；仅 TCP 直配时 UDP 传空串占位 |
 
 - **nodeName 必填**，不可为空。
-- **domainId** 合法范围 [0,232]，越界返回错误；可缺省——缺省时经 DDSNode 类内缺省初始化器读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0）。
+- **domainId** 合法范围 [0,232]，越界返回错误；可缺省——缺省时经 Node 类内缺省初始化器读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（未设置/为空/非法/超范围回落 0）。
 - **每节点一个独立 DDS 参与者**。
 - **udpDiscoverServerLocator / tcpDiscoverServerLocator 可缺省尾参**：缺省时经类内缺省初始化器读环境变量自动直配——总开关 `YOMKDDS_USE_DISCOVER_SERVER` 为 true/1（大小写不敏感）时分别取 `YOMKDDS_UDP_DISCOVER_SERVERS`/`YOMKDDS_TCP_DISCOVER_SERVERS`，开关关闭时两串变量被忽略恒空（=不直配）。显式直配聚合串格式为分号分隔 `ip[:port]` 多 server（port 缺省 11811、合法范围 [1,65535]，非法串创建失败回显）；直配后 participant 以 CLIENT 发现协议运行（禁用多播 PDP，发现流量单播直送 server）；TCP 通道 port 为 server 的 TCP 监听口，非空时 participant 自动补注入 TCPv4 传输（与内置 UDPv4/SHM 共存，数据通道不受影响）。直配语义、跨域互通与环境变量门控详见 [discovery-server.md](./discovery-server.md)。
 

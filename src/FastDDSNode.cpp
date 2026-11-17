@@ -308,7 +308,7 @@ bool FastDDSNode::setDomainId(uint32_t domainId, const std::string& nodeName,
     return (publisher_ != nullptr) && (subscriber_ != nullptr);
 }
 
-Topic* FastDDSNode::getOrCreateTopic(const std::string& topicName, const std::string& typeName)
+eprosima::fastdds::dds::Topic* FastDDSNode::getOrCreateTopic(const std::string& topicName, const std::string& typeName)
 {
     auto it = topics_.find(topicName);
     if (it != topics_.end())
@@ -320,7 +320,7 @@ Topic* FastDDSNode::getOrCreateTopic(const std::string& topicName, const std::st
         return it->second;
     }
 
-    Topic* topic = participant_->create_topic(topicName, typeName, TOPIC_QOS_DEFAULT);
+    eprosima::fastdds::dds::Topic* topic = participant_->create_topic(topicName, typeName, TOPIC_QOS_DEFAULT);
     if (topic != nullptr)
     {
         try
@@ -352,7 +352,7 @@ bool FastDDSNode::registerPubTopic(const std::string& topicName, void* type, con
     PubInfo info;
     info.type = ts;
     bool topicExisted = topics_.count(topicName) > 0;
-    Topic* topic = getOrCreateTopic(topicName, ts.get_type_name());
+    eprosima::fastdds::dds::Topic* topic = getOrCreateTopic(topicName, ts.get_type_name());
     if (topic == nullptr)
     {
         return false;
@@ -404,7 +404,7 @@ bool FastDDSNode::registerSubTopic(const std::string& topicName, void* type, Dat
     ts.register_type(participant_);
 
     bool topicExisted = topics_.count(topicName) > 0;
-    Topic* topic = getOrCreateTopic(topicName, ts.get_type_name());
+    eprosima::fastdds::dds::Topic* topic = getOrCreateTopic(topicName, ts.get_type_name());
     if (topic == nullptr)
     {
         return false;

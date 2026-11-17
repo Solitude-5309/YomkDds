@@ -91,7 +91,7 @@ inline void bagRecordReset()
  * re-anchors the time base; rate scales the inter-message scheduling interval
  * (2.0 = double speed, 0.5 = half speed, ros2 PlayerClock set_rate semantics).
  * Pause/resume/rate are set by CLI keyboard interaction or library callers;
- * none travel through the BagPlay protocol (CLI and bag service share the
+ * none travel through the BagPlayRequest protocol (CLI and bag service share the
  * process, reading the globals directly).
  * @note bagPlaySetRate rejects rate <= 0 and keeps the previous value;
  *       call bagPlayReset() before starting a new playback session
@@ -99,7 +99,7 @@ inline void bagRecordReset()
 // @zh: bag 回放（链式 yomk::dds().bag().dir(bagDir)…play()）的停止/暂停/速率控制（async-signal-safe）
 // @zh: 播放线程在各阻塞处读标志。暂停冻结时间轴（读线程被队列满反压自然停住），恢复后
 // @zh: 重锚时间基准；速率缩放消息间调度间隔（2.0 两倍速、0.5 半倍速，对齐 ros2 PlayerClock
-// @zh: set_rate 语义）。暂停/恢复/速率由 CLI 键盘交互或库调用方设置；不经 BagPlay 协议
+// @zh: set_rate 语义）。暂停/恢复/速率由 CLI 键盘交互或库调用方设置；不经 BagPlayRequest 协议
 // @zh: 传递（CLI 与 bag 服务同进程，全局标志直读）
 // @zh: note bagPlaySetRate 拒绝 rate<=0 并保持原值；发起回放前先 bagPlayReset() 复位
 namespace yomk

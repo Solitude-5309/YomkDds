@@ -1470,7 +1470,7 @@ bool FastDDSBagNode::bagInfo(const std::string& bagDir, BagInfo& outInfo, std::s
         for (const auto& topic : info.at("topics_with_message_count"))
         {
             const auto& meta = topic.at("topic_metadata");
-            BagInfoTopic parsed;
+            BagMetadataTopic parsed;
             parsed.topicName = meta.at("name").get<std::string>();
             parsed.typeName = meta.at("type").get<std::string>();
             // qos 键可选：metadata.json 无 qos 键（旧 bag）或空串（仅订阅者主题录制）时

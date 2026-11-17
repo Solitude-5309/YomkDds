@@ -30,7 +30,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsBagHandler.h" // 服务/BagNode/BagRecord/BagReindex/yomk::bagRecordStop
+#include "YomkDdsBagHandler.h" // 服务/BagCreateNodeRequest/BagRecordRequest/BagReindexRequest/yomk::bagRecordStop
 #include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（完整录制用例的远端发布端）
@@ -80,14 +80,14 @@ int main()
 
     // ---- L0：/bag_reindex 与节点生命周期解耦（纯文件操作，节点状态无关） ----
     auto reindexBefore =
-        testInvoke(svc, "/bag_reindex", yomk::msgs::dds::BagReindex::shared(BagReindex{"reindex_l0_miss"}));
+        testInvoke(svc, "/bag_reindex", yomk::msgs::dds::BagReindexRequest::shared(BagReindexRequest{"reindex_l0_miss"}));
     check(reindexBefore.status == yomk::payload::ResStatus::Failed &&
               reindexBefore.msg.find("bag path [reindex_l0_miss] does not exist") != std::string::npos &&
               reindexBefore.msg.find("bag node not created") == std::string::npos,
           "未建节点时 /bag_reindex 可达：报文件层错误（非 bag node not created）");
 
     // ---- L1：创建 / 重复创建拒绝 ----
-    check(testInvoke(svc, "/create_node", yomk::msgs::dds::BagNode::shared(BagNode{TEST_DOMAIN})).status ==
+    check(testInvoke(svc, "/create_node", yomk::msgs::dds::BagCreateNodeRequest::shared(BagCreateNodeRequest{TEST_DOMAIN})).status ==
               yomk::payload::ResStatus::Succeeded,
           "创建 bag 节点(domain 200) → eOk（真实创建 participant）");
     auto infoAfter = testInvoke(svc, "/bag_info", yomk::msgs::dds::BagInfoRequest::shared(BagInfoRequest{"info_svc_l0_miss"}));
@@ -95,29 +95,29 @@ int main()
               infoAfter.msg.find("does not exist") != std::string::npos,
           "已建节点时 /bag_info 同样可达（行为与节点状态无关）");
     auto reindexAfter =
-        testInvoke(svc, "/bag_reindex", yomk::msgs::dds::BagReindex::shared(BagReindex{"reindex_l0_miss"}));
+        testInvoke(svc, "/bag_reindex", yomk::msgs::dds::BagReindexRequest::shared(BagReindexRequest{"reindex_l0_miss"}));
     check(reindexAfter.status == yomk::payload::ResStatus::Failed &&
               reindexAfter.msg.find("does not exist") != std::string::npos,
           "已建节点时 /bag_reindex 同样可达（行为与节点状态无关）");
-    auto dupCreate = testInvoke(svc, "/create_node", yomk::msgs::dds::BagNode::shared(BagNode{TEST_DOMAIN}));
+    auto dupCreate = testInvoke(svc, "/create_node", yomk::msgs::dds::BagCreateNodeRequest::shared(BagCreateNodeRequest{TEST_DOMAIN}));
     check(dupCreate.status == yomk::payload::ResStatus::Failed &&
               dupCreate.msg.find("bag node already exists") != std::string::npos,
           "重复创建 → eNo bag node already exists, delete it first");
 
     // record 空清单：服务层锁外校验先于节点触达
-    auto rEmpty = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecord::shared(BagRecord{{}}));
+    auto rEmpty = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{}}));
     check(rEmpty.status == yomk::payload::ResStatus::Failed &&
               rEmpty.msg.find("no topics given") != std::string::npos,
           "record 空清单 → eNo no topics given");
 
     // ---- record 无端点主题：校验失败 eNo，msg 含主题名（默认收敛窗 ~3s，不落盘） ----
-    auto miss = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecord::shared(BagRecord{{"rt/bag_svc_miss"}}));
+    auto miss = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{"rt/bag_svc_miss"}}));
     check(miss.status == yomk::payload::ResStatus::Failed, "record 无端点主题 → eNo");
     check(miss.msg.find("主题 [rt/bag_svc_miss] 既无发布者也无订阅者") != std::string::npos,
           "record 无端点主题 msg 含逐主题报错文本");
     // 校验失败后节点未定格：删除并重建验证服务层后续可用（同失败后修正输入重试语义）
     check(testInvoke(svc, "/delete_node").status == yomk::payload::ResStatus::Succeeded, "校验失败后删除 → eOk");
-    check(testInvoke(svc, "/create_node", yomk::msgs::dds::BagNode::shared(BagNode{TEST_DOMAIN})).status ==
+    check(testInvoke(svc, "/create_node", yomk::msgs::dds::BagCreateNodeRequest::shared(BagCreateNodeRequest{TEST_DOMAIN})).status ==
               yomk::payload::ResStatus::Succeeded,
           "重建 bag 节点 → eOk");
 
@@ -155,7 +155,7 @@ int main()
     });
 
     // 主线程长驻阻塞：校验通过 → 透传订阅 → 录制 → 收尾 → eOk 回执
-    auto rec = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecord::shared(BagRecord{{REC_TOPIC}}));
+    auto rec = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{REC_TOPIC}}));
     stopThread.join();
     pubStop.store(true);
     pubThread.join();
@@ -174,7 +174,7 @@ int main()
     }
 
     // ---- 定格语义：成功录制后重复 record 拒绝 ----
-    auto again = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecord::shared(BagRecord{{REC_TOPIC}}));
+    auto again = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{REC_TOPIC}}));
     check(again.status == yomk::payload::ResStatus::Failed &&
               again.msg.find("record already finished") != std::string::npos,
           "定格式拒绝：成功录制后重复 record → eNo record already finished");
@@ -185,16 +185,16 @@ int main()
     check(dupDel.status == yomk::payload::ResStatus::Failed &&
               dupDel.msg.find("bag node not created") != std::string::npos,
           "重复删除 → eNo bag node not created");
-    auto delRec = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecord::shared(BagRecord{{REC_TOPIC}}));
+    auto delRec = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{REC_TOPIC}}));
     check(delRec.status == yomk::payload::ResStatus::Failed &&
               delRec.msg.find("bag node not created") != std::string::npos,
           "删除后 record → eNo bag node not created");
 
     // ---- 重建 / 重复创建拒绝 / 收尾删除（关键不变式：显式删除规避静态析构序问题） ----
-    check(testInvoke(svc, "/create_node", yomk::msgs::dds::BagNode::shared(BagNode{TEST_DOMAIN})).status ==
+    check(testInvoke(svc, "/create_node", yomk::msgs::dds::BagCreateNodeRequest::shared(BagCreateNodeRequest{TEST_DOMAIN})).status ==
               yomk::payload::ResStatus::Succeeded,
           "删除后重建 bag 节点 → eOk");
-    auto dupCreate2 = testInvoke(svc, "/create_node", yomk::msgs::dds::BagNode::shared(BagNode{TEST_DOMAIN}));
+    auto dupCreate2 = testInvoke(svc, "/create_node", yomk::msgs::dds::BagCreateNodeRequest::shared(BagCreateNodeRequest{TEST_DOMAIN}));
     check(dupCreate2.status == yomk::payload::ResStatus::Failed &&
               dupCreate2.msg.find("bag node already exists") != std::string::npos,
           "重建后重复创建仍拒绝（单节点模型全程生效）");
@@ -248,13 +248,13 @@ int main()
     check(std::filesystem::exists(playBagDir + "/metadata.json", ec), "L3 前置：metadata.json 落盘");
 
     // a) 负载往返保真：路径不存在 → eNo 且错误文本回显 bagDir（解包字段无损证明）
-    auto playMiss = testInvoke(svc, "/bag_play", yomk::msgs::dds::BagPlay::shared(BagPlay{"play_svc_l3_miss"}));
+    auto playMiss = testInvoke(svc, "/bag_play", yomk::msgs::dds::BagPlayRequest::shared(BagPlayRequest{"play_svc_l3_miss"}));
     check(playMiss.status == yomk::payload::ResStatus::Failed &&
               playMiss.msg.find("bag path [play_svc_l3_miss] does not exist") != std::string::npos,
           "/bag_play 负载往返：错误文本回显 bagDir（解包字段保真）");
 
     // b) 真实回放：eOk + PlayResult 结构化回执（bagDir + 逐主题统计，行文本归调用方）
-    auto playOk = testInvoke(svc, "/bag_play", yomk::msgs::dds::BagPlay::shared(BagPlay{playBagDir}));
+    auto playOk = testInvoke(svc, "/bag_play", yomk::msgs::dds::BagPlayRequest::shared(BagPlayRequest{playBagDir}));
     check(playOk.status == yomk::payload::ResStatus::Succeeded, "/bag_play 真实 bag 回放 → eOk");
     auto played = yomk::msgs::unpack<yomk::msgs::dds::PlayResult>(playOk.data);
     check(played != nullptr, "play 回执可解包为 PlayResult（非 StringArray）");

@@ -276,7 +276,7 @@ static constexpr char kDomainEnv[] = "YOMKDDS_DDS_DOMAIN_ID";
 static constexpr char kDiscoverRoundsEnv[] = "YOMKDDS_DDS_DISCOVER_ROUNDS";
 
 // 发现服务器直配三环境变量：总开关 + UDP/TCP 双通道 server 聚合串（节点创建时经
-// Node/DebugCreateNodeRequest/BagNode 类内缺省初始化器读取，见 include/dds/YomkDdsHandler.h）。
+// Node/DebugCreateNodeRequest/BagCreateNodeRequest 类内缺省初始化器读取，见 include/dds/YomkDdsHandler.h）。
 // 启动时无则分别创建并设默认值 false/空/空（进程内生效），并幂等持久化到 ~/.bashrc
 // 使新开任意终端可查看可继承；默认值与"未设置"行为完全一致（开关非 true/1、串空均
 // 回落多播发现），仅保证可见性，用户 export 改值即刻生效

@@ -78,7 +78,7 @@ public:
         uint64_t topicCount = 0;   // 该条目注册的 channel 数（含 0 条消息的主题）
     };
     // bag info 的逐主题条目（metadata.json topics_with_message_count 原序）
-    struct BagInfoTopic
+    struct BagMetadataTopic
     {
         std::string topicName;
         std::string typeName;  // bag 内存的原始 DDS 类型名
@@ -95,7 +95,7 @@ public:
         uint64_t durationNs = 0;          // duration.nanoseconds
         uint64_t messageCount = 0;
         std::string serializationFormat;  // 录制链路单格式，固定 "cdr"
-        std::vector<BagInfoTopic> topics;
+        std::vector<BagMetadataTopic> topics;
     };
     // 仅可成功一次，失败/重复调用返回 false。spec/err 语义同 FastDDSNode::setDomainId
     // （XML 三级提取链——本节点无用户名，仅默认档可兜底；serverLocator 直配强制 CLIENT）。

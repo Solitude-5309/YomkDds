@@ -49,14 +49,14 @@ YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DebugTopicMsgRequest, DebugTopicMsgR
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::DebugTopicPubRequest, DebugTopicPubRequest, msg)
 
 // ===== YomkDdsBagHandler =====
-YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagNode, BagNode, msg)
-YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagRecord, BagRecord, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagCreateNodeRequest, BagCreateNodeRequest, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagRecordRequest, BagRecordRequest, msg)
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::RecordResult, RecordResult, msg)
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagInfoRequest, BagInfoRequest, msg)
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagInfo, BagInfo, msg)
-YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagReindex, BagReindex, msg)
-YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagConvert, BagConvert, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagReindexRequest, BagReindexRequest, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagConvertRequest, BagConvertRequest, msg)
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::ConvertResult, ConvertResult, msg)
-YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagPlay, BagPlay, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::BagPlayRequest, BagPlayRequest, msg)
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::PlayResult, PlayResult, msg)
 // clang-format on

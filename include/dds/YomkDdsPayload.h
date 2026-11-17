@@ -787,7 +787,7 @@ struct DebugTopicPubRequest
 
 /** @brief bag create_node request (same env fallbacks as Node) */
 // @zh: bag create_node 请求负载（环境变量回落语义同 CreateNodeRequest）
-struct BagNode
+struct BagCreateNodeRequest
 {
     uint32_t domainId = YomkDdsDefaultDomainId();                               // DDS domain id [0,232]
     std::string udpDiscoverServerLocator = YomkDdsDefaultUdpDiscoverServers();  // UDP channel
@@ -796,7 +796,7 @@ struct BagNode
 
 /** @brief bag_record request (blocking until recording finishes) */
 // @zh: bag_record 请求负载（阻塞至录制收尾）
-struct BagRecord
+struct BagRecordRequest
 {
     std::vector<std::string> topics;  // at least 1; wildcard "*" item supported
     std::string outputDir;            // empty = timestamped default bag_<...>
@@ -814,14 +814,14 @@ struct BagInfoRequest
 
 /** @brief bag_reindex request (pure file op, rebuilds metadata.json) */
 // @zh: bag_reindex 请求负载（纯文件操作，重建 metadata.json）
-struct BagReindex
+struct BagReindexRequest
 {
     std::string bagDir = "";  // metadata.json may be missing/corrupted
 };
 
 /** @brief bag_convert request (filter/merge inputs into new bags) */
 // @zh: bag_convert 请求负载（按配置过滤合并输入为新 bag）
-struct BagConvert
+struct BagConvertRequest
 {
     std::vector<std::string> inputs;  // at least 1, duplicates rejected
     std::string cfgPath = "";         // JSON config, top-level output_bags array
@@ -829,7 +829,7 @@ struct BagConvert
 
 /** @brief bag_play request (blocking until all messages are played) */
 // @zh: bag_play 请求负载（阻塞至全部消息播毕）
-struct BagPlay
+struct BagPlayRequest
 {
     std::string bagDir = "";              // must contain metadata.json
     double playbackRate = 1.0;            // >0; 2.0 double speed
@@ -945,7 +945,7 @@ struct ConvertResult
  */
 // @zh: 单个 bag 元信息中的逐主题条目
 // @zh: note metadata.json 无 qos 键（旧 bag）或记录空串（录制时仅订阅者主题）时 qos 为空
-struct BagInfoTopic
+struct BagMetadataTopic
 {
     std::string topicName;       // metadata.json topics_with_message_count[].topic_metadata.name
     std::string typeName;        // raw DDS type name stored in the bag
@@ -957,8 +957,8 @@ struct BagInfoTopic
         return std::tie(topicName, typeName, qos, messageCount);
     }
 
-    bool operator==(const BagInfoTopic& rhs) const { return tie() == rhs.tie(); }
-    bool operator!=(const BagInfoTopic& rhs) const { return !(*this == rhs); }
+    bool operator==(const BagMetadataTopic& rhs) const { return tie() == rhs.tie(); }
+    bool operator!=(const BagMetadataTopic& rhs) const { return !(*this == rhs); }
 };
 
 /**
@@ -979,10 +979,10 @@ struct BagInfo
     uint64_t durationNs = 0;            // duration.nanoseconds
     uint64_t messageCount = 0;          // message_count
     std::string serializationFormat;    // single CDR pipeline, reported as "cdr"
-    std::vector<BagInfoTopic> topics;   // topics_with_message_count order
+    std::vector<BagMetadataTopic> topics;   // topics_with_message_count order
 
     std::tuple<const std::vector<std::string>&, const uint64_t&, const std::string&, const uint64_t&,
-            const uint64_t&, const uint64_t&, const std::string&, const std::vector<BagInfoTopic>&>
+            const uint64_t&, const uint64_t&, const std::string&, const std::vector<BagMetadataTopic>&>
     tie() const
     {
         return std::tie(files, bagSizeBytes, storageId, startTimeNs, durationNs, messageCount,

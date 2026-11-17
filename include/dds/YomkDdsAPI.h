@@ -1247,7 +1247,7 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsBagReindex)
-            .msg(yomk::msgs::dds::BagReindex::shared(yomk::payload::dds::BagReindex{std::move(m_bagDir)}))
+            .msg(yomk::msgs::dds::BagReindexRequest::shared(yomk::payload::dds::BagReindexRequest{std::move(m_bagDir)}))
             .request();
     }
     /**
@@ -1400,8 +1400,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsBagPlay)
-            .msg(yomk::msgs::dds::BagPlay::shared(
-                yomk::payload::dds::BagPlay{std::move(m_bagDir), m_playRate, std::move(m_playTopics),
+            .msg(yomk::msgs::dds::BagPlayRequest::shared(
+                yomk::payload::dds::BagPlayRequest{std::move(m_bagDir), m_playRate, std::move(m_playTopics),
                     m_playLoop, m_playOffsetSec, m_playDelaySec, m_playWaitAckedMs,
                     std::move(m_playRemaps), m_playReadAhead, std::move(m_playQosFile)}))
             .request();
@@ -1495,8 +1495,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
         return yomk::server().url(yomk::url::ddsBagCreateNode)
-            .msg(yomk::msgs::dds::BagNode::shared(
-                yomk::payload::dds::BagNode{m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
+            .msg(yomk::msgs::dds::BagCreateNodeRequest::shared(
+                yomk::payload::dds::BagCreateNodeRequest{m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
             .request();
     }
     /**
@@ -1634,8 +1634,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "topics are required");
         }
         return yomk::server().url(yomk::url::ddsBagRecord)
-            .msg(yomk::msgs::dds::BagRecord::shared(
-                yomk::payload::dds::BagRecord{std::move(m_recordTopics), std::move(m_recordOutDir),
+            .msg(yomk::msgs::dds::BagRecordRequest::shared(
+                yomk::payload::dds::BagRecordRequest{std::move(m_recordTopics), std::move(m_recordOutDir),
                     m_recordMaxSize, m_recordMaxDurationSec, m_recordCacheSize}))
             .request();
     }
@@ -1704,8 +1704,8 @@ public:
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "out_cfg(path) is required");
         }
         return yomk::server().url(yomk::url::ddsBagConvert)
-            .msg(yomk::msgs::dds::BagConvert::shared(
-                yomk::payload::dds::BagConvert{std::move(m_convertInBags), std::move(m_convertOutCfg)}))
+            .msg(yomk::msgs::dds::BagConvertRequest::shared(
+                yomk::payload::dds::BagConvertRequest{std::move(m_convertInBags), std::move(m_convertOutCfg)}))
             .request();
     }
 };

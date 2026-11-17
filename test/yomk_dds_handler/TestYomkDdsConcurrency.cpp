@@ -205,7 +205,7 @@ namespace
                         }
                     }
                     // version：只读端点不取 mtx_，与并发写共存（验证 getVersion 无锁读线程安全）
-                    if (testInvoke(svc, "/version", yomk::msgs::String::shared("")).status == yomk::payload::ResStatus::Succeeded)
+                    if (testInvoke(svc, "/get_version", yomk::msgs::String::shared("")).status == yomk::payload::ResStatus::Succeeded)
                     {
                         verOk.fetch_add(1);
                     }

@@ -620,9 +620,9 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "out_cb() callback is required");
         }
-        return yomk::server().url(yomk::url::ddsDebugTopicPrint)
-            .msg(yomk::msgs::dds::DebugTopicPrintRequest::shared(
-                yomk::payload::dds::DebugTopicPrintRequest{std::move(m_topicName), std::move(m_output), std::move(m_qos)}))
+        return yomk::server().url(yomk::url::ddsDebugPrintTopic)
+            .msg(yomk::msgs::dds::DebugPrintTopicRequest::shared(
+                yomk::payload::dds::DebugPrintTopicRequest{std::move(m_topicName), std::move(m_output), std::move(m_qos)}))
             .request();
     }
     /**
@@ -645,9 +645,9 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugTopicInfo)
-            .msg(yomk::msgs::dds::DebugTopicInfoRequest::shared(
-                yomk::payload::dds::DebugTopicInfoRequest{std::move(m_topicName), m_stableRounds, m_intervalMs}))
+        return yomk::server().url(yomk::url::ddsDebugGetTopicInfo)
+            .msg(yomk::msgs::dds::DebugGetTopicInfoRequest::shared(
+                yomk::payload::dds::DebugGetTopicInfoRequest{std::move(m_topicName), m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -671,9 +671,9 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugTopicExample)
-            .msg(yomk::msgs::dds::DebugTopicExampleRequest::shared(
-                yomk::payload::dds::DebugTopicExampleRequest{std::move(m_topicName), m_stableRounds, m_intervalMs}))
+        return yomk::server().url(yomk::url::ddsDebugGetTopicExample)
+            .msg(yomk::msgs::dds::DebugGetTopicExampleRequest::shared(
+                yomk::payload::dds::DebugGetTopicExampleRequest{std::move(m_topicName), m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -696,9 +696,9 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugTopicMsg)
-            .msg(yomk::msgs::dds::DebugTopicMsgRequest::shared(
-                yomk::payload::dds::DebugTopicMsgRequest{std::move(m_topicName), m_stableRounds, m_intervalMs}))
+        return yomk::server().url(yomk::url::ddsDebugGetTopicMsg)
+            .msg(yomk::msgs::dds::DebugGetTopicMsgRequest::shared(
+                yomk::payload::dds::DebugGetTopicMsgRequest{std::move(m_topicName), m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -729,7 +729,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "payload(json) is required");
         }
-        return yomk::server().url(yomk::url::ddsDebugTopicPub)
+        return yomk::server().url(yomk::url::ddsDebugStartPub)
             .msg(yomk::msgs::dds::DebugTopicPubRequest::shared(
                 yomk::payload::dds::DebugTopicPubRequest{std::move(m_topicName), std::move(m_payload),
                     m_stableRounds, m_intervalMs, m_repeatMs, m_requiredSubs, m_maxTimes,
@@ -801,9 +801,9 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugTopicFind)
-            .msg(yomk::msgs::dds::DebugTopicFindRequest::shared(
-                yomk::payload::dds::DebugTopicFindRequest{std::move(m_typeName), m_stableRounds, m_intervalMs}))
+        return yomk::server().url(yomk::url::ddsDebugFindTopics)
+            .msg(yomk::msgs::dds::DebugFindTopicsRequest::shared(
+                yomk::payload::dds::DebugFindTopicsRequest{std::move(m_typeName), m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -835,9 +835,9 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugInterfaceShow)
-            .msg(yomk::msgs::dds::DebugInterfaceShowRequest::shared(
-                yomk::payload::dds::DebugInterfaceShowRequest{std::move(m_typeName), m_stableRounds, m_intervalMs}))
+        return yomk::server().url(yomk::url::ddsDebugShowInterface)
+            .msg(yomk::msgs::dds::DebugShowInterfaceRequest::shared(
+                yomk::payload::dds::DebugShowInterfaceRequest{std::move(m_typeName), m_stableRounds, m_intervalMs}))
             .request();
     }
 };
@@ -910,9 +910,9 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugNodeInfo)
-            .msg(yomk::msgs::dds::DebugNodeInfoRequest::shared(
-                yomk::payload::dds::DebugNodeInfoRequest{std::move(m_nodeName), m_stableRounds, m_intervalMs}))
+        return yomk::server().url(yomk::url::ddsDebugGetNodeInfo)
+            .msg(yomk::msgs::dds::DebugGetNodeInfoRequest::shared(
+                yomk::payload::dds::DebugGetNodeInfoRequest{std::move(m_nodeName), m_stableRounds, m_intervalMs}))
             .request();
     }
 };
@@ -1063,7 +1063,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugPubStop).msg(nullptr).request();
+        return yomk::server().url(yomk::url::ddsDebugStopPub).msg(nullptr).request();
     }
     /**
      * @brief Switch into the topic facet with the observed topic name
@@ -1145,9 +1145,9 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugInterfaceList)
-            .msg(yomk::msgs::dds::DebugInterfaceListRequest::shared(
-                yomk::payload::dds::DebugInterfaceListRequest{m_stableRounds, m_intervalMs}))
+        return yomk::server().url(yomk::url::ddsDebugListInterfaces)
+            .msg(yomk::msgs::dds::DebugListInterfacesRequest::shared(
+                yomk::payload::dds::DebugListInterfacesRequest{m_stableRounds, m_intervalMs}))
             .request();
     }
     /**
@@ -1252,7 +1252,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagInfo)
+        return yomk::server().url(yomk::url::ddsBagGetInfo)
             .msg(yomk::msgs::dds::BagInfoRequest::shared(yomk::payload::dds::BagInfoRequest{std::move(m_bagDir)}))
             .request();
     }
@@ -1802,7 +1802,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsVersion).msg(nullptr).request();
+        return yomk::server().url(yomk::url::ddsGetVersion).msg(nullptr).request();
     }
 
     /**

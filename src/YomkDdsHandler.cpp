@@ -40,7 +40,7 @@ YomkDdsHandler::~YomkDdsHandler() = default;
 
 int YomkDdsHandler::init()
 {
-    installFunc("/version", &YomkDdsHandler::getVersion);
+    installFunc("/get_version", &YomkDdsHandler::getVersion);
     installFunc("/load_xml", &YomkDdsHandler::loadXml);
     installFunc("/create_node", &YomkDdsHandler::createNode);
     installFunc("/delete_node", &YomkDdsHandler::deleteNode);

@@ -25,7 +25,7 @@ namespace
     // T1：/version 契约（不解包，忽略 pkg）
     void testVersion(YomkDdsHandler *svc)
     {
-        auto resp = testInvoke(svc, "/version");
+        auto resp = testInvoke(svc, "/get_version");
         check(resp.status == yomk::payload::ResStatus::Succeeded, "/version 返回 eOk");
         check(resp.msg == "ok", "/version msg == ok");
 
@@ -37,7 +37,7 @@ namespace
             check(ver->d.find("(WIP)") == std::string::npos, "/version 版本串不含 (WIP)（发布态整洁版本串）");
         }
 
-        auto respNull = testInvoke(svc, "/version", nullptr);
+        auto respNull = testInvoke(svc, "/get_version", nullptr);
         check(respNull.status == yomk::payload::ResStatus::Succeeded, "/version 传 nullptr 仍 eOk（忽略 pkg）");
     }
 
@@ -107,7 +107,7 @@ int main()
 
     // 内省：9 个 dds 端点均已注册（闭环 4 增 /load_xml）
     auto infos = testFuncInfos(svc);
-    check(infos.size() == 9 && infos.count("/version") && infos.count("/load_xml") && infos.count("/create_node") && infos.count("/delete_node") && infos.count("/register_pub_topic") && infos.count("/register_sub_topic") && infos.count("/publish") && infos.count("/loan") && infos.count("/discard_loan"),
+    check(infos.size() == 9 && infos.count("/get_version") && infos.count("/load_xml") && infos.count("/create_node") && infos.count("/delete_node") && infos.count("/register_pub_topic") && infos.count("/register_sub_topic") && infos.count("/publish") && infos.count("/loan") && infos.count("/discard_loan"),
           "funcInfos 内省 9 端点齐全");
 
     testVersion(svc);

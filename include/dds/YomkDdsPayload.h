@@ -388,12 +388,12 @@ struct DebugCreateNodeRequest
 };
 
 /**
- * @brief topic_print request
+ * @brief print_topic request
  * @warning Empty output callback is rejected
  */
-// @zh: topic_print 请求负载
+// @zh: print_topic 请求负载
 // @zh: warning 空输出回调拒绝
-struct DebugTopicPrintRequest
+struct DebugPrintTopicRequest
 {
     std::string topicName;      // topic to observe
     DDSDebugOutputFunc output;  // user-defined output callback
@@ -408,9 +408,9 @@ struct DebugListTopicsRequest
     uint32_t intervalMs = 0;    // snapshot polling interval in milliseconds
 };
 
-/** @brief topic_info request (independent convergence parameters) */
-// @zh: topic_info 请求负载（独立收敛参数）
-struct DebugTopicInfoRequest
+/** @brief get_topic_info request (independent convergence parameters) */
+// @zh: get_topic_info 请求负载（独立收敛参数）
+struct DebugGetTopicInfoRequest
 {
     std::string topicName = "";  // topic to query
     uint32_t stableRounds = 0;
@@ -583,11 +583,11 @@ struct InterfaceType
 };
 
 /**
- * @brief interface_show response: the root type plus the closure of its struct dependencies
+ * @brief show_interface response: the root type plus the closure of its struct dependencies
  * @note dependencies is flattened and deduplicated in topological order (a type
  *       comes before the types that reference it) and never contains root
  */
-// @zh: interface_show 响应：root 类型及其 struct 依赖闭包
+// @zh: show_interface 响应：root 类型及其 struct 依赖闭包
 // @zh: note dependencies 平铺去重、拓扑序（被依赖者在前），且不含 root
 struct InterfaceInfo
 {
@@ -604,11 +604,11 @@ struct InterfaceInfo
 };
 
 /**
- * @brief topic_example response: type identity, reflected struct closure and JSON template
+ * @brief get_topic_example response: type identity, reflected struct closure and JSON template
  * @note interfaceInfo.root is the queried type, whose typeName equals typeName; json is the
  *       compact default-value sample and is already a valid publish payload
  */
-// @zh: topic_example 响应：类型标识 + struct 反射闭包 + JSON 模板
+// @zh: get_topic_example 响应：类型标识 + struct 反射闭包 + JSON 模板
 // @zh: note interfaceInfo.root 为查询类型（其 typeName 与 typeName 相同）；
 // @zh: json 为紧凑默认值样本，本身即合法发布载荷
 struct TopicExampleInfo
@@ -628,11 +628,11 @@ struct TopicExampleInfo
 };
 
 /**
- * @brief topic_msg response: type name plus the compact default-value JSON sample
+ * @brief get_topic_msg response: type name plus the compact default-value JSON sample
  * @note json is single-line and itself a valid publish payload; writing it to a file is a
  *       caller-side concern, no output path travels in the request
  */
-// @zh: topic_msg 响应：类型名 + 紧凑默认值 JSON 样本
+// @zh: get_topic_msg 响应：类型名 + 紧凑默认值 JSON 样本
 // @zh: note json 为单行文本，本身即合法发布载荷；是否落盘由调用方决定，请求负载不携带输出路径
 struct TopicMessageInfo
 {
@@ -650,11 +650,11 @@ struct TopicMessageInfo
 };
 
 /**
- * @brief topic_pub response counters (reported in both single-shot and repeat modes)
+ * @brief start_pub response counters (reported in both single-shot and repeat modes)
  * @note total includes the first shot (1 for a single-shot publish); failed only counts
  *       repeat-mode write failures
  */
-// @zh: topic_pub 响应计数（单次与持续模式均回填）
+// @zh: start_pub 响应计数（单次与持续模式均回填）
 // @zh: note total 含首轮（单次发布即 1）；failed 仅统计持续模式下的 write 失败
 struct TopicPublishInfo
 {
@@ -688,11 +688,11 @@ struct NodeEndpoint
 };
 
 /**
- * @brief node_info response: participant name plus its publisher/subscriber topic lists
+ * @brief get_node_info response: participant name plus its publisher/subscriber topic lists
  * @note each list is deduplicated per topic and sorted by (topicName, typeName); an empty
  *       list still means a discovered participant, only a never-discovered name fails
  */
-// @zh: node_info 响应：参与者名 + 发布/订阅主题清单
+// @zh: get_node_info 响应：参与者名 + 发布/订阅主题清单
 // @zh: note 两份清单按主题去重、以 (topicName, typeName) 排序；空清单仍表示参与者已被发现，
 // @zh: 只有收敛窗口内始终不可见的名字才失败
 struct NodeInfo
@@ -719,53 +719,53 @@ struct DebugListNodesRequest
     uint32_t intervalMs = 0;
 };
 
-/** @brief node_info request (independent convergence parameters) */
-// @zh: node_info 请求负载（独立收敛参数）
-struct DebugNodeInfoRequest
+/** @brief get_node_info request (independent convergence parameters) */
+// @zh: get_node_info 请求负载（独立收敛参数）
+struct DebugGetNodeInfoRequest
 {
     std::string nodeName = "";  // participant_name exact match
     uint32_t stableRounds = 0;
     uint32_t intervalMs = 0;
 };
 
-/** @brief topic_find request (type name exact match) */
-// @zh: topic_find 请求负载（类型名精确匹配）
-struct DebugTopicFindRequest
+/** @brief find_topics request (type name exact match) */
+// @zh: find_topics 请求负载（类型名精确匹配）
+struct DebugFindTopicsRequest
 {
     std::string typeName = "";
     uint32_t stableRounds = 0;
     uint32_t intervalMs = 0;
 };
 
-/** @brief interface_show request (IDL struct dump by type name) */
+/** @brief show_interface request (IDL struct dump by type name) */
 // @zh: interface_show 请求负载（按类型名输出 IDL 结构）
-struct DebugInterfaceShowRequest
+struct DebugShowInterfaceRequest
 {
     std::string typeName = "";
     uint32_t stableRounds = 0;
     uint32_t intervalMs = 0;
 };
 
-/** @brief interface_list request (all discovered type names, deduplicated) */
+/** @brief list_interfaces request (all discovered type names, deduplicated) */
 // @zh: interface_list 请求负载（全部已发现类型名，去重排序）
-struct DebugInterfaceListRequest
+struct DebugListInterfacesRequest
 {
     uint32_t stableRounds = 0;
     uint32_t intervalMs = 0;
 };
 
-/** @brief topic_example request (Type/IDL/example command three-part lines) */
+/** @brief get_topic_example request (Type/IDL/example command three-part lines) */
 // @zh: topic_example 请求负载（Type/IDL/example 命令三段行集）
-struct DebugTopicExampleRequest
+struct DebugGetTopicExampleRequest
 {
     std::string topicName = "";  // exact match
     uint32_t stableRounds = 0;
     uint32_t intervalMs = 0;
 };
 
-/** @brief topic_msg request (type name + compact msg JSON, exactly two lines) */
+/** @brief get_topic_msg request (type name + compact msg JSON, exactly two lines) */
 // @zh: topic_msg 请求负载（类型名 + 紧凑 msg JSON，恰两行）
-struct DebugTopicMsgRequest
+struct DebugGetTopicMsgRequest
 {
     std::string topicName = "";  // exact match
     uint32_t stableRounds = 0;
@@ -773,12 +773,12 @@ struct DebugTopicMsgRequest
 };
 
 /**
- * @brief topic_pub request (JSON payload publish with full first-shot validation)
+ * @brief start_pub request (JSON payload publish with full first-shot validation)
  * @note requiredSubscribers > 0 gates delivery on that many matched
  *       subscribers; repeatIntervalMs > 0 keeps the publish chain alive and
  *       repeats until the stop flag or maxTimes is reached
  */
-// @zh: topic_pub 请求负载（JSON 载荷发布，首轮完整强校验）
+// @zh: start_pub 请求负载（JSON 载荷发布，首轮完整强校验）
 // @zh: note requiredSubscribers>0 为期望建匹配订阅端数门槛；repeatIntervalMs>0 为持续发布
 // @zh: 模式，直至停止标志置位或发满 maxTimes 条
 struct DebugTopicPubRequest
@@ -804,8 +804,8 @@ struct BagCreateNodeRequest
     std::string tcpDiscoverServerLocator = YomkDdsDefaultTcpDiscoverServers();  // TCP channel
 };
 
-/** @brief bag_record request (blocking until recording finishes) */
-// @zh: bag_record 请求负载（阻塞至录制收尾）
+/** @brief record request (blocking until recording finishes) */
+// @zh: record 请求负载（阻塞至录制收尾）
 struct BagRecordRequest
 {
     std::vector<std::string> topics;  // at least 1; wildcard "*" item supported
@@ -815,30 +815,30 @@ struct BagRecordRequest
     uint64_t maxCacheSize = 0;        // write cache double-buffer bytes; 0 = direct write
 };
 
-/** @brief bag_info request (pure file read, no bag node needed) */
-// @zh: bag_info 请求负载（纯文件读，不经 bag 节点）
+/** @brief get_info request (pure file read, no bag node needed) */
+// @zh: get_info 请求负载（纯文件读，不经 bag 节点）
 struct BagInfoRequest
 {
     std::string bagDir = "";  // must contain metadata.json
 };
 
-/** @brief bag_reindex request (pure file op, rebuilds metadata.json) */
-// @zh: bag_reindex 请求负载（纯文件操作，重建 metadata.json）
+/** @brief reindex request (pure file op, rebuilds metadata.json) */
+// @zh: reindex 请求负载（纯文件操作，重建 metadata.json）
 struct BagReindexRequest
 {
     std::string bagDir = "";  // metadata.json may be missing/corrupted
 };
 
-/** @brief bag_convert request (filter/merge inputs into new bags) */
-// @zh: bag_convert 请求负载（按配置过滤合并输入为新 bag）
+/** @brief convert request (filter/merge inputs into new bags) */
+// @zh: convert 请求负载（按配置过滤合并输入为新 bag）
 struct BagConvertRequest
 {
     std::vector<std::string> inputs;  // at least 1, duplicates rejected
     std::string cfgPath = "";         // JSON config, top-level output_bags array
 };
 
-/** @brief bag_play request (blocking until all messages are played) */
-// @zh: bag_play 请求负载（阻塞至全部消息播毕）
+/** @brief play request (blocking until all messages are played) */
+// @zh: play 请求负载（阻塞至全部消息播毕）
 struct BagPlayRequest
 {
     std::string bagDir = "";              // must contain metadata.json
@@ -880,12 +880,12 @@ struct BagTopicStat
 };
 
 /**
- * @brief bag_record response: the output bag directory plus per-topic statistics
+ * @brief record response: the output bag directory plus per-topic statistics
  * @note Data only: the directory line and the "topic: N messages / M bytes" lines are
  *       rendered by the caller (yomkdds); topics keeps the recording order (wildcard
  *       items already expanded)
  */
-// @zh: bag_record 响应：输出 bag 目录 + 逐主题统计
+// @zh: record 响应：输出 bag 目录 + 逐主题统计
 // @zh: note 只回数据：目录行与 "topic: N 条 / M 字节" 行由调用方（yomkdds）渲染；
 // @zh: topics 保持录制清单顺序（通配项已展开）
 struct RecordResult
@@ -928,11 +928,11 @@ struct ConvertedBagStat
 };
 
 /**
- * @brief bag_convert response: one statistics record per output bag
+ * @brief convert response: one statistics record per output bag
  * @note Data only: the "converted <uri>: N messages / M bytes / K topics" lines are
  *       rendered by the caller (yomkdds); bags keeps the output_bags config order
  */
-// @zh: bag_convert 响应：每个输出 bag 一条统计
+// @zh: convert 响应：每个输出 bag 一条统计
 // @zh: note 只回数据："converted <uri>: N messages / M bytes / K topics" 行由调用方
 // @zh: （yomkdds）渲染；bags 保持 output_bags 配置顺序
 struct ConvertResult
@@ -972,12 +972,12 @@ struct BagMetadataTopic
 };
 
 /**
- * @brief bag_info response: the metadata.json fields plus the recursive directory size
+ * @brief get_info response: the metadata.json fields plus the recursive directory size
  * @note Data only: every line (labels, unit suffixes, human-readable time, 19-column
  *       alignment) is rendered by the caller (yomkdds); times stay in nanoseconds and
  *       bagSizeBytes covers the whole directory, metadata.json included
  */
-// @zh: bag_info 响应：metadata.json 字段 + 目录递归总大小
+// @zh: get_info 响应：metadata.json 字段 + 目录递归总大小
 // @zh: note 只回数据：行标签、单位、人类可读时间与 19 列对齐均由调用方（yomkdds）渲染；
 // @zh: 时间保留纳秒，bagSizeBytes 为目录递归总字节（含 metadata.json 自身）
 struct BagInfo
@@ -1004,13 +1004,13 @@ struct BagInfo
 };
 
 /**
- * @brief bag_play response: the played bag directory plus per-topic statistics
+ * @brief play response: the played bag directory plus per-topic statistics
  * @note Data only: the directory line and the "topic: N messages / M bytes" lines are
  *       rendered by the caller (yomkdds); topics keeps the bag scan order, topicName
  *       carries the published name (remaps applied), and a topic that was pre-scanned
  *       but never reached reports 0/0 (playback stopped early via yomk::bagPlayStop)
  */
-// @zh: bag_play 响应：回放的 bag 目录 + 逐主题统计
+// @zh: play 响应：回放的 bag 目录 + 逐主题统计
 // @zh: note 只回数据：目录行与 "topic: N 条 / M 字节" 行由调用方（yomkdds）渲染；topics 保持
 // @zh: bag 预扫顺序，topicName 为发布名（已应用 remap）；预扫命中但未播到的主题（经
 // @zh: yomk::bagPlayStop 提前停止）计 0/0

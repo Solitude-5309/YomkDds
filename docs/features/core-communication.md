@@ -10,7 +10,7 @@ YomkDds 是基于 YomkServer 框架的 DDS 分布式通信扩展，集成 Fast D
 
 | 能力 | 链式 API | URL 端点 | 说明 |
 |---|---|---|---|
-| 版本查询 | `yomk::dds().version()` | `/YomkDdsHandler/version` | 返回 Response 携带 String 版本串（"YomkDds v<版本号>"），解包/打印由调用方处理 |
+| 版本查询 | `yomk::dds().version()` | `/YomkDdsHandler/get_version` | 返回 Response 携带 String 版本串（"YomkDds v<版本号>"），解包/打印由调用方处理 |
 | 创建节点 | `yomk::dds().node(nodeName)[.domain(domainId)][.udp_ds(udpLocator)][.tcp_ds(tcpLocator)].create()` | `/YomkDdsHandler/create_node` | 每节点一个独立 DDS 参与者 |
 | 删除节点 | `yomk::dds().node(nodeName).remove()` | `/YomkDdsHandler/delete_node` | 销毁节点及其全部 DDS 实体，不存在的节点返回错误 |
 | 注册发布主题 | `yomk::dds().node(nodeName).topic(topicName).type(type)[.qos(qos)].create_pub()` | `/YomkDdsHandler/register_pub_topic` | type 为 `new XxxPubSubType()`，所有权移交服务端 |

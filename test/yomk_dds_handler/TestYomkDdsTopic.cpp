@@ -30,7 +30,7 @@
 // String + YOMK_* 宏
 #include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
-#include "YomkDdsDebugHandler.h" // YomkDdsDebugHandler + DebugCreateNodeRequest/DebugTopicInfoRequest（QoS-B4 读回链路）
+#include "YomkDdsDebugHandler.h" // YomkDdsDebugHandler + DebugCreateNodeRequest/DebugGetTopicInfoRequest（QoS-B4 读回链路）
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MString / MInt32 数据类
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType / MInt32PubSubType
@@ -349,7 +349,7 @@ namespace
         check(testInvoke(svcDebug, "/create_node", yomk::msgs::dds::DebugCreateNodeRequest::shared(DebugCreateNodeRequest{TEST_DOMAIN})).status == yomk::payload::ResStatus::Succeeded,
               "QoS-B4 创建调试节点（域 200）→ eOk");
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 调试参与者发现已在线端点
-        auto hitV = testInvoke(svcDebug, "/topic_info", yomk::msgs::dds::DebugTopicInfoRequest::shared(DebugTopicInfoRequest{"t_be", 10, 200}));
+        auto hitV = testInvoke(svcDebug, "/get_topic_info", yomk::msgs::dds::DebugGetTopicInfoRequest::shared(DebugGetTopicInfoRequest{"t_be", 10, 200}));
         check(hitV.status == yomk::payload::ResStatus::Succeeded && hitV.data != nullptr,
               "QoS-B4 topic info t_be → eOk（发现缓存命中）");
         auto infoV = yomk::msgs::unpack<yomk::msgs::dds::TopicInfo>(hitV.data);

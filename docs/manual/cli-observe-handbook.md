@@ -88,7 +88,7 @@ average rate: 1.000
 ```
 
 各输出项含义（对齐 ros2 topic hz）：`average rate` 为窗口内相邻消息间隔均值的倒数（Hz）；`min`/`max` 为间隔极值（秒）；`std dev` 为间隔的总体标准差（秒，除以 n）；`window` 为间隔样本数。无新消息不重复打印；首条消息前不打印统计；登记后的等待提示与类型不可重建告警同 `topic print`（见上一小节）；Ctrl+C 退出。
-- **等价库调用**：复用 `yomk::dds().debug().topic(主题名).out_cb(回调).print()`（同一 `/topic_print` 端点，回调侧改记时间戳）。
+- **等价库调用**：复用 `yomk::dds().debug().topic(主题名).out_cb(回调).print()`（同一 `/print_topic` 端点，回调侧改记时间戳）。
 
 ### topic list：列出域内主题
 
@@ -183,11 +183,11 @@ yomkdds topic type hello_world        # 输出：YomkDdsStd::MString
 ```
 
 - **关键选项**：无；未发现主题时报错退出（`topic [<主题名>] not found`，与 topic info 同语义）。
-- **等价库调用**：`yomk::dds().debug().topic(主题名).rounds(5).interval(200).info()`（取 `TopicInfo::typeName`，复用同一 `/topic_info` 端点与收敛语义）。
+- **等价库调用**：`yomk::dds().debug().topic(主题名).rounds(5).interval(200).info()`（取 `TopicInfo::typeName`，复用同一 `/get_topic_info` 端点与收敛语义）。
 
 ### topic find：按类型名反查主题
 
-- **用途**：按数据类型名精确匹配反查域内主题（独立 `/topic_find` 端点，收敛语义同 topic list），命中时每行输出一个主题名（按主题名排序，对齐 `ros2 topic find`）。
+- **用途**：按数据类型名精确匹配反查域内主题（独立 `/find_topics` 端点，收敛语义同 topic list），命中时每行输出一个主题名（按主题名排序，对齐 `ros2 topic find`）。
 - **完整命令行**：
 
 ```bash

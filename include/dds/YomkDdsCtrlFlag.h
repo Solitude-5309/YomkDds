@@ -60,7 +60,7 @@ private:
     std::atomic<bool> m_v{false};
 };
 
-// ===== 调试持续发布停止标志（topic_pub repeat 模式 / 期望建匹配等待） =====
+// ===== 调试持续发布停止标志（start_pub repeat 模式 / 期望建匹配等待） =====
 inline Flag g_debugPubStop;
 }  // namespace yomk::ctrl
 // clang-format on

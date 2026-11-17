@@ -32,7 +32,7 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 
 ### 录制（`yomk::dds().bag()...record()` / `bag record`）
 
-`yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()`（端点 `/YomkDdsBagHandler/bag_record`）**长驻阻塞至 Ctrl+C**（SIGINT 经 `yomk::bagRecordStop` 无锁置位）收尾返回。`topics()` 必填（缺失时终结直接返回 `topics are required`），其余四个累积器可选、次序不限；`out_dir()` 空 = 缺省时间戳目录名，`max_size()`/`max_duration()` 为单分片阈值（两条件同用时先到先分），`cache()` 为写缓存双缓冲字节数。CLI 形态：
+`yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()`（端点 `/YomkDdsBagHandler/record`）**长驻阻塞至 Ctrl+C**（SIGINT 经 `yomk::bagRecordStop` 无锁置位）收尾返回。`topics()` 必填（缺失时终结直接返回 `topics are required`），其余四个累积器可选、次序不限；`out_dir()` 空 = 缺省时间戳目录名，`max_size()`/`max_duration()` 为单分片阈值（两条件同用时先到先分），`cache()` 为写缓存双缓冲字节数。CLI 形态：
 
 ```bash
 yomkdds bag record hello_world           # 录制单主题（默认域 0）

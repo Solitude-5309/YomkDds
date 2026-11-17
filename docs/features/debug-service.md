@@ -28,7 +28,7 @@
 | 入口 | 能力 | 关键行为 |
 |---|---|---|
 | 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()` | 列出域内主题（含类型名与端点详情） | 返回 `TopicInfoList`，每项 `TopicInfo` 携带 `topicName` / `typeName`（原样输出）/ `publisherCount` / `subscriptionCount` / `publishers` / `subscriptions` 逐端点清单（归属节点名、FastDDS 原生 GUID、结构化 QoS 字段；端点类型由所在清单表达）；按主题名排序；远端 DataWriter 与 DataReader 均记录（仅有订阅者而无发布者的主题同样列出）；列表可为空（域内无 writer/reader）；终端文本由调用方渲染（CLI 缺省仅打主题名，`-t` 附类型名，`-v` 展开端点详情） |
-| 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()` | 列出域内节点 | 独立收敛查询域内已发现的命名参与者（不依赖 list_topics/topic_info）；participant_name 非空且非 "/" 才列出（空名与 ROS2 参与者默认占位名 "/" 跳过，不输出 GUID 串），按名称排序；调试节点自身不在自身发现回调中，天然不列出；列表可为空 |
+| 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()` | 列出域内节点 | 独立收敛查询域内已发现的命名参与者（不依赖 list_topics/get_topic_info）；participant_name 非空且非 "/" 才列出（空名与 ROS2 参与者默认占位名 "/" 跳过，不输出 GUID 串），按名称排序；调试节点自身不在自身发现回调中，天然不列出；列表可为空 |
 | CLI `yomkdds topic list [-t \| --types] [-v \| --verbose]` | 列出域内全部已发现主题 | 缺省每行仅主题名；`-t` 每行 `主题名 [类型名]`（对齐 `ros2 topic list -t` 形态）；`-v` 逐主题输出 `主题名 [类型名]` 标题 + 与 `topic info -v` 同构的端点详情段；三种形态只是同一份结构化载荷的不同渲染 |
 | CLI `yomkdds node list` | 列出域内全部已发现的命名参与者 | 同域其他进程的调试节点与 bag 节点分别以唯一名 `yomkdds_debug_<uid>` / `yomkdds_bag_<uid>` 列出（uid 为 12 位随机 hex，多进程各自的调试/录制节点可区分） |
 
@@ -46,7 +46,7 @@
 | 入口 | 能力 | 关键行为 |
 |---|---|---|
 | 链式 `yomk::dds().debug().type(typeName)[.rounds(n)][.interval(ms)].find_topics()` | 按数据类型反查主题 | 独立收敛查询（语义同 `topics()`），类型名精确匹配；命中返回 StringArray 每行一个主题名（按主题名排序），无匹配主题返回错误（可发现类型名拼写错误） |
-| CLI `yomkdds topic type <主题名>` | 查询单主题数据类型名 | topic info 的单值快捷方式（复用同一 `/topic_info` 端点与收敛语义），输出单行裸类型名（对齐 `ros2 topic type`，便于脚本取用） |
+| CLI `yomkdds topic type <主题名>` | 查询单主题数据类型名 | topic info 的单值快捷方式（复用同一 `/get_topic_info` 端点与收敛语义），输出单行裸类型名（对齐 `ros2 topic type`，便于脚本取用） |
 | CLI `yomkdds topic find <类型名>` | 按数据类型名反查域内主题列表 | 精确匹配，对齐 `ros2 topic find` |
 
 ### 组 5：类型内省

@@ -72,7 +72,7 @@ int main()
     check(yomk::server().srv_ptr(svc).add() == 0, "YomkDdsBagHandler 注册成功（所有权移交框架，init() 已内部调用）");
 
     // ---- L0：/bag_info 与节点生命周期解耦（纯文件读，节点状态无关） ----
-    auto infoBefore = testInvoke(svc, "/bag_info", yomk::msgs::dds::BagInfoRequest::shared(BagInfoRequest{"info_svc_l0_miss"}));
+    auto infoBefore = testInvoke(svc, "/get_info", yomk::msgs::dds::BagInfoRequest::shared(BagInfoRequest{"info_svc_l0_miss"}));
     check(infoBefore.status == yomk::payload::ResStatus::Failed &&
               infoBefore.msg.find("bag path [info_svc_l0_miss] does not exist") != std::string::npos &&
               infoBefore.msg.find("bag node not created") == std::string::npos,
@@ -80,7 +80,7 @@ int main()
 
     // ---- L0：/bag_reindex 与节点生命周期解耦（纯文件操作，节点状态无关） ----
     auto reindexBefore =
-        testInvoke(svc, "/bag_reindex", yomk::msgs::dds::BagReindexRequest::shared(BagReindexRequest{"reindex_l0_miss"}));
+        testInvoke(svc, "/reindex", yomk::msgs::dds::BagReindexRequest::shared(BagReindexRequest{"reindex_l0_miss"}));
     check(reindexBefore.status == yomk::payload::ResStatus::Failed &&
               reindexBefore.msg.find("bag path [reindex_l0_miss] does not exist") != std::string::npos &&
               reindexBefore.msg.find("bag node not created") == std::string::npos,
@@ -90,12 +90,12 @@ int main()
     check(testInvoke(svc, "/create_node", yomk::msgs::dds::BagCreateNodeRequest::shared(BagCreateNodeRequest{TEST_DOMAIN})).status ==
               yomk::payload::ResStatus::Succeeded,
           "创建 bag 节点(domain 200) → eOk（真实创建 participant）");
-    auto infoAfter = testInvoke(svc, "/bag_info", yomk::msgs::dds::BagInfoRequest::shared(BagInfoRequest{"info_svc_l0_miss"}));
+    auto infoAfter = testInvoke(svc, "/get_info", yomk::msgs::dds::BagInfoRequest::shared(BagInfoRequest{"info_svc_l0_miss"}));
     check(infoAfter.status == yomk::payload::ResStatus::Failed &&
               infoAfter.msg.find("does not exist") != std::string::npos,
           "已建节点时 /bag_info 同样可达（行为与节点状态无关）");
     auto reindexAfter =
-        testInvoke(svc, "/bag_reindex", yomk::msgs::dds::BagReindexRequest::shared(BagReindexRequest{"reindex_l0_miss"}));
+        testInvoke(svc, "/reindex", yomk::msgs::dds::BagReindexRequest::shared(BagReindexRequest{"reindex_l0_miss"}));
     check(reindexAfter.status == yomk::payload::ResStatus::Failed &&
               reindexAfter.msg.find("does not exist") != std::string::npos,
           "已建节点时 /bag_reindex 同样可达（行为与节点状态无关）");
@@ -105,13 +105,13 @@ int main()
           "重复创建 → eNo bag node already exists, delete it first");
 
     // record 空清单：服务层锁外校验先于节点触达
-    auto rEmpty = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{}}));
+    auto rEmpty = testInvoke(svc, "/record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{}}));
     check(rEmpty.status == yomk::payload::ResStatus::Failed &&
               rEmpty.msg.find("no topics given") != std::string::npos,
           "record 空清单 → eNo no topics given");
 
     // ---- record 无端点主题：校验失败 eNo，msg 含主题名（默认收敛窗 ~3s，不落盘） ----
-    auto miss = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{"rt/bag_svc_miss"}}));
+    auto miss = testInvoke(svc, "/record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{"rt/bag_svc_miss"}}));
     check(miss.status == yomk::payload::ResStatus::Failed, "record 无端点主题 → eNo");
     check(miss.msg.find("主题 [rt/bag_svc_miss] 既无发布者也无订阅者") != std::string::npos,
           "record 无端点主题 msg 含逐主题报错文本");
@@ -155,7 +155,7 @@ int main()
     });
 
     // 主线程长驻阻塞：校验通过 → 透传订阅 → 录制 → 收尾 → eOk 回执
-    auto rec = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{REC_TOPIC}}));
+    auto rec = testInvoke(svc, "/record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{REC_TOPIC}}));
     stopThread.join();
     pubStop.store(true);
     pubThread.join();
@@ -174,7 +174,7 @@ int main()
     }
 
     // ---- 定格语义：成功录制后重复 record 拒绝 ----
-    auto again = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{REC_TOPIC}}));
+    auto again = testInvoke(svc, "/record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{REC_TOPIC}}));
     check(again.status == yomk::payload::ResStatus::Failed &&
               again.msg.find("record already finished") != std::string::npos,
           "定格式拒绝：成功录制后重复 record → eNo record already finished");
@@ -185,7 +185,7 @@ int main()
     check(dupDel.status == yomk::payload::ResStatus::Failed &&
               dupDel.msg.find("bag node not created") != std::string::npos,
           "重复删除 → eNo bag node not created");
-    auto delRec = testInvoke(svc, "/bag_record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{REC_TOPIC}}));
+    auto delRec = testInvoke(svc, "/record", yomk::msgs::dds::BagRecordRequest::shared(BagRecordRequest{{REC_TOPIC}}));
     check(delRec.status == yomk::payload::ResStatus::Failed &&
               delRec.msg.find("bag node not created") != std::string::npos,
           "删除后 record → eNo bag node not created");
@@ -248,13 +248,13 @@ int main()
     check(std::filesystem::exists(playBagDir + "/metadata.json", ec), "L3 前置：metadata.json 落盘");
 
     // a) 负载往返保真：路径不存在 → eNo 且错误文本回显 bagDir（解包字段无损证明）
-    auto playMiss = testInvoke(svc, "/bag_play", yomk::msgs::dds::BagPlayRequest::shared(BagPlayRequest{"play_svc_l3_miss"}));
+    auto playMiss = testInvoke(svc, "/play", yomk::msgs::dds::BagPlayRequest::shared(BagPlayRequest{"play_svc_l3_miss"}));
     check(playMiss.status == yomk::payload::ResStatus::Failed &&
               playMiss.msg.find("bag path [play_svc_l3_miss] does not exist") != std::string::npos,
           "/bag_play 负载往返：错误文本回显 bagDir（解包字段保真）");
 
     // b) 真实回放：eOk + PlayResult 结构化回执（bagDir + 逐主题统计，行文本归调用方）
-    auto playOk = testInvoke(svc, "/bag_play", yomk::msgs::dds::BagPlayRequest::shared(BagPlayRequest{playBagDir}));
+    auto playOk = testInvoke(svc, "/play", yomk::msgs::dds::BagPlayRequest::shared(BagPlayRequest{playBagDir}));
     check(playOk.status == yomk::payload::ResStatus::Succeeded, "/bag_play 真实 bag 回放 → eOk");
     auto played = yomk::msgs::unpack<yomk::msgs::dds::PlayResult>(playOk.data);
     check(played != nullptr, "play 回执可解包为 PlayResult（非 StringArray）");

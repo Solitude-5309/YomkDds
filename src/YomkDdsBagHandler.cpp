@@ -1,4 +1,4 @@
-// /bag_record、/bag_play 长驻阻塞期间持锁——锁保护 node_ 生命周期不被并发 deleteNode 破坏
+// /record、/play 长驻阻塞期间持锁——锁保护 node_ 生命周期不被并发 deleteNode 破坏
 // （同 YomkDdsDebugHandler 持锁收敛约定）；停止经 yomk::g_bagRecordStop / g_bagPlayStop 由
 // SIGINT 处理函数异步置位，不依赖本服务其他端点。
 #include "YomkDdsBagHandler.h"
@@ -25,13 +25,13 @@ YomkDdsBagHandler::~YomkDdsBagHandler() = default;
 
 int YomkDdsBagHandler::init()
 {
-    installFunc("/version", &YomkDdsBagHandler::getVersion);
+    installFunc("/get_version", &YomkDdsBagHandler::getVersion);
     installFunc("/create_node", &YomkDdsBagHandler::createNode);
-    installFunc("/bag_record", &YomkDdsBagHandler::bagRecord);
-    installFunc("/bag_info", &YomkDdsBagHandler::bagInfo);
-    installFunc("/bag_reindex", &YomkDdsBagHandler::bagReindex);
-    installFunc("/bag_convert", &YomkDdsBagHandler::bagConvert);
-    installFunc("/bag_play", &YomkDdsBagHandler::bagPlay);
+    installFunc("/record", &YomkDdsBagHandler::bagRecord);
+    installFunc("/get_info", &YomkDdsBagHandler::bagInfo);
+    installFunc("/reindex", &YomkDdsBagHandler::bagReindex);
+    installFunc("/convert", &YomkDdsBagHandler::bagConvert);
+    installFunc("/play", &YomkDdsBagHandler::bagPlay);
     installFunc("/delete_node", &YomkDdsBagHandler::deleteNode);
     return 0;
 }

@@ -28,18 +28,18 @@ public:
 private:
     yomk::payload::Response getVersion(YomkMsgPtr pkg);
     yomk::payload::Response createNode(YomkMsgPtr pkg);
-    yomk::payload::Response topicPrint(YomkMsgPtr pkg);
+    yomk::payload::Response printTopic(YomkMsgPtr pkg);
     yomk::payload::Response listTopics(YomkMsgPtr pkg);
-    yomk::payload::Response topicInfo(YomkMsgPtr pkg);
-    yomk::payload::Response topicFind(YomkMsgPtr pkg);
-    yomk::payload::Response interfaceShow(YomkMsgPtr pkg);
-    yomk::payload::Response interfaceList(YomkMsgPtr pkg);
-    yomk::payload::Response topicExample(YomkMsgPtr pkg);
-    yomk::payload::Response topicMsg(YomkMsgPtr pkg);
+    yomk::payload::Response getTopicInfo(YomkMsgPtr pkg);
+    yomk::payload::Response findTopics(YomkMsgPtr pkg);
+    yomk::payload::Response showInterface(YomkMsgPtr pkg);
+    yomk::payload::Response listInterfaces(YomkMsgPtr pkg);
+    yomk::payload::Response getTopicExample(YomkMsgPtr pkg);
+    yomk::payload::Response getTopicMsg(YomkMsgPtr pkg);
     yomk::payload::Response startPub(YomkMsgPtr pkg);
     yomk::payload::Response stopPub(YomkMsgPtr pkg);
     yomk::payload::Response listNodes(YomkMsgPtr pkg);
-    yomk::payload::Response nodeInfo(YomkMsgPtr pkg);
+    yomk::payload::Response getNodeInfo(YomkMsgPtr pkg);
     yomk::payload::Response deleteNode(YomkMsgPtr pkg);
 
 private:

@@ -41,7 +41,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-// 引服务头：YomkDdsHandler + Node/Topic/SubRequest/Publish/Loan/
+// 引服务头：YomkDdsHandler + Node/RegisterPubTopicRequest/RegisterSubTopicRequest/Publish/Loan/
 // LoanSample/String + YOMK_* 宏
 #include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
@@ -77,7 +77,7 @@ namespace
 
     YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName)
     {
-        return yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
+        return yomk::msgs::dds::CreateNodeRequest::shared(CreateNodeRequest{nodeName, domainId});
     }
 
     // 资源采样器（Linux /proc，零第三方依赖；与 serial exe 各自独立）
@@ -184,7 +184,7 @@ namespace
         for (int i = 0; i < NTOPICS; ++i)
         {
             if (testInvoke(svc, "/register_pub_topic",
-                            yomk::msgs::dds::Topic::shared(Topic{node, "c1_topic_" + std::to_string(i), new YomkDdsStd::MInt32PubSubType()}))
+                            yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{node, "c1_topic_" + std::to_string(i), new YomkDdsStd::MInt32PubSubType()}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regOk;
@@ -219,7 +219,7 @@ namespace
                     const int tidx = (i % 2 == 0) ? t : (t + NTHREADS);
                     const std::string topic = "c1_topic_" + std::to_string(tidx);
                     loanAttempts.fetch_add(1, std::memory_order_relaxed);
-                    auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::Loan::shared(Loan{node, topic, nullptr}));
+                    auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{node, topic, nullptr}));
                     auto lres = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(lr.data);;
                     void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
                     if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
@@ -228,13 +228,13 @@ namespace
                         static_cast<YomkDdsStd::MInt32 *>(s)->data(static_cast<int32_t>(i & 0x7fffffff));
                         if (i % 2 == 0)
                         {
-                            if (testInvoke(svc, "/publish", yomk::msgs::dds::Publish::shared(Publish{node, topic, s}))
+                            if (testInvoke(svc, "/publish", yomk::msgs::dds::PublishRequest::shared(PublishRequest{node, topic, s}))
                                     .status == yomk::payload::ResStatus::Succeeded)
                             {
                                 pubOk.fetch_add(1, std::memory_order_relaxed);
                             }
                         }
-                        else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::Loan::shared(Loan{node, topic, s}))
+                        else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{node, topic, s}))
                                      .status == yomk::payload::ResStatus::Succeeded)
                         {
                             discOk.fetch_add(1, std::memory_order_relaxed);
@@ -294,20 +294,20 @@ namespace
                     createOk.fetch_add(1, std::memory_order_relaxed);
                 }
                 if (testInvoke(svc, "/register_pub_topic",
-                                yomk::msgs::dds::Topic::shared(Topic{name, "c2_topic", new YomkDdsStd::MInt32PubSubType()}))
+                                yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{name, "c2_topic", new YomkDdsStd::MInt32PubSubType()}))
                         .status == yomk::payload::ResStatus::Succeeded)
                 {
                     regPubOk.fetch_add(1, std::memory_order_relaxed);
                 }
                 if (testInvoke(svc, "/register_sub_topic",
-                                yomk::msgs::dds::SubRequest::shared(SubRequest{name, "c2_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
+                                yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{name, "c2_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
                         .status == yomk::payload::ResStatus::Succeeded)
                 {
                     regSubOk.fetch_add(1, std::memory_order_relaxed);
                 }
                 for (int i = 0; i < 3; ++i)
                 {
-                    auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::Loan::shared(Loan{name, "c2_topic", nullptr}));
+                    auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{name, "c2_topic", nullptr}));
                     auto lres = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(lr.data);;
                     void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
                     if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
@@ -316,11 +316,11 @@ namespace
                         static_cast<YomkDdsStd::MInt32 *>(s)->data(i);
                         if (i % 2 == 0)
                         {
-                            testInvoke(svc, "/publish", yomk::msgs::dds::Publish::shared(Publish{name, "c2_topic", s}));
+                            testInvoke(svc, "/publish", yomk::msgs::dds::PublishRequest::shared(PublishRequest{name, "c2_topic", s}));
                         }
                         else
                         {
-                            testInvoke(svc, "/discard_loan", yomk::msgs::dds::Loan::shared(Loan{name, "c2_topic", s}));
+                            testInvoke(svc, "/discard_loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{name, "c2_topic", s}));
                         }
                     }
                 }
@@ -400,7 +400,7 @@ namespace
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, node)).status == yomk::payload::ResStatus::Succeeded,
               "C3 创建 c3_node → eOk");
         check(testInvoke(svc, "/register_pub_topic",
-                          yomk::msgs::dds::Topic::shared(Topic{node, topic, new YomkDdsStd::MInt32PubSubType()}))
+                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{node, topic, new YomkDdsStd::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "C3 register_pub_topic c3_topic(MInt32) → eOk");
 
@@ -424,7 +424,7 @@ namespace
             }
         };
         check(testInvoke(svc, "/register_sub_topic",
-                          yomk::msgs::dds::SubRequest::shared(SubRequest{node, topic, new YomkDdsStd::MInt32PubSubType(), cb}))
+                          yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{node, topic, new YomkDdsStd::MInt32PubSubType(), cb}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "C3 register_sub_topic c3_topic(callback) → eOk");
 
@@ -445,7 +445,7 @@ namespace
                 for (long s = 0; s < perThread; ++s)
                 {
                     msg.data(static_cast<int32_t>(t * 1000000 + s)); // 全局唯一可解码编码
-                    if (testInvoke(svc, "/publish", yomk::msgs::dds::Publish::shared(Publish{node, topic, &msg}))
+                    if (testInvoke(svc, "/publish", yomk::msgs::dds::PublishRequest::shared(PublishRequest{node, topic, &msg}))
                             .status == yomk::payload::ResStatus::Succeeded)
                     {
                         pubOk.fetch_add(1, std::memory_order_relaxed);

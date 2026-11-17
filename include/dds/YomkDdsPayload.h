@@ -277,7 +277,7 @@ struct DDSServerInfo
 // @zh: create_node 请求负载
 // @zh: note 可缺省字段经类内缺省初始化器读环境变量；直配聚合串格式 "ip[:port]"，
 // @zh: 多 server 分号分隔，非法串创建失败并回显原因
-struct Node
+struct CreateNodeRequest
 {
     std::string nodeName;  // unique node name, must not be empty
     uint32_t domainId = YomkDdsDefaultDomainId();                               // DDS domain id [0,232]
@@ -292,7 +292,7 @@ struct Node
  */
 // @zh: load_xml 请求负载
 // @zh: note 成功仅证明文件可解析并缓存；后续 create_node 按三级提取链叠加
-struct XmlLoad
+struct LoadXmlRequest
 {
     std::string xmlPath = YomkDdsDefaultXmlProfilePath();  // relative or absolute
 };
@@ -304,7 +304,7 @@ struct XmlLoad
  */
 // @zh: register_pub_topic 请求负载
 // @zh: warning type（TopicDataType*）所有权移交服务端，无论成败调用后 caller 不再持有/释放
-struct Topic
+struct RegisterPubTopicRequest
 {
     std::string nodeName;
     std::string topicName;
@@ -317,8 +317,8 @@ struct Topic
  * @warning Same type ownership transfer as Topic
  */
 // @zh: register_sub_topic 请求负载
-// @zh: warning type 所有权语义同 Topic
-struct SubRequest
+// @zh: warning type 所有权语义同 RegisterPubTopicRequest
+struct RegisterSubTopicRequest
 {
     std::string nodeName;
     std::string topicName;
@@ -334,7 +334,7 @@ struct SubRequest
  */
 // @zh: publish 请求负载
 // @zh: note data 为借用（非所有权）：publish 同步写入，caller 保留并自行管理其生命周期
-struct Publish
+struct PublishRequest
 {
     std::string nodeName;
     std::string topicName;
@@ -347,7 +347,7 @@ struct Publish
  */
 // @zh: loan / discard_loan 请求负载
 // @zh: note loan 请求忽略 sample；discard 请求携带待归还的借出指针
-struct Loan
+struct LoanRequest
 {
     std::string nodeName;
     std::string topicName;
@@ -369,7 +369,7 @@ struct LoanSample
 // ===== YomkDdsDebugHandler request payloads =====
 
 /** @brief debug create_node request (same env fallbacks as Node) */
-// @zh: debug create_node 请求负载（环境变量回落语义同 Node）
+// @zh: debug create_node 请求负载（环境变量回落语义同 CreateNodeRequest）
 struct DebugNode
 {
     uint32_t domainId = YomkDdsDefaultDomainId();                               // DDS domain id [0,232]
@@ -786,7 +786,7 @@ struct DebugTopicPub
 // ===== YomkDdsBagHandler request payloads =====
 
 /** @brief bag create_node request (same env fallbacks as Node) */
-// @zh: bag create_node 请求负载（环境变量回落语义同 Node）
+// @zh: bag create_node 请求负载（环境变量回落语义同 CreateNodeRequest）
 struct BagNode
 {
     uint32_t domainId = YomkDdsDefaultDomainId();                               // DDS domain id [0,232]

@@ -44,7 +44,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-// 引服务头：YomkDdsHandler + Node/Topic/SubRequest/Publish/Loan/
+// 引服务头：YomkDdsHandler + Node/RegisterPubTopicRequest/RegisterSubTopicRequest/Publish/Loan/
 // LoanSample/String + YOMK_* 宏
 #include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
@@ -80,7 +80,7 @@ namespace
     // 构造 /create_node 请求包
     YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName)
     {
-        return yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
+        return yomk::msgs::dds::CreateNodeRequest::shared(CreateNodeRequest{nodeName, domainId});
     }
 
     // ============================ 资源采样器（Linux /proc，零第三方依赖）============================
@@ -206,13 +206,13 @@ namespace
                 ++createOk;
             }
             if (testInvoke(svc, "/register_pub_topic",
-                            yomk::msgs::dds::Topic::shared(Topic{name, "s1_topic", new YomkDdsStd::MInt32PubSubType()}))
+                            yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{name, "s1_topic", new YomkDdsStd::MInt32PubSubType()}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regPubOk;
             }
             if (testInvoke(svc, "/register_sub_topic",
-                            yomk::msgs::dds::SubRequest::shared(SubRequest{name, "s1_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
+                            yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{name, "s1_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regSubOk;
@@ -220,7 +220,7 @@ namespace
             // 少量 loan→填值→(publish|discard)：每轮固定小量，聚焦 create/teardown 资源回收
             for (int i = 0; i < 5; ++i)
             {
-                auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::Loan::shared(Loan{name, "s1_topic", nullptr}));
+                auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{name, "s1_topic", nullptr}));
                 auto lres = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(lr.data);;
                 void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
                 if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
@@ -229,13 +229,13 @@ namespace
                     static_cast<YomkDdsStd::MInt32 *>(s)->data(i);
                     if (i % 2 == 0)
                     {
-                        if (testInvoke(svc, "/publish", yomk::msgs::dds::Publish::shared(Publish{name, "s1_topic", s}))
+                        if (testInvoke(svc, "/publish", yomk::msgs::dds::PublishRequest::shared(PublishRequest{name, "s1_topic", s}))
                                 .status == yomk::payload::ResStatus::Succeeded)
                         {
                             ++pubOk;
                         }
                     }
-                    else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::Loan::shared(Loan{name, "s1_topic", s}))
+                    else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{name, "s1_topic", s}))
                                  .status == yomk::payload::ResStatus::Succeeded)
                     {
                         ++discOk;
@@ -293,7 +293,7 @@ namespace
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, node)).status == yomk::payload::ResStatus::Succeeded,
               "S2 创建持久 s2_node → eOk");
         check(testInvoke(svc, "/register_pub_topic",
-                          yomk::msgs::dds::Topic::shared(Topic{node, topic, new YomkDdsStd::MInt32PubSubType()}))
+                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{node, topic, new YomkDdsStd::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "S2 register_pub_topic s2_topic(MInt32,writer-only) → eOk");
 
@@ -306,7 +306,7 @@ namespace
         auto oneOp = [&](long i)
         {
             ++loanAttempts;
-            auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::Loan::shared(Loan{node, topic, nullptr}));
+            auto lr = testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{node, topic, nullptr}));
             auto lres = yomk::msgs::unpack<yomk::msgs::dds::LoanSample>(lr.data);;
             void *s = (lres != nullptr) ? lres->msg.sample : nullptr;
             if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
@@ -315,13 +315,13 @@ namespace
                 static_cast<YomkDdsStd::MInt32 *>(s)->data(static_cast<int32_t>(i & 0x7fffffff));
                 if (i % 2 == 0)
                 {
-                    if (testInvoke(svc, "/publish", yomk::msgs::dds::Publish::shared(Publish{node, topic, s}))
+                    if (testInvoke(svc, "/publish", yomk::msgs::dds::PublishRequest::shared(PublishRequest{node, topic, s}))
                             .status == yomk::payload::ResStatus::Succeeded)
                     {
                         ++pubOk;
                     }
                 }
-                else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::Loan::shared(Loan{node, topic, s}))
+                else if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{node, topic, s}))
                              .status == yomk::payload::ResStatus::Succeeded)
                 {
                     ++discOk;
@@ -425,13 +425,13 @@ namespace
         {
             const std::string t = "s3_topic_" + std::to_string(i);
             if (testInvoke(svc, "/register_pub_topic",
-                            yomk::msgs::dds::Topic::shared(Topic{node, t, new YomkDdsStd::MInt32PubSubType()}))
+                            yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{node, t, new YomkDdsStd::MInt32PubSubType()}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regPubOk;
             }
             if (testInvoke(svc, "/register_sub_topic",
-                            yomk::msgs::dds::SubRequest::shared(SubRequest{node, t, new YomkDdsStd::MInt32PubSubType(), cb}))
+                            yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{node, t, new YomkDdsStd::MInt32PubSubType(), cb}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regSubOk;

@@ -19,12 +19,12 @@
 // cppcheck-suppress unknownMacro
 
 // ===== YomkDdsHandler (structures in YomkDdsPayload.h) =====
-YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::Node, Node, msg)
-YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::XmlLoad, XmlLoad, msg)
-YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::Topic, Topic, msg)
-YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::SubRequest, SubRequest, msg)
-YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::Publish, Publish, msg)
-YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::Loan, Loan, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::CreateNodeRequest, CreateNodeRequest, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::LoadXmlRequest, LoadXmlRequest, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::RegisterPubTopicRequest, RegisterPubTopicRequest, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::RegisterSubTopicRequest, RegisterSubTopicRequest, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::PublishRequest, PublishRequest, msg)
+YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::LoanRequest, LoanRequest, msg)
 YOMK_DEFINE_MSG_NS(dds, yomk::payload::dds::LoanSample, LoanSample, msg)
 
 // ===== YomkDdsDebugHandler =====

@@ -91,12 +91,12 @@ namespace
 
     YomkMsgPtr mkLoad(const std::string &xmlPath)
     {
-        return yomk::msgs::dds::XmlLoad::shared(XmlLoad{xmlPath});
+        return yomk::msgs::dds::LoadXmlRequest::shared(LoadXmlRequest{xmlPath});
     }
 
     YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName, const std::string &serverLocator = "")
     {
-        return yomk::msgs::dds::Node::shared(Node{nodeName, domainId, serverLocator});
+        return yomk::msgs::dds::CreateNodeRequest::shared(CreateNodeRequest{nodeName, domainId, serverLocator});
     }
 } // namespace
 

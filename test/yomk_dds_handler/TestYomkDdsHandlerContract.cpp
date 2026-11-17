@@ -67,13 +67,13 @@ namespace
                   std::string(ep) + " : 改名伪造命中第二守卫(dynamic_pointer_cast 失败) eNo");
         };
 
-        checkGuards("/create_node", yomk::msgs::dds::Node::kName, yomk::msgs::String::shared("wrong"));
-        checkGuards("/delete_node", yomk::msgs::String::kName, yomk::msgs::dds::Node::shared(Node{"wrong", 0}));
-        checkGuards("/register_pub_topic", yomk::msgs::dds::Topic::kName, yomk::msgs::String::shared("wrong"));
-        checkGuards("/register_sub_topic", yomk::msgs::dds::SubRequest::kName, yomk::msgs::String::shared("wrong"));
-        checkGuards("/publish", yomk::msgs::dds::Publish::kName, yomk::msgs::String::shared("wrong"));
-        checkGuards("/loan", yomk::msgs::dds::Loan::kName, yomk::msgs::String::shared("wrong"));
-        checkGuards("/discard_loan", yomk::msgs::dds::Loan::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/create_node", yomk::msgs::dds::CreateNodeRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/delete_node", yomk::msgs::String::kName, yomk::msgs::dds::CreateNodeRequest::shared(CreateNodeRequest{"wrong", 0}));
+        checkGuards("/register_pub_topic", yomk::msgs::dds::RegisterPubTopicRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/register_sub_topic", yomk::msgs::dds::RegisterSubTopicRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/publish", yomk::msgs::dds::PublishRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/loan", yomk::msgs::dds::LoanRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/discard_loan", yomk::msgs::dds::LoanRequest::kName, yomk::msgs::String::shared("wrong"));
     }
 
     // T3：6 个查节点端点的"节点不存在"早退（合法包 + 不存在 nodeName → eNo，不触达 DDS）
@@ -89,11 +89,11 @@ namespace
         };
 
         checkNodeGone("/delete_node", yomk::msgs::String::shared(ghost));
-        checkNodeGone("/register_pub_topic", yomk::msgs::dds::Topic::shared(Topic{ghost, "t", nullptr}));
-        checkNodeGone("/register_sub_topic", yomk::msgs::dds::SubRequest::shared(SubRequest{ghost, "t", nullptr, nullptr}));
-        checkNodeGone("/publish", yomk::msgs::dds::Publish::shared(Publish{ghost, "t", nullptr}));
-        checkNodeGone("/loan", yomk::msgs::dds::Loan::shared(Loan{ghost, "t", nullptr}));
-        checkNodeGone("/discard_loan", yomk::msgs::dds::Loan::shared(Loan{ghost, "t", nullptr}));
+        checkNodeGone("/register_pub_topic", yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{ghost, "t", nullptr}));
+        checkNodeGone("/register_sub_topic", yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{ghost, "t", nullptr, nullptr}));
+        checkNodeGone("/publish", yomk::msgs::dds::PublishRequest::shared(PublishRequest{ghost, "t", nullptr}));
+        checkNodeGone("/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{ghost, "t", nullptr}));
+        checkNodeGone("/discard_loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{ghost, "t", nullptr}));
     }
 } // namespace
 

@@ -26,7 +26,7 @@
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
 #include "FastDDSDebugNode.h"   // debug 节点直测（topicInfo 类型名读回）
-#include "YomkDdsHandler.h"     // 服务 + Topic/SubRequest/Publish + String + YOMK_* 宏
+#include "YomkDdsHandler.h"     // 服务 + RegisterPubTopicRequest/RegisterSubTopicRequest/Publish + String + YOMK_* 宏
 #include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MString 数据类
@@ -59,14 +59,14 @@ namespace
     // 构造 /create_node 请求包
     YomkMsgPtr mkNode(uint32_t domainId, const std::string &nodeName)
     {
-        return yomk::msgs::dds::Node::shared(Node{nodeName, domainId});
+        return yomk::msgs::dds::CreateNodeRequest::shared(CreateNodeRequest{nodeName, domainId});
     }
 
     // 构造 /register_pub_topic 请求包（type 所有权移交服务端）
     YomkMsgPtr mkPub(const std::string &nodeName, const std::string &topicName,
                      YomkDdsStd::MStringPubSubType *type)
     {
-        return yomk::msgs::dds::Topic::shared(Topic{nodeName, topicName, type});
+        return yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{nodeName, topicName, type});
     }
 
     // 构造 /register_sub_topic 请求包
@@ -74,14 +74,14 @@ namespace
                      YomkDdsStd::MStringPubSubType *type,
                      std::function<void(const void *)> cb)
     {
-        return yomk::msgs::dds::SubRequest::shared(SubRequest{nodeName, topicName, type, cb});
+        return yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{nodeName, topicName, type, cb});
     }
 
     // 构造 /publish 请求包（负载第三参为非 const 指针，与 Publish 契约一致）
     YomkMsgPtr mkPubMsg(const std::string &nodeName, const std::string &topicName,
                         YomkDdsStd::MString *msg)
     {
-        return yomk::msgs::dds::Publish::shared(Publish{nodeName, topicName, msg});
+        return yomk::msgs::dds::PublishRequest::shared(PublishRequest{nodeName, topicName, msg});
     }
 
     // S3 探针：stdout/stderr fd 级捕获（设施思路同 TestFastDDSDebugNode，双流各一管道）。

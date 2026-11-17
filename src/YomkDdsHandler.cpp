@@ -1,7 +1,7 @@
 // 内存所有权协议（贯穿全部 handler，无法从签名推导）：
-//   type（Topic/SubRequest.type）caller new、服务端全路径接管，无论成败均由本服务 delete；
-//   data（Publish.data）借用（非所有权），publish 同步写入后归 caller 管理；
-//   sample（Loan/LoanSample.sample）从 writer 池借出，经 write（发布）或 discard（归还）交回中间件。
+//   type（RegisterPubTopicRequest/RegisterSubTopicRequest.type）caller new、服务端全路径接管，无论成败均由本服务 delete；
+//   data（PublishRequest.data）借用（非所有权），publish 同步写入后归 caller 管理；
+//   sample（LoanRequest/LoanSample.sample）从 writer 池借出，经 write（发布）或 discard（归还）交回中间件。
 #include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
 
@@ -60,16 +60,16 @@ yomk::payload::Response YomkDdsHandler::getVersion(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsHandler::loadXml(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::XmlLoad::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::LoadXmlRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not XmlLoad. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not LoadXmlRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::XmlLoad>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::LoadXmlRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[XmlLoad] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[LoadXmlRequest] is dynamic_pointer_cast failed. ");
     };
 
     if (p->msg.xmlPath.empty())
@@ -111,16 +111,16 @@ yomk::payload::Response YomkDdsHandler::loadXml(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsHandler::createNode(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::Node::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::CreateNodeRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not Node. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not CreateNodeRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::Node>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::CreateNodeRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[Node] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[CreateNodeRequest] is dynamic_pointer_cast failed. ");
     };
 
     if (p->msg.nodeName.empty())
@@ -192,16 +192,16 @@ yomk::payload::Response YomkDdsHandler::deleteNode(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsHandler::registerPubTopic(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::Topic::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::RegisterPubTopicRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not Topic. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not RegisterPubTopicRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::Topic>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::RegisterPubTopicRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[Topic] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[RegisterPubTopicRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -224,16 +224,16 @@ yomk::payload::Response YomkDdsHandler::registerPubTopic(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsHandler::registerSubTopic(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::SubRequest::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::RegisterSubTopicRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not SubRequest. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not RegisterSubTopicRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::SubRequest>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::RegisterSubTopicRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[SubRequest] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[RegisterSubTopicRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -256,16 +256,16 @@ yomk::payload::Response YomkDdsHandler::registerSubTopic(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsHandler::publish(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::Publish::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::PublishRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not Publish. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not PublishRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::Publish>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::PublishRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[Publish] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[PublishRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -286,16 +286,16 @@ yomk::payload::Response YomkDdsHandler::publish(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsHandler::loan(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::Loan::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::LoanRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not Loan. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not LoanRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::Loan>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::LoanRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[Loan] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[LoanRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -321,16 +321,16 @@ yomk::payload::Response YomkDdsHandler::loan(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsHandler::discardLoan(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::Loan::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::LoanRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not Loan. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not LoanRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::Loan>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::LoanRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[Loan] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[LoanRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);

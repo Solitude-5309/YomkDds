@@ -24,14 +24,14 @@
  *   T13 /topic_pub 未建节点早退（node_ 空检查先于独立收敛触达）。
  *   T14 /topic_msg 未建节点早退（node_ 空检查先于独立收敛触达）。
  * DDS-free 保证：T5 的越界校验在锁外返回；T4/T6/T7/T8/T9/T10/T11/T12/T13/T14 的 node_ 空检查在触达节点层前返回；
- *   /version 不碰 DDS；本测试绝不传合法 DebugNode{0..232}（那会创建真实 participant）。
+ *   /version 不碰 DDS；本测试绝不传合法 DebugCreateNodeRequest{0..232}（那会创建真实 participant）。
  *
  * 风格：纯 main() + check 函数 + 失败计数（零第三方依赖），返回非 0 表示存在失败用例。
  */
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsDebugHandler.h" // 服务/DebugNode/DebugTopic/String/YOMK_* 宏
+#include "YomkDdsDebugHandler.h" // 服务/DebugCreateNodeRequest/DebugTopicPrintRequest/String/YOMK_* 宏
 #include "YomkDdsMsg.h"
 
 #include <cstdint>
@@ -58,7 +58,7 @@ namespace
     }
 
     // T3：/create_node、/topic_print、/list_topics、/topic_info、/list_nodes、/node_info 的解包双守卫
-    // （nullptr / 异类包 / 改名伪造；DebugInfo/DebugList 只留 rounds/interval 后
+    // （nullptr / 异类包 / 改名伪造；DebugTopicInfoRequest/DebugListTopicsRequest 只留 rounds/interval 后
     // 守卫包名不变，无需改断言）
     void testUnpackGuards(YomkDdsDebugHandler *svc)
     {
@@ -84,13 +84,13 @@ namespace
                   std::string(ep) + " : 改名伪造命中第二守卫(dynamic_pointer_cast 失败) eNo");
         };
 
-        checkGuards("/create_node", yomk::msgs::dds::DebugNode::kName, yomk::msgs::String::shared("wrong"));
-        checkGuards("/topic_print", yomk::msgs::dds::DebugTopic::kName, yomk::msgs::dds::DebugNode::shared(DebugNode{0}));
-        checkGuards("/list_topics", yomk::msgs::dds::DebugList::kName, yomk::msgs::String::shared("wrong"));
-        checkGuards("/topic_info", yomk::msgs::dds::DebugInfo::kName, yomk::msgs::String::shared("wrong"));
-        checkGuards("/topic_find", yomk::msgs::dds::DebugFind::kName, yomk::msgs::String::shared("wrong"));
-        checkGuards("/list_nodes", yomk::msgs::dds::NodeList::kName, yomk::msgs::String::shared("wrong"));
-        checkGuards("/node_info", yomk::msgs::dds::NodeInfoRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/create_node", yomk::msgs::dds::DebugCreateNodeRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/topic_print", yomk::msgs::dds::DebugTopicPrintRequest::kName, yomk::msgs::dds::DebugCreateNodeRequest::shared(DebugCreateNodeRequest{0}));
+        checkGuards("/list_topics", yomk::msgs::dds::DebugListTopicsRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/topic_info", yomk::msgs::dds::DebugTopicInfoRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/topic_find", yomk::msgs::dds::DebugTopicFindRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/list_nodes", yomk::msgs::dds::DebugListNodesRequest::kName, yomk::msgs::String::shared("wrong"));
+        checkGuards("/node_info", yomk::msgs::dds::DebugNodeInfoRequest::kName, yomk::msgs::String::shared("wrong"));
     }
 
     // T4：/delete_node 特殊契约——单节点模型无参载荷，(void)pkg 不走解包守卫
@@ -120,12 +120,12 @@ namespace
     // T5：/create_node domainId 越界前置拦截（锁外校验，不触 DDS）
     void testCreateDomainBoundary(YomkDdsDebugHandler *svc)
     {
-        auto r233 = testInvoke(svc, "/create_node", yomk::msgs::dds::DebugNode::shared(DebugNode{233}));
+        auto r233 = testInvoke(svc, "/create_node", yomk::msgs::dds::DebugCreateNodeRequest::shared(DebugCreateNodeRequest{233}));
         check(r233.status == yomk::payload::ResStatus::Failed &&
                   r233.msg.find("out of valid range") != std::string::npos,
               "domainId=233 → eNo out of valid range（前置拦截，不建 participant）");
 
-        auto rmax = testInvoke(svc, "/create_node", yomk::msgs::dds::DebugNode::shared(DebugNode{UINT32_MAX}));
+        auto rmax = testInvoke(svc, "/create_node", yomk::msgs::dds::DebugCreateNodeRequest::shared(DebugCreateNodeRequest{UINT32_MAX}));
         check(rmax.status == yomk::payload::ResStatus::Failed &&
                   rmax.msg.find("out of valid range") != std::string::npos,
               "domainId=UINT32_MAX → eNo out of valid range（前置拦截，不再回绕深入 setDomainId）");
@@ -134,13 +134,13 @@ namespace
     // T6：/topic_print 未建节点早退（node_ 空检查先于 output 空检查）
     void testTopicPrintNoNode(YomkDdsDebugHandler *svc)
     {
-        auto rEmptyCb = testInvoke(svc, "/topic_print", yomk::msgs::dds::DebugTopic::shared(DebugTopic{"t_debug", nullptr}));
+        auto rEmptyCb = testInvoke(svc, "/topic_print", yomk::msgs::dds::DebugTopicPrintRequest::shared(DebugTopicPrintRequest{"t_debug", nullptr}));
         check(rEmptyCb.status == yomk::payload::ResStatus::Failed &&
                   rEmptyCb.msg.find("debug node not created") != std::string::npos,
               "/topic_print 合法包+空回调+未建节点 → eNo debug node not created（node_ 检查在前）");
 
         auto rValid = testInvoke(svc,
-            "/topic_print", yomk::msgs::dds::DebugTopic::shared(DebugTopic{"t_debug", [](const std::string &) {}}));
+            "/topic_print", yomk::msgs::dds::DebugTopicPrintRequest::shared(DebugTopicPrintRequest{"t_debug", [](const std::string &) {}}));
         check(rValid.status == yomk::payload::ResStatus::Failed &&
                   rValid.msg.find("debug node not created") != std::string::npos,
               "/topic_print 合法包+非空回调+未建节点 → eNo debug node not created");
@@ -151,7 +151,7 @@ namespace
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS；
         // 3 字段聚合初始化（topicName/stableRounds/intervalMs）即完整载荷（编译级验证）
-        auto rValid = testInvoke(svc, "/topic_info", yomk::msgs::dds::DebugInfo::shared(DebugInfo{"t_info", 1, 50}));
+        auto rValid = testInvoke(svc, "/topic_info", yomk::msgs::dds::DebugTopicInfoRequest::shared(DebugTopicInfoRequest{"t_info", 1, 50}));
         check(rValid.status == yomk::payload::ResStatus::Failed &&
                   rValid.msg.find("debug node not created") != std::string::npos,
               "/topic_info 合法包+未建节点 → eNo debug node not created（node_ 检查先于触达节点层）");
@@ -161,7 +161,7 @@ namespace
     void testListNodeNoNode(YomkDdsDebugHandler *svc)
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
-        auto rValid = testInvoke(svc, "/list_nodes", yomk::msgs::dds::NodeList::shared(NodeList{1, 50}));
+        auto rValid = testInvoke(svc, "/list_nodes", yomk::msgs::dds::DebugListNodesRequest::shared(DebugListNodesRequest{1, 50}));
         check(rValid.status == yomk::payload::ResStatus::Failed &&
                   rValid.msg.find("debug node not created") != std::string::npos,
               "/list_nodes 合法包+未建节点 → eNo debug node not created（node_ 检查先于触达节点层）");
@@ -172,7 +172,7 @@ namespace
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid =
-            testInvoke(svc, "/node_info", yomk::msgs::dds::NodeInfoRequest::shared(NodeInfoRequest{"t_no_node", 1, 50}));
+            testInvoke(svc, "/node_info", yomk::msgs::dds::DebugNodeInfoRequest::shared(DebugNodeInfoRequest{"t_no_node", 1, 50}));
         check(rValid.status == yomk::payload::ResStatus::Failed &&
                   rValid.msg.find("debug node not created") != std::string::npos,
               "/node_info 合法包+未建节点 → eNo debug node not created（node_ 检查先于触达节点层）");
@@ -182,7 +182,7 @@ namespace
     void testTopicFindNoNode(YomkDdsDebugHandler *svc)
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
-        auto rValid = testInvoke(svc, "/topic_find", yomk::msgs::dds::DebugFind::shared(DebugFind{"t_no_node", 1, 50}));
+        auto rValid = testInvoke(svc, "/topic_find", yomk::msgs::dds::DebugTopicFindRequest::shared(DebugTopicFindRequest{"t_no_node", 1, 50}));
         check(rValid.status == yomk::payload::ResStatus::Failed &&
                   rValid.msg.find("debug node not created") != std::string::npos,
               "/topic_find 合法包+未建节点 → eNo debug node not created（node_ 检查先于触达节点层）");
@@ -193,7 +193,7 @@ namespace
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid = testInvoke(svc,
-            "/interface_show", yomk::msgs::dds::DebugInterfaceShow::shared(DebugInterfaceShow{"t_no_node", 1, 50}));
+            "/interface_show", yomk::msgs::dds::DebugInterfaceShowRequest::shared(DebugInterfaceShowRequest{"t_no_node", 1, 50}));
         check(rValid.status == yomk::payload::ResStatus::Failed &&
                   rValid.msg.find("debug node not created") != std::string::npos,
               "/interface_show 合法包+未建节点 → eNo debug node not created（node_ 检查先于触达节点层）");
@@ -204,7 +204,7 @@ namespace
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid = testInvoke(svc,
-            "/interface_list", yomk::msgs::dds::DebugInterfaceList::shared(DebugInterfaceList{1, 50}));
+            "/interface_list", yomk::msgs::dds::DebugInterfaceListRequest::shared(DebugInterfaceListRequest{1, 50}));
         check(rValid.status == yomk::payload::ResStatus::Failed &&
                   rValid.msg.find("debug node not created") != std::string::npos,
               "/interface_list 合法包+未建节点 → eNo debug node not created（node_ 检查先于触达节点层）");
@@ -215,7 +215,7 @@ namespace
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid = testInvoke(svc,
-            "/topic_example", yomk::msgs::dds::DebugTopicExample::shared(DebugTopicExample{"t_no_node", 1, 50}));
+            "/topic_example", yomk::msgs::dds::DebugTopicExampleRequest::shared(DebugTopicExampleRequest{"t_no_node", 1, 50}));
         check(rValid.status == yomk::payload::ResStatus::Failed &&
                   rValid.msg.find("debug node not created") != std::string::npos,
               "/topic_example 合法包+未建节点 → eNo debug node not created（node_ 检查先于触达节点层）");
@@ -226,7 +226,7 @@ namespace
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid = testInvoke(svc,
-            "/topic_pub", yomk::msgs::dds::DebugTopicPub::shared(DebugTopicPub{"t_no_node", "{}", 1, 50}));
+            "/topic_pub", yomk::msgs::dds::DebugTopicPubRequest::shared(DebugTopicPubRequest{"t_no_node", "{}", 1, 50}));
         check(rValid.status == yomk::payload::ResStatus::Failed &&
                   rValid.msg.find("debug node not created") != std::string::npos,
               "/topic_pub 合法包+未建节点 → eNo debug node not created（node_ 检查先于触达节点层）");
@@ -237,7 +237,7 @@ namespace
     {
         // stableRounds=1 为单次快照快速路径；未建节点时 node_ 空检查先行返回，不触 DDS
         auto rValid = testInvoke(svc,
-            "/topic_msg", yomk::msgs::dds::DebugTopicMsg::shared(DebugTopicMsg{"t_no_node", 1, 50}));
+            "/topic_msg", yomk::msgs::dds::DebugTopicMsgRequest::shared(DebugTopicMsgRequest{"t_no_node", 1, 50}));
         check(rValid.status == yomk::payload::ResStatus::Failed &&
                   rValid.msg.find("debug node not created") != std::string::npos,
               "/topic_msg 合法包+未建节点 → eNo debug node not created（node_ 检查先于触达节点层）");

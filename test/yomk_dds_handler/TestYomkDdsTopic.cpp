@@ -30,7 +30,7 @@
 // String + YOMK_* 宏
 #include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
-#include "YomkDdsDebugHandler.h" // YomkDdsDebugHandler + DebugNode/DebugInfo（QoS-B4 读回链路）
+#include "YomkDdsDebugHandler.h" // YomkDdsDebugHandler + DebugCreateNodeRequest/DebugTopicInfoRequest（QoS-B4 读回链路）
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MString / MInt32 数据类
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType / MInt32PubSubType
@@ -346,10 +346,10 @@ namespace
               "QoS-B2 RELIABLE requested > BEST_EFFORT offered → 收 0 条（若翻译失效将匹配收到 → 失败侦察）");
 
         // B4：debug 链路 QoS 直证（发现数据读回 writer 端点实际 QoS）
-        check(testInvoke(svcDebug, "/create_node", yomk::msgs::dds::DebugNode::shared(DebugNode{TEST_DOMAIN})).status == yomk::payload::ResStatus::Succeeded,
+        check(testInvoke(svcDebug, "/create_node", yomk::msgs::dds::DebugCreateNodeRequest::shared(DebugCreateNodeRequest{TEST_DOMAIN})).status == yomk::payload::ResStatus::Succeeded,
               "QoS-B4 创建调试节点（域 200）→ eOk");
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 调试参与者发现已在线端点
-        auto hitV = testInvoke(svcDebug, "/topic_info", yomk::msgs::dds::DebugInfo::shared(DebugInfo{"t_be", 10, 200}));
+        auto hitV = testInvoke(svcDebug, "/topic_info", yomk::msgs::dds::DebugTopicInfoRequest::shared(DebugTopicInfoRequest{"t_be", 10, 200}));
         check(hitV.status == yomk::payload::ResStatus::Succeeded && hitV.data != nullptr,
               "QoS-B4 topic info t_be → eOk（发现缓存命中）");
         auto infoV = yomk::msgs::unpack<yomk::msgs::dds::TopicInfo>(hitV.data);

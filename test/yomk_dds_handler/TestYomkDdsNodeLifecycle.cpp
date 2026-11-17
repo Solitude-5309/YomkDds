@@ -28,7 +28,7 @@
  *     Server we don't impose domain ids to be the same"；跨域丢弃仅存在于简单发现
  *     PDPSimple 的基类校验），互通即域号与 server 无关的实证；多播 PDP 被禁，发现必经 server。
  *   Part G（闭环 1 env 直配端到端）：C-2d 白盒（开关门控/大小写与 1 兼容/server 串透传/
- *     Node 缺省尾参与 DebugNode/BagNode 无参全缺省聚合初始化器读回——闭环 2
+ *     Node 缺省尾参与 DebugCreateNodeRequest/BagNode 无参全缺省聚合初始化器读回——闭环 2
  *     三字段对齐）+ 服务级端到端——setenv 开关+UDP 串后经
  *     /create_node 创建（请求不携带 locator，聚合初始化器自动读 env），spawn 同款
  *     discovery server 子进程（组杀模式同 Part F，端口 11812 非缺省值实证 env 串 port
@@ -47,7 +47,7 @@
 #include "YomkDdsHandler.h" // 服务/Node/String/YOMK_* 宏
 #include "YomkDdsMsg.h"
 #include "FastDDSNode.h"    // Part B 直接单元测试 setDomainId
-#include "YomkDdsDebugHandler.h" // C-2d：DebugNode 无参全缺省聚合初始化 env 读回
+#include "YomkDdsDebugHandler.h" // C-2d：DebugCreateNodeRequest 无参全缺省聚合初始化 env 读回
 #include "YomkDdsBagHandler.h"   // C-2d：BagNode 无参全缺省聚合初始化 env 读回
 // Part C-E 白盒：yomkdds_xml 三件套（parseServerLocator/applyDiscoveryServers/
 // participantQosFromXml）
@@ -387,7 +387,7 @@ namespace
                 // Debug/Bag 节点同款对齐（闭环 2）：无参全缺省聚合初始化 → 三字段均经
                 // 默认成员初始化器读 env（域号 + 开关门控双 server 串）
                 setenv("YOMKDDS_DDS_DOMAIN_ID", "5", 1);
-                DebugNode dbgProbe{};
+                DebugCreateNodeRequest dbgProbe{};
                 BagNode bagProbe{};
                 check(dbgProbe.domainId == 5 &&
                           dbgProbe.udpDiscoverServerLocator == "10.0.0.9:11811;10.0.0.8" &&
@@ -395,13 +395,13 @@ namespace
                           bagProbe.domainId == 5 &&
                           bagProbe.udpDiscoverServerLocator == "10.0.0.9:11811;10.0.0.8" &&
                           bagProbe.tcpDiscoverServerLocator == "10.0.0.7",
-                      "Part C: DebugNode/BagNode 无参聚合初始化 → 三字段均经 env 初始化器读回");
+                      "Part C: DebugCreateNodeRequest/BagNode 无参聚合初始化 → 三字段均经 env 初始化器读回");
 
                 // 开关 false：两 server 串变量被忽略恒空（即使已设置）；域号 helper 不受
                 // 开关门控（Debug/Bag 同款字段一并读回验证）
                 setenv("YOMKDDS_USE_DISCOVER_SERVER", "false", 1);
                 CreateNodeRequest offProbe{"off_probe"};
-                DebugNode dbgOff{};
+                DebugCreateNodeRequest dbgOff{};
                 BagNode bagOff{};
                 check(YomkDdsDefaultUdpDiscoverServers().empty() &&
                           YomkDdsDefaultTcpDiscoverServers().empty() &&

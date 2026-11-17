@@ -370,7 +370,7 @@ struct LoanSample
 
 /** @brief debug create_node request (same env fallbacks as Node) */
 // @zh: debug create_node 请求负载（环境变量回落语义同 CreateNodeRequest）
-struct DebugNode
+struct DebugCreateNodeRequest
 {
     uint32_t domainId = YomkDdsDefaultDomainId();                               // DDS domain id [0,232]
     std::string udpDiscoverServerLocator = YomkDdsDefaultUdpDiscoverServers();  // UDP channel
@@ -383,7 +383,7 @@ struct DebugNode
  */
 // @zh: topic_print 请求负载
 // @zh: warning 空输出回调拒绝
-struct DebugTopic
+struct DebugTopicPrintRequest
 {
     std::string topicName;      // topic to observe
     DDSDebugOutputFunc output;  // user-defined output callback
@@ -392,7 +392,7 @@ struct DebugTopic
 
 /** @brief list_topics request (0 values are clamped to defaults 5 rounds / 200ms) */
 // @zh: list_topics 请求负载（0 值由节点层钳制为默认 5 次/200ms）
-struct DebugList
+struct DebugListTopicsRequest
 {
     uint32_t stableRounds = 0;  // consecutive unchanged-snapshot rounds required
     uint32_t intervalMs = 0;    // snapshot polling interval in milliseconds
@@ -400,7 +400,7 @@ struct DebugList
 
 /** @brief topic_info request (independent convergence parameters) */
 // @zh: topic_info 请求负载（独立收敛参数）
-struct DebugInfo
+struct DebugTopicInfoRequest
 {
     std::string topicName = "";  // topic to query
     uint32_t stableRounds = 0;
@@ -703,7 +703,7 @@ struct NodeInfo
 
 /** @brief list_nodes request (independent convergence parameters) */
 // @zh: list_nodes 请求负载（独立收敛参数）
-struct NodeList
+struct DebugListNodesRequest
 {
     uint32_t stableRounds = 0;
     uint32_t intervalMs = 0;
@@ -711,7 +711,7 @@ struct NodeList
 
 /** @brief node_info request (independent convergence parameters) */
 // @zh: node_info 请求负载（独立收敛参数）
-struct NodeInfoRequest
+struct DebugNodeInfoRequest
 {
     std::string nodeName = "";  // participant_name exact match
     uint32_t stableRounds = 0;
@@ -720,7 +720,7 @@ struct NodeInfoRequest
 
 /** @brief topic_find request (type name exact match) */
 // @zh: topic_find 请求负载（类型名精确匹配）
-struct DebugFind
+struct DebugTopicFindRequest
 {
     std::string typeName = "";
     uint32_t stableRounds = 0;
@@ -729,7 +729,7 @@ struct DebugFind
 
 /** @brief interface_show request (IDL struct dump by type name) */
 // @zh: interface_show 请求负载（按类型名输出 IDL 结构）
-struct DebugInterfaceShow
+struct DebugInterfaceShowRequest
 {
     std::string typeName = "";
     uint32_t stableRounds = 0;
@@ -738,7 +738,7 @@ struct DebugInterfaceShow
 
 /** @brief interface_list request (all discovered type names, deduplicated) */
 // @zh: interface_list 请求负载（全部已发现类型名，去重排序）
-struct DebugInterfaceList
+struct DebugInterfaceListRequest
 {
     uint32_t stableRounds = 0;
     uint32_t intervalMs = 0;
@@ -746,7 +746,7 @@ struct DebugInterfaceList
 
 /** @brief topic_example request (Type/IDL/example command three-part lines) */
 // @zh: topic_example 请求负载（Type/IDL/example 命令三段行集）
-struct DebugTopicExample
+struct DebugTopicExampleRequest
 {
     std::string topicName = "";  // exact match
     uint32_t stableRounds = 0;
@@ -755,7 +755,7 @@ struct DebugTopicExample
 
 /** @brief topic_msg request (type name + compact msg JSON, exactly two lines) */
 // @zh: topic_msg 请求负载（类型名 + 紧凑 msg JSON，恰两行）
-struct DebugTopicMsg
+struct DebugTopicMsgRequest
 {
     std::string topicName = "";  // exact match
     uint32_t stableRounds = 0;
@@ -771,7 +771,7 @@ struct DebugTopicMsg
 // @zh: topic_pub 请求负载（JSON 载荷发布，首轮完整强校验）
 // @zh: note requiredSubscribers>0 为期望建匹配订阅端数门槛；repeatIntervalMs>0 为持续发布
 // @zh: 模式，直至停止标志置位或发满 maxTimes 条
-struct DebugTopicPub
+struct DebugTopicPubRequest
 {
     std::string topicName = "";        // target topic, must be discovered
     std::string json = "";             // payload, same shape as the topic_example template

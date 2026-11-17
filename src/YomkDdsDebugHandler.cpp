@@ -51,16 +51,16 @@ yomk::payload::Response YomkDdsDebugHandler::getVersion(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsDebugHandler::createNode(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::DebugNode::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DebugCreateNodeRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugNode. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugCreateNodeRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugNode>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugCreateNodeRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[DebugNode] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DebugCreateNodeRequest] is dynamic_pointer_cast failed. ");
     };
 
     if (p->msg.domainId > kMaxDomainId)
@@ -98,16 +98,16 @@ yomk::payload::Response YomkDdsDebugHandler::createNode(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsDebugHandler::topicPrint(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::DebugTopic::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DebugTopicPrintRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugTopic. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugTopicPrintRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugTopic>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugTopicPrintRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[DebugTopic] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DebugTopicPrintRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -143,16 +143,16 @@ yomk::payload::Response YomkDdsDebugHandler::topicPrint(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsDebugHandler::listTopics(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::DebugList::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DebugListTopicsRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugList. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugListTopicsRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugList>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugListTopicsRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[DebugList] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DebugListTopicsRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -173,16 +173,16 @@ yomk::payload::Response YomkDdsDebugHandler::listTopics(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsDebugHandler::topicFind(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::DebugFind::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DebugTopicFindRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugFind. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugTopicFindRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugFind>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugTopicFindRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[DebugFind] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DebugTopicFindRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -212,16 +212,16 @@ yomk::payload::Response YomkDdsDebugHandler::topicFind(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsDebugHandler::interfaceShow(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::DebugInterfaceShow::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DebugInterfaceShowRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugInterfaceShow. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugInterfaceShowRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugInterfaceShow>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugInterfaceShowRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[DebugInterfaceShow] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DebugInterfaceShowRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -249,16 +249,16 @@ yomk::payload::Response YomkDdsDebugHandler::interfaceShow(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsDebugHandler::interfaceList(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::DebugInterfaceList::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DebugInterfaceListRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugInterfaceList. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugInterfaceListRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugInterfaceList>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugInterfaceListRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[DebugInterfaceList] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DebugInterfaceListRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -289,16 +289,16 @@ yomk::payload::Response YomkDdsDebugHandler::interfaceList(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsDebugHandler::topicExample(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::DebugTopicExample::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DebugTopicExampleRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugTopicExample. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugTopicExampleRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugTopicExample>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugTopicExampleRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[DebugTopicExample] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DebugTopicExampleRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -326,16 +326,16 @@ yomk::payload::Response YomkDdsDebugHandler::topicExample(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsDebugHandler::topicMsg(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::DebugTopicMsg::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DebugTopicMsgRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugTopicMsg. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugTopicMsgRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugTopicMsg>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugTopicMsgRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[DebugTopicMsg] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DebugTopicMsgRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -363,16 +363,16 @@ yomk::payload::Response YomkDdsDebugHandler::topicMsg(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsDebugHandler::topicPub(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::DebugTopicPub::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DebugTopicPubRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugTopicPub. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugTopicPubRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugTopicPub>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugTopicPubRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[DebugTopicPub] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DebugTopicPubRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -398,16 +398,16 @@ yomk::payload::Response YomkDdsDebugHandler::topicPub(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsDebugHandler::topicInfo(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::DebugInfo::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DebugTopicInfoRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugInfo. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugTopicInfoRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugInfo>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugTopicInfoRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[DebugInfo] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DebugTopicInfoRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -430,16 +430,16 @@ yomk::payload::Response YomkDdsDebugHandler::topicInfo(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsDebugHandler::listNodes(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::NodeList::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DebugListNodesRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not NodeList. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugListNodesRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::NodeList>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugListNodesRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[NodeList] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DebugListNodesRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);
@@ -457,16 +457,16 @@ yomk::payload::Response YomkDdsDebugHandler::listNodes(YomkMsgPtr pkg)
 
 yomk::payload::Response YomkDdsDebugHandler::nodeInfo(YomkMsgPtr pkg)
 {
-        if (!pkg || pkg->name() != yomk::msgs::dds::NodeInfoRequest::kName)
+        if (!pkg || pkg->name() != yomk::msgs::dds::DebugNodeInfoRequest::kName)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not NodeInfoRequest. ");
+            yomk::payload::ResStatus::Failed, " pkg is null or pkg is not DebugNodeInfoRequest. ");
     }
-    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::NodeInfoRequest>(pkg);
+    auto p = std::dynamic_pointer_cast<yomk::msgs::dds::DebugNodeInfoRequest>(pkg);
     if (!p)
     {
         return yomk::payload::Response(
-            yomk::payload::ResStatus::Failed, " pkg[NodeInfoRequest] is dynamic_pointer_cast failed. ");
+            yomk::payload::ResStatus::Failed, " pkg[DebugNodeInfoRequest] is dynamic_pointer_cast failed. ");
     };
 
     std::lock_guard<std::mutex> lock(mtx_);

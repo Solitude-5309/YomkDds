@@ -3,14 +3,14 @@
  * @brief FastDDSBagNode 节点层录制收尾测试（真实 DDS 端到端：发布 → 录制 → Ctrl+C 停止 → 落盘断言）
  *
  * 范围：record 全链路——发现校验通过（远端 MString 发布者在线）、透传订阅、消息直写 mcap、
- *       bagRecordStop 触发收尾（删除 reader → writer.close 补 summary → metadata.json →
+ *       yomk::ctrl::g_bagRecordStop 触发收尾（删除 reader → writer.close 补 summary → metadata.json →
  *       stats 回填），以及收尾产物断言（bag 目录、bag_0.mcap 读回、metadata.json 字段、
  *       stats 契约）与录制定格语义（成功后再次 record 拒绝）。启动校验分支归
  *       TestFastDDSBagNodeValidation。
  * 覆盖：
- *   R1 setDomainId(202) 成功；bagRecordReset 复位残留停止标志；
+ *   R1 setDomainId(202) 成功；yomk::ctrl::bagRecordReset 复位残留停止标志；
  *   R2 远端 MString 发布者（rt/bag_rec_hit）周期发布，录制线程 record 阻塞；
- *   R3 ~5s 后 bagRecordStop → record 返回 true；
+ *   R3 ~5s 后 yomk::ctrl::g_bagRecordStop → record 返回 true；
  *   R4 stats 契约：单主题、topic/type（YomkDdsStd::MString）/count/bytes 一致；
  *   R5 落盘：bag 目录（bag_<YYYY-MM-DD_HH-MM-SS_mmm>）含 bag_0.mcap 与 metadata.json；
  *   R6 mcap 读回：条数 == stats.count；Channel topic/messageEncoding=cdr/schemaId=0/
@@ -52,7 +52,7 @@
 
 #include "TestCheck.h"
 #include "FastDDSBagNode.h"     // 被测节点（直测，不经服务层）
-#include "YomkDdsBagHandler.h"  // yomk::bagRecordStop/bagRecordReset（停止标志读写端）
+#include "YomkDdsBagHandler.h"  // yomk::ctrl::g_bagRecordStop/yomk::ctrl::bagRecordReset（停止标志读写端）
 
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（远端发布端制造录制流量）
 
@@ -131,7 +131,7 @@ int main()
     namespace dds = eprosima::fastdds::dds;  // main 作用域别名：直连 FastDDS API 搭建远端发布端
 
     // R1：复位残留停止标志（对齐服务层 bagRecord 前置复位的直测等价动作）
-    yomk::bagRecordReset();
+    yomk::ctrl::bagRecordReset();
 
     FastDDSBagNode node;
     check(node.setDomainId(TEST_DOMAIN), "R1 setDomainId(202) 成功（真实创建 participant）");
@@ -162,7 +162,7 @@ int main()
         }
     });
 
-    // 录制线程：record 长驻阻塞至 bagRecordStop 置位收尾
+    // 录制线程：record 长驻阻塞至 yomk::ctrl::g_bagRecordStop 置位收尾
     std::vector<FastDDSBagNode::BagTopicStat> stats;
     std::string error;
     std::atomic<bool> recDone{false};
@@ -173,9 +173,9 @@ int main()
         recDone.store(true);
     });
 
-    // ---- R3：等待录制期后模拟 Ctrl+C（bagRecordStop 置位），等待收尾完成 ----
+    // ---- R3：等待录制期后模拟 Ctrl+C（yomk::ctrl::g_bagRecordStop 置位），等待收尾完成 ----
     std::this_thread::sleep_for(std::chrono::milliseconds(kRecordMs));
-    yomk::bagRecordStop();
+    yomk::ctrl::g_bagRecordStop.stop();
     for (int i = 0; i < 100 && !recDone.load(); ++i)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -184,7 +184,7 @@ int main()
     pubStop.store(true);
     pubThread.join();
 
-    check(ok, "R3 bagRecordStop 后 record → true（校验通过 + 录制 + 收尾完成）");
+    check(ok, "R3 yomk::ctrl::g_bagRecordStop 后 record → true（校验通过 + 录制 + 收尾完成）");
     if (!ok)
     {
         std::cerr << "record error: " << error << std::endl;
@@ -314,7 +314,7 @@ int main()
     // ---- R9：通配模式录制（新节点：精确项 + 前缀模式命中同前缀双主题，展开去重合并） ----
     {
         // 复位停止标志（R3 已置位）；同域新建 bag 节点（node 已定格不可复用）
-        yomk::bagRecordReset();
+        yomk::ctrl::bagRecordReset();
         FastDDSBagNode node2;
         check(node2.setDomainId(TEST_DOMAIN), "R9 新节点 setDomainId(202) 成功");
 
@@ -356,7 +356,7 @@ int main()
             recDone2.store(true);
         });
         std::this_thread::sleep_for(std::chrono::milliseconds(kPatternRecordMs));
-        yomk::bagRecordStop();
+        yomk::ctrl::g_bagRecordStop.stop();
         for (int i = 0; i < 100 && !recDone2.load(); ++i)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -411,7 +411,7 @@ int main()
         std::filesystem::remove_all("bag_custom", rmAllEc);
 
         // 复位停止标志（R9 已置位）；同域新建 bag 节点（node2 已定格不可复用）
-        yomk::bagRecordReset();
+        yomk::ctrl::bagRecordReset();
         FastDDSBagNode node3;
         check(node3.setDomainId(TEST_DOMAIN), "R10 新节点 setDomainId(202) 成功");
 
@@ -446,7 +446,7 @@ int main()
             recDone3.store(true);
         });
         std::this_thread::sleep_for(std::chrono::milliseconds(kPatternRecordMs));
-        yomk::bagRecordStop();
+        yomk::ctrl::g_bagRecordStop.stop();
         for (int i = 0; i < 100 && !recDone3.load(); ++i)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -478,8 +478,8 @@ int main()
 
     // ---- R11a：--start-paused 全程暂停不恢复 → 零写入 ----
     {
-        // 复位双标志（R10 已置 stop；bagRecordReset 现同时复位 paused）
-        yomk::bagRecordReset();
+        // 复位双标志（R10 已置 stop；yomk::ctrl::bagRecordReset 现同时复位 paused）
+        yomk::ctrl::bagRecordReset();
         FastDDSBagNode node4;
         check(node4.setDomainId(TEST_DOMAIN), "R11a 新节点 setDomainId(202) 成功");
 
@@ -504,8 +504,8 @@ int main()
             }
         });
 
-        // 暂停态启动：bagRecordPause 先于 record（对齐 CLI --start-paused 前置置位）
-        yomk::bagRecordPause();
+        // 暂停态启动：yomk::ctrl::g_bagRecordPaused 先于 record（对齐 CLI --start-paused 前置置位）
+        yomk::ctrl::g_bagRecordPaused.pause();
         std::vector<FastDDSBagNode::BagTopicStat> statsPaused;
         std::string errorPaused;
         std::atomic<bool> recDone4{false};
@@ -516,7 +516,7 @@ int main()
             recDone4.store(true);
         });
         std::this_thread::sleep_for(std::chrono::milliseconds(kPausedRecordMs));
-        yomk::bagRecordStop();
+        yomk::ctrl::g_bagRecordStop.stop();
         for (int i = 0; i < 100 && !recDone4.load(); ++i)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -535,7 +535,7 @@ int main()
 
     // ---- R11b：暂停后恢复 → 恢复后开始写入 ----
     {
-        yomk::bagRecordReset();
+        yomk::ctrl::bagRecordReset();
         FastDDSBagNode node5;
         check(node5.setDomainId(TEST_DOMAIN), "R11b 新节点 setDomainId(202) 成功");
 
@@ -559,7 +559,7 @@ int main()
             }
         });
 
-        yomk::bagRecordPause();
+        yomk::ctrl::g_bagRecordPaused.pause();
         std::vector<FastDDSBagNode::BagTopicStat> statsResume;
         std::string errorResume;
         std::atomic<bool> recDone5{false};
@@ -571,9 +571,9 @@ int main()
         });
         // 暂停一段（校验收敛后仍有丢弃期）后置恢复标志，再录一段
         std::this_thread::sleep_for(std::chrono::milliseconds(kResumeDelayMs));
-        yomk::bagRecordResume();
+        yomk::ctrl::g_bagRecordPaused.resume();
         std::this_thread::sleep_for(std::chrono::milliseconds(kResumeRecordMs));
-        yomk::bagRecordStop();
+        yomk::ctrl::g_bagRecordStop.stop();
         for (int i = 0; i < 100 && !recDone5.load(); ++i)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -596,7 +596,7 @@ int main()
 
     // ---- R12：-b/--max-bag-size 分片录制（大 payload 驱动 chunk flush 触发滚动） ----
     {
-        yomk::bagRecordReset();
+        yomk::ctrl::bagRecordReset();
         FastDDSBagNode node6;
         check(node6.setDomainId(TEST_DOMAIN), "R12 新节点 setDomainId(202) 成功");
 
@@ -644,7 +644,7 @@ int main()
             recDone6.store(true);
         });
         std::this_thread::sleep_for(std::chrono::milliseconds(kSplitRecordMs));
-        yomk::bagRecordStop();
+        yomk::ctrl::g_bagRecordStop.stop();
         for (int i = 0; i < 100 && !recDone6.load(); ++i)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -721,7 +721,7 @@ int main()
 
     // ---- R13：-d/--max-bag-duration 时长分片录制（普通 payload 驱动时长滚动） ----
     {
-        yomk::bagRecordReset();
+        yomk::ctrl::bagRecordReset();
         FastDDSBagNode node7;
         check(node7.setDomainId(TEST_DOMAIN), "R13 新节点 setDomainId(202) 成功");
 
@@ -769,7 +769,7 @@ int main()
             recDone7.store(true);
         });
         std::this_thread::sleep_for(std::chrono::milliseconds(kTimeRecordMs));
-        yomk::bagRecordStop();
+        yomk::ctrl::g_bagRecordStop.stop();
         for (int i = 0; i < 100 && !recDone7.load(); ++i)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -850,7 +850,7 @@ int main()
 
     // ---- R14a：-c/--max-cache-size 写缓存双缓冲（回调拷贝入队 + 消费线程写盘，停止 drain 完整） ----
     {
-        yomk::bagRecordReset();
+        yomk::ctrl::bagRecordReset();
         FastDDSBagNode node8;
         check(node8.setDomainId(TEST_DOMAIN), "R14a 新节点 setDomainId(202) 成功");
 
@@ -897,7 +897,7 @@ int main()
             recDone8.store(true);
         });
         std::this_thread::sleep_for(std::chrono::milliseconds(kCacheRecordMs));
-        yomk::bagRecordStop();
+        yomk::ctrl::g_bagRecordStop.stop();
         for (int i = 0; i < 100 && !recDone8.load(); ++i)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -964,7 +964,7 @@ int main()
 
     // ---- R14b：缓存 + -d 2 组合（分片检查随 shardCheckAndWrite 移入消费线程后照常滚动） ----
     {
-        yomk::bagRecordReset();
+        yomk::ctrl::bagRecordReset();
         FastDDSBagNode node9;
         check(node9.setDomainId(TEST_DOMAIN), "R14b 新节点 setDomainId(202) 成功");
 
@@ -1011,7 +1011,7 @@ int main()
             recDone9.store(true);
         });
         std::this_thread::sleep_for(std::chrono::milliseconds(kCacheRecordMs));
-        yomk::bagRecordStop();
+        yomk::ctrl::g_bagRecordStop.stop();
         for (int i = 0; i < 100 && !recDone9.load(); ++i)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -1091,7 +1091,7 @@ int main()
 
     // ---- R14c：满载丢弃（1 字节缓存必满，dropNew_ 置位期间丢新 + 收尾丢条统计） ----
     {
-        yomk::bagRecordReset();
+        yomk::ctrl::bagRecordReset();
         FastDDSBagNode node10;
         check(node10.setDomainId(TEST_DOMAIN), "R14c 新节点 setDomainId(202) 成功");
 
@@ -1142,7 +1142,7 @@ int main()
             recDone10.store(true);
         });
         std::this_thread::sleep_for(std::chrono::milliseconds(kCacheDropRecordMs));
-        yomk::bagRecordStop();
+        yomk::ctrl::g_bagRecordStop.stop();
         for (int i = 0; i < 100 && !recDone10.load(); ++i)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -1196,7 +1196,7 @@ int main()
     //      DataWriter 默认 TRANSIENT_LOCAL → Channel.metadata 与 metadata.json 的 qos 均
     //      == "RELIABLE,VOLATILE"，证 qos 反映真实 offered 而非写死） ----
     {
-        yomk::bagRecordReset();
+        yomk::ctrl::bagRecordReset();
         FastDDSBagNode node11;
         check(node11.setDomainId(TEST_DOMAIN), "R15 新节点 setDomainId(202) 成功");
 
@@ -1244,7 +1244,7 @@ int main()
             recDone11.store(true);
         });
         std::this_thread::sleep_for(std::chrono::milliseconds(kRecordMs));
-        yomk::bagRecordStop();
+        yomk::ctrl::g_bagRecordStop.stop();
         for (int i = 0; i < 100 && !recDone11.load(); ++i)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -1293,7 +1293,7 @@ int main()
     //      （同进程 R2 已注册同 TypeObject 原名，返回 false 但新名注册照常生效，见下方
     //      OBSERVE），链路断言落在 writer/录制/stats 上 ----
     {
-        yomk::bagRecordReset();
+        yomk::ctrl::bagRecordReset();
         FastDDSBagNode node12;
         check(node12.setDomainId(TEST_DOMAIN), "R16 新节点 setDomainId(202) 成功");
 
@@ -1362,7 +1362,7 @@ int main()
             recDone12.store(true);
         });
         std::this_thread::sleep_for(std::chrono::milliseconds(kRecordMs));
-        yomk::bagRecordStop();
+        yomk::ctrl::g_bagRecordStop.stop();
         for (int i = 0; i < 100 && !recDone12.load(); ++i)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));

@@ -1,5 +1,5 @@
 // /record、/play 长驻阻塞期间持锁——锁保护 node_ 生命周期不被并发 deleteNode 破坏
-// （同 YomkDdsDebugHandler 持锁收敛约定）；停止经 yomk::g_bagRecordStop / g_bagPlayStop 由
+// （同 YomkDdsDebugHandler 持锁收敛约定）；停止经 yomk::ctrl::g_bagRecordStop / yomk::ctrl::g_bagPlayStop 由
 // SIGINT 处理函数异步置位，不依赖本服务其他端点。
 #include "YomkDdsBagHandler.h"
 #include "YomkDdsMsg.h"
@@ -27,11 +27,11 @@ int YomkDdsBagHandler::init()
 {
     installFunc("/get_version", &YomkDdsBagHandler::getVersion);
     installFunc("/create_node", &YomkDdsBagHandler::createNode);
-    installFunc("/record", &YomkDdsBagHandler::bagRecord);
-    installFunc("/get_info", &YomkDdsBagHandler::bagInfo);
-    installFunc("/reindex", &YomkDdsBagHandler::bagReindex);
-    installFunc("/convert", &YomkDdsBagHandler::bagConvert);
-    installFunc("/play", &YomkDdsBagHandler::bagPlay);
+    installFunc("/record", &YomkDdsBagHandler::record);
+    installFunc("/get_info", &YomkDdsBagHandler::getInfo);
+    installFunc("/reindex", &YomkDdsBagHandler::reindex);
+    installFunc("/convert", &YomkDdsBagHandler::convert);
+    installFunc("/play", &YomkDdsBagHandler::play);
     installFunc("/delete_node", &YomkDdsBagHandler::deleteNode);
     return 0;
 }
@@ -90,7 +90,7 @@ yomk::payload::Response YomkDdsBagHandler::createNode(YomkMsgPtr pkg)
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }
 
-yomk::payload::Response YomkDdsBagHandler::bagRecord(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsBagHandler::record(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != yomk::msgs::dds::BagRecordRequest::kName)
     {
@@ -107,14 +107,14 @@ yomk::payload::Response YomkDdsBagHandler::bagRecord(YomkMsgPtr pkg)
     // 纯输入校验锁外前置：不触 DDS，未建节点时也可先报出明确的输入问题
     if (p->msg.topics.empty())
     {
-        yomk::log().tag("YomkDdsBagHandler::bagRecord").error("no topics given");
+        yomk::log().tag("YomkDdsBagHandler::record").error("no topics given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no topics given");
     }
     for (const auto& topic : p->msg.topics)
     {
         if (topic.empty())
         {
-            yomk::log().tag("YomkDdsBagHandler::bagRecord").error("empty topic name in topic list");
+            yomk::log().tag("YomkDdsBagHandler::record").error("empty topic name in topic list");
             return yomk::payload::Response(yomk::payload::ResStatus::Failed, "empty topic name in topic list");
         }
     }
@@ -122,15 +122,15 @@ yomk::payload::Response YomkDdsBagHandler::bagRecord(YomkMsgPtr pkg)
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        yomk::log().tag("YomkDdsBagHandler::bagRecord").error("bag node not created");
+        yomk::log().tag("YomkDdsBagHandler::record").error("bag node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "bag node not created");
     }
 
     // 兜底复位残留 stop 标志（上次 Ctrl+C 残留置位会致录制秒退）；只复位 stop 不动 paused——
-    // paused 是调用方启动意图（CLI --start-paused / bagRecordPause），handler 清除会使暂停态静默失效
-    yomk::g_bagRecordStop.store(false);
+    // paused 是调用方启动意图（CLI --start-paused / yomk::ctrl::g_bagRecordPaused），handler 清除会使暂停态静默失效
+    yomk::ctrl::g_bagRecordStop.reset();
 
-    // 长驻阻塞：录制至 SIGINT（g_bagRecordStop 置位）触发节点层收尾返回；
+    // 长驻阻塞：录制至 SIGINT（yomk::ctrl::g_bagRecordStop 置位）触发节点层收尾返回；
     // 启动校验失败（无端点主题）原因由节点层逐主题列于 msg
     std::string error;
     std::vector<FastDDSBagNode::BagTopicStat> stats;
@@ -141,7 +141,7 @@ yomk::payload::Response YomkDdsBagHandler::bagRecord(YomkMsgPtr pkg)
         {
             error = "bag record failed";  // 兜底，避免空 msg
         }
-        yomk::log().tag("YomkDdsBagHandler::bagRecord").error("record failed: ", error);
+        yomk::log().tag("YomkDdsBagHandler::record").error("record failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
 
@@ -159,7 +159,7 @@ yomk::payload::Response YomkDdsBagHandler::bagRecord(YomkMsgPtr pkg)
             yomk::msgs::dds::RecordResult::shared(std::move(result)));
 }
 
-yomk::payload::Response YomkDdsBagHandler::bagInfo(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsBagHandler::getInfo(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != yomk::msgs::dds::BagInfoRequest::kName)
     {
@@ -176,7 +176,7 @@ yomk::payload::Response YomkDdsBagHandler::bagInfo(YomkMsgPtr pkg)
     // bagDir 空校验锁外前置（对齐 bagRecord 的纯输入校验先例：不触节点状态）
     if (p->msg.bagDir.empty())
     {
-        yomk::log().tag("YomkDdsBagHandler::bagInfo").error("no bag dir given");
+        yomk::log().tag("YomkDdsBagHandler::getInfo").error("no bag dir given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no bag dir given");
     }
 
@@ -189,7 +189,7 @@ yomk::payload::Response YomkDdsBagHandler::bagInfo(YomkMsgPtr pkg)
         {
             error = "bag info failed";  // 兜底，避免空 msg
         }
-        yomk::log().tag("YomkDdsBagHandler::bagInfo").error("bag info failed: ", error);
+        yomk::log().tag("YomkDdsBagHandler::getInfo").error("bag info failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
 
@@ -213,7 +213,7 @@ yomk::payload::Response YomkDdsBagHandler::bagInfo(YomkMsgPtr pkg)
             yomk::msgs::dds::BagInfo::shared(std::move(result)));
 }
 
-yomk::payload::Response YomkDdsBagHandler::bagReindex(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsBagHandler::reindex(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != yomk::msgs::dds::BagReindexRequest::kName)
     {
@@ -230,7 +230,7 @@ yomk::payload::Response YomkDdsBagHandler::bagReindex(YomkMsgPtr pkg)
     // 纯输入校验锁外前置（同 bagRecord 先例：不触节点状态）
     if (p->msg.bagDir.empty())
     {
-        yomk::log().tag("YomkDdsBagHandler::bagReindex").error("no bag dir given");
+        yomk::log().tag("YomkDdsBagHandler::reindex").error("no bag dir given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no bag dir given");
     }
 
@@ -242,13 +242,13 @@ yomk::payload::Response YomkDdsBagHandler::bagReindex(YomkMsgPtr pkg)
         {
             error = "bag reindex failed";  // 兜底，避免空 msg
         }
-        yomk::log().tag("YomkDdsBagHandler::bagReindex").error("bag reindex failed: ", error);
+        yomk::log().tag("YomkDdsBagHandler::reindex").error("bag reindex failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok");
 }
 
-yomk::payload::Response YomkDdsBagHandler::bagConvert(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsBagHandler::convert(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != yomk::msgs::dds::BagConvertRequest::kName)
     {
@@ -265,12 +265,12 @@ yomk::payload::Response YomkDdsBagHandler::bagConvert(YomkMsgPtr pkg)
     // 纯输入校验锁外前置（同上先例）
     if (p->msg.inputs.empty())
     {
-        yomk::log().tag("YomkDdsBagHandler::bagConvert").error("no input bag dir given");
+        yomk::log().tag("YomkDdsBagHandler::convert").error("no input bag dir given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no input bag dir given");
     }
     if (p->msg.cfgPath.empty())
     {
-        yomk::log().tag("YomkDdsBagHandler::bagConvert").error("no config file given");
+        yomk::log().tag("YomkDdsBagHandler::convert").error("no config file given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no config file given");
     }
 
@@ -283,7 +283,7 @@ yomk::payload::Response YomkDdsBagHandler::bagConvert(YomkMsgPtr pkg)
         {
             error = "bag convert failed";  // 兜底，避免空 msg
         }
-        yomk::log().tag("YomkDdsBagHandler::bagConvert").error("bag convert failed: ", error);
+        yomk::log().tag("YomkDdsBagHandler::convert").error("bag convert failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
 
@@ -300,7 +300,7 @@ yomk::payload::Response YomkDdsBagHandler::bagConvert(YomkMsgPtr pkg)
             yomk::msgs::dds::ConvertResult::shared(std::move(result)));
 }
 
-yomk::payload::Response YomkDdsBagHandler::bagPlay(YomkMsgPtr pkg)
+yomk::payload::Response YomkDdsBagHandler::play(YomkMsgPtr pkg)
 {
         if (!pkg || pkg->name() != yomk::msgs::dds::BagPlayRequest::kName)
     {
@@ -317,41 +317,41 @@ yomk::payload::Response YomkDdsBagHandler::bagPlay(YomkMsgPtr pkg)
     // 纯输入校验锁外前置（同 bagRecord 先例：不触节点状态）
     if (p->msg.bagDir.empty())
     {
-        yomk::log().tag("YomkDdsBagHandler::bagPlay").error("no bag dir given");
+        yomk::log().tag("YomkDdsBagHandler::play").error("no bag dir given");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "no bag dir given");
     }
     // 纯输入校验锁外前置（同上先例）
     if (p->msg.playbackRate <= 0.0)
     {
-        yomk::log().tag("YomkDdsBagHandler::bagPlay").error("invalid playback rate");
+        yomk::log().tag("YomkDdsBagHandler::play").error("invalid playback rate");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "invalid playback rate");
     }
     // 负值非法：有意偏离 ros2 API 层“告警忽略按 0 播”，快速失败暴露拼写错误
     // （对齐 ros2 CLI check_not_negative_float 拦截形态）
     if (p->msg.startOffset < 0.0)
     {
-        yomk::log().tag("YomkDdsBagHandler::bagPlay").error("invalid start offset");
+        yomk::log().tag("YomkDdsBagHandler::play").error("invalid start offset");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "invalid start offset");
     }
     // 只拒负值（0 为合法缺省）；有意偏离 ros2 API 层负值告警按 0 播，快速失败暴露拼写错误
     if (p->msg.delay < 0.0)
     {
-        yomk::log().tag("YomkDdsBagHandler::bagPlay").error("invalid delay");
+        yomk::log().tag("YomkDdsBagHandler::play").error("invalid delay");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "invalid delay");
     }
 
     std::lock_guard<std::mutex> lock(mtx_);
     if (node_ == nullptr)
     {
-        yomk::log().tag("YomkDdsBagHandler::bagPlay").error("bag node not created");
+        yomk::log().tag("YomkDdsBagHandler::play").error("bag node not created");
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, "bag node not created");
     }
 
     // 兜底复位残留 stop 标志（上次 Ctrl+C 残留置位会致回放秒退）；只复位 stop 不动 paused——
-    // paused 是运行意图（键盘线程 bagPlayPause 置位后期待播放线程冻结时间轴），清除会静默失效
-    yomk::g_bagPlayStop.store(false);
+    // paused 是运行意图（键盘线程 yomk::ctrl::g_bagPlayPaused 置位后期待播放线程冻结时间轴），清除会静默失效
+    yomk::ctrl::g_bagPlayStop.reset();
 
-    // 长驻阻塞：回放至 EOS 或 SIGINT（g_bagPlayStop 置位）触发节点层收尾返回；
+    // 长驻阻塞：回放至 EOS 或 SIGINT（yomk::ctrl::g_bagPlayStop 置位）触发节点层收尾返回；
     // 预扫失败（目录不存在/旧 bag 拒播/qos 非法/topics 未命中 bag 清单）原因由节点层列于 msg
     std::string error;
     std::vector<FastDDSBagNode::BagTopicStat> stats;
@@ -364,7 +364,7 @@ yomk::payload::Response YomkDdsBagHandler::bagPlay(YomkMsgPtr pkg)
         {
             error = "bag play failed";  // 兜底，避免空 msg
         }
-        yomk::log().tag("YomkDdsBagHandler::bagPlay").error("play failed: ", error);
+        yomk::log().tag("YomkDdsBagHandler::play").error("play failed: ", error);
         return yomk::payload::Response(yomk::payload::ResStatus::Failed, error);
     }
 

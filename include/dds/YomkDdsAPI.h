@@ -1408,8 +1408,8 @@ public:
      *         the "topic: N messages / M bytes" lines are rendered by the caller;
      *         Invalid when YomkServer is not initialized
      * @note Blocks the calling thread until all messages are played or stops through
-     *       yomk::bagPlayStop (async-signal-safe); pause/resume/rate at runtime via
-     *       yomk::bagPlayPause/Resume/SetRate, call yomk::bagPlayReset() before reuse;
+     *       yomk::ctrl::g_bagPlayStop (async-signal-safe); pause/resume/rate at runtime via
+     *       yomk::ctrl::g_bagPlayPaused/Resume/SetRate, call yomk::ctrl::bagPlayReset() before reuse;
      *       requires the bag node created by create(), and legacy bags without type
      *       metadata are rejected
      */
@@ -1417,8 +1417,8 @@ public:
     // @zh: return Response 携带 PlayResult 包：bagDir + topics（bag 预扫序，每项 BagTopicStat：
     // @zh: topicName（应用 remap 后的发布名）/typeName/条数/字节；未播到的主题计 0/0）；
     // @zh: 目录行与 "topic: N 条 / M 字节" 行由调用方渲染；未初始化返回 Invalid
-    // @zh: note 阻塞调用线程至全部播毕或经 yomk::bagPlayStop 停止（async-signal-safe）；
-    // @zh: 运行时经 bagPlayPause/Resume/SetRate 控制，复用前先 bagPlayReset()；
+    // @zh: note 阻塞调用线程至全部播毕或经 yomk::ctrl::g_bagPlayStop 停止（async-signal-safe）；
+    // @zh: 运行时经 yomk::ctrl::g_bagPlayPaused/Resume/SetRate 控制，复用前先 yomk::ctrl::bagPlayReset()；
     // @zh: 须先经 create() 建 bag 节点；旧格式 bag（type 空串）拒播
     yomk::payload::Response play()
     {
@@ -1641,15 +1641,15 @@ public:
      *         "topic: N messages / M bytes" lines are rendered by the caller; Invalid when
      *         YomkServer is not initialized or topics() was not accumulated
      * @note Blocks the calling thread until recording finishes or stops through
-     *       yomk::bagRecordStop (async-signal-safe); call yomk::bagRecordReset()
+     *       yomk::ctrl::g_bagRecordStop (async-signal-safe); call yomk::ctrl::bagRecordReset()
      *       before reuse; requires the bag node created by create()
      */
     // @zh: 按累积的主题清单与阈值录制到 mcap bag（阻塞至录制收尾的请求终结）
     // @zh: return Response 携带 RecordResult 包：bagDir 与逐主题 BagTopicStat（主题名/原始
     // @zh: 类型名/条数/字节，保持录制清单顺序、通配项已展开）；目录行与 "topic: N 条 / M 字节"
     // @zh: 行由调用方渲染；未初始化或未累积 topics() 返回 Invalid
-    // @zh: note 阻塞调用线程至录制收尾或经 yomk::bagRecordStop 停止（async-signal-safe）；
-    // @zh: 复用前先 bagRecordReset() 复位；须先经 create() 建 bag 节点
+    // @zh: note 阻塞调用线程至录制收尾或经 yomk::ctrl::g_bagRecordStop 停止（async-signal-safe）；
+    // @zh: 复用前先 yomk::ctrl::bagRecordReset() 复位；须先经 create() 建 bag 节点
     yomk::payload::Response record()
     {
         if (!requireServer())

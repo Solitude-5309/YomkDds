@@ -1,7 +1,7 @@
 # =============================================================================
 # FastDDSBagNode：bag 录制节点两层测试
 # 启动校验用例（DDS-free 直测节点：无端点主题拒绝 + 混合清单整体报错且不落盘）+
-# 录制收尾用例（真实 DDS：MString 发布者制造流量 → record → bagRecordStop 收尾 →
+# 录制收尾用例（真实 DDS：MString 发布者制造流量 → record → yomk::ctrl::g_bagRecordStop.stop() 收尾 →
 # bag 目录 bag_0.mcap + metadata.json 落盘与 mcap 读回断言）。链接 YomkDdsStdMsgs 仅为
 # 发布端构造真实流量，被测对象本身零 msg 依赖（透传原始 CDR 字节）。
 # =============================================================================

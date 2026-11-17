@@ -32,7 +32,7 @@ Bag 服务把 DDS 域内流量录制为标准 mcap 格式 bag（类型无关，�
 
 ### 录制（`yomk::dds().bag()...record()` / `bag record`）
 
-`yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()`（端点 `/YomkDdsBagHandler/record`）**长驻阻塞至 Ctrl+C**（SIGINT 经 `yomk::bagRecordStop` 无锁置位）收尾返回。`topics()` 必填（缺失时终结直接返回 `topics are required`），其余四个累积器可选、次序不限；`out_dir()` 空 = 缺省时间戳目录名，`max_size()`/`max_duration()` 为单分片阈值（两条件同用时先到先分），`cache()` 为写缓存双缓冲字节数。CLI 形态：
+`yomk::dds().bag().topics({...})[.out_dir(dir)][.max_size(bytes)][.max_duration(sec)][.cache(bytes)].record()`（端点 `/YomkDdsBagHandler/record`）**长驻阻塞至 Ctrl+C**（SIGINT 经 `yomk::ctrl::g_bagRecordStop` 无锁置位）收尾返回。`topics()` 必填（缺失时终结直接返回 `topics are required`），其余四个累积器可选、次序不限；`out_dir()` 空 = 缺省时间戳目录名，`max_size()`/`max_duration()` 为单分片阈值（两条件同用时先到先分），`cache()` 为写缓存双缓冲字节数。CLI 形态：
 
 ```bash
 yomkdds bag record hello_world           # 录制单主题（默认域 0）
@@ -51,7 +51,7 @@ yomkdds bag record --start-paused hello_world  # 暂停态启动（订阅照常�
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 #include <yomk/dds/YomkDdsAPI.h>
-#include <yomk/dds/YomkDdsBagHandler.h> // bagRecordStop/bagRecordReset（停止标志读写端）
+#include <yomk/dds/YomkDdsBagHandler.h> // yomk::ctrl::g_bagRecordStop/yomk::ctrl::bagRecordReset（停止标志读写端）
 
 #include <csignal>
 #include <iostream>
@@ -59,7 +59,7 @@ yomkdds bag record --start-paused hello_world  # 暂停态启动（订阅照常�
 
 using namespace yomk;
 
-void onSignal(int) { bagRecordStop(); }  // 无锁原子置位，录制循环读它收尾
+void onSignal(int) { yomk::ctrl::g_bagRecordStop.stop(); }  // 无锁原子置位，录制循环读它收尾
 
 int main()
 {
@@ -67,15 +67,15 @@ int main()
     yomk::server().srv<YomkDdsBagHandler>().create();
 
     // 1. 复位残留停止标志（防上次会话置位导致秒退）后创建 bag 节点（单节点模型）
-    bagRecordReset();
+    yomk::ctrl::bagRecordReset();
     auto resp = yomk::dds().bag().domain(0).create();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         return 1;
     }
 
-    // 2. Ctrl+C → bagRecordStop 置位；可选暂停态启动：录制前 bagRecordPause() 置位
-    //    （订阅照常、消息丢弃不写入，等价 CLI --start-paused），bagRecordResume() 恢复写入
+    // 2. Ctrl+C → yomk::ctrl::g_bagRecordStop 置位；可选暂停态启动：录制前 yomk::ctrl::g_bagRecordPaused.pause() 置位
+    //    （订阅照常、消息丢弃不写入，等价 CLI --start-paused），yomk::ctrl::g_bagRecordPaused.resume() 恢复写入
     std::signal(SIGINT, onSignal);
 
     // 3. 长驻阻塞：启动校验、订阅与录制、收尾落盘都在服务端完成，返回即录制结束
@@ -109,7 +109,7 @@ int main()
 }
 ```
 
-暂停恢复：库侧 `yomk::bagRecordPause()`/`bagRecordResume()`（等价 CLI 交互键 p/r 与 `--start-paused` 的 SPACE 启动）。落盘产物为 bag 目录两文件：`bag_0.mcap`（标准 mcap 容器，逐主题 Channel，`Channel.metadata` 记录 `type=<类型名>`、`qos=<Reliability>,<Durability>` 串，消息 record 保存原始 CDR 字节；指定分片时滚动产生 `bag_1.mcap`、`bag_2.mcap`、...，各分片独立完整可读回）与 `metadata.json`（顶层平铺 bag 元信息：`version`/`storage_identifier`/`relative_file_paths`/`starting_time`（含 `_format` 可读伴生键）/`duration`/`message_count`/`topics_with_message_count`）。
+暂停恢复：库侧 `yomk::ctrl::g_bagRecordPaused.pause()`/`yomk::ctrl::g_bagRecordPaused.resume()`（等价 CLI 交互键 p/r 与 `--start-paused` 的 SPACE 启动）。落盘产物为 bag 目录两文件：`bag_0.mcap`（标准 mcap 容器，逐主题 Channel，`Channel.metadata` 记录 `type=<类型名>`、`qos=<Reliability>,<Durability>` 串，消息 record 保存原始 CDR 字节；指定分片时滚动产生 `bag_1.mcap`、`bag_2.mcap`、...，各分片独立完整可读回）与 `metadata.json`（顶层平铺 bag 元信息：`version`/`storage_identifier`/`relative_file_paths`/`starting_time`（含 `_format` 可读伴生键）/`duration`/`message_count`/`topics_with_message_count`）。
 
 ### 纯文件操作（无须 bag 节点）
 
@@ -128,7 +128,7 @@ yomkdds bag convert -i bag_a -i bag_b -o convert.json      # 多输入按 logTim
 
 ### 回放（`yomk::dds().bag().dir(bagDir)…play()` / `bag play`）
 
-`yomkdds bag play <bag目录>` 按录制时间轴把 bag 回放为真实 DDS 流量：预扫 metadata.json 后按主题按需重建透传发布实体——消息 CDR 原始字节直发不反序列化，发布 QoS 按录制快照恢复；读播解耦（读线程从分片逐条预读入有界内存队列、播放线程按消息 logTime 相对间隔定时发布）。库侧在同一 `dir(bagDir)` 子分面上累积 `rate()`/`topics()`/`loop()`/`offset()`/`delay()`/`wait_acked()`/`remaps()`/`read_ahead()`/`qos_file()`（均可选、次序不限）后 `play()` 终结，阻塞至播毕或 `yomk::bagPlayStop` 停止。CLI 自动创建并在退出前删除 bag 节点（域号经环境变量 `YOMKDDS_DDS_DOMAIN_ID` 选择，同其他命令）。成功回执为 `PlayResult`（只回数据）：`bagDir` + `topics[]`（每项 `BagTopicStat`：`topicName`（应用 remap 后的发布名）/`typeName`/`count`/`bytes`，保持 bag 预扫顺序，预扫命中但未播到的主题（经 `yomk::bagPlayStop` 提前停止）计 0/0）；目录行与 `topic: N 条 / M 字节` 行由调用方渲染（CLI `bag play` 在收尾输出上述统计文本）。
+`yomkdds bag play <bag目录>` 按录制时间轴把 bag 回放为真实 DDS 流量：预扫 metadata.json 后按主题按需重建透传发布实体——消息 CDR 原始字节直发不反序列化，发布 QoS 按录制快照恢复；读播解耦（读线程从分片逐条预读入有界内存队列、播放线程按消息 logTime 相对间隔定时发布）。库侧在同一 `dir(bagDir)` 子分面上累积 `rate()`/`topics()`/`loop()`/`offset()`/`delay()`/`wait_acked()`/`remaps()`/`read_ahead()`/`qos_file()`（均可选、次序不限）后 `play()` 终结，阻塞至播毕或 `yomk::ctrl::g_bagPlayStop` 停止。CLI 自动创建并在退出前删除 bag 节点（域号经环境变量 `YOMKDDS_DDS_DOMAIN_ID` 选择，同其他命令）。成功回执为 `PlayResult`（只回数据）：`bagDir` + `topics[]`（每项 `BagTopicStat`：`topicName`（应用 remap 后的发布名）/`typeName`/`count`/`bytes`，保持 bag 预扫顺序，预扫命中但未播到的主题（经 `yomk::ctrl::g_bagPlayStop` 提前停止）计 0/0）；目录行与 `topic: N 条 / M 字节` 行由调用方渲染（CLI `bag play` 在收尾输出上述统计文本）。
 
 ```bash
 yomkdds bag play bag_in                    # 全主题 1x 按录制时间轴回放
@@ -149,13 +149,13 @@ yomkdds bag play bag_in --qos-profile-overrides-path qos.json   # 按主题覆�
 
 | 函数 | 语义 |
 |---|---|
-| `yomk::bagPlayStop()` | 置停止标志（播放线程各阻塞处只读，async-signal-safe，SIGINT 处理即用此） |
-| `yomk::bagPlayPause()` / `yomk::bagPlayResume()` | 置暂停 / 解除暂停（暂停期播放线程冻结时间轴零发出，恢复后重锚时间基准继续按录制节奏发布） |
-| `yomk::bagPlaySetRate(rate)` | 动态调率（对齐 ros2 `~/set_rate`：rate<=0 拒绝返回 false 保持原值，合法值即时生效于后续调度） |
-| `yomk::bagPlayGetRate()` | 查询当前倍率（对齐 ros2 `~/get_rate`） |
-| `yomk::bagPlayReset()` | 发起回放前调用：复位停止与暂停标志 + 倍率复位 1.0（防上次会话残留导致秒退/开播即冻住/倍率漂移） |
+| `yomk::ctrl::g_bagPlayStop.stop()` | 置停止标志（播放线程各阻塞处只读，async-signal-safe，SIGINT 处理即用此） |
+| `yomk::ctrl::g_bagPlayPaused.pause()` / `yomk::ctrl::g_bagPlayPaused.resume()` | 置暂停 / 解除暂停（暂停期播放线程冻结时间轴零发出，恢复后重锚时间基准继续按录制节奏发布） |
+| `yomk::ctrl::bagPlaySetRate(rate)` | 动态调率（对齐 ros2 `~/set_rate`：rate<=0 拒绝返回 false 保持原值，合法值即时生效于后续调度） |
+| `yomk::ctrl::bagPlayGetRate()` | 查询当前倍率（对齐 ros2 `~/get_rate`） |
+| `yomk::ctrl::bagPlayReset()` | 发起回放前调用：复位停止与暂停标志 + 倍率复位 1.0（防上次会话残留导致秒退/开播即冻住/倍率漂移） |
 
-录制侧配套：`yomk::bagRecordStop()`（Ctrl+C 置位收尾）、`yomk::bagRecordPause()`/`yomk::bagRecordResume()`（暂停期照常 take 排空但丢弃不写）、`yomk::bagRecordReset()`（双复位停止+暂停，防上次会话残留表现为"何都不录"）。
+录制侧配套：`yomk::ctrl::g_bagRecordStop.stop()`（Ctrl+C 置位收尾）、`yomk::ctrl::g_bagRecordPaused.pause()`/`yomk::ctrl::g_bagRecordPaused.resume()`（暂停期照常 take 排空但丢弃不写）、`yomk::ctrl::bagRecordReset()`（双复位停止+暂停，防上次会话残留表现为"何都不录"）。
 
 ## 参数与约束
 

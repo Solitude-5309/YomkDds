@@ -27,7 +27,7 @@
 
 | 入口 | 能力 | 关键行为 |
 |---|---|---|
-| 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()` | 列出域内主题（含类型名与端点详情） | 返回 `TopicInfoArray`，每项 `TopicInfo` 携带 `topicName` / `typeName`（原样输出）/ `publisherCount` / `subscriptionCount` / `publishers` / `subscriptions` 逐端点清单（归属节点名、FastDDS 原生 GUID、结构化 QoS 字段；端点类型由所在清单表达）；按主题名排序；远端 DataWriter 与 DataReader 均记录（仅有订阅者而无发布者的主题同样列出）；列表可为空（域内无 writer/reader）；终端文本由调用方渲染（CLI 缺省仅打主题名，`-t` 附类型名，`-v` 展开端点详情） |
+| 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()` | 列出域内主题（含类型名与端点详情） | 返回 `TopicInfoList`，每项 `TopicInfo` 携带 `topicName` / `typeName`（原样输出）/ `publisherCount` / `subscriptionCount` / `publishers` / `subscriptions` 逐端点清单（归属节点名、FastDDS 原生 GUID、结构化 QoS 字段；端点类型由所在清单表达）；按主题名排序；远端 DataWriter 与 DataReader 均记录（仅有订阅者而无发布者的主题同样列出）；列表可为空（域内无 writer/reader）；终端文本由调用方渲染（CLI 缺省仅打主题名，`-t` 附类型名，`-v` 展开端点详情） |
 | 链式 `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()` | 列出域内节点 | 独立收敛查询域内已发现的命名参与者（不依赖 list_topics/topic_info）；participant_name 非空且非 "/" 才列出（空名与 ROS2 参与者默认占位名 "/" 跳过，不输出 GUID 串），按名称排序；调试节点自身不在自身发现回调中，天然不列出；列表可为空 |
 | CLI `yomkdds topic list [-t \| --types] [-v \| --verbose]` | 列出域内全部已发现主题 | 缺省每行仅主题名；`-t` 每行 `主题名 [类型名]`（对齐 `ros2 topic list -t` 形态）；`-v` 逐主题输出 `主题名 [类型名]` 标题 + 与 `topic info -v` 同构的端点详情段；三种形态只是同一份结构化载荷的不同渲染 |
 | CLI `yomkdds node list` | 列出域内全部已发现的命名参与者 | 同域其他进程的调试节点与 bag 节点分别以唯一名 `yomkdds_debug_<uid>` / `yomkdds_bag_<uid>` 列出（uid 为 12 位随机 hex，多进程各自的调试/录制节点可区分） |
@@ -129,9 +129,9 @@ int main(int argc, char *argv[])
 yomk::server().init();
 yomk::server().srv<YomkDdsDebugHandler>().create();
 auto resp = yomk::dds().debug().domain(0).create();      // 1. 创建调试节点
-// 2. 收敛查询：连续 5 次 200ms 快照不变即返回结构化 TopicInfoArray 包
+// 2. 收敛查询：连续 5 次 200ms 快照不变即返回结构化 TopicInfoList 包
 resp = yomk::dds().debug().rounds(5).interval(200).topics();
-auto arr = yomk::msgs::unpack<yomk::msgs::dds::TopicInfoArray>(resp.data);
+auto arr = yomk::msgs::unpack<yomk::msgs::dds::TopicInfoList>(resp.data);
 if (arr != nullptr)
 {
     // 终端形态由调用方决定：此处仅打主题名（附类型名同理，取 typeName）
@@ -213,7 +213,7 @@ CLI 侧一次运行即自动完成"创建调试节点 → 查询 → 删除"全�
 | 形参形态 | `rounds(n)` / `interval(ms)` 均为可选累积器、次序不限，`topics()` 终结；只影响查询类终结，不影响 `create()`/`quit()` 建点与退出的参数（`interfaces()` 同分面：`rounds(n)`/`interval(ms)` 语义一致） |
 | rounds | 连续多少次快照集合不变即认为收敛；缺省/0 由节点层钳制为默认 5 次 |
 | interval | 快照轮询间隔（毫秒）；缺省/0 钳制为默认 200ms；最长阻塞约 rounds*interval |
-| 返回值 | 命中返回 `TopicInfoArray` 包（每项 `TopicInfo`：主题名/类型名/收发计数/逐端点清单），按主题名排序，列表可为空；只打主题名、附类型名还是展开端点详情属调用方决策（CLI `-t`/`-v` 选择） |
+| 返回值 | 命中返回 `TopicInfoList` 包（每项 `TopicInfo`：主题名/类型名/收发计数/逐端点清单），按主题名排序，列表可为空；只打主题名、附类型名还是展开端点详情属调用方决策（CLI `-t`/`-v` 选择） |
 
 ### 收敛查询语义
 

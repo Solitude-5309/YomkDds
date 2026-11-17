@@ -67,7 +67,7 @@
 |---|---|
 | `yomk::dds().debug()[.domain(domainId)][.udp_ds/.tcp_ds(locator)].create()` | 创建调试节点（单节点模型） |
 | `yomk::dds().debug().topic(topicName).out_cb(cb)[.qos(qos)].print()` | 登记调试主题（消息文本逐条投递回调） |
-| `yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()` | 列出域内主题（返回结构化 `TopicInfoArray`：主题名/类型名/收发计数/逐端点 GUID 与 QoS） |
+| `yomk::dds().debug()[.rounds(n)][.interval(ms)].topics()` | 列出域内主题（返回结构化 `TopicInfoList`：主题名/类型名/收发计数/逐端点 GUID 与 QoS） |
 | `yomk::dds().debug().topic(topicName)[.rounds(n)][.interval(ms)].info()` | 查询主题详情（返回单个 `TopicInfo`，字段与 `topics()` 单项同构） |
 | `yomk::dds().debug()[.rounds(n)][.interval(ms)].nodes()` | 列出域内节点 |
 | `yomk::dds().debug().node(nodeName)[.rounds(n)][.interval(ms)].info()` | 查询节点发布/订阅清单（返回结构化 `NodeInfo`：节点名 + `publishers`/`subscribers` 端点清单，按 (主题名, 类型名) 排序） |

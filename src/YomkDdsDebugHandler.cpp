@@ -168,7 +168,7 @@ yomk::payload::Response YomkDdsDebugHandler::listTopics(YomkMsgPtr pkg)
     node_->listTopicInfos(infos, p->msg.stableRounds, p->msg.intervalMs);
     // 只回结构化数据：类型名恒在载荷内，行文本（含是否带类型名）由调用方决定
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "ok",
-            yomk::msgs::dds::TopicInfoArray::shared(yomk::payload::dds::TopicInfoArray{std::move(infos)}));
+            yomk::msgs::dds::TopicInfoList::shared(yomk::payload::dds::TopicInfoList{std::move(infos)}));
 }
 
 yomk::payload::Response YomkDdsDebugHandler::topicFind(YomkMsgPtr pkg)

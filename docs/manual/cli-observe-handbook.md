@@ -101,7 +101,7 @@ yomkdds topic list -t       # 类型名模式：每行输出 主题名 [类型�
 yomkdds topic list -v       # 端点详情模式：逐主题输出 主题名 [类型名] + 详情段
 ```
 
-- **关键选项**：`-t`（`--types`）进入类型名模式，每行输出 `主题名 [类型名]`（单空格 + 方括号，对齐 `ros2 topic list -t` 形态，类型名原样输出）；`-v`（`--verbose`）逐主题输出 `主题名 [类型名]` 标题行，后接与 `topic info -v` 完全同构的详情段（段间空行）。三种形态只是同一份结构化载荷（`TopicInfoArray`）的不同渲染。
+- **关键选项**：`-t`（`--types`）进入类型名模式，每行输出 `主题名 [类型名]`（单空格 + 方括号，对齐 `ros2 topic list -t` 形态，类型名原样输出）；`-v`（`--verbose`）逐主题输出 `主题名 [类型名]` 标题行，后接与 `topic info -v` 完全同构的详情段（段间空行）。三种形态只是同一份结构化载荷（`TopicInfoList`）的不同渲染。
 - **示例输出**：
 
 ```
@@ -117,7 +117,7 @@ hello_world [YomkDdsStd::MString]
 域内无任何已发布主题时输出 `no topics discovered on domain N`（types 模式同）。
 
 `-v` 端点详情模式逐主题先打 `主题名 [类型名]`，随后是与 `topic info -v` 完全同构的段（Type/Publisher count/逐端点块/Subscription count，多主题时主题间空行分隔），范例见下一小节 `topic info -v` 输出示例。
-- **等价库调用**：三种形态同为 `yomk::dds().debug().rounds(5).interval(200).topics()`（返回 `TopicInfoArray`）；缺省打 `topicName`、`-t` 打 `topicName [typeName]`、`-v` 再逐主题展开端点详情段，均属 CLI 侧渲染（服务层只回结构化数据）。
+- **等价库调用**：三种形态同为 `yomk::dds().debug().rounds(5).interval(200).topics()`（返回 `TopicInfoList`）；缺省打 `topicName`、`-t` 打 `topicName [typeName]`、`-v` 再逐主题展开端点详情段，均属 CLI 侧渲染（服务层只回结构化数据）。
 
 建议先启动发布端再执行 `topic list`——工具创建调试节点入域后内部自适应收敛查询，无需固定等待窗口。
 

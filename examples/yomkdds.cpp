@@ -1564,7 +1564,7 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false,
     }
 
     // 2. 收敛查询：节点内部轮询发现缓存快照（~200ms 间隔），连续 waitRounds 次集合不变即返回，
-    //    发现重放完成即立即输出；载荷为全量结构化 TopicInfoArray，行文本在此渲染
+    //    发现重放完成即立即输出；载荷为全量结构化 TopicInfoList，行文本在此渲染
     resp = yomk::dds().debug().rounds(waitRounds).interval(200).topics();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
@@ -1572,7 +1572,7 @@ static int runList(uint32_t domainId, uint32_t waitRounds, bool types = false,
         yomk::dds().debug().quit();
         return 1;
     }
-    auto arr = yomk::msgs::unpack<yomk::msgs::dds::TopicInfoArray>(resp.data);
+    auto arr = yomk::msgs::unpack<yomk::msgs::dds::TopicInfoList>(resp.data);
     if (arr == nullptr)
     {
         yomk::log().tag("yomkdds").error("list topics failed: unexpected response payload");

@@ -1076,7 +1076,7 @@ public:
     }
     /**
      * @brief List discovered topics in the domain with their full details, sorted (request terminator)
-     * @return Response carrying a TopicInfoArray packet: one TopicInfo per topic with
+     * @return Response carrying a TopicInfoList packet: one TopicInfo per topic with
      *         topicName/typeName/publisherCount/subscriptionCount and the per-endpoint
      *         nodeName/GUID/structured QoS lists; remote writers and readers both
      *         recorded, the list may be empty
@@ -1085,7 +1085,7 @@ public:
      *       clamped to 5 rounds / 200ms. Independent of the topic() sub-facet
      */
     // @zh: 列出域内已发现主题及其完整详情（按名排序，请求终结）
-    // @zh: return Response 携带 TopicInfoArray 包：每项 TopicInfo 含主题名/类型名/收发计数与逐端点
+    // @zh: return Response 携带 TopicInfoList 包：每项 TopicInfo 含主题名/类型名/收发计数与逐端点
     // @zh: nodeName/GUID/结构化 QoS 清单；远端 writer 与 reader 均记录，列表可为空
     // @zh: note 收敛查询：每 interval() 轮询一次发现快照，连续 rounds() 次不变即返回；
     // @zh: 未累积时钳制为默认 5 次/200ms；与 topic() 子分面互不依赖

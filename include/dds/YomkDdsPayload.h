@@ -530,7 +530,7 @@ struct TopicInfo
 
 /** @brief list_topics response: one TopicInfo per discovered topic (sorted by topic name) */
 // @zh: list_topics 响应：每个已发现主题一项 TopicInfo（按主题名排序）
-struct TopicInfoArray
+struct TopicInfoList
 {
     std::vector<TopicInfo> d;
 };

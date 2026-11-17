@@ -13,7 +13,7 @@
  *       异主题登记 → 删除 → 重复删除拒绝 → 删除后 list_topics/list_nodes/topic_info/node_info
  *       拒绝 → 删除后重建 → node list 命中（命名 peer 经 SPDP 传播）→ topic_info 结构化包断言
  *       （topicName/typeName/收发计数/逐端点 nodeName+GUID+结构化 QoS 字段）→
- *       list_topics 结构化 TopicInfoArray 断言（topicName/typeName/计数）→
+ *       list_topics 结构化 TopicInfoList 断言（topicName/typeName/计数）→
  *       topic_find 按类型名反查命中唯一行与未匹配类型 eNo → interface_show 按类型名输出
  *       结构化 InterfaceInfo（root 成员表 data/string + 空依赖）与未发现类型 eNo →
  *       interface_list 类型名去重清单命中唯一行与空域未发现 eNo → topic_example 按主题名
@@ -118,8 +118,8 @@ int main()
     auto listed = testInvoke(svc, "/list_topics", mkList());
     check(listed.status == yomk::payload::ResStatus::Succeeded && listed.data != nullptr,
           "list_topics（入域无 writer，单次快照）→ eOk（空列表路径）");
-    auto arr = yomk::msgs::unpack<yomk::msgs::dds::TopicInfoArray>(listed.data);
-    check(arr != nullptr && arr->d.d.empty(), "list_topics 返回包可解包为空 TopicInfoArray");
+    auto arr = yomk::msgs::unpack<yomk::msgs::dds::TopicInfoList>(listed.data);
+    check(arr != nullptr && arr->d.d.empty(), "list_topics 返回包可解包为空 TopicInfoList");
 
     // interface_list：同域无任何类型，空集按 find 族语义 eNo（收敛参数链路同直通节点层）
     auto ifaceListMiss = testInvoke(svc, "/interface_list", yomk::msgs::dds::DebugInterfaceListRequest::shared(DebugInterfaceListRequest{1, 50}));
@@ -348,7 +348,7 @@ int main()
                 // （是否渲染为 "主题名 [类型名]" 由调用方决定，服务层不出行文本）
                 auto listHit = testInvoke(svc, "/list_topics", yomk::msgs::dds::DebugListTopicsRequest::shared(DebugListTopicsRequest{5, 100}));
                 check(listHit.status == yomk::payload::ResStatus::Succeeded, "list_topics(5,100ms) → eOk");
-                auto listInfos = yomk::msgs::unpack<yomk::msgs::dds::TopicInfoArray>(listHit.data);
+                auto listInfos = yomk::msgs::unpack<yomk::msgs::dds::TopicInfoList>(listHit.data);
                 std::vector<yomk::payload::dds::TopicInfo> listRows;
                 if (listInfos != nullptr)
                 {

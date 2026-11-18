@@ -108,15 +108,17 @@ export PYTHONPATH="${PY_SITE_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 
 # 测试清单：按模块分组、快->慢，stress 类压尾（项带模块子目录前缀，test/<模块>/<名>.py；
 # 新增测试在此登记；模块轮测试追加对应模块分组与条目）
-# 当前登记总数: 1 项（数组闭合后有自检守卫，声明与清单漂移即报错退出，
+# 当前登记总数: 2 项（数组闭合后有自检守卫，声明与清单漂移即报错退出，
 # 作为登记数漂移的结构性防御）
 TESTS=(
     # dds 模块（YomkDds 扩展运行时服务）
     test_dds
+    # fastdds 模块（绑定可用性：msg 类型发布/订阅互通）
+    fastdds/test_fastdds
 )
 
 # -------------sl 2b. 总数自检守卫 ----------------
-DECLARED_TEST_COUNT=1
+DECLARED_TEST_COUNT=2
 if [ "${#TESTS[@]}" -ne "${DECLARED_TEST_COUNT}" ]; then
     echo "错误: TESTS 登记数 ${#TESTS[@]} 与声明总数 ${DECLARED_TEST_COUNT} 不一致，登记新测试时须同步更新本文件声明"
     exit 1

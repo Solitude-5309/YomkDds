@@ -32,6 +32,8 @@ YomkDdsPython/                  # 扩展仓库根
 │   └── YomkServerPyVersionCheck.cmake  # 框架版本下限校验（对齐 C++ YomkServerVersionCheck.cmake 职责）
 ├── test/run_tests.sh           # 全量测试运行器（与 YomkServerPy run_tests.sh 同构）
 ├── test/test_dds.py
+├── test/fastdds/               # fastdds 绑定基础测试
+│   └── test_fastdds.py             #   发布者/订阅者互通（msg 类型）+ 安装树导入来源校验
 ├── thirdparty/                 # 第三方预编译安装树（与 C++ YomkDds main 同款，随库安装）
 │   ├── Fast-DDS-3.6.1/install      #   Fast-DDS C++ 库（libfastdds/libfastcdr 等动态库）
 │   ├── Fast-DDS-python-2.6.1/install #   fastdds Python 绑定模块（SWIG，落 site-packages/fastdds）

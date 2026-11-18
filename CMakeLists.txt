@@ -5,7 +5,7 @@ include(cmake/AbiInfo.cmake)
 # YomkServer 版本检测模块：find_package(YomkServer) 之后调用 yomk_server_version_check()
 include(cmake/YomkServerVersionCheck.cmake)
 
-project(YomkDds VERSION 2.6.0 LANGUAGES CXX)
+project(YomkDds VERSION 2.6.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -116,6 +116,10 @@ install(FILES
 )
 
 install(DIRECTORY thirdparty/Fast-DDS-3.6.1/install/
+    DESTINATION .
+)
+
+install(DIRECTORY thirdparty/Fast-DDS-python-2.6.1/install/
     DESTINATION .
 )
 

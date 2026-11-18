@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 # project(VERSION) → YOMK_DDS_VERSION → configure_file 生成 yomk/dds/_version.py
 # 的 __version__ → yomk.dds.__version__（DdsService.version 端点暴露）。
 # 本行即版本唯一来源，发布时手动 bump。
-project(YomkDds VERSION 0.0.3 LANGUAGES NONE)
+project(YomkDds VERSION 0.0.4 LANGUAGES NONE)
 
 set(YOMK_DDS_VERSION "${PROJECT_VERSION}")
 
@@ -33,7 +33,24 @@ configure_file(
     @ONLY
 )
 
-# ---------- 4. 安装规则 ----------
+# ---------- 4. 安装前置校验（必须先于一切 install 规则声明） ----------
+# install 规则按声明顺序执行：校验放最前，框架缺失/版本过低时立即中止，
+# 任何扩展文件都不落盘（避免"文件已装、校验才报错"的带病安装）。
+# 校验只读前缀中已存在的框架文件，不依赖扩展自身安装产物。
+# 纯文件/文本检查，不调用 python——import 冒烟依赖 user-site 的 pip 依赖
+# （readerwriterlock 等），sudo 安装时以 root 身份不可见，故放 build_ubuntu.sh
+# 以调用者身份执行（与框架"特权步骤只落盘、校验回归普通用户"设计一致）
+install(CODE "
+    if(NOT EXISTS \"\${CMAKE_INSTALL_PREFIX}/${PYTHON_SITE_PACKAGES}/yomk/server/__init__.py\")
+        message(FATAL_ERROR \"安装前缀 '\${CMAKE_INSTALL_PREFIX}' 下未找到框架 yomk 命名空间包，扩展须与 YomkServerPy 同前缀安装\")
+    endif()
+    # 框架版本下限校验（cmake/YomkServerPyVersionCheck.cmake，对齐 C++ YomkServerVersionCheck.cmake 职责；
+    # install(CODE) 独立脚本作用域拿不到 configure 期函数，故在安装脚本内 include 模块再调用）
+    include(\"${CMAKE_CURRENT_SOURCE_DIR}/cmake/YomkServerPyVersionCheck.cmake\")
+    yomk_serverpy_version_check(\"\${CMAKE_INSTALL_PREFIX}/${PYTHON_SITE_PACKAGES}/yomk/server/_version.py\")
+")
+
+# ---------- 5. 安装规则 ----------
 # 纯 Python 源树按扩展名过滤安装（.py/.pyi/py.typed，排除 __pycache__）；
 # 仅落扩展自身叶子目录（yomk/dds、yomk/msgs/dds、yomk/url/dds），不动框架文件
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/src/yomk/"
@@ -50,7 +67,7 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/yomk/dds/_version.py"
     DESTINATION "${PYTHON_SITE_PACKAGES}/yomk/dds"
 )
 
-# ---------- 5. 第三方依赖随库安装（对齐 C++ YomkDds main 分支） ----------
+# ---------- 6. 第三方依赖随库安装（对齐 C++ YomkDds main 分支） ----------
 # C++ 库把 thirdparty 预编译安装树随库装入前缀；本扩展面向 Python-only 用户
 # （不装 C++ 库，C++ 安装树不存在），故同样随库安装三件套，保证 import fastdds 可用：
 # - Fast-DDS-3.6.1/install      → bin/include/lib/share/tools（libfastdds/libfastcdr 等
@@ -65,14 +82,3 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Fast-DDS-python-2.6.1/
     DESTINATION .)
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Fast-DDS-Gen-4.3.0/"
     DESTINATION .)
-
-# ---------- 6. 安装期校验 ----------
-# 框架就位校验：扩展必须装入 YomkServerPy 所在安装前缀（PEP 420 命名空间合并的前提）。
-# 纯文件存在性检查，不调用 python——import 冒烟依赖 user-site 的 pip 依赖
-# （readerwriterlock 等），sudo 安装时以 root 身份不可见，故放 build_ubuntu.sh
-# 以调用者身份执行（与框架"特权步骤只落盘、校验回归普通用户"设计一致）
-install(CODE "
-    if(NOT EXISTS \"\${CMAKE_INSTALL_PREFIX}/${PYTHON_SITE_PACKAGES}/yomk/server/__init__.py\")
-        message(FATAL_ERROR \"安装前缀 '\${CMAKE_INSTALL_PREFIX}' 下未找到框架 yomk 命名空间包，扩展须与 YomkServerPy 同前缀安装\")
-    endif()
-")

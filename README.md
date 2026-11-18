@@ -28,6 +28,8 @@ YomkDdsPython/                  # 扩展仓库根
 │       ├── __init__.py             #   ECHO / GET_VERSION 端点常量（注明功能作用与统一请求形态）
 │       ├── __init__.pyi            #   端点常量类型桩
 │       └── py.typed
+├── cmake/                      # CMake 模块
+│   └── YomkServerPyVersionCheck.cmake  # 框架版本下限校验（对齐 C++ YomkServerVersionCheck.cmake 职责）
 ├── test/run_tests.sh           # 全量测试运行器（与 YomkServerPy run_tests.sh 同构）
 ├── test/test_dds.py
 ├── thirdparty/                 # 第三方预编译安装树（与 C++ YomkDds main 同款，随库安装）

@@ -82,3 +82,13 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Fast-DDS-python-2.6.1/
     DESTINATION .)
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Fast-DDS-Gen-4.3.0/"
     DESTINATION .)
+
+# ---------- 7. msg C++ 头文件安装（对齐 C++ YomkDds main 根 CMakeLists 逻辑） ----------
+# msg/ 类型库本体不在根构建内（根 CMake 无 add_subdirectory(msg)），由 build_ubuntu.sh
+# 独立构建安装（见其 3.1 步）；根构建仅随库安装两个 C++ 类型头文件供下游 C++ 消费
+# （与 main 分支根 CMakeLists 同款 install(FILES)）
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/msg/YomkDdsStdMsgs.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/msg/YomkDdsStdMsgsPubSubTypes.hpp"
+    DESTINATION include/yomk/dds
+)

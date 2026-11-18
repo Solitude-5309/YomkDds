@@ -36,6 +36,10 @@ YomkDdsPython/                  # 扩展仓库根
 │   ├── Fast-DDS-3.6.1/install      #   Fast-DDS C++ 库（libfastdds/libfastcdr 等动态库）
 │   ├── Fast-DDS-python-2.6.1/install #   fastdds Python 绑定模块（SWIG，落 site-packages/fastdds）
 │   └── Fast-DDS-Gen-4.3.0          #   IDL 代码生成器（运行需 java 17）
+├── msg/                        # fastddsgen 生成类型库工程（对齐 C++ YomkDds main，build_ubuntu.sh 独立构建）
+│   ├── CMakeLists.txt              #   C++ 类型库 + SWIG Python 绑定（校正后装至 site-packages/yomk/dds/YomkDdsStdMsgs，与主库同域）
+│   ├── YomkDdsStdMsgs.idl          #   IDL 源
+│   └── YomkDdsStdMsgs*             #   fastddsgen 生成物（C++ 类型支持源码 + SWIG 接口）
 ├── CMakeLists.txt              # 安装规则 + 版本注入（单一来源 project(VERSION)）+ 命名空间守卫 + 框架就位校验
 ├── build_ubuntu.sh             # 一键安装脚本（参考 YomkServerPy，交互输入安装前缀）
 └── README.md
@@ -70,7 +74,7 @@ server().srv(DdsService).create()   # 显式注册后 /DdsService/* 才可达
 安装须与 YomkServerPy 同前缀（扩展按 PEP 420 并入框架 site-packages/yomk/）：
 
 ```bash
-./build_ubuntu.sh      # 一键安装（默认取 YOMK_PREFIX_PATH；依赖仅 cmake + python3）
+./build_ubuntu.sh      # 一键安装（默认取 YOMK_PREFIX_PATH；依赖 cmake/python3/g++/swig/python3-dev）
 ./test/run_tests.sh    # 全量测试（缺省消费 $YOMK_PREFIX_PATH 安装树，--prefix 可覆盖）
 ```
 

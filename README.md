@@ -44,6 +44,8 @@ YomkDdsPython/                  # 扩展仓库根
 │   └── YomkDdsStdMsgs*             #   fastddsgen 生成物（C++ 类型支持源码 + SWIG 接口）
 ├── CMakeLists.txt              # 安装规则 + 版本注入（单一来源 project(VERSION)）+ 命名空间守卫 + 框架就位校验
 ├── build_ubuntu.sh             # 一键安装脚本（参考 YomkServerPy，交互输入安装前缀）
+├── scripts/
+│   └── install_idl.sh          # IDL 类型一键 生成/编译/安装（loan 支持，装入 yomk/dds/ 域）
 └── README.md
 ```
 
@@ -119,6 +121,56 @@ Python-only 用户不装 C++ YomkDds 库，其 Fast-DDS 运行时依赖由本扩
 `libfastdds`/`libfastcdr` 等动态库落 `lib/`，`build_ubuntu.sh` 幂等注册 ldconfig
 （`/etc/ld.so.conf.d/yomk.conf`）解析绑定模块的动态库依赖（无 RPATH）。
 安装后任意终端可直接 `import fastdds`。
+
+## IDL 通信数据包安装（install_idl.sh）
+
+将自定义 IDL 一键生成/编译/安装为可 import 的消息类型工程（支持 loan）。
+依赖：cmake/python3/g++/swig/python3-dev/java 17（fastddsgen 运行时）；
+生成工具**仅使用安装树内的 fastddsgen**（`$YOMK_PREFIX_PATH/scripts/fastddsgen`），
+不使用源码 `thirdparty/` 中的：
+
+```bash
+bash scripts/install_idl.sh scripts/rpc.idl
+# 请输入安装路径 [默认: /opt/yomk]:        ← 直接回车用默认，输入即改
+```
+
+流程与产物：
+
+1. **生成**：当前目录 `./msg_<YYYYMMDD_HHMMSS>/` 下生成类型工程
+   （`fastddsgen -python -d . -de final <idl>`，`-de final` 即 loan 支持）；
+   工程可重复编译，留作源码归档或删除均可
+2. **编译**：生成目录内 cmake 配置/编译；自定义前缀无 Fast-DDS 安装树时，
+   依赖解析自动回退框架前缀（`$YOMK_PREFIX_PATH`）
+3. **安装 + 校正**：C++ 类型库落 `<前缀>/lib/`（ldconfig 刷新，免密 sudo 可用
+   则自动执行）；Python 模块自动校正 Debian `posix_local` scheme 的
+   `local/.../dist-packages` 偏移，目的地按前缀分派：
+
+| 安装前缀 | Python 模块落点 | 导入形态 |
+| --- | --- | --- |
+| 默认（`$YOMK_PREFIX_PATH`，与框架同前缀） | `<前缀>/lib/pythonX.Y/site-packages/yomk/dds/` | `yomk.dds.<IDL文件名>`；IDL 含 `module` 声明时为 `yomk.dds.<IDL模块>.<IDL文件名>`（与主库同域） |
+| 自定义前缀 | `<前缀>/lib/pythonX.Y/site-packages/`（保持生成布局） | `<IDL文件名>`；含 `module` 声明时为 `<IDL模块>.<IDL文件名>` |
+
+脚本收尾会打印本次实际的落点与导入形态（无需自行推导）。
+
+   自定义前缀不在系统 PYTHONPATH 内，使用前需自行挂载：
+
+```bash
+export PYTHONPATH=<自定义前缀>/lib/pythonX.Y/site-packages:$PYTHONPATH
+```
+
+   说明：默认前缀下模块并入 `yomk/dds/`；自定义前缀下若也子挂 `yomk/dds/`，
+   会被框架侧的 `yomk.dds` 常规包（PEP 420）遮蔽而不可导入，故保持生成布局。
+
+脚本收尾打印实际落点与导入形态，并做导入冒烟（通过才 exit 0）。
+安装后即可用生成的类型收发数据（示例，以实测过的 `module TestMsg { struct Demo ... }` 为例）：
+
+```python
+from yomk.dds.TestMsg.demo import Demo   # 默认前缀安装后的导入形态
+
+data = Demo()
+data.payload("hello")    # 字段写入走 setter
+data.payload()           # 字段读取走 getter，返回 'hello'
+```
 
 ## 版本号管理
 

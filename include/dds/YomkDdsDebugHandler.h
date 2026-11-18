@@ -8,7 +8,7 @@
 #include <yomk/log/YomkLoggerApi.h>
 
 #include "YomkDdsPayload.h"  // flat quoted include: install tree, test tree and main tree all resolve same-dir
-#include "YomkDdsCtrlFlag.h"  // yomk::ctrl::g_debugPubStop：停止标志定义移至独立头，服务头保持纯服务声明
+#include "YomkDdsCtrlFlag.h"  // yomk::ctrl::dds::g_debugPubStop：停止标志定义移至独立头，服务头保持纯服务声明
 
 #include <memory>
 #include <mutex>

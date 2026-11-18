@@ -27,24 +27,24 @@
 // yomk::payload::Response except loan(), whose pointer emptiness is the failure test.
 // Full behavior: docs/features/core-communication.md
 // 设计对齐 YomkServer 链式 API（srv_info/log）：域入口按值返回 builder，builder 机制
-// 内敛于 yomk::detail，调用方全程以 auto 接收，从不具名引用类型；builder 禁止缓存复用。
+// 内敛于 yomk::detail::dds，调用方全程以 auto 接收，从不具名引用类型；builder 禁止缓存复用。
 // @zh: 节点生命周期 yomk::dds().node(name)[.domain/.udp_ds/.tcp_ds()].create() / .remove()；
 // @zh: 主题登记 yomk::dds().node(name).topic(name)[.type()（必填）][.qos()].create_pub() 或
 // @zh: [.sub_cb()].create_sub()；发布 [.data()].pub()；零拷贝 loan()/[.sample()].return_loan()；
 // @zh: XML profiles [.xml(path)].load_cfg()；版本 version()；
 // @zh: 终结均返回 yomk::payload::Response（仅 loan() 例外，以返回指针判空作失败判定）；
 // @zh: 详见 docs/features/core-communication.md
-namespace yomk::detail
+namespace yomk::detail::dds
 {
 /**
  * @brief XML profiles loading facet: carries the explicit path accumulated by dds().xml(), terminated by load_cfg()
  */
 // @zh: XML profiles 加载分面：承载 dds().xml() 累积的显式路径，load_cfg() 终结
-class DdsXmlBuilder
+class XmlBuilder
 {
     std::string m_xmlPath;
 public:
-    explicit DdsXmlBuilder(std::string xmlPath)
+    explicit XmlBuilder(std::string xmlPath)
         : m_xmlPath(std::move(xmlPath))
     {
     }
@@ -66,7 +66,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsLoadXml)
+        return yomk::server().url(yomk::url::dds::LoadXml)
             .msg(yomk::msgs::dds::LoadXmlRequest::shared(yomk::payload::dds::LoadXmlRequest{std::move(m_xmlPath)}))
             .request();
     }
@@ -81,7 +81,7 @@ public:
 // @zh: 主题注册分面：承载 node().topic() 累积的节点名/主题名，type() 必填与
 // @zh: qos() 可选累积器，create_pub()（发布）或 sub_cb()...create_sub()（订阅）终结；
 // @zh: data()...pub() 向已注册发布主题发送一条消息
-class DdsTopicBuilder
+class TopicBuilder
 {
     std::string m_nodeName;
     std::string m_topicName;
@@ -91,7 +91,7 @@ class DdsTopicBuilder
     void* m_data = nullptr;
     void* m_sample = nullptr;
 public:
-    DdsTopicBuilder(std::string nodeName, std::string topicName)
+    TopicBuilder(std::string nodeName, std::string topicName)
         : m_nodeName(std::move(nodeName)), m_topicName(std::move(topicName))
     {
     }
@@ -106,7 +106,7 @@ public:
     // @zh: type 消息类型实例（new XxxPubSubType()）
     // @zh: return 自身链式引用
     // @zh: warning type 所有权移交服务端，无论成败调用后 caller 不再持有/释放
-    DdsTopicBuilder& type(void* type)
+    TopicBuilder& type(void* type)
     {
         m_type = type;
         return *this;
@@ -121,7 +121,7 @@ public:
     // @zh: qos 端点 QoS 描述 DDSQosProfile；全哨兵=Fast DDS 默认底座，ROS2 用
     // @zh: DDSQosProfile::ros2DefaultPublisher()
     // @zh: return 自身链式引用
-    DdsTopicBuilder& qos(yomk::payload::dds::DDSQosProfile qos)
+    TopicBuilder& qos(yomk::payload::dds::DDSQosProfile qos)
     {
         m_qos = std::move(qos);
         return *this;
@@ -138,7 +138,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsRegisterPubTopic)
+        return yomk::server().url(yomk::url::dds::RegisterPubTopic)
             .msg(yomk::msgs::dds::RegisterPubTopicRequest::shared(
                 yomk::payload::dds::RegisterPubTopicRequest{std::move(m_nodeName), std::move(m_topicName), m_type, std::move(m_qos)}))
             .request();
@@ -152,7 +152,7 @@ public:
     // @zh: 累积订阅回调
     // @zh: callback 每收到一条消息调用一次；消息实例指针仅回调期间有效
     // @zh: return 自身链式引用
-    DdsTopicBuilder& sub_cb(yomk::payload::dds::DDSCallbackFunc callback)
+    TopicBuilder& sub_cb(yomk::payload::dds::DDSCallbackFunc callback)
     {
         m_callback = std::move(callback);
         return *this;
@@ -175,7 +175,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "sub_cb() callback is required");
         }
-        return yomk::server().url(yomk::url::ddsRegisterSubTopic)
+        return yomk::server().url(yomk::url::dds::RegisterSubTopic)
             .msg(yomk::msgs::dds::RegisterSubTopicRequest::shared(
                 yomk::payload::dds::RegisterSubTopicRequest{std::move(m_nodeName), std::move(m_topicName), m_type, std::move(m_callback), std::move(m_qos)}))
             .request();
@@ -188,7 +188,7 @@ public:
     // @zh: 累积待发送的消息实例指针
     // @zh: data 借用（非所有权）消息实例指针
     // @zh: return 自身链式引用
-    DdsTopicBuilder& data(void* data)
+    TopicBuilder& data(void* data)
     {
         m_data = data;
         return *this;
@@ -208,7 +208,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsPublish)
+        return yomk::server().url(yomk::url::dds::Publish)
             .msg(yomk::msgs::dds::PublishRequest::shared(
                 yomk::payload::dds::PublishRequest{std::move(m_nodeName), std::move(m_topicName), m_data}))
             .request();
@@ -231,7 +231,7 @@ public:
         {
             return nullptr;
         }
-        auto resp = yomk::server().url(yomk::url::ddsLoan)
+        auto resp = yomk::server().url(yomk::url::dds::Loan)
             .msg(yomk::msgs::dds::LoanRequest::shared(
                 yomk::payload::dds::LoanRequest{std::move(m_nodeName), std::move(m_topicName)}))
             .request();
@@ -250,7 +250,7 @@ public:
     // @zh: 累积待归还的借出样本指针
     // @zh: sample 须为链式 loan() 借出的指针
     // @zh: return 自身链式引用
-    DdsTopicBuilder& sample(void* sample)
+    TopicBuilder& sample(void* sample)
     {
         m_sample = sample;
         return *this;
@@ -269,7 +269,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDiscardLoan)
+        return yomk::server().url(yomk::url::dds::DiscardLoan)
             .msg(yomk::msgs::dds::DiscardLoanRequest::shared(
                 yomk::payload::dds::DiscardLoanRequest{std::move(m_nodeName), std::move(m_topicName), m_sample}))
             .request();
@@ -282,14 +282,14 @@ public:
  */
 // @zh: 节点创建分面：承载 dds().node() 累积的节点名，domain()/udp_ds()/tcp_ds()
 // @zh: 可选累积器（次序不限），create() 终结
-class DdsNodeBuilder
+class NodeBuilder
 {
     std::string m_nodeName;
     uint32_t m_domainId = yomk::payload::dds::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
     std::string m_udpDiscoverServerLocator = yomk::payload::dds::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
     std::string m_tcpDiscoverServerLocator = yomk::payload::dds::YomkDdsDefaultTcpDiscoverServers();  // 缺省经总开关读 YOMKDDS_TCP_DISCOVER_SERVERS
 public:
-    explicit DdsNodeBuilder(std::string nodeName)
+    explicit NodeBuilder(std::string nodeName)
         : m_nodeName(std::move(nodeName))
     {
     }
@@ -301,7 +301,7 @@ public:
     // @zh: 累积 DDS 域号
     // @zh: domainId DDS 域号 [0,232]
     // @zh: return 自身链式引用
-    DdsNodeBuilder& domain(uint32_t domainId)
+    NodeBuilder& domain(uint32_t domainId)
     {
         m_domainId = domainId;
         return *this;
@@ -314,7 +314,7 @@ public:
     // @zh: 累积 UDP 通道发现服务器直配聚合串
     // @zh: locator "ip[:port]" 聚合串，多 server 分号分隔
     // @zh: return 自身链式引用
-    DdsNodeBuilder& udp_ds(std::string locator)
+    NodeBuilder& udp_ds(std::string locator)
     {
         m_udpDiscoverServerLocator = std::move(locator);
         return *this;
@@ -327,7 +327,7 @@ public:
     // @zh: 累积 TCP 通道发现服务器直配聚合串
     // @zh: locator 形式同 udp_ds()
     // @zh: return 自身链式引用
-    DdsNodeBuilder& tcp_ds(std::string locator)
+    NodeBuilder& tcp_ds(std::string locator)
     {
         m_tcpDiscoverServerLocator = std::move(locator);
         return *this;
@@ -340,9 +340,9 @@ public:
     // @zh: 切入主题注册分面并累积主题名
     // @zh: topicName 本节点待注册的主题名
     // @zh: return 主题注册分面，经 create_pub() 或 create_sub() 终结
-    DdsTopicBuilder topic(std::string topicName)
+    TopicBuilder topic(std::string topicName)
     {
-        return DdsTopicBuilder(m_nodeName, std::move(topicName));  // 拷贝节点名：node 分面其后仍可 create()
+        return TopicBuilder(m_nodeName, std::move(topicName));  // 拷贝节点名：node 分面其后仍可 create()
     }
 
     /**
@@ -360,7 +360,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsCreateNode)
+        return yomk::server().url(yomk::url::dds::CreateNode)
             .msg(yomk::msgs::dds::CreateNodeRequest::shared(
                 yomk::payload::dds::CreateNodeRequest{std::move(m_nodeName), m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
             .request();
@@ -379,7 +379,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDeleteNode)
+        return yomk::server().url(yomk::url::dds::DeleteNode)
             .msg(yomk::msgs::String::shared(std::move(m_nodeName)))
             .request();
     }
@@ -446,7 +446,7 @@ public:
 // @zh: 以及 publish() 面的 payload()/rounds()/interval()/repeat()/required()/max_times()/qos() 累积器
 // @zh: （可选累积器次序不限），由 print()、info()、pub_example()、sample_to_json() 或 publish() 终结；
 // @zh: 其余 topic 子分面在后续迁移批次并入
-class DdsDebugTopicBuilder
+class DebugTopicBuilder
 {
     std::string m_topicName;
     yomk::payload::dds::DDSDebugOutputFunc m_output;
@@ -459,7 +459,7 @@ class DdsDebugTopicBuilder
     uint32_t m_requiredSubs = 0;  // publish() 订阅端门槛；0 = 自动收敛
     uint32_t m_maxTimes = 0;      // publish() 条数上限（含首发）；0 = 不限
 public:
-    explicit DdsDebugTopicBuilder(std::string topicName)
+    explicit DebugTopicBuilder(std::string topicName)
         : m_topicName(std::move(topicName))
     {
     }
@@ -474,7 +474,7 @@ public:
     // @zh: callback DDSDebugOutputFunc，投递发生在 DDS reader 线程，须线程安全且快速返回
     // @zh: return 自身链式引用
     // @zh: warning 空回调由 print() 拒绝
-    DdsDebugTopicBuilder& out_cb(yomk::payload::dds::DDSDebugOutputFunc callback)
+    DebugTopicBuilder& out_cb(yomk::payload::dds::DDSDebugOutputFunc callback)
     {
         m_output = std::move(callback);
         return *this;
@@ -490,7 +490,7 @@ public:
     // @zh: qos DDSQosProfile；print() 全哨兵保持 BEST_EFFORT+VOLATILE depth 1，
     // @zh: publish() 全哨兵保持 KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL
     // @zh: return 自身链式引用
-    DdsDebugTopicBuilder& qos(yomk::payload::dds::DDSQosProfile qos)
+    DebugTopicBuilder& qos(yomk::payload::dds::DDSQosProfile qos)
     {
         m_qos = std::move(qos);
         return *this;
@@ -509,7 +509,7 @@ public:
     // @zh: return 自身链式引用
     // @zh: note 作用于发现驱动的终结（info()/pub_example()/sample_to_json()/publish()）；
     // @zh: print() 为持续订阅，不看收敛累积器
-    DdsDebugTopicBuilder& rounds(uint32_t rounds)
+    DebugTopicBuilder& rounds(uint32_t rounds)
     {
         m_stableRounds = rounds;
         return *this;
@@ -525,7 +525,7 @@ public:
     // @zh: intervalMs 轮询间隔（毫秒）；0 由节点层钳制为默认 200ms
     // @zh: return 自身链式引用
     // @zh: note 作用于发现驱动的终结，同 rounds()
-    DdsDebugTopicBuilder& interval(uint32_t intervalMs)
+    DebugTopicBuilder& interval(uint32_t intervalMs)
     {
         m_intervalMs = intervalMs;
         return *this;
@@ -542,7 +542,7 @@ public:
     // @zh: json 载荷文本，形态同 pub_example()/sample_to_json() 模板
     // @zh: return 自身链式引用
     // @zh: note publish() 必填（首轮强校验）；其余终结不看它
-    DdsDebugTopicBuilder& payload(std::string json)
+    DebugTopicBuilder& payload(std::string json)
     {
         m_payload = std::move(json);
         m_hasPayload = true;
@@ -554,15 +554,15 @@ public:
      *            until the stop flag or max_times() is reached; 0 = publish once
      * @return Reference to self for chaining
      * @note Applies to publish() only; stop a repeating publish through
-     *       yomk::ctrl::g_debugPubStop.stop() (async-signal-safe) and reset it with
-     *       yomk::ctrl::g_debugPubStop.reset() before a new session
+     *       yomk::ctrl::dds::g_debugPubStop.stop() (async-signal-safe) and reset it with
+     *       yomk::ctrl::dds::g_debugPubStop.reset() before a new session
      */
     // @zh: 累积 publish() 的持续发布周期
     // @zh: repeatMs >0 为持续发布（直到停止标志置位或发满 max_times() 条）；0 = 单次发布
     // @zh: return 自身链式引用
-    // @zh: note 仅作用于 publish()；持续发布经 yomk::ctrl::g_debugPubStop.stop() 停止（async-signal-safe），
-    // @zh: 再次发起前宜先 yomk::ctrl::g_debugPubStop.reset() 复位
-    DdsDebugTopicBuilder& repeat(uint32_t repeatMs)
+    // @zh: note 仅作用于 publish()；持续发布经 yomk::ctrl::dds::g_debugPubStop.stop() 停止（async-signal-safe），
+    // @zh: 再次发起前宜先 yomk::ctrl::dds::g_debugPubStop.reset() 复位
+    DebugTopicBuilder& repeat(uint32_t repeatMs)
     {
         m_repeatMs = repeatMs;
         return *this;
@@ -578,7 +578,7 @@ public:
     // @zh: requiredSubscribers 期望建匹配订阅端数：>0 达标才发布，0 = 自动收敛
     // @zh: return 自身链式引用
     // @zh: note 仅作用于 publish()
-    DdsDebugTopicBuilder& required(uint32_t requiredSubscribers)
+    DebugTopicBuilder& required(uint32_t requiredSubscribers)
     {
         m_requiredSubs = requiredSubscribers;
         return *this;
@@ -594,7 +594,7 @@ public:
     // @zh: maxTimes >0 发满该条数（含首轮）排空 200ms 后返回；0 = 不限
     // @zh: return 自身链式引用
     // @zh: note 仅作用于 publish()
-    DdsDebugTopicBuilder& max_times(uint32_t maxTimes)
+    DebugTopicBuilder& max_times(uint32_t maxTimes)
     {
         m_maxTimes = maxTimes;
         return *this;
@@ -620,7 +620,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "out_cb() callback is required");
         }
-        return yomk::server().url(yomk::url::ddsDebugPrintTopic)
+        return yomk::server().url(yomk::url::dds::DebugPrintTopic)
             .msg(yomk::msgs::dds::DebugPrintTopicRequest::shared(
                 yomk::payload::dds::DebugPrintTopicRequest{std::move(m_topicName), std::move(m_output), std::move(m_qos)}))
             .request();
@@ -645,7 +645,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugGetTopicInfo)
+        return yomk::server().url(yomk::url::dds::DebugGetTopicInfo)
             .msg(yomk::msgs::dds::DebugGetTopicInfoRequest::shared(
                 yomk::payload::dds::DebugGetTopicInfoRequest{std::move(m_topicName), m_stableRounds, m_intervalMs}))
             .request();
@@ -671,7 +671,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugGetTopicExample)
+        return yomk::server().url(yomk::url::dds::DebugGetTopicExample)
             .msg(yomk::msgs::dds::DebugGetTopicExampleRequest::shared(
                 yomk::payload::dds::DebugGetTopicExampleRequest{std::move(m_topicName), m_stableRounds, m_intervalMs}))
             .request();
@@ -696,7 +696,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugGetTopicMsg)
+        return yomk::server().url(yomk::url::dds::DebugGetTopicMsg)
             .msg(yomk::msgs::dds::DebugGetTopicMsgRequest::shared(
                 yomk::payload::dds::DebugGetTopicMsgRequest{std::move(m_topicName), m_stableRounds, m_intervalMs}))
             .request();
@@ -709,16 +709,16 @@ public:
      *         initialized or payload() was not accumulated
      * @note Blocking until the first-round convergence and, for RELIABLE peers, until
      *       acknowledgment; repeat() keeps the chain alive until the stop flag or
-     *       max_times(). Stop a repeating publish through yomk::ctrl::g_debugPubStop.stop()
-     *       (async-signal-safe) and reset it with yomk::ctrl::g_debugPubStop.reset() before a new
+     *       max_times(). Stop a repeating publish through yomk::ctrl::dds::g_debugPubStop.stop()
+     *       (async-signal-safe) and reset it with yomk::ctrl::dds::g_debugPubStop.reset() before a new
      *       session
      */
     // @zh: 按累积的 JSON 载荷发布到目标主题（请求终结）
     // @zh: return Response 携带 TopicPublishInfo 包（单次与持续模式均有）：主题名与 total（含首轮，
     // @zh: 单次发布即 1）、failed（持续模式的 write 失败数）；未初始化或未累积 payload() 载荷时返回 Invalid
     // @zh: note 阻塞至首轮收敛完成（RELIABLE 订阅端还等送达确认）；repeat() 使其持续至停止标志
-    // @zh: 置位或发满 max_times()；持续发布经 yomk::ctrl::g_debugPubStop.stop() 停止（async-signal-safe），
-    // @zh: 再次发起前宜先 yomk::ctrl::g_debugPubStop.reset() 复位
+    // @zh: 置位或发满 max_times()；持续发布经 yomk::ctrl::dds::g_debugPubStop.stop() 停止（async-signal-safe），
+    // @zh: 再次发起前宜先 yomk::ctrl::dds::g_debugPubStop.reset() 复位
     yomk::payload::Response publish()
     {
         if (!requireServer())
@@ -729,7 +729,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "payload(json) is required");
         }
-        return yomk::server().url(yomk::url::ddsDebugStartPub)
+        return yomk::server().url(yomk::url::dds::DebugStartPub)
             .msg(yomk::msgs::dds::DebugTopicPubRequest::shared(
                 yomk::payload::dds::DebugTopicPubRequest{std::move(m_topicName), std::move(m_payload),
                     m_stableRounds, m_intervalMs, m_repeatMs, m_requiredSubs, m_maxTimes,
@@ -746,13 +746,13 @@ public:
  */
 // @zh: 调试类型分面：承载 debug().type() 起始的类型名与 rounds()/interval() 收敛累积器
 // @zh: （次序不限），find_topics() 或 interface_show() 终结；其余 type 子分面在后续迁移批次并入
-class DdsDebugTypeBuilder
+class DebugTypeBuilder
 {
     std::string m_typeName;
     uint32_t m_stableRounds = 0;  // 0 由节点层钳制为默认 5 次
     uint32_t m_intervalMs = 0;    // 0 由节点层钳制为默认 200ms
 public:
-    explicit DdsDebugTypeBuilder(std::string typeName)
+    explicit DebugTypeBuilder(std::string typeName)
         : m_typeName(std::move(typeName))
     {
     }
@@ -765,7 +765,7 @@ public:
     // @zh: 累积收敛轮数
     // @zh: rounds 连续多少次快照不变即认为收敛；0 由节点层钳制为默认 5 次
     // @zh: return 自身链式引用
-    DdsDebugTypeBuilder& rounds(uint32_t rounds)
+    DebugTypeBuilder& rounds(uint32_t rounds)
     {
         m_stableRounds = rounds;
         return *this;
@@ -779,7 +779,7 @@ public:
     // @zh: 累积发现快照轮询间隔
     // @zh: intervalMs 轮询间隔（毫秒）；0 由节点层钳制为默认 200ms
     // @zh: return 自身链式引用
-    DdsDebugTypeBuilder& interval(uint32_t intervalMs)
+    DebugTypeBuilder& interval(uint32_t intervalMs)
     {
         m_intervalMs = intervalMs;
         return *this;
@@ -801,7 +801,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugFindTopics)
+        return yomk::server().url(yomk::url::dds::DebugFindTopics)
             .msg(yomk::msgs::dds::DebugFindTopicsRequest::shared(
                 yomk::payload::dds::DebugFindTopicsRequest{std::move(m_typeName), m_stableRounds, m_intervalMs}))
             .request();
@@ -835,7 +835,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugShowInterface)
+        return yomk::server().url(yomk::url::dds::DebugShowInterface)
             .msg(yomk::msgs::dds::DebugShowInterfaceRequest::shared(
                 yomk::payload::dds::DebugShowInterfaceRequest{std::move(m_typeName), m_stableRounds, m_intervalMs}))
             .request();
@@ -851,13 +851,13 @@ public:
 // @zh: 调试节点分面：承载 debug().node() 起始的参与者名与 rounds()/interval() 收敛累积器
 // @zh: （次序不限），info() 终结
 // @zh: note 该名指域内远端参与者，非调试节点自身（调试节点无名）
-class DdsDebugNodeBuilder
+class DebugNodeBuilder
 {
     std::string m_nodeName;
     uint32_t m_stableRounds = 0;  // 0 由节点层钳制为默认 5 次
     uint32_t m_intervalMs = 0;    // 0 由节点层钳制为默认 200ms
 public:
-    explicit DdsDebugNodeBuilder(std::string nodeName)
+    explicit DebugNodeBuilder(std::string nodeName)
         : m_nodeName(std::move(nodeName))
     {
     }
@@ -870,7 +870,7 @@ public:
     // @zh: 累积收敛轮数
     // @zh: rounds 连续多少次快照不变即认为收敛；0 由节点层钳制为默认 5 次
     // @zh: return 自身链式引用
-    DdsDebugNodeBuilder& rounds(uint32_t rounds)
+    DebugNodeBuilder& rounds(uint32_t rounds)
     {
         m_stableRounds = rounds;
         return *this;
@@ -884,7 +884,7 @@ public:
     // @zh: 累积发现快照轮询间隔
     // @zh: intervalMs 轮询间隔（毫秒）；0 由节点层钳制为默认 200ms
     // @zh: return 自身链式引用
-    DdsDebugNodeBuilder& interval(uint32_t intervalMs)
+    DebugNodeBuilder& interval(uint32_t intervalMs)
     {
         m_intervalMs = intervalMs;
         return *this;
@@ -910,7 +910,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugGetNodeInfo)
+        return yomk::server().url(yomk::url::dds::DebugGetNodeInfo)
             .msg(yomk::msgs::dds::DebugGetNodeInfoRequest::shared(
                 yomk::payload::dds::DebugGetNodeInfoRequest{std::move(m_nodeName), m_stableRounds, m_intervalMs}))
             .request();
@@ -927,7 +927,7 @@ public:
 // @zh: 调试分面：承载可选的 domain()/udp_ds()/tcp_ds() 建点累积器与 rounds()/interval()
 // @zh: 查询累积器（次序不限），create()/quit() 或查询终结 topics()/interfaces()/nodes() 收束，
 // @zh: 或交出 topic()/type()/node() 子分面
-class DdsDebugBuilder
+class DebugBuilder
 {
     uint32_t m_domainId = yomk::payload::dds::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
     std::string m_udpDiscoverServerLocator = yomk::payload::dds::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
@@ -943,7 +943,7 @@ public:
     // @zh: 累积 DDS 域号（调试节点仅可观察同域端点）
     // @zh: domainId DDS 域号 [0,232]
     // @zh: return 自身链式引用
-    DdsDebugBuilder& domain(uint32_t domainId)
+    DebugBuilder& domain(uint32_t domainId)
     {
         m_domainId = domainId;
         return *this;
@@ -956,7 +956,7 @@ public:
     // @zh: 累积 UDP 通道发现服务器直配聚合串（语义同核心套件建点分面）
     // @zh: locator "ip[:port]" 聚合串，多 server 分号分隔
     // @zh: return 自身链式引用
-    DdsDebugBuilder& udp_ds(std::string locator)
+    DebugBuilder& udp_ds(std::string locator)
     {
         m_udpDiscoverServerLocator = std::move(locator);
         return *this;
@@ -969,7 +969,7 @@ public:
     // @zh: 累积 TCP 通道发现服务器直配聚合串
     // @zh: locator 形式同 udp_ds()
     // @zh: return 自身链式引用
-    DdsDebugBuilder& tcp_ds(std::string locator)
+    DebugBuilder& tcp_ds(std::string locator)
     {
         m_tcpDiscoverServerLocator = std::move(locator);
         return *this;
@@ -983,7 +983,7 @@ public:
     // @zh: 累积查询终结的收敛轮次
     // @zh: rounds 连续快照不变所需轮次；0 由节点层钳制为默认 5 次
     // @zh: return 自身链式引用
-    DdsDebugBuilder& rounds(uint32_t rounds)
+    DebugBuilder& rounds(uint32_t rounds)
     {
         m_stableRounds = rounds;
         return *this;
@@ -997,7 +997,7 @@ public:
     // @zh: 累积查询终结的快照轮询间隔
     // @zh: intervalMs 轮询间隔（毫秒）；0 由节点层钳制为默认 200ms
     // @zh: return 自身链式引用
-    DdsDebugBuilder& interval(uint32_t intervalMs)
+    DebugBuilder& interval(uint32_t intervalMs)
     {
         m_intervalMs = intervalMs;
         return *this;
@@ -1017,7 +1017,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugCreateNode)
+        return yomk::server().url(yomk::url::dds::DebugCreateNode)
             .msg(yomk::msgs::dds::DebugCreateNodeRequest::shared(
                 yomk::payload::dds::DebugCreateNodeRequest{m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
             .request();
@@ -1039,7 +1039,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugDeleteNode).msg(nullptr).request();
+        return yomk::server().url(yomk::url::dds::DebugDeleteNode).msg(nullptr).request();
     }
     /**
      * @brief Stop a repeating publish started by publish() (request terminator)
@@ -1048,14 +1048,14 @@ public:
      *       takes the service mutex, so it stays callable while publish() is
      *       blocking inside a repeat loop — the loop exits and the blocked
      *       publish() call returns with its total/failed counters. Same
-     *       effect as yomk::ctrl::g_debugPubStop.stop() in-process; usable
+     *       effect as yomk::ctrl::dds::g_debugPubStop.stop() in-process; usable
      *       from another process (frontend UI) through the client chain
      */
     // @zh: 停止 publish() 发起的持续发布（请求终结）
     // @zh: return Response；服务已初始化时恒 Succeeded
     // @zh: note 协议桥接到进程内控制面标志：端点不取服务互斥量，publish() 阻塞于持续
     // @zh: 循环期间仍可调用——循环退出后被阻塞的 publish() 调用带回 total/failed 计数；
-    // @zh: 与同进程直调 yomk::ctrl::g_debugPubStop.stop() 效果等价，远端（前端 UI）经
+    // @zh: 与同进程直调 yomk::ctrl::dds::g_debugPubStop.stop() 效果等价，远端（前端 UI）经
     // @zh: 客户端链路同样可用
     yomk::payload::Response stop_pub()
     {
@@ -1063,7 +1063,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugStopPub).msg(nullptr).request();
+        return yomk::server().url(yomk::url::dds::DebugStopPub).msg(nullptr).request();
     }
     /**
      * @brief Switch into the topic facet with the observed topic name
@@ -1073,9 +1073,9 @@ public:
     // @zh: 切入主题分面并累积被观察的主题名
     // @zh: topicName 被观察主题名，不可为空
     // @zh: return 主题分面，经 print() 或 info() 终结
-    DdsDebugTopicBuilder topic(std::string topicName)
+    DebugTopicBuilder topic(std::string topicName)
     {
-        return DdsDebugTopicBuilder(std::move(topicName));
+        return DebugTopicBuilder(std::move(topicName));
     }
     /**
      * @brief Switch into the type facet with the queried data type name
@@ -1085,9 +1085,9 @@ public:
     // @zh: 切入类型分面并累积被反查的数据类型名
     // @zh: typeName 反查用数据类型名，精确匹配
     // @zh: return 类型分面，经 find_topics() 终结
-    DdsDebugTypeBuilder type(std::string typeName)
+    DebugTypeBuilder type(std::string typeName)
     {
-        return DdsDebugTypeBuilder(std::move(typeName));
+        return DebugTypeBuilder(std::move(typeName));
     }
     /**
      * @brief Switch into the node facet with the queried participant name
@@ -1097,9 +1097,9 @@ public:
     // @zh: 切入节点分面并累积被查询的参与者名
     // @zh: nodeName 被查询的远端参与者名，精确匹配
     // @zh: return 节点分面，经 info() 终结
-    DdsDebugNodeBuilder node(std::string nodeName)
+    DebugNodeBuilder node(std::string nodeName)
     {
-        return DdsDebugNodeBuilder(std::move(nodeName));
+        return DebugNodeBuilder(std::move(nodeName));
     }
     /**
      * @brief List discovered topics in the domain with their full details, sorted (request terminator)
@@ -1122,7 +1122,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugListTopics)
+        return yomk::server().url(yomk::url::dds::DebugListTopics)
             .msg(yomk::msgs::dds::DebugListTopicsRequest::shared(
                 yomk::payload::dds::DebugListTopicsRequest{m_stableRounds, m_intervalMs}))
             .request();
@@ -1145,7 +1145,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugListInterfaces)
+        return yomk::server().url(yomk::url::dds::DebugListInterfaces)
             .msg(yomk::msgs::dds::DebugListInterfacesRequest::shared(
                 yomk::payload::dds::DebugListInterfacesRequest{m_stableRounds, m_intervalMs}))
             .request();
@@ -1169,7 +1169,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsDebugListNodes)
+        return yomk::server().url(yomk::url::dds::DebugListNodes)
             .msg(yomk::msgs::dds::DebugListNodesRequest::shared(
                 yomk::payload::dds::DebugListNodesRequest{m_stableRounds, m_intervalMs}))
             .request();
@@ -1211,7 +1211,7 @@ public:
 // @zh: 回放则在同一分面累积可选的 rate()/topics()/loop()/offset()/delay()/wait_acked()/
 // @zh: remaps()/read_ahead()/qos_file() 参数（次序不限），play() 阻塞终结
 // @zh: note info()/reindex() 为纯文件操作不经 bag 节点；play() 须先经 create() 建 bag 节点
-class DdsBagDirBuilder
+class BagDirBuilder
 {
     std::string m_bagDir;
 
@@ -1225,7 +1225,7 @@ class DdsBagDirBuilder
     size_t m_playReadAhead = yomk::payload::dds::kBagPlayReadAheadQueueSize;     // 预读队列深度，须 >=1
     std::string m_playQosFile;                                              // 空 = 不加载 QoS 覆盖文件
 public:
-    explicit DdsBagDirBuilder(std::string bagDir)
+    explicit BagDirBuilder(std::string bagDir)
         : m_bagDir(std::move(bagDir))
     {
     }
@@ -1252,7 +1252,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagGetInfo)
+        return yomk::server().url(yomk::url::dds::BagGetInfo)
             .msg(yomk::msgs::dds::BagInfoRequest::shared(yomk::payload::dds::BagInfoRequest{std::move(m_bagDir)}))
             .request();
     }
@@ -1273,7 +1273,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagReindex)
+        return yomk::server().url(yomk::url::dds::BagReindex)
             .msg(yomk::msgs::dds::BagReindexRequest::shared(yomk::payload::dds::BagReindexRequest{std::move(m_bagDir)}))
             .request();
     }
@@ -1286,7 +1286,7 @@ public:
     // @zh: 累积回放速率倍率
     // @zh: value 须 >0（2.0 两倍速、0.5 半倍速）；<=0 由节点层拒绝
     // @zh: return 自身链式引用
-    DdsBagDirBuilder& rate(double value)
+    BagDirBuilder& rate(double value)
     {
         m_playRate = value;
         return *this;
@@ -1300,7 +1300,7 @@ public:
     // @zh: 累积回放主题过滤清单
     // @zh: topics 空 = 全部；精确项须在 bag 清单否则报错，恰含一个 '*' 的通配项按 bag 清单展开
     // @zh: return 自身链式引用
-    DdsBagDirBuilder& topics(std::vector<std::string> topics)
+    BagDirBuilder& topics(std::vector<std::string> topics)
     {
         m_playTopics = std::move(topics);
         return *this;
@@ -1311,7 +1311,7 @@ public:
      */
     // @zh: 到尾即回开头无限播放（无参布尔开关）
     // @zh: return 自身链式引用
-    DdsBagDirBuilder& loop()
+    BagDirBuilder& loop()
     {
         m_playLoop = true;
         return *this;
@@ -1325,7 +1325,7 @@ public:
     // @zh: 累积从 bag 起点跳过的秒数
     // @zh: sec 在读侧跳过（不入队不计收尾统计）；负值由节点层拒绝
     // @zh: return 自身链式引用
-    DdsBagDirBuilder& offset(double sec)
+    BagDirBuilder& offset(double sec)
     {
         m_playOffsetSec = sec;
         return *this;
@@ -1339,7 +1339,7 @@ public:
     // @zh: 累积每轮开播延迟秒
     // @zh: sec 须 >0；每轮首条前先睡该秒数，为订阅端留匹配窗口
     // @zh: return 自身链式引用
-    DdsBagDirBuilder& delay(double sec)
+    BagDirBuilder& delay(double sec)
     {
         m_playDelaySec = sec;
         return *this;
@@ -1353,7 +1353,7 @@ public:
     // @zh: 累积退出前等 RELIABLE 订阅端确认的毫秒数
     // @zh: ms -1 不等（缺省）/ 0 永远等（可 Ctrl+C 中断）/ >0 每主题超时；BEST_EFFORT 主题跳过
     // @zh: return 自身链式引用
-    DdsBagDirBuilder& wait_acked(int64_t ms)
+    BagDirBuilder& wait_acked(int64_t ms)
     {
         m_playWaitAckedMs = ms;
         return *this;
@@ -1367,7 +1367,7 @@ public:
     // @zh: 累积主题重映射规则
     // @zh: remaps 为 "old:=new" 规则清单；old 不在 bag 中时静默无效
     // @zh: return 自身链式引用
-    DdsBagDirBuilder& remaps(std::vector<std::string> remaps)
+    BagDirBuilder& remaps(std::vector<std::string> remaps)
     {
         m_playRemaps = std::move(remaps);
         return *this;
@@ -1381,7 +1381,7 @@ public:
     // @zh: 累积预读内存队列深度
     // @zh: depth 须 >=1，用于吸收磁盘 IO 抖动；未累积时用缺省 kBagPlayReadAheadQueueSize（1000）
     // @zh: return 自身链式引用
-    DdsBagDirBuilder& read_ahead(size_t depth)
+    BagDirBuilder& read_ahead(size_t depth)
     {
         m_playReadAhead = depth;
         return *this;
@@ -1395,7 +1395,7 @@ public:
     // @zh: 累积按主题覆盖发布 QoS 的文件
     // @zh: path JSON，键 = bag 原主题名，值 = {reliability, durability}；优先级 文件 > bag 快照 > 回退；空 = 不加载
     // @zh: return 自身链式引用
-    DdsBagDirBuilder& qos_file(std::string path)
+    BagDirBuilder& qos_file(std::string path)
     {
         m_playQosFile = std::move(path);
         return *this;
@@ -1408,8 +1408,8 @@ public:
      *         the "topic: N messages / M bytes" lines are rendered by the caller;
      *         Invalid when YomkServer is not initialized
      * @note Blocks the calling thread until all messages are played or stops through
-     *       yomk::ctrl::g_bagPlayStop (async-signal-safe); pause/resume/rate at runtime via
-     *       yomk::ctrl::g_bagPlayPaused/Resume/SetRate, call yomk::ctrl::bagPlayReset() before reuse;
+     *       yomk::ctrl::dds::g_bagPlayStop (async-signal-safe); pause/resume/rate at runtime via
+     *       yomk::ctrl::dds::g_bagPlayPaused/Resume/SetRate, call yomk::ctrl::dds::bagPlayReset() before reuse;
      *       requires the bag node created by create(), and legacy bags without type
      *       metadata are rejected
      */
@@ -1417,8 +1417,8 @@ public:
     // @zh: return Response 携带 PlayResult 包：bagDir + topics（bag 预扫序，每项 BagTopicStat：
     // @zh: topicName（应用 remap 后的发布名）/typeName/条数/字节；未播到的主题计 0/0）；
     // @zh: 目录行与 "topic: N 条 / M 字节" 行由调用方渲染；未初始化返回 Invalid
-    // @zh: note 阻塞调用线程至全部播毕或经 yomk::ctrl::g_bagPlayStop 停止（async-signal-safe）；
-    // @zh: 运行时经 yomk::ctrl::g_bagPlayPaused/Resume/SetRate 控制，复用前先 yomk::ctrl::bagPlayReset()；
+    // @zh: note 阻塞调用线程至全部播毕或经 yomk::ctrl::dds::g_bagPlayStop 停止（async-signal-safe）；
+    // @zh: 运行时经 yomk::ctrl::dds::g_bagPlayPaused/Resume/SetRate 控制，复用前先 yomk::ctrl::dds::bagPlayReset()；
     // @zh: 须先经 create() 建 bag 节点；旧格式 bag（type 空串）拒播
     yomk::payload::Response play()
     {
@@ -1426,7 +1426,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagPlay)
+        return yomk::server().url(yomk::url::dds::BagPlay)
             .msg(yomk::msgs::dds::BagPlayRequest::shared(
                 yomk::payload::dds::BagPlayRequest{std::move(m_bagDir), m_playRate, std::move(m_playTopics),
                     m_playLoop, m_playOffsetSec, m_playDelaySec, m_playWaitAckedMs,
@@ -1446,7 +1446,7 @@ public:
 // @zh: topics()/out_dir()/max_size()/max_duration()/cache() 录制累积器，
 // @zh: 以及 in_bags()/out_cfg() 转换累积器（次序不限），
 // @zh: create()/quit()/record()/convert() 收束；dir() 交出 bag 目录子分面
-class DdsBagBuilder
+class BagBuilder
 {
     uint32_t m_domainId = yomk::payload::dds::YomkDdsDefaultDomainId();                               // 缺省读 YOMKDDS_DDS_DOMAIN_ID
     std::string m_udpDiscoverServerLocator = yomk::payload::dds::YomkDdsDefaultUdpDiscoverServers();  // 缺省经总开关读 YOMKDDS_UDP_DISCOVER_SERVERS
@@ -1472,7 +1472,7 @@ public:
     // @zh: 累积 DDS 域号（bag 节点仅可录制同域端点）
     // @zh: domainId DDS 域号 [0,232]
     // @zh: return 自身链式引用
-    DdsBagBuilder& domain(uint32_t domainId)
+    BagBuilder& domain(uint32_t domainId)
     {
         m_domainId = domainId;
         return *this;
@@ -1485,7 +1485,7 @@ public:
     // @zh: 累积 UDP 通道发现服务器直配聚合串（语义同核心套件建点分面）
     // @zh: locator "ip[:port]" 聚合串，多 server 分号分隔
     // @zh: return 自身链式引用
-    DdsBagBuilder& udp_ds(std::string locator)
+    BagBuilder& udp_ds(std::string locator)
     {
         m_udpDiscoverServerLocator = std::move(locator);
         return *this;
@@ -1498,7 +1498,7 @@ public:
     // @zh: 累积 TCP 通道发现服务器直配聚合串
     // @zh: locator 形式同 udp_ds()
     // @zh: return 自身链式引用
-    DdsBagBuilder& tcp_ds(std::string locator)
+    BagBuilder& tcp_ds(std::string locator)
     {
         m_tcpDiscoverServerLocator = std::move(locator);
         return *this;
@@ -1521,7 +1521,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagCreateNode)
+        return yomk::server().url(yomk::url::dds::BagCreateNode)
             .msg(yomk::msgs::dds::BagCreateNodeRequest::shared(
                 yomk::payload::dds::BagCreateNodeRequest{m_domainId, std::move(m_udpDiscoverServerLocator), std::move(m_tcpDiscoverServerLocator)}))
             .request();
@@ -1543,7 +1543,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagDeleteNode).msg(nullptr).request();
+        return yomk::server().url(yomk::url::dds::BagDeleteNode).msg(nullptr).request();
     }
     /**
      * @brief Stop a recording session started by record() (request terminator)
@@ -1563,7 +1563,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagStopRecord).msg(nullptr).request();
+        return yomk::server().url(yomk::url::dds::BagStopRecord).msg(nullptr).request();
     }
     /** @brief Pause a recording session (request terminator; write path freezes per message) */
     // @zh: 暂停录制（请求终结；订阅写路径逐条冻结）
@@ -1573,7 +1573,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagPauseRecord).msg(nullptr).request();
+        return yomk::server().url(yomk::url::dds::BagPauseRecord).msg(nullptr).request();
     }
     /** @brief Resume a paused recording session (request terminator; the write path continues) */
     // @zh: 恢复暂停的录制（请求终结；订阅写路径继续落盘）
@@ -1583,7 +1583,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagResumeRecord).msg(nullptr).request();
+        return yomk::server().url(yomk::url::dds::BagResumeRecord).msg(nullptr).request();
     }
     /** @brief Stop a playing session started by play() (request terminator) */
     // @zh: 停止 play() 发起的回放（请求终结）
@@ -1593,7 +1593,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagStopPlay).msg(nullptr).request();
+        return yomk::server().url(yomk::url::dds::BagStopPlay).msg(nullptr).request();
     }
     /** @brief Pause a playing session (request terminator; freezes the timeline) */
     // @zh: 暂停回放（请求终结；冻结时间轴）
@@ -1603,7 +1603,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagPausePlay).msg(nullptr).request();
+        return yomk::server().url(yomk::url::dds::BagPausePlay).msg(nullptr).request();
     }
     /** @brief Resume a paused playing session (request terminator; re-anchors the time base) */
     // @zh: 恢复暂停的回放（请求终结；重锚时间基准）
@@ -1613,7 +1613,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagResumePlay).msg(nullptr).request();
+        return yomk::server().url(yomk::url::dds::BagResumePlay).msg(nullptr).request();
     }
     /**
      * @brief Set the playback rate multiplier (request terminator; takes effect on subsequent scheduling)
@@ -1628,7 +1628,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsBagSetPlayRate)
+        return yomk::server().url(yomk::url::dds::BagSetPlayRate)
             .msg(yomk::msgs::dds::BagPlayRateRequest::shared(yomk::payload::dds::BagPlayRateRequest{rate}))
             .request();
     }
@@ -1645,9 +1645,9 @@ public:
     // @zh: bagDir 待读取/回放的 bag 目录；info()/reindex() 须有可读 metadata.json，空串由节点层拒绝
     // @zh: return 承载该目录的子分面，info()/reindex() 终结；或累积回放参数后由 play() 终结
     // @zh: note info()/reindex() 为纯文件操作不经 bag 节点；play() 须先建 bag 节点
-    DdsBagDirBuilder dir(std::string bagDir)
+    BagDirBuilder dir(std::string bagDir)
     {
-        return DdsBagDirBuilder(std::move(bagDir));
+        return BagDirBuilder(std::move(bagDir));
     }
     /**
      * @brief Accumulate the topic list to record (required before record())
@@ -1658,7 +1658,7 @@ public:
     // @zh: 累积待录制主题清单（终结前必填）
     // @zh: topics 至少 1 个；恰含一个 '*' 的通配项按发现快照展开；未命中/无效项整体报错
     // @zh: return 自身链式引用
-    DdsBagBuilder& topics(std::vector<std::string> topics)
+    BagBuilder& topics(std::vector<std::string> topics)
     {
         m_recordTopics = std::move(topics);
         m_hasRecordTopics = true;
@@ -1673,7 +1673,7 @@ public:
     // @zh: 累积录制输出 bag 目录（落盘目录，区别于读取既有 bag 的 dir() 子分面）
     // @zh: dir 相对/绝对均可，空 = 缺省时间戳名 bag_<...>，已存在报错
     // @zh: return 自身链式引用
-    DdsBagBuilder& out_dir(std::string dir)
+    BagBuilder& out_dir(std::string dir)
     {
         m_recordOutDir = std::move(dir);
         return *this;
@@ -1687,7 +1687,7 @@ public:
     // @zh: 累积单分片字节上限（写满滚动 bag_N.mcap）；0=不分片，过小由节点层校验报错
     // @zh: bytes 单分片最大字节数
     // @zh: return 自身链式引用
-    DdsBagBuilder& max_size(uint64_t bytes)
+    BagBuilder& max_size(uint64_t bytes)
     {
         m_recordMaxSize = bytes;
         return *this;
@@ -1701,7 +1701,7 @@ public:
     // @zh: 累积单分片时长上限秒数（自本分片首条消息起算）；0=不分片
     // @zh: sec 单分片最大时长秒；与 max_size() 同用时先到先分
     // @zh: return 自身链式引用
-    DdsBagBuilder& max_duration(uint64_t sec)
+    BagBuilder& max_duration(uint64_t sec)
     {
         m_recordMaxDurationSec = sec;
         return *this;
@@ -1715,7 +1715,7 @@ public:
     // @zh: 累积写缓存双缓冲字节数；>0 回调拷贝入队由独立线程写盘（满则丢新并计数），0=每条直写
     // @zh: bytes 写缓存字节数
     // @zh: return 自身链式引用
-    DdsBagBuilder& cache(uint64_t bytes)
+    BagBuilder& cache(uint64_t bytes)
     {
         m_recordCacheSize = bytes;
         return *this;
@@ -1728,15 +1728,15 @@ public:
      *         "topic: N messages / M bytes" lines are rendered by the caller; Invalid when
      *         YomkServer is not initialized or topics() was not accumulated
      * @note Blocks the calling thread until recording finishes or stops through
-     *       yomk::ctrl::g_bagRecordStop (async-signal-safe); call yomk::ctrl::bagRecordReset()
+     *       yomk::ctrl::dds::g_bagRecordStop (async-signal-safe); call yomk::ctrl::dds::bagRecordReset()
      *       before reuse; requires the bag node created by create()
      */
     // @zh: 按累积的主题清单与阈值录制到 mcap bag（阻塞至录制收尾的请求终结）
     // @zh: return Response 携带 RecordResult 包：bagDir 与逐主题 BagTopicStat（主题名/原始
     // @zh: 类型名/条数/字节，保持录制清单顺序、通配项已展开）；目录行与 "topic: N 条 / M 字节"
     // @zh: 行由调用方渲染；未初始化或未累积 topics() 返回 Invalid
-    // @zh: note 阻塞调用线程至录制收尾或经 yomk::ctrl::g_bagRecordStop 停止（async-signal-safe）；
-    // @zh: 复用前先 yomk::ctrl::bagRecordReset() 复位；须先经 create() 建 bag 节点
+    // @zh: note 阻塞调用线程至录制收尾或经 yomk::ctrl::dds::g_bagRecordStop 停止（async-signal-safe）；
+    // @zh: 复用前先 yomk::ctrl::dds::bagRecordReset() 复位；须先经 create() 建 bag 节点
     yomk::payload::Response record()
     {
         if (!requireServer())
@@ -1747,7 +1747,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "topics are required");
         }
-        return yomk::server().url(yomk::url::ddsBagRecord)
+        return yomk::server().url(yomk::url::dds::BagRecord)
             .msg(yomk::msgs::dds::BagRecordRequest::shared(
                 yomk::payload::dds::BagRecordRequest{std::move(m_recordTopics), std::move(m_recordOutDir),
                     m_recordMaxSize, m_recordMaxDurationSec, m_recordCacheSize}))
@@ -1762,7 +1762,7 @@ public:
     // @zh: 累积待转换的输入 bag 目录清单（convert() 前必填）
     // @zh: bagDirs 至少 1 个已存在的 bag 目录；重复目录由节点层拒绝（同名目录重复归并会双写消息）
     // @zh: return 自身链式引用
-    DdsBagBuilder& in_bags(std::vector<std::string> bagDirs)
+    BagBuilder& in_bags(std::vector<std::string> bagDirs)
     {
         m_convertInBags = std::move(bagDirs);
         m_hasConvertInBags = true;
@@ -1778,7 +1778,7 @@ public:
     // @zh: 累积转换使用的输出配置文件（convert() 前必填）
     // @zh: path JSON 文件，顶层 output_bags 数组每条目描述一个输出 bag（须含非空 "uri"）
     // @zh: return 自身链式引用
-    DdsBagBuilder& out_cfg(std::string path)
+    BagBuilder& out_cfg(std::string path)
     {
         m_convertOutCfg = std::move(path);
         m_hasConvertOutCfg = true;
@@ -1817,7 +1817,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "out_cfg(path) is required");
         }
-        return yomk::server().url(yomk::url::ddsBagConvert)
+        return yomk::server().url(yomk::url::dds::BagConvert)
             .msg(yomk::msgs::dds::BagConvertRequest::shared(
                 yomk::payload::dds::BagConvertRequest{std::move(m_convertInBags), std::move(m_convertOutCfg)}))
             .request();
@@ -1829,7 +1829,7 @@ public:
  *        mounted here
  */
 // @zh: 域入口 Builder：核心通信、调试与 Bag 三个套件的分面挂载于此
-class DdsBuilder
+class Builder
 {
 public:
     /**
@@ -1840,9 +1840,9 @@ public:
     // @zh: 切入节点创建分面并累积节点唯一名
     // @zh: nodeName 节点唯一名，不可为空
     // @zh: return 节点创建分面，经 create() 终结
-    DdsNodeBuilder node(std::string nodeName)
+    NodeBuilder node(std::string nodeName)
     {
-        return DdsNodeBuilder(std::move(nodeName));
+        return NodeBuilder(std::move(nodeName));
     }
 
     /**
@@ -1854,9 +1854,9 @@ public:
     // @zh: 切入调试分面（类型无关域观察者）
     // @zh: return 调试分面，经 create()/quit() 或查询终结 topics() 收束
     // @zh: note 调试节点自身无名——该分面上的 node(name) 指域内远端参与者
-    DdsDebugBuilder debug()
+    DebugBuilder debug()
     {
-        return DdsDebugBuilder{};
+        return DebugBuilder{};
     }
 
     /**
@@ -1868,9 +1868,9 @@ public:
     // @zh: 切入 Bag 分面（mcap 录制回放）
     // @zh: return Bag 分面，经 create() 终结（quit() 在后续批次并入）
     // @zh: note bag 节点自身无名；分面累积器的缺省语义同原可变尾参宏
-    DdsBagBuilder bag()
+    BagBuilder bag()
     {
-        return DdsBagBuilder{};
+        return BagBuilder{};
     }
 
     /**
@@ -1889,7 +1889,7 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsGetVersion).msg(nullptr).request();
+        return yomk::server().url(yomk::url::dds::GetVersion).msg(nullptr).request();
     }
 
     /**
@@ -1900,9 +1900,9 @@ public:
     // @zh: 切入 XML profiles 加载分面并累积显式路径
     // @zh: xmlPath 显式路径（相对/绝对均可）
     // @zh: return XML 加载分面，经 load_cfg() 终结
-    DdsXmlBuilder xml(std::string xmlPath)
+    XmlBuilder xml(std::string xmlPath)
     {
-        return DdsXmlBuilder(std::move(xmlPath));
+        return XmlBuilder(std::move(xmlPath));
     }
 
     /**
@@ -1926,25 +1926,25 @@ public:
         {
             return yomk::payload::Response(yomk::payload::ResStatus::Invalid, "YomkServer is not initialized");
         }
-        return yomk::server().url(yomk::url::ddsLoadXml)
+        return yomk::server().url(yomk::url::dds::LoadXml)
             .msg(yomk::msgs::dds::LoadXmlRequest::shared(yomk::payload::dds::LoadXmlRequest{}))
             .request();
     }
 };
-}  // namespace yomk::detail
+}  // namespace yomk::detail::dds
 
 namespace yomk
 {
 /**
  * @brief YomkDds core communication domain entry: starting point for chained calls
- * @return detail::DdsBuilder (by value, for single-expression chained calls only)
+ * @return detail::dds::Builder (by value, for single-expression chained calls only)
  * @note Thread-safe, non-blocking
  */
 // @zh: YomkDds 核心通信域入口：链式调用的起点
-// @zh: return detail::DdsBuilder（按值，仅用于单表达式链式调用）
+// @zh: return detail::dds::Builder（按值，仅用于单表达式链式调用）
 // @zh: note 线程安全，非阻塞
-inline detail::DdsBuilder dds()
+inline detail::dds::Builder dds()
 {
-    return detail::DdsBuilder{};
+    return detail::dds::Builder{};
 }
 }  // namespace yomk

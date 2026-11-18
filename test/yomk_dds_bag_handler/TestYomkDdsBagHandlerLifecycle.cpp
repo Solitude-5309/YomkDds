@@ -4,7 +4,7 @@
  *
  * 范围：契约测试（DDS-free）刻意豁免的 /create_node 成功路径（经 setDomainId 创建真实
  *       participant）、/bag_record 完整录制链路（校验通过 → 透传订阅 → mcap 落盘 →
- *       yomk::ctrl::g_bagRecordStop 收尾 → RecordResult 统计回执）、/bag_play 完整回放链路与 /delete_node
+ *       yomk::ctrl::dds::g_bagRecordStop 收尾 → RecordResult 统计回执）、/bag_play 完整回放链路与 /delete_node
  *       析构清理。节点层校验分支归 TestFastDDSBagNodeValidation，落盘内容与回放对账细节归
  *       TestFastDDSBagNodeRecord/Play。
  * 覆盖：
@@ -12,7 +12,7 @@
  *      含主题名，校验失败不落盘）→ 完整录制（远端 MString 发布者 + 停止线程模拟 Ctrl+C →
  *      eOk + RecordResult（bagDir + 逐主题统计）→ 定格后重复 record 拒绝 → 删除 →
  *      重复删除拒绝 → 删除后 record 拒绝 → 重建 → 重复创建拒绝 → delete 收尾；
- *   L2 停止标志契约：录制经 yomk::ctrl::g_bagRecordStop 置位收尾（模拟 SIGINT 处理函数行为）；
+ *   L2 停止标志契约：录制经 yomk::ctrl::dds::g_bagRecordStop 置位收尾（模拟 SIGINT 处理函数行为）；
  *   L3 /bag_play 端点（重建节点后）：负载往返保真（路径不存在 → 错误文本回显 bagDir）+
  *      最小 bag 真实回放（mcap writer + 手写 metadata.json 造 2 条 @100ms bag → eOk +
  *      PlayResult 回执：bagDir + 逐主题统计（发布名/类型/条数/字节））。
@@ -30,7 +30,7 @@
 
 #include "TestCheck.h"
 #include "TestServiceAccess.h"
-#include "YomkDdsBagHandler.h" // 服务/BagCreateNodeRequest/BagRecordRequest/BagReindexRequest/yomk::ctrl::g_bagRecordStop
+#include "YomkDdsBagHandler.h" // 服务/BagCreateNodeRequest/BagRecordRequest/BagReindexRequest/yomk::ctrl::dds::g_bagRecordStop
 #include "YomkDdsMsg.h"
 
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（完整录制用例的远端发布端）
@@ -147,11 +147,11 @@ int main()
         }
     });
 
-    // 停止线程：~5s 后经 yomk::ctrl::g_bagRecordStop 置位（模拟 CLI onSignal 的 SIGINT 路径，async-signal-safe store）
+    // 停止线程：~5s 后经 yomk::ctrl::dds::g_bagRecordStop 置位（模拟 CLI onSignal 的 SIGINT 路径，async-signal-safe store）
     std::thread stopThread([&]()
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(kRecordMs));
-        yomk::ctrl::g_bagRecordStop.stop();
+        yomk::ctrl::dds::g_bagRecordStop.stop();
     });
 
     // 主线程长驻阻塞：校验通过 → 透传订阅 → 录制 → 收尾 → eOk 回执
@@ -160,7 +160,7 @@ int main()
     pubStop.store(true);
     pubThread.join();
 
-    check(rec.status == yomk::payload::ResStatus::Succeeded, "完整录制（yomk::ctrl::g_bagRecordStop 收尾）→ eOk");
+    check(rec.status == yomk::payload::ResStatus::Succeeded, "完整录制（yomk::ctrl::dds::g_bagRecordStop 收尾）→ eOk");
     auto result = yomk::msgs::unpack<yomk::msgs::dds::RecordResult>(rec.data);
     check(result != nullptr && !result->msg.topics.empty(),
           "record 回执可解包为 RecordResult（bagDir + 逐主题统计）");
@@ -286,13 +286,13 @@ int main()
         auto playPause = testInvoke(svc, "/pause_play", nullptr);
         check(playPause.status == yomk::payload::ResStatus::Succeeded && playPause.msg == "pause requested",
               "/pause_play → eOk（play 持锁阻塞期间并发可调度，无锁置位）");
-        check(yomk::ctrl::g_bagPlayPaused.paused(), "暂停态迁移：play paused 标志置位（时间轴冻结）");
+        check(yomk::ctrl::dds::g_bagPlayPaused.paused(), "暂停态迁移：play paused 标志置位（时间轴冻结）");
         std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
         auto playResume = testInvoke(svc, "/resume_play", nullptr);
         check(playResume.status == yomk::payload::ResStatus::Succeeded && playResume.msg == "resume requested",
               "/resume_play → eOk（恢复回放）");
-        check(!yomk::ctrl::g_bagPlayPaused.paused(), "恢复态迁移：play paused 标志清除（时间轴重锚）");
+        check(!yomk::ctrl::dds::g_bagPlayPaused.paused(), "恢复态迁移：play paused 标志清除（时间轴重锚）");
 
         auto playStop = testInvoke(svc, "/stop_play", nullptr);
         check(playStop.status == yomk::payload::ResStatus::Succeeded && playStop.msg == "stop requested",
@@ -321,19 +321,19 @@ int main()
     auto recPause = testInvoke(svc, "/pause_record", nullptr);
     check(recPause.status == yomk::payload::ResStatus::Succeeded && recPause.msg == "pause requested",
           "/pause_record → eOk（record 持锁阻塞期间并发可调度，无锁置位）");
-    check(yomk::ctrl::g_bagRecordPaused.paused(), "暂停态迁移：record paused 标志置位（写路径冻结）");
+    check(yomk::ctrl::dds::g_bagRecordPaused.paused(), "暂停态迁移：record paused 标志置位（写路径冻结）");
     std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
     auto recResume = testInvoke(svc, "/resume_record", nullptr);
     check(recResume.status == yomk::payload::ResStatus::Succeeded && recResume.msg == "resume requested",
           "/resume_record → eOk（恢复录制）");
-    check(!yomk::ctrl::g_bagRecordPaused.paused(), "恢复态迁移：record paused 标志清除（写路径继续）");
+    check(!yomk::ctrl::dds::g_bagRecordPaused.paused(), "恢复态迁移：record paused 标志清除（写路径继续）");
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     auto recStop = testInvoke(svc, "/stop_record", nullptr);
     check(recStop.status == yomk::payload::ResStatus::Succeeded && recStop.msg == "stop requested",
           "/stop_record → eOk（收尾录制）");
-    check(!yomk::ctrl::g_bagRecordStop.stopped() == false,
+    check(!yomk::ctrl::dds::g_bagRecordStop.stopped() == false,
           "停止态迁移：record stop 标志置位");
     recEpThread.join();
     check(recEpStatus.load() == static_cast<int>(yomk::payload::ResStatus::Succeeded),

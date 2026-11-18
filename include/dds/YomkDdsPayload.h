@@ -1015,12 +1015,12 @@ struct BagInfo
  * @note Data only: the directory line and the "topic: N messages / M bytes" lines are
  *       rendered by the caller (yomkdds); topics keeps the bag scan order, topicName
  *       carries the published name (remaps applied), and a topic that was pre-scanned
- *       but never reached reports 0/0 (playback stopped early via yomk::ctrl::g_bagPlayStop)
+ *       but never reached reports 0/0 (playback stopped early via yomk::ctrl::dds::g_bagPlayStop)
  */
 // @zh: play 响应：回放的 bag 目录 + 逐主题统计
 // @zh: note 只回数据：目录行与 "topic: N 条 / M 字节" 行由调用方（yomkdds）渲染；topics 保持
 // @zh: bag 预扫顺序，topicName 为发布名（已应用 remap）；预扫命中但未播到的主题（经
-// @zh: yomk::ctrl::g_bagPlayStop 提前停止）计 0/0
+// @zh: yomk::ctrl::dds::g_bagPlayStop 提前停止）计 0/0
 struct PlayResult
 {
     std::string bagDir;                 // played bag directory (as requested)

@@ -3,12 +3,12 @@
 // CDR bytes straight to mcap (schema_id=0, no-schema channels) and replays by
 // rebuilding pass-through writers on the recorded timeline — no message type
 // dependency. Single bag node per process; record/play block the calling
-// thread under mtx_, so long-running stops rely on the yomk::ctrl flags (YomkDdsCtrlFlag.h).
+// thread under mtx_, so long-running stops rely on the yomk::ctrl::dds flags (YomkDdsCtrlFlag.h).
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 
 #include "YomkDdsPayload.h"  // flat quoted include: install tree, test tree and main tree all resolve same-dir
-#include "YomkDdsCtrlFlag.h"  // yomk::ctrl bag 控制面标志（迁移自本头，服务头保持纯服务声明）
+#include "YomkDdsCtrlFlag.h"  // yomk::ctrl::dds bag 控制面标志（迁移自本头，服务头保持纯服务声明）
 
 #include <memory>
 #include <mutex>

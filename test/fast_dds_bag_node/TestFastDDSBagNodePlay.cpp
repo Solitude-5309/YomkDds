@@ -5,7 +5,7 @@
  * 范围：play 全链路——预扫 metadata.json（type/qos 解析与非法输入拒播）→ 读线程逐条预读 →
  *       播放线程按录制时间轴经透传 writer 发布 → 订阅端精确收数对账。bag 由 mcap writer +
  *       手写 metadata.json 构造（makeBag，写侧同款落盘形态：每分片自含 Channel 声明、
- *       metadata 键集同 record 组装），不依赖 record 产物。暂停/恢复（yomk::ctrl::g_bagPlayPaused/Resume
+ *       metadata 键集同 record 组装），不依赖 record 产物。暂停/恢复（yomk::ctrl::dds::g_bagPlayPaused/Resume
  *       的播放侧联动）与 10 项 play 选项归后续轮；服务层端点契约归
  *       TestYomkDdsBagHandlerContract。
  * 覆盖：
@@ -26,16 +26,16 @@
  *   P3c QoS 快照恢复正向（durability）：BEST_EFFORT,TRANSIENT_LOCAL bag → BEST_EFFORT
  *      订阅端 latched 补发精确收满（若 durability 误恢复 VOLATILE 则匹配建立前的样本
  *      全部丢失，16 条无法凑满——以收数反向钉死 durability 快照恢复）；
- *   P4 Ctrl+C 停止：播放中途 yomk::ctrl::g_bagPlayStop 置位（模拟 CLI SIGINT onSignal 路径）→
+ *   P4 Ctrl+C 停止：播放中途 yomk::ctrl::dds::g_bagPlayStop 置位（模拟 CLI SIGINT onSignal 路径）→
  *      play 提前返回 true、stats 部分计数（1.5s @100ms 双主题远小于 80 条总量）、订阅端
  *      收数 ≤ 播出数（writer 已删，无补发窗口）；
  *   P6 多分片回放守恒：双分片 bag（bag_0/bag_1 各 10 条，时间轴连续）→ 跨分片升序游标
  *      回放 → 订阅端精确收 20、stats 守恒。
  *   P7 回放速率倍率（对齐 ros2 --rate 语义）：P7.1 rate=2.0 全程（span 1.6s → 播放
  *      耗时 ≉0.8s 窗口 0.6-1.2s）；P7.2 rate=0.5 全程（≈3.2s 窗口 2.6-4.2s）；P7.3
- *      运行时动态调率（rate=1.0 启动，第 2 条播放时刻 yomk::ctrl::bagPlaySetRate(2.0)——换率重锚保
+ *      运行时动态调率（rate=1.0 启动，第 2 条播放时刻 yomk::ctrl::dds::bagPlaySetRate(2.0)——换率重锚保
  *      已播 bag 进度连续，总耗时 ≉1.0s 窗口 0.8-1.4s）；P7.4 调率接口语义（SetRate(0)/
- *      (-1) 拒绝 false 且 GetRate 不变、SetRate(2.0) 生效、yomk::ctrl::bagPlayReset 复位 1.0）；
+ *      (-1) 拒绝 false 且 GetRate 不变、SetRate(2.0) 生效、yomk::ctrl::dds::bagPlayReset 复位 1.0）；
  *      P7.5 rate=0/-1 启动（play false + invalid playback rate + stats 清空）。
  *      节奏断言口径：play 长驻阻塞线程总耗时（start→done，轮询粒度 5ms）——订阅端
  *      TRANSIENT_LOCAL latched 补发到达时刻随匹配建立漂移不可作间隔证据，消息真实发出
@@ -45,7 +45,7 @@
  *      项去重（stats 升序各 20）；P8.3 通配展开（*p8a 单主题 / /rt/p8* 双主题）；P8.4
  *      精确项不存在（false + not found in bag + stats 清空）；P8.5 模式未命中
  *      （matched no bag topic）与双 '*'（record 惯例文案）。
- *   P9 暂停态启动（--start-paused，库层形态：yomk::ctrl::g_bagPlayPaused 预置 + 播放挂起；对齐
+ *   P9 暂停态启动（--start-paused，库层形态：yomk::ctrl::dds::g_bagPlayPaused 预置 + 播放挂起；对齐
  *      record 同名选项先例与 ros2 --start-paused 语义）：P9.1 暂停窗订阅端零增量 +
  *      恢复全量补播 + 总耗时 ≈ 暂停窗 + 全局 span（暂停期不泄入时间轴，重锚语义）
  *      ——全局 span 1950ms（40 条 @50ms 交错），病态泄入表现为恢复后瞬间追发
@@ -129,7 +129,7 @@
 
 #include "TestCheck.h"
 #include "FastDDSBagNode.h"     // 被测节点（直测，不经服务层）
-#include "YomkDdsBagHandler.h"  // yomk::ctrl::g_bagPlayStop/yomk::ctrl::bagPlayReset（停止标志读写端）
+#include "YomkDdsBagHandler.h"  // yomk::ctrl::dds::g_bagPlayStop/yomk::ctrl::dds::bagPlayReset（停止标志读写端）
 
 #include <mcap/writer.hpp>      // makeBag 造分片（MCAP_IMPLEMENTATION 单译元在被测库内）
 #include <nlohmann/json.hpp>    // makeBag 手写 metadata.json（record 组装同款键集）
@@ -565,7 +565,7 @@ int main()
     }
 
     // ---- P5：预扫输入校验（fail 快速返回不建任何 DDS 实体，节点可继续复用） ----
-    yomk::ctrl::bagPlayReset();  // 复位残留停止/暂停标志（对齐 CLI runBagPlay 的发起前置）
+    yomk::ctrl::dds::bagPlayReset();  // 复位残留停止/暂停标志（对齐 CLI runBagPlay 的发起前置）
     std::vector<FastDDSBagNode::BagTopicStat> stats;
     std::string error;
 
@@ -665,7 +665,7 @@ int main()
     check(topicA != nullptr && topicB != nullptr && readerA != nullptr && readerB != nullptr,
           "P1 前置：双主题订阅端 reader 先建在场");
 
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p1Stats;
     std::string p1Error;
     std::atomic<bool> p1Done{false};
@@ -707,7 +707,7 @@ int main()
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     check(topicTl != nullptr && readerTlBest != nullptr && readerTlRel != nullptr,
           "P3a 前置：双口径 reader 先建在场");
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p3aStats;
     std::string p3aError;
     std::atomic<bool> p3aDone{false};
@@ -729,7 +729,7 @@ int main()
     auto *readerBeRel = makePlayReader(subscriber, topicBe, &beRel,
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     check(topicBe != nullptr && readerBeRel != nullptr, "P3b 前置：RELIABLE 订阅端先建在场");
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p3bStats;
     std::string p3bError;
     std::atomic<bool> p3bDone{false};
@@ -753,7 +753,7 @@ int main()
     auto *readerDtl = makePlayReader(subscriber, topicDtl, &dtlBest,
         dds::BEST_EFFORT_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     check(topicDtl != nullptr && readerDtl != nullptr, "P3c 前置：BEST_EFFORT 订阅端先建在场");
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p3cStats;
     std::string p3cError;
     std::atomic<bool> p3cDone{false};
@@ -763,7 +763,7 @@ int main()
     joinPlay(p3cThread, p3cDone);
     check(p3cOk, "P3c play 全程完成返回 true");
 
-    // ---- P4：Ctrl+C 停止（播放中途 yomk::ctrl::g_bagPlayStop 置位 → 提前返回 + 部分计数） ----
+    // ---- P4：Ctrl+C 停止（播放中途 yomk::ctrl::dds::g_bagPlayStop 置位 → 提前返回 + 部分计数） ----
     check(makeBag(kP4Bag,
               {{"/rt/play_stop_a", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 40},
                   {"/rt/play_stop_b", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 40}},
@@ -779,16 +779,16 @@ int main()
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     check(topicSa != nullptr && topicSb != nullptr && readerSa != nullptr && readerSb != nullptr,
           "P4 前置：双订阅端 reader 先建在场");
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p4Stats;
     std::string p4Error;
     std::atomic<bool> p4Done{false};
     bool p4Ok = false;
     std::thread p4Thread = startPlayThread(node, kP4Bag, p4Stats, p4Error, p4Ok, p4Done);
     std::this_thread::sleep_for(std::chrono::milliseconds(1500));  // 播放中途
-    yomk::ctrl::g_bagPlayStop.stop();  // 模拟 CLI SIGINT onSignal 的 async-signal-safe 置位
+    yomk::ctrl::dds::g_bagPlayStop.stop();  // 模拟 CLI SIGINT onSignal 的 async-signal-safe 置位
     joinPlay(p4Thread, p4Done);
-    check(p4Ok, "P4 yomk::ctrl::g_bagPlayStop 置位后 play 提前返回 true");
+    check(p4Ok, "P4 yomk::ctrl::dds::g_bagPlayStop 置位后 play 提前返回 true");
     check(p4Stats.size() == 2, "P4 stats 双主题两项");
     const std::uint64_t playedSum =
         (p4Stats.size() == 2) ? (p4Stats[0].count + p4Stats[1].count) : 0;
@@ -809,7 +809,7 @@ int main()
     auto *readerShard = makePlayReader(subscriber, topicShard, &shardListen,
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     check(topicShard != nullptr && readerShard != nullptr, "P6 前置：订阅端 reader 先建在场");
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p6Stats;
     std::string p6Error;
     std::atomic<bool> p6Done{false};
@@ -828,7 +828,7 @@ int main()
           "P7 前置：单主题 5 条 @400ms bag 构造成功（时间轴 span 1.6s）");
 
     // P7.1 rate=2.0 全程快放：span 1.6s → 播放 ≉0.8s（窗口 0.6-1.2s）
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p71Stats;
     std::string p71Error;
     std::atomic<bool> p71Done{false};
@@ -845,7 +845,7 @@ int main()
               std::to_string(static_cast<int>(p71ElapsedMs)) + "ms）");
 
     // P7.2 rate=0.5 全程慢放：span 1.6s → 播放 ≉3.2s（窗口 2.6-4.2s）
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p72Stats;
     std::string p72Error;
     std::atomic<bool> p72Done{false};
@@ -862,10 +862,10 @@ int main()
               std::to_string(static_cast<int>(p72ElapsedMs)) + "ms）");
 
     // P7.3 运行时动态调率：rate=1.0 启动，400ms（第 2 条播放时刻 @1x，播放线程正处第
-    //      2→3 条睡眠分片段）时 yomk::ctrl::bagPlaySetRate(2.0)——换率重锚保已播 bag 进度连续
+    //      2→3 条睡眠分片段）时 yomk::ctrl::dds::bagPlaySetRate(2.0)——换率重锚保已播 bag 进度连续
     //      （无跳发/重复，对齐 ros2 PlayerClock set_rate 进度语义）：剩余 1.2s bag 时间
     //      按 2x 播 → 总耗时 ≉1.0s（窗口 0.8-1.4s）
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p73Stats;
     std::string p73Error;
     std::atomic<bool> p73Done{false};
@@ -874,8 +874,8 @@ int main()
     std::thread p73Thread =
         startPlayThread(node, kP7Bag, p73Stats, p73Error, p73Ok, p73Done);
     std::this_thread::sleep_for(std::chrono::milliseconds(400));
-    check(yomk::ctrl::bagPlaySetRate(2.0),
-          "P7.3 运行时 yomk::ctrl::bagPlaySetRate(2.0) 返回 true（换率即时生效）");
+    check(yomk::ctrl::dds::bagPlaySetRate(2.0),
+          "P7.3 运行时 yomk::ctrl::dds::bagPlaySetRate(2.0) 返回 true（换率即时生效）");
     const double p73ElapsedMs = joinPlayElapsedMs(p73Thread, p73Done, p73Start);
     check(p73Ok, "P7.3 play 全程完成返回 true");
     check(p73Stats.size() == 1 && p73Stats[0].count == 5,
@@ -886,15 +886,15 @@ int main()
 
     // P7.4 调率接口语义（进程内 API 对齐 ros2 ~/set_rate、~/get_rate 服务）：P7.3 结束
     //      时原子为 2.0（SetRate 生效未复位）
-    check(!yomk::ctrl::bagPlaySetRate(0.0) && yomk::ctrl::bagPlayGetRate() == 2.0,
+    check(!yomk::ctrl::dds::bagPlaySetRate(0.0) && yomk::ctrl::dds::bagPlayGetRate() == 2.0,
           "P7.4 SetRate(0) 拒绝返回 false 且 GetRate 保持 2.0");
-    check(!yomk::ctrl::bagPlaySetRate(-1.0) && yomk::ctrl::bagPlayGetRate() == 2.0,
+    check(!yomk::ctrl::dds::bagPlaySetRate(-1.0) && yomk::ctrl::dds::bagPlayGetRate() == 2.0,
           "P7.4 SetRate(-1) 拒绝返回 false 且 GetRate 保持 2.0");
-    check(yomk::ctrl::bagPlaySetRate(2.0) && yomk::ctrl::bagPlayGetRate() == 2.0,
+    check(yomk::ctrl::dds::bagPlaySetRate(2.0) && yomk::ctrl::dds::bagPlayGetRate() == 2.0,
           "P7.4 SetRate(2.0) 合法值生效（GetRate 读回一致）");
-    yomk::ctrl::bagPlayReset();
-    check(yomk::ctrl::bagPlayGetRate() == 1.0,
-          "P7.4 yomk::ctrl::bagPlayReset 复位速率为 1.0（防上次会话残留倍率）");
+    yomk::ctrl::dds::bagPlayReset();
+    check(yomk::ctrl::dds::bagPlayGetRate() == 1.0,
+          "P7.4 yomk::ctrl::dds::bagPlayReset 复位速率为 1.0（防上次会话残留倍率）");
 
     // P7.5 rate=0 与 rate=-1 启动：入口校验拒绝快速返回（不建任何 DDS 实体），stats 清空
     std::vector<FastDDSBagNode::BagTopicStat> p75Stats;
@@ -929,7 +929,7 @@ int main()
     check(topicP8a != nullptr && topicP8b != nullptr && readerP8a != nullptr &&
               readerP8b != nullptr,
           "P8 前置：双主题订阅端 reader 先建在场（对账过滤面）");
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p81Stats;
     std::string p81Error;
     std::atomic<bool> p81Done{false};
@@ -946,7 +946,7 @@ int main()
 
     // P8.2 双主题过滤 + 重复项 + 乱序清单：{"p8b","p8a","p8a"} → 入选集合去重，
     // stats 仍预扫清单序（p8a/p8b 各 20），订阅端各收满
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p82Stats;
     std::string p82Error;
     std::atomic<bool> p82Done{false};
@@ -964,7 +964,7 @@ int main()
 
     // P8.3 通配展开（同步 play，stats 为权威对账——writer 播毕即删无 latched 补发）：
     // {"*p8a"} 前后缀夹逼仅命中 p8a；{"/rt/p8*"} 前缀通配双主题全命中
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p83Stats;
     std::string p83Error;
     std::atomic<bool> p83Done{false};
@@ -975,7 +975,7 @@ int main()
     check(p83Ok && p83Stats.size() == 1 && p83Stats[0].topic == "/rt/p8a" &&
               p83Stats[0].count == 20,
           "P8.3 前缀通配 *p8a 仅命中单主题（stats 1 行 count 20）");
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p83bStats;
     std::string p83bError;
     std::atomic<bool> p83bDone{false};
@@ -1007,11 +1007,11 @@ int main()
           "P8.5 双 '*' → false + 出现多次（record 惯例）");
 
     // ---- P9：--start-paused 暂停态启动（库层形态，对齐 record 先例与 ros2 语义） ----
-    // P9.1 暂停窗零发出 + 恢复全量补播 + 暂停期不泄入时间轴：预置 yomk::ctrl::g_bagPlayPaused → 后台
+    // P9.1 暂停窗零发出 + 恢复全量补播 + 暂停期不泄入时间轴：预置 yomk::ctrl::dds::g_bagPlayPaused → 后台
     // play → 700ms 窗订阅端零增量（不依赖 P8 累计基数，只断言窗口内不动）→ resume →
     // 补播收满；总耗时 ≈ 700 + 1950（全局 span）+开销，泄入病态会塌缩到暂停窗内
-    yomk::ctrl::bagPlayReset();
-    yomk::ctrl::g_bagPlayPaused.pause();  // 预置暂停意图（先于 play；节点层全程只 load 该原子）
+    yomk::ctrl::dds::bagPlayReset();
+    yomk::ctrl::dds::g_bagPlayPaused.pause();  // 预置暂停意图（先于 play；节点层全程只 load 该原子）
     std::vector<FastDDSBagNode::BagTopicStat> p91Stats;
     std::string p91Error;
     std::atomic<bool> p91Done{false};
@@ -1024,7 +1024,7 @@ int main()
     std::this_thread::sleep_for(std::chrono::milliseconds(700));
     check(p8aListen.count.load() == p91aBase && p8bListen.count.load() == p91bBase,
           "P9.1 暂停窗 700ms 双订阅端零增量（播放挂起零发出）");
-    yomk::ctrl::g_bagPlayPaused.resume();
+    yomk::ctrl::dds::g_bagPlayPaused.resume();
     check(waitForCount(p8aListen.count, p91aBase + 20),
           "P9.1 恢复后 p8a 补播收满（+20）");
     const double p91ElapsedMs = joinPlayElapsedMs(p91Thread, p91Done, p91Start);
@@ -1037,8 +1037,8 @@ int main()
 
     // P9.2 暂停态与 --topics 过滤叠加：预置暂停 + topics 仅 p8b → 暂停窗双端零增量，
     // 恢复后 p8b 补播 +20、p8a 仍零增量（stats 仅 p8b 行）
-    yomk::ctrl::bagPlayReset();
-    yomk::ctrl::g_bagPlayPaused.pause();
+    yomk::ctrl::dds::bagPlayReset();
+    yomk::ctrl::dds::g_bagPlayPaused.pause();
     std::vector<FastDDSBagNode::BagTopicStat> p92Stats;
     std::string p92Error;
     std::atomic<bool> p92Done{false};
@@ -1050,7 +1050,7 @@ int main()
     std::this_thread::sleep_for(std::chrono::milliseconds(700));
     check(p8aListen.count.load() == p92aBase && p8bListen.count.load() == p92bBase,
           "P9.2 暂停窗双订阅端零增量（过滤叠加暂停态）");
-    yomk::ctrl::g_bagPlayPaused.resume();
+    yomk::ctrl::dds::g_bagPlayPaused.resume();
     check(waitForCount(p8bListen.count, p92bBase + 20),
           "P9.2 恢复后 p8b 补播收满（+20）");
     joinPlay(p92Thread, p92Done);
@@ -1063,11 +1063,11 @@ int main()
 
     // ---- P10：-l/--loop 循环回放（库层形态，对齐 ros2 语义：到尾回开头无限播放） ----
     // P10.1 循环两轮不倾泻：后台 play(loop=true) → 2.5s 窗（第一轮 span 1950ms 完 +
-    // 第二轮 ~550ms）→ yomk::ctrl::g_bagPlayStop → 收数 [21,35]：下界 20+1 钉住轮边界重锚后第二轮
+    // 第二轮 ~550ms）→ yomk::ctrl::dds::g_bagPlayStop → 收数 [21,35]：下界 20+1 钉住轮边界重锚后第二轮
     // 首条立即播出，上界 20+15 钉住第二轮按录制时间轴节拍推进（回卷后不重锚的倾泻
     // 形态会把第二轮 20 条瞬间全发，2.5s 内收满 40 越上界）；总耗时 ≥1900ms 钉住
     // 第一轮完整节拍
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p101Stats;
     std::string p101Error;
     std::atomic<bool> p101Done{false};
@@ -1078,7 +1078,7 @@ int main()
     std::thread p101Thread = startPlayThread(node, kP8Bag, p101Stats, p101Error, p101Ok,
         p101Done, 1.0, {}, true);
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
-    yomk::ctrl::g_bagPlayStop.stop();
+    yomk::ctrl::dds::g_bagPlayStop.stop();
     const double p101ElapsedMs = joinPlayElapsedMs(p101Thread, p101Done, p101Start);
     check(p101Ok, "P10.1 stop 路径 play 返回 true");
     const auto p101aGot = p8aListen.count.load() - p101aBase;
@@ -1095,7 +1095,7 @@ int main()
 
     // P10.2 loop 与 --topics 叠加：仅 p8a 入选 + loop → 回卷轮过滤仍生效（p8a 两轮
     // 累计 ≥21、p8b 全程零收）
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p102Stats;
     std::string p102Error;
     std::atomic<bool> p102Done{false};
@@ -1105,7 +1105,7 @@ int main()
     std::thread p102Thread = startPlayThread(node, kP8Bag, p102Stats, p102Error, p102Ok,
         p102Done, 1.0, {"/rt/p8a"}, true);
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
-    yomk::ctrl::g_bagPlayStop.stop();
+    yomk::ctrl::dds::g_bagPlayStop.stop();
     joinPlay(p102Thread, p102Done);
     check(p102Ok, "P10.2 stop 路径 play 返回 true");
     check(p8aListen.count.load() - p102aBase >= 21,
@@ -1116,12 +1116,12 @@ int main()
               p102Stats[0].count >= 21,
           "P10.2 stats 仅 p8a 行且 ≥21");
 
-    // P10.3 loop 与暂停态启动叠加：预置 yomk::ctrl::g_bagPlayPaused → play(loop=true) → 700ms 暂停窗
+    // P10.3 loop 与暂停态启动叠加：预置 yomk::ctrl::dds::g_bagPlayPaused → play(loop=true) → 700ms 暂停窗
     // 零增量（P9 语义 loop 下保持）→ resume → 2.4s（第一轮剩余 ~1250ms + 调度开销余量
     // ——P9.1 实测开销可达数百 ms，窗口过短第二轮首条来不及播出 → 第二轮 ~800ms 节拍
     // 推进）→ stop → 收数 [21,35]（下界 20+1 钉跨暂停两轮起步，上界防倾泻同 P10.1 口径）
-    yomk::ctrl::bagPlayReset();
-    yomk::ctrl::g_bagPlayPaused.pause();
+    yomk::ctrl::dds::bagPlayReset();
+    yomk::ctrl::dds::g_bagPlayPaused.pause();
     std::vector<FastDDSBagNode::BagTopicStat> p103Stats;
     std::string p103Error;
     std::atomic<bool> p103Done{false};
@@ -1133,9 +1133,9 @@ int main()
     std::this_thread::sleep_for(std::chrono::milliseconds(700));
     check(p8aListen.count.load() == p103aBase && p8bListen.count.load() == p103bBase,
           "P10.3 暂停窗 700ms 双订阅端零增量（P9 语义 loop 下保持）");
-    yomk::ctrl::g_bagPlayPaused.resume();
+    yomk::ctrl::dds::g_bagPlayPaused.resume();
     std::this_thread::sleep_for(std::chrono::milliseconds(2400));
-    yomk::ctrl::g_bagPlayStop.stop();
+    yomk::ctrl::dds::g_bagPlayStop.stop();
     joinPlay(p103Thread, p103Done);
     check(p103Ok, "P10.3 stop 路径 play 返回 true");
     const auto p103aGot = p8aListen.count.load() - p103aBase;
@@ -1151,7 +1151,7 @@ int main()
     // 精确播 t≥1000ms 的 10 条、p8b 精确播 t≥1050ms 的 10 条；总耗时 ≈ 播段 span
     // 950ms（首播条立即播出至末条按差值调度），跳过失效的倾泻形态（40 条全发）计数
     // 与耗时双双越界
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p111Stats;
     std::string p111Error;
     std::atomic<bool> p111Done{false};
@@ -1174,7 +1174,7 @@ int main()
 
     // P11.2 offset 超全场时长：offset=5.0s > span 1950ms → 零消息播出、正常播毕成功
     // 返回（对齐 ros2 超界语义：不报错；stats 行仍按预扫清单回填、计数 0）
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p112Stats;
     std::string p112Error;
     std::atomic<bool> p112Done{false};
@@ -1209,7 +1209,7 @@ int main()
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     check(topicP11 != nullptr && readerP11 != nullptr,
           "P11.3 前置：单主题 reader 先建在场");
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p113Stats;
     std::string p113Error;
     std::atomic<bool> p113Done{false};
@@ -1218,7 +1218,7 @@ int main()
     std::thread p113Thread = startPlayThread(node, kP11Bag, p113Stats, p113Error, p113Ok,
         p113Done, 1.0, {}, true, 2.25);
     std::this_thread::sleep_for(std::chrono::milliseconds(5000));
-    yomk::ctrl::g_bagPlayStop.stop();
+    yomk::ctrl::dds::g_bagPlayStop.stop();
     joinPlay(p113Thread, p113Done);
     check(p113Ok, "P11.3 stop 路径 play 返回 true");
     const auto p113Got = p11Listen.count.load() - p113Base;
@@ -1246,7 +1246,7 @@ int main()
     //（delay 窗零发出；未生效形态 500ms 已发 ~5 条即拒）；waitForCount 双主题各 20
     // 收满；自然播毕耗时 = delay 窗 1000 + span 1950 + 开销（未生效形态 ≈2.15-2.65s
     // 越下界 2600，第二重区分）
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p121Stats;
     std::string p121Error;
     std::atomic<bool> p121Done{false};
@@ -1276,7 +1276,7 @@ int main()
     // 撞窗边界竞态实测 21 越上界，缩 2.7s 消除）。上界 20 钉住"每轮开头延迟"——delay
     // 仅首轮生效形态第二轮 ≈2.45s 即播、2.7s 窗内再收数条（检出即 ≥21）越上界；下界
     // 15 防首轮匹配/调度开销吞条误伤（开销 ≤1.5s 时首轮收窗 ≥700ms 收 ≥15）
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p122Stats;
     std::string p122Error;
     std::atomic<bool> p122Done{false};
@@ -1286,7 +1286,7 @@ int main()
     std::thread p122Thread = startPlayThread(node, kP8Bag, p122Stats, p122Error, p122Ok,
         p122Done, 1.0, {}, true, 0.0, 0.5);
     std::this_thread::sleep_for(std::chrono::milliseconds(2700));
-    yomk::ctrl::g_bagPlayStop.stop();
+    yomk::ctrl::dds::g_bagPlayStop.stop();
     joinPlay(p122Thread, p122Done);
     check(p122Ok, "P12.2 stop 路径 play 返回 true");
     const auto p122aGot = p8aListen.count.load() - p122aBase;
@@ -1323,7 +1323,7 @@ int main()
     // P13.2 无订阅端永等不挂死（先于 P13.1 执行——P13.1 的 reader 在场会使"无订阅端"
     // 失真）：waitAckedMs=0 永等，无 matched RELIABLE reader → wait 立即通过（空集
     // 全确认），ok=true 正常播毕不挂死
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p132Stats;
     std::string p132Error;
     std::atomic<bool> p132Done{false};
@@ -1348,7 +1348,7 @@ int main()
     check(topicP13a != nullptr && topicP13b != nullptr && readerP13a != nullptr &&
               readerP13b != nullptr,
           "P13.1 前置：双 RELIABLE 订阅端 reader 先建在场");
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p131Stats;
     std::string p131Error;
     std::atomic<bool> p131Done{false};
@@ -1364,7 +1364,7 @@ int main()
 
     // P13.3 BEST_EFFORT 跳过：复用 kP3cBag（BEST_EFFORT,TRANSIENT_LOCAL 快照——writer
     // 侧 BEST_EFFORT 不参与 ackNack）→ waitAckedMs=100 收尾跳过等待快速播毕
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p133Stats;
     std::string p133Error;
     std::atomic<bool> p133Done{false};
@@ -1376,7 +1376,7 @@ int main()
 
     // P13.4 超时不失败：kP13Bag waitAckedMs=1 极小片——进程内 ACK 毫秒级可能过可能
     // 超时，两种结果都 ok=true（超时告警不改返回值；不断言告警文本）
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p134Stats;
     std::string p134Error;
     std::atomic<bool> p134Done{false};
@@ -1396,7 +1396,7 @@ int main()
     check(topicRma != nullptr && readerRma != nullptr,
           "P14.1 前置：新名 /rt/remap_a reader 先建在场（RELIABLE,TL）");
     const auto p8aBase141 = p8aListen.count.load();
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p141Stats;
     std::string p141Error;
     std::atomic<bool> p141Done{false};
@@ -1428,7 +1428,7 @@ int main()
           "P14.2 前置：双新名 reader 先建在场（RELIABLE,TL）");
     const auto p8aBase142 = p8aListen.count.load();
     const auto p8bBase142 = p8bListen.count.load();
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p142Stats;
     std::string p142Error;
     std::atomic<bool> p142Done{false};
@@ -1456,7 +1456,7 @@ int main()
     check(topicRa3 != nullptr && readerRa3 != nullptr,
           "P14.3 前置：新名 /rt/ra3 reader 先建在场（RELIABLE,TL）");
     const auto p8bBase143 = p8bListen.count.load();
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p143Stats;
     std::string p143Error;
     std::atomic<bool> p143Done{false};
@@ -1489,7 +1489,7 @@ int main()
     // 无匹配发生即无效果不报错）——正常播毕，数据照常发原名
     const auto p8aBase145 = p8aListen.count.load();
     const auto p8bBase145 = p8bListen.count.load();
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p145Stats;
     std::string p145Error;
     std::atomic<bool> p145Done{false};
@@ -1513,7 +1513,7 @@ int main()
     // reader 各精确 +20；stats 双行 topic/count/bytes 全精确（深度不影响守恒）
     const auto p8aBase151 = p8aListen.count.load();
     const auto p8bBase151 = p8bListen.count.load();
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p151Stats;
     std::string p151Error;
     std::atomic<bool> p151Done{false};
@@ -1535,7 +1535,7 @@ int main()
     // +20；stats 全精确——深度上界不改变守恒
     const auto p8aBase152 = p8aListen.count.load();
     const auto p8bBase152 = p8bListen.count.load();
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p152Stats;
     std::string p152Error;
     std::atomic<bool> p152Done{false};
@@ -1574,7 +1574,7 @@ int main()
         out.close();
         const auto p8aBase161 = p8aListen.count.load();
         const auto p8bBase161 = p8bListen.count.load();
-        yomk::ctrl::bagPlayReset();
+        yomk::ctrl::dds::bagPlayReset();
         std::vector<FastDDSBagNode::BagTopicStat> p161Stats;
         std::string p161Error;
         std::atomic<bool> p161Done{false};
@@ -1605,7 +1605,7 @@ int main()
         out.close();
         const auto p8aBase162 = p8aListen.count.load();
         const auto p8bBase162 = p8bListen.count.load();
-        yomk::ctrl::bagPlayReset();
+        yomk::ctrl::dds::bagPlayReset();
         std::vector<FastDDSBagNode::BagTopicStat> p162Stats;
         std::string p162Error;
         std::atomic<bool> p162Done{false};
@@ -1678,7 +1678,7 @@ int main()
     auto *readerSn = makePlayReader(subscriber, topicSn, &snRecv,
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     check(topicSn != nullptr && readerSn != nullptr, "P17 前置：透传 reader 先建在场");
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     std::vector<FastDDSBagNode::BagTopicStat> p17Stats;
     std::string p17Error;
     std::atomic<bool> p17Done{false};

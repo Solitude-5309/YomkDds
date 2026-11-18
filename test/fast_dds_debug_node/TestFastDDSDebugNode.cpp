@@ -70,7 +70,7 @@
 #include "TestCheck.h"
 #include "FastDDSDebugNode.h"
 #include "FastDDSNode.h"
-#include "YomkDdsDebugHandler.h" // yomk::ctrl::g_debugPubStop.stop()/g_debugPubStop.reset()（topicPub 期望建匹配中断用例）
+#include "YomkDdsDebugHandler.h" // yomk::ctrl::dds::g_debugPubStop.stop()/g_debugPubStop.reset()（topicPub 期望建匹配中断用例）
 
 #include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MString 数据类（仅发布端使用）
 #include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（仅发布端使用）
@@ -1293,7 +1293,7 @@ int main()
                 std::atomic<bool> stopperDone{false};
                 std::thread stopper([&stopperDone]() {
                     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                    yomk::ctrl::g_debugPubStop.stop();
+                    yomk::ctrl::dds::g_debugPubStop.stop();
                     stopperDone.store(true);
                 });
                 std::string wiErr;
@@ -1304,7 +1304,7 @@ int main()
                       "等待中断 error 含 interrupted");
                 stopper.join();
                 check(stopperDone.load(), "置位线程已执行（时序健全性）");
-                yomk::ctrl::g_debugPubStop.reset();  // 复位停止标志，防残留影响后续调用
+                yomk::ctrl::dds::g_debugPubStop.reset();  // 复位停止标志，防残留影响后续调用
             }
 
             // 清理：writer → topic → publisher → participant
@@ -1335,7 +1335,7 @@ int main()
         std::atomic<bool> ntStopperDone{false};
         std::thread ntStopper([&ntStopperDone]() {
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            yomk::ctrl::g_debugPubStop.stop();
+            yomk::ctrl::dds::g_debugPubStop.stop();
             ntStopperDone.store(true);
         });
         std::string ntErr;
@@ -1346,7 +1346,7 @@ int main()
               "主题未发现等待中断 error 含 interrupted");
         ntStopper.join();
         check(ntStopperDone.load(), "置位线程已执行（时序健全性）");
-        yomk::ctrl::g_debugPubStop.reset();  // 复位停止标志，防残留影响后续调用
+        yomk::ctrl::dds::g_debugPubStop.reset();  // 复位停止标志，防残留影响后续调用
     }
 
     // ---- topicPub 条数上限用例（maxTimes，CLI -t N）：持续循环发满 N 条（含首轮）自动停止，
@@ -1715,7 +1715,7 @@ int main()
             });
             std::vector<yomk::payload::dds::TopicEndpointInfo> pubDetail;
             const bool seen = waitEndpoints(BE_TOPIC, true, pubDetail, 2);
-            yomk::ctrl::g_debugPubStop.stop();  // 停止持续发布（发布线程 join 后 dbg 析构）
+            yomk::ctrl::dds::g_debugPubStop.stop();  // 停止持续发布（发布线程 join 后 dbg 析构）
             pubThread.join();
             check(seen, "topicPub 持续发布期间观察节点读回 writer 端点详情");
             for (const auto &ep : pubDetail)
@@ -1770,7 +1770,7 @@ int main()
             });
             std::vector<yomk::payload::dds::TopicEndpointInfo> defDetail;
             const bool seenDef = waitEndpoints(DEF_TOPIC, true, defDetail, 2);
-            yomk::ctrl::g_debugPubStop.stop();
+            yomk::ctrl::dds::g_debugPubStop.stop();
             pubThread.join();
             check(seenDef, "无参 topicPub 持续发布期间观察节点读回 writer 端点详情");
             for (const auto &ep : defDetail)

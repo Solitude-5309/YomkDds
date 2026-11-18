@@ -6,7 +6,7 @@
 // 安全，多 reader 并发写须串行），不触 mtx_。
 #include "FastDDSBagNode.h"
 
-#include "YomkDdsBagHandler.h" // yomk::ctrl::g_bagRecordStop（录制停止标志，API 头内联定义）
+#include "YomkDdsBagHandler.h" // yomk::ctrl::dds::g_bagRecordStop（录制停止标志，API 头内联定义）
 
 #define MCAP_IMPLEMENTATION  // mcap header-only：实现随本 TU 编译（全库唯一单译元）
 #include <mcap/reader.hpp>   // 读回侧实现同译元编译（读回断言经链接本库取实现）
@@ -605,7 +605,7 @@ public:
             }
             // --start-paused 暂停态：照常 take 排空（防恢复后旧数据涌入），不写不计数，
             // sequence 不递增（恢复后首条消息 sequence 从 0 起）
-            if (yomk::ctrl::g_bagRecordPaused.paused())
+            if (yomk::ctrl::dds::g_bagRecordPaused.paused())
             {
                 continue;
             }
@@ -1330,9 +1330,9 @@ bool FastDDSBagNode::record(const std::vector<std::string>& topics, std::vector<
         });
     }
 
-    // ④录制循环：每 100ms 轮询停止标志（SIGINT 经 yomk::ctrl::g_bagRecordStop 置位，
+    // ④录制循环：每 100ms 轮询停止标志（SIGINT 经 yomk::ctrl::dds::g_bagRecordStop 置位，
     // atomic store async-signal-safe）
-    while (!yomk::ctrl::g_bagRecordStop.stopped())
+    while (!yomk::ctrl::dds::g_bagRecordStop.stopped())
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(kRecordPollMs));
     }
@@ -2562,13 +2562,13 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
     stats.clear();
 
     // 速率入参校验（快速返回不建任何 DDS 实体；stats 已清空——失败语义为"未播放任何
-    // 消息"）；通过后注入原子初值，此后播放线程只认原子（运行时 yomk::ctrl::bagPlaySetRate 动态调节
+    // 消息"）；通过后注入原子初值，此后播放线程只认原子（运行时 yomk::ctrl::dds::bagPlaySetRate 动态调节
     // 的唯一生效通道）
     if (playbackRate <= 0.0)
     {
         return fail("invalid playback rate");
     }
-    yomk::ctrl::g_bagPlayRate.store(playbackRate, std::memory_order_relaxed);
+    yomk::ctrl::dds::g_bagPlayRate.store(playbackRate, std::memory_order_relaxed);
 
     // 起始偏移入参校验（快速返回路径）；负值非法——错误文案对齐服务层锁外校验
     if (startOffset < 0.0)
@@ -2835,12 +2835,12 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
         return fail("create publisher failed");
     }
 
-    // 停止谓词:全局标志(SIGINT 经 yomk::ctrl::g_bagPlayStop 置位)或局部失败停止(writer 创建
+    // 停止谓词:全局标志(SIGINT 经 yomk::ctrl::dds::g_bagPlayStop 置位)或局部失败停止(writer 创建
     // 失败不污染全局标志)。relaxed 读足够:同步点由队列 cv 超时与线程 join 提供
     std::atomic<bool> localStop{false};
     const auto stopped = [&localStop]()
     {
-        return yomk::ctrl::g_bagPlayStop.stopped() ||
+        return yomk::ctrl::dds::g_bagPlayStop.stopped() ||
                localStop.load(std::memory_order_relaxed);
     };
     PlayQueue queue(stopped, readAheadQueueSize);
@@ -2968,7 +2968,7 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
                 anchor = std::chrono::steady_clock::now();
                 t0 = msg.logTime;
                 anchored = true;
-                rate = yomk::ctrl::g_bagPlayRate.load(std::memory_order_relaxed);
+                rate = yomk::ctrl::dds::g_bagPlayRate.load(std::memory_order_relaxed);
             }
             else if (msg.loopStart)
             {
@@ -2977,7 +2977,7 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
                 // bag 差值顺延;倍率取轮边界最新值
                 anchor = std::chrono::steady_clock::now();
                 t0 = msg.logTime;
-                rate = yomk::ctrl::g_bagPlayRate.load(std::memory_order_relaxed);
+                rate = yomk::ctrl::dds::g_bagPlayRate.load(std::memory_order_relaxed);
             }
             // bag 偏移(乱序防御:logTime 早于锚点 bag 时间按 0 延迟立即播——录制侧单调,
             // 仅防御手造 bag 的乱序时间戳;uint64 差值先算再转 double 除速率)
@@ -2987,16 +2987,16 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
                 std::chrono::nanoseconds(static_cast<int64_t>(bagOffsetNs / rate));
             while (!stopped())
             {
-                if (yomk::ctrl::g_bagPlayPaused.paused())
+                if (yomk::ctrl::dds::g_bagPlayPaused.paused())
                 {
                     // 暂停:冻结时间轴短轮询等恢复;恢复后重锚(当前条立即播;暂停期间倍率
-                    // 可能经 yomk::ctrl::bagPlaySetRate 变更,重锚按最新倍率反解)
+                    // 可能经 yomk::ctrl::dds::bagPlaySetRate 变更,重锚按最新倍率反解)
                     while (!stopped() &&
-                           yomk::ctrl::g_bagPlayPaused.paused())
+                           yomk::ctrl::dds::g_bagPlayPaused.paused())
                     {
                         std::this_thread::sleep_for(std::chrono::milliseconds(kPlayPausePollMs));
                     }
-                    rate = yomk::ctrl::g_bagPlayRate.load(std::memory_order_relaxed);
+                    rate = yomk::ctrl::dds::g_bagPlayRate.load(std::memory_order_relaxed);
                     const auto resumeNow = std::chrono::steady_clock::now();
                     anchor = resumeNow -
                              std::chrono::nanoseconds(
@@ -3006,7 +3006,7 @@ bool FastDDSBagNode::play(const std::string& bagDir, std::vector<BagTopicStat>& 
                     break;
                 }
                 // 换率检测:分片醒后读原子,与当前倍率不同即重锚(已播 bag 进度不跳变)
-                const double rateNew = yomk::ctrl::g_bagPlayRate.load(std::memory_order_relaxed);
+                const double rateNew = yomk::ctrl::dds::g_bagPlayRate.load(std::memory_order_relaxed);
                 if (rateNew != rate)
                 {
                     const auto reAnchorNow = std::chrono::steady_clock::now();

@@ -22,8 +22,8 @@
 // 透传机制：PassthroughPubSubType 不解析数据，原始 CDR 字节（含 encapsulation header）
 // 原样落盘 mcap（schema_id=0 无 schema 通道、encoding="cdr"、thirdparty/mcap v2.1.3，
 // 实现仅在本节点 .cpp 单译元编译）；发现层仅按主题名 + 类型名字符串匹配，与远端类型
-// 定义零耦合。停止/暂停标志由 YomkDdsBagHandler 提供（record: yomk::ctrl::g_bagRecordStop/
-// yomk::ctrl::g_bagRecordPaused；play: yomk::ctrl::g_bagPlayStop/yomk::ctrl::g_bagPlayPaused，暂停冻结时间轴）。
+// 定义零耦合。停止/暂停标志由 YomkDdsBagHandler 提供（record: yomk::ctrl::dds::g_bagRecordStop/
+// yomk::ctrl::dds::g_bagRecordPaused；play: yomk::ctrl::dds::g_bagPlayStop/yomk::ctrl::dds::g_bagPlayPaused，暂停冻结时间轴）。
 // 线程模型：发现回调仅缓存发现信息（seenMtx_ 叶子锁，锁序倒置防护同 FastDDSDebugNode）；
 // 数据回调两路：maxCacheSize=0 同步直写（DDS 接收线程逐条写盘，payloadMtx_ 串行多
 // reader 并发写同一 McapWriter），>0 写缓存双缓冲（回调深拷贝入队即返回、独立消费线程
@@ -101,13 +101,13 @@ public:
     // （XML 三级提取链——本节点无用户名，仅默认档可兜底；serverLocator 直配强制 CLIENT）。
     bool setDomainId(uint32_t domainId, const yomkdds_xml::ParticipantQosSpec& spec =
             yomkdds_xml::ParticipantQosSpec{}, std::string* err = nullptr);
-    // 录制主题列表（长驻阻塞：调用线程阻塞至 yomk::ctrl::g_bagRecordStop 置位并完成收尾）。
+    // 录制主题列表（长驻阻塞：调用线程阻塞至 yomk::ctrl::dds::g_bagRecordStop 置位并完成收尾）。
     // 清单项支持单 '*' 通配，模式项按发现缓存全表展开为实际录制清单；任一精确主题既无
     // 发布者也无订阅者、或模式未命中即整体报错 false（不建目录不产生任何文件；仅订阅者
     // 主题同样通过）。maxBagSize/maxBagDurationSec 先到先分片，maxCacheSize>0 走写缓存
     // 双缓冲（缓存满丢弃新消息并按主题计数，收尾统一告警）。reader QoS 跟随远端 writer
     // offered；每主题一个 mcap Channel（schema_id=0，metadata 落 type+qos）。
-    // yomk::ctrl::g_bagRecordPaused 置位期间照常 take 但丢弃（不计入时间统计）。
+    // yomk::ctrl::dds::g_bagRecordPaused 置位期间照常 take 但丢弃（不计入时间统计）。
     // 成功返回 true 且节点定格（再次 record 报错须重建）；失败返回 false 并经 error 出参
     // 回填原因，未定格可修正输入后重试。
     bool record(const std::vector<std::string>& topics, std::vector<BagTopicStat>& stats,

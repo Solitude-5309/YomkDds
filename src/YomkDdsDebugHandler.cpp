@@ -405,7 +405,7 @@ yomk::payload::Response YomkDdsDebugHandler::stopPub(YomkMsgPtr pkg)
     // 发布循环轮询到置位即收尾返回，被阻塞的 startPub 调用带回 total/failed 计数。
     // 期望建匹配等待期（waiting for subscribers）置位同样中断并报错返回。
     (void)pkg;
-    yomk::ctrl::g_debugPubStop.stop();
+    yomk::ctrl::dds::g_debugPubStop.stop();
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "stop requested");
 }
 

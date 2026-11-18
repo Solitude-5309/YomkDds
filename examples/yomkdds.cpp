@@ -55,9 +55,9 @@ static std::atomic<bool> g_stop{false}; // SIGINT（Ctrl+C）退出标志
 static void onSignal(int)
 {
     g_stop.store(true);
-    yomk::ctrl::g_debugPubStop.stop(); // topic pub -r 持续发布：无锁置位（async-signal-safe），节点层发布循环读它退出
-    yomk::ctrl::g_bagRecordStop.stop(); // bag record：无锁置位（async-signal-safe），节点层录制循环读它收尾退出
-    yomk::ctrl::g_bagPlayStop.stop();   // bag play：无锁置位（async-signal-safe），节点层回放循环读它收尾退出
+    yomk::ctrl::dds::g_debugPubStop.stop(); // topic pub -r 持续发布：无锁置位（async-signal-safe），节点层发布循环读它退出
+    yomk::ctrl::dds::g_bagRecordStop.stop(); // bag record：无锁置位（async-signal-safe），节点层录制循环读它收尾退出
+    yomk::ctrl::dds::g_bagPlayStop.stop();   // bag play：无锁置位（async-signal-safe），节点层回放循环读它收尾退出
 }
 
 static void printUsage(std::ostream &os)
@@ -735,10 +735,10 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
     yomk::server().srv<YomkDdsBagHandler>().create();
 
     // 1. 复位双标志（防上次会话残留置位导致秒退/不录）后创建 bag 节点（单节点模型）
-    yomk::ctrl::bagRecordReset();
+    yomk::ctrl::dds::bagRecordReset();
     if (startPaused)
     {
-        yomk::ctrl::g_bagRecordPaused.pause(); // 暂停态启动：先置位再发起录制（订阅照常，写入暂停）
+        yomk::ctrl::dds::g_bagRecordPaused.pause(); // 暂停态启动：先置位再发起录制（订阅照常，写入暂停）
     }
     if (!autoLoadXmlProfile())
     {
@@ -751,7 +751,7 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
         return 1;
     }
 
-    // 2. 监听 Ctrl+C：处理函数经 yomk::ctrl::g_bagRecordStop 无锁置位，节点层录制循环读它收尾
+    // 2. 监听 Ctrl+C：处理函数经 yomk::ctrl::dds::g_bagRecordStop 无锁置位，节点层录制循环读它收尾
     std::signal(SIGINT, onSignal);
     std::string startSuffix;
     if (!outputDir.empty())
@@ -782,7 +782,7 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
     yomk::log().tag("yomkdds").info("recording topics from ", std::to_string(topics.size()), " list item(s) on domain ", std::to_string(domainId), startSuffix);
 
     // 3. 键盘监听线程（始终启动，tty 下生效）：SPACE=start，p=pause，r=resume，Ctrl+C 退出
-    //    poll() 100ms 超时轮询：每次超时后检查 yomk::ctrl::g_bagRecordStop，Ctrl+C 后最多 100ms 内干净退出
+    //    poll() 100ms 超时轮询：每次超时后检查 yomk::ctrl::dds::g_bagRecordStop，Ctrl+C 后最多 100ms 内干净退出
     //    并还原终端；非 tty（管道/重定向）时 tcgetattr 失败直接 return，Ctrl+C 退出路径不受影响
     std::thread([]()
     {
@@ -794,7 +794,7 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
         termios raw = oldt;
         raw.c_lflag &= ~(ICANON | ECHO);
         tcsetattr(STDIN_FILENO, TCSANOW, &raw);
-        while (!yomk::ctrl::g_bagRecordStop.stopped())
+        while (!yomk::ctrl::dds::g_bagRecordStop.stopped())
         {
             struct pollfd pfd {STDIN_FILENO, POLLIN, 0};
             if (poll(&pfd, 1, 100) <= 0)
@@ -808,25 +808,25 @@ static int runRecord(uint32_t domainId, const std::vector<std::string> &topics,
             }
             if (ch == ' ')
             {
-                if (yomk::ctrl::g_bagRecordPaused.paused())
+                if (yomk::ctrl::dds::g_bagRecordPaused.paused())
                 {
-                    yomk::ctrl::g_bagRecordPaused.resume();
+                    yomk::ctrl::dds::g_bagRecordPaused.resume();
                     std::cout << "recording started" << std::endl;
                 }
             }
             else if (ch == 'r')
             {
-                if (yomk::ctrl::g_bagRecordPaused.paused())
+                if (yomk::ctrl::dds::g_bagRecordPaused.paused())
                 {
-                    yomk::ctrl::g_bagRecordPaused.resume();
+                    yomk::ctrl::dds::g_bagRecordPaused.resume();
                     std::cout << "recording resumed" << std::endl;
                 }
             }
             else if (ch == 'p')
             {
-                if (!yomk::ctrl::g_bagRecordPaused.paused())
+                if (!yomk::ctrl::dds::g_bagRecordPaused.paused())
                 {
-                    yomk::ctrl::g_bagRecordPaused.pause();
+                    yomk::ctrl::dds::g_bagRecordPaused.pause();
                     std::cout << "recording paused" << std::endl;
                 }
             }
@@ -917,8 +917,8 @@ static std::string formatRate(double rate)
 // 正交；回显附 ", qos-override=<FILE>" 后缀（仅显式传参才显示）；空=缺省不加载恒等
 // 现行为；
 // tty 下额外起键盘监听线程：SPACE 从暂停态开始回放、p 暂停、r 继续（与 record 键位
-// 一致）、+/- 调节回放速率（±10% 步进，经 yomk::ctrl::bagPlaySetRate 操作 yomk::ctrl::g_bagPlayRate
-// 原子，对齐 ros2 Increase/Decrease Rate 10% 键位语义），Ctrl+C 经 yomk::ctrl::g_bagPlayStop
+// 一致）、+/- 调节回放速率（±10% 步进，经 yomk::ctrl::dds::bagPlaySetRate 操作 yomk::ctrl::dds::g_bagPlayRate
+// 原子，对齐 ros2 Increase/Decrease Rate 10% 键位语义），Ctrl+C 经 yomk::ctrl::dds::g_bagPlayStop
 // 无锁置位不可逆整程退出；非 tty（管道/重定向）自动跳过键盘线程，仅剩开始/停止两通道
 static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playbackRate,
         const std::vector<std::string> &topics, bool startPaused, bool loop,
@@ -932,10 +932,10 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
     // 1. 复位双标志（防上次会话残留置位导致秒退/开播即冻）后创建 bag 节点（单节点模型）；
     //    暂停态启动：先置位再发起播放（对齐 record 先例——服务 handler 只清 stop 不清
     //    paused，预置意图存活到播放线程）
-    yomk::ctrl::bagPlayReset();
+    yomk::ctrl::dds::bagPlayReset();
     if (startPaused)
     {
-        yomk::ctrl::g_bagPlayPaused.pause();
+        yomk::ctrl::dds::g_bagPlayPaused.pause();
     }
     if (!autoLoadXmlProfile())
     {
@@ -948,7 +948,7 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
         return 1;
     }
 
-    // 2. 监听 Ctrl+C：处理函数经 yomk::ctrl::g_bagPlayStop 无锁置位，节点层回放循环读它收尾
+    // 2. 监听 Ctrl+C：处理函数经 yomk::ctrl::dds::g_bagPlayStop 无锁置位，节点层回放循环读它收尾
     std::signal(SIGINT, onSignal);
     // 启动回显：速率非缺省 1.0 时附 rate=<g>（-r 显式传入的可见性）
     std::string rateNote;
@@ -1010,7 +1010,7 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
 
     // 3. 键盘监听线程（tty 下生效）：SPACE=start（仅暂停态），p=pause（仅运行态），
     //    r=resume（仅暂停态，与 record 键位一致），+/-=rate ±10%，Ctrl+C 退出
-    //    poll() 100ms 超时轮询：每次超时后检查 yomk::ctrl::g_bagPlayStop，Ctrl+C 后最多 100ms 内干净
+    //    poll() 100ms 超时轮询：每次超时后检查 yomk::ctrl::dds::g_bagPlayStop，Ctrl+C 后最多 100ms 内干净
     //    退出并还原终端；非 tty（管道/重定向）时 tcgetattr 失败直接 return，仅剩开始/
     //    停止两通道（同 record 主流程/键盘分工）
     std::thread([]()
@@ -1023,7 +1023,7 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
         termios raw = oldt;
         raw.c_lflag &= ~(ICANON | ECHO);
         tcsetattr(STDIN_FILENO, TCSANOW, &raw);
-        while (!yomk::ctrl::g_bagPlayStop.stopped())
+        while (!yomk::ctrl::dds::g_bagPlayStop.stopped())
         {
             struct pollfd pfd {STDIN_FILENO, POLLIN, 0};
             if (poll(&pfd, 1, 100) <= 0)
@@ -1037,25 +1037,25 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
             }
             if (ch == ' ')
             {
-                if (yomk::ctrl::g_bagPlayPaused.paused())
+                if (yomk::ctrl::dds::g_bagPlayPaused.paused())
                 {
-                    yomk::ctrl::g_bagPlayPaused.resume();
+                    yomk::ctrl::dds::g_bagPlayPaused.resume();
                     std::cout << "replay started" << std::endl;
                 }
             }
             else if (ch == 'p')
             {
-                if (!yomk::ctrl::g_bagPlayPaused.paused())
+                if (!yomk::ctrl::dds::g_bagPlayPaused.paused())
                 {
-                    yomk::ctrl::g_bagPlayPaused.pause();
+                    yomk::ctrl::dds::g_bagPlayPaused.pause();
                     std::cout << "replay paused" << std::endl;
                 }
             }
             else if (ch == 'r')
             {
-                if (yomk::ctrl::g_bagPlayPaused.paused())
+                if (yomk::ctrl::dds::g_bagPlayPaused.paused())
                 {
-                    yomk::ctrl::g_bagPlayPaused.resume();
+                    yomk::ctrl::dds::g_bagPlayPaused.resume();
                     std::cout << "replay resumed" << std::endl;
                 }
             }
@@ -1063,10 +1063,10 @@ static int runBagPlay(uint32_t domainId, const std::string &bagDir, double playb
             {
                 // 回放速率 ±10% 步进（对齐 ros2 Increase/Decrease Rate 10% 键位语义）；
                 // <=0 拒绝保持原值（对齐 ros2 set_rate 拒绝语义）
-                const double next = yomk::ctrl::bagPlayGetRate() + (ch == '+' ? 0.1 : -0.1);
-                if (yomk::ctrl::bagPlaySetRate(next))
+                const double next = yomk::ctrl::dds::bagPlayGetRate() + (ch == '+' ? 0.1 : -0.1);
+                if (yomk::ctrl::dds::bagPlaySetRate(next))
                 {
-                    std::cout << "rate set to " << formatRate(yomk::ctrl::bagPlayGetRate())
+                    std::cout << "rate set to " << formatRate(yomk::ctrl::dds::bagPlayGetRate())
                               << std::endl;
                 }
                 else
@@ -2143,7 +2143,7 @@ static int runTopicPub(uint32_t domainId, const std::string &topicName, const st
     // 2. 收敛后发布（ack 自适应确认）；未发现（未指定 -w 时，指定 -w 则等待主题出现）/
     //    载荷不合法/未确认/等待被中断均报错退出。
     //    无条件注册 SIGINT 处理（同 print/hz 框架）：缺省即 1Hz 持续发送必须可 Ctrl+C
-    //    停止，Ctrl+C 经 yomk::ctrl::g_debugPubStop.stop() 置停止标志（无锁 store，async-signal-safe）
+    //    停止，Ctrl+C 经 yomk::ctrl::dds::g_debugPubStop.stop() 置停止标志（无锁 store，async-signal-safe）
     //    ——-w 等待期中断报错退出，持续循环退出并回传 total/failed
     std::signal(SIGINT, onSignal);
     if (maxTimes > 0)

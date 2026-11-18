@@ -156,7 +156,7 @@ public:
     // 模板对称；失败不建 writer）→ ③建临时发布链（qos 全哨兵=Fast DDS writer 默认底座
     // KEEP_LAST(1)+RELIABLE+TRANSIENT_LOCAL，≡既有固定值，无参行为不变；ROS2 对接建议
     // DDSQosProfile::ros2DefaultPublisher()。requiredSubscribers>0 时先阻塞等待 matched 计数
-    // 达标，不设超时，yomk::ctrl::g_debugPubStop 置位即中断 error="waiting for subscribers
+    // 达标，不设超时，yomk::ctrl::dds::g_debugPubStop 置位即中断 error="waiting for subscribers
     // interrupted"）→ ④write 恰一次 + ack 自适应：发现缓存该主题存在 RELIABLE 订阅者时
     // wait_for_acknowledgments(2s)，超时 error="not all subscribers acknowledged"；全
     // BEST_EFFORT 或无订阅者退化 intervalMs 保底窗（无 ack 协议）。⑤repeatIntervalMs>0 持续

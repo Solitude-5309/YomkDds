@@ -161,7 +161,7 @@ auto onMessage = [&](const void *data)
 
 ### 代码位置与链接要求
 
-- 链式 API 位于 `include/dds/YomkDdsAPI.h`（`yomk::dds()` 域入口，builder 机制内敛于 `yomk::detail`）；DDS 节点实现位于 `src/FastDDSNode.h` / `src/FastDDSNode.cpp`（发布订阅与 QoS/Loan 底层交付路径）；请求包与服务声明位于 `include/dds/YomkDdsHandler.h`。
+- 链式 API 位于 `include/dds/YomkDdsAPI.h`（`yomk::dds()` 域入口，builder 机制内敛于 `yomk::detail::dds`）；DDS 节点实现位于 `src/FastDDSNode.h` / `src/FastDDSNode.cpp`（发布订阅与 QoS/Loan 底层交付路径）；请求包与服务声明位于 `include/dds/YomkDdsHandler.h`。
 - 示例均为完整可复制编译的程序，链接 `YomkDds::YomkDds YomkServer::YomkServer YomkDdsStdMsgs`。
 
 ## 错误与边界行为

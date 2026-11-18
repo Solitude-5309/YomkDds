@@ -15,7 +15,7 @@
 // cppcheck-suppress unknownMacro
 #include <atomic>
 
-namespace yomk::ctrl
+namespace yomk::ctrl::dds
 {
 /**
  * @brief Ctrl+C stop/pause flag for one blocking loop (SIGINT-safe: lock-free ops only)
@@ -132,5 +132,5 @@ inline void bagPlayReset() noexcept
     g_bagPlayPaused.resume();
     g_bagPlayRate.store(1.0, std::memory_order_relaxed);
 }
-}  // namespace yomk::ctrl
+}  // namespace yomk::ctrl::dds
 // clang-format on

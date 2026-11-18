@@ -498,7 +498,7 @@ int main()
                             std::this_thread::sleep_for(std::chrono::milliseconds(100));
                         }
                     }
-                    yomk::ctrl::g_debugPubStop.stop();
+                    yomk::ctrl::dds::g_debugPubStop.stop();
                     pubQosThread.join();
                     check(obSeen, "qos 下传用例 observer 读回 svc 发布 writer 端点详情");
                     bool obRel = false;

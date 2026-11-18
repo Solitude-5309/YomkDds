@@ -37,6 +37,7 @@ flowchart TD
         MA --> M10["cli-publish-handbook.md<br>CLI 发布与内省手册"]
         MA --> M11["bag-handbook.md<br>Bag 录制回放手册"]
         MA --> M12["env-vars-reference.md<br>环境变量参考"]
+        MA --> M13["idl-type-install.md<br>安装 IDL 自定义类型"]
     end
 
     A --> F

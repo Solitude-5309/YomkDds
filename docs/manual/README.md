@@ -17,6 +17,7 @@ flowchart LR
     D --> D3["discovery-server-tutorial<br>跨域互通"]
     D --> D4["xml-profiles-tutorial<br>XML 集中配置"]
     D --> D5["ros2-interop-tutorial<br>对接 ROS2"]
+    D --> D6["idl-type-install<br>安装 IDL 自定义类型"]
     B --> E["调试与运维"]
     E --> E1["cli-observe-handbook<br>观察域内状态"]
     E --> E2["cli-publish-handbook<br>手工发布与类型内省"]
@@ -31,6 +32,7 @@ flowchart LR
 | 我想…… | 去这篇 |
 |---|---|
 | 安装依赖、编译并安装 YomkDds | [setup-and-build.md](./setup-and-build.md) |
+| 把自定义 IDL 消息类型生成并安装进扩展 | [idl-type-install.md](./idl-type-install.md) |
 | 5 分钟跑通第一个发布订阅程序 | [quick-start.md](./quick-start.md) |
 | 理解订阅回调、消息类型定义、多节点跨进程收发 | [pub-sub-tutorial.md](./pub-sub-tutorial.md) |
 | 用零拷贝（loan）方式发布以提升性能 | [loan-tutorial.md](./loan-tutorial.md) |
@@ -48,6 +50,7 @@ flowchart LR
 | 文档 | 一句话简介 | 难度 |
 |---|---|---|
 | [setup-and-build.md](./setup-and-build.md) | 依赖检测、一键编译安装、验证安装 | 入门 |
+| [idl-type-install.md](./idl-type-install.md) | 自定义 IDL 消息类型一键生成/编译/安装与导入验证 | 进阶 |
 | [quick-start.md](./quick-start.md) | 编译运行第一个发布订阅 + 双进程 hello world | 入门 |
 | [pub-sub-tutorial.md](./pub-sub-tutorial.md) | 回调消费、消息类型、多节点多主题、资源清理 | 入门 |
 | [loan-tutorial.md](./loan-tutorial.md) | plain 类型借出样本直接填值发布的完整流程 | 进阶 |

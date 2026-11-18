@@ -28,6 +28,7 @@ YomkDdsPython/                  # 扩展仓库根
 │       ├── __init__.py             #   ECHO / GET_VERSION 端点常量（注明功能作用与统一请求形态）
 │       ├── __init__.pyi            #   端点常量类型桩
 │       └── py.typed
+├── test/run_tests.sh           # 全量测试运行器（与 YomkServerPy run_tests.sh 同构）
 ├── test/test_dds.py
 ├── CMakeLists.txt              # 安装规则 + 版本注入（单一来源 project(VERSION)）+ 命名空间守卫 + 框架就位校验
 ├── build_ubuntu.sh             # 一键安装脚本（参考 YomkServerPy，交互输入安装前缀）
@@ -64,7 +65,7 @@ server().srv(DdsService).create()   # 显式注册后 /DdsService/* 才可达
 
 ```bash
 ./build_ubuntu.sh      # 一键安装（默认取 YOMK_PREFIX_PATH；依赖仅 cmake + python3）
-python3 test/test_dds.py
+./test/run_tests.sh    # 全量测试（缺省消费 $YOMK_PREFIX_PATH 安装树，--prefix 可覆盖）
 ```
 
 或手动 CMake：

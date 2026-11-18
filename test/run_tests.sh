@@ -95,10 +95,11 @@ PY_SITE_DIR=$(ls -d "${PREFIX}"/lib/python*[0-9].[0-9]*/site-packages 2>/dev/nul
 [ -n "${PY_SITE_DIR}" ] \
     || fail "未找到 ${PREFIX}/lib/pythonX.Y/site-packages，请先安装扩展: $(install_hint)（或用 --prefix 指定安装前缀）"
 
-# 产物校验：框架就位 + 扩展三域就位（含版本注入产物 _version.py）
+# 产物校验：框架就位 + 扩展三域就位（含版本注入产物 _version.py）+ 第三方 fastdds 绑定
 for f in yomk/server/__init__.py \
          yomk/dds/__init__.py yomk/dds/_version.py yomk/dds/DdsService.py \
-         yomk/msgs/dds/__init__.py yomk/url/dds/__init__.py; do
+         yomk/msgs/dds/__init__.py yomk/url/dds/__init__.py \
+         fastdds/__init__.py; do
     [ -f "${PY_SITE_DIR}/${f}" ] || fail "未找到 ${PY_SITE_DIR}/${f}，请先安装扩展: $(install_hint)"
 done
 

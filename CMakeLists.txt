@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 # project(VERSION) → YOMK_DDS_VERSION → configure_file 生成 yomk/dds/_version.py
 # 的 __version__ → yomk.dds.__version__（DdsService.version 端点暴露）。
 # 本行即版本唯一来源，发布时手动 bump。
-project(YomkDds VERSION 0.0.2 LANGUAGES NONE)
+project(YomkDds VERSION 0.0.3 LANGUAGES NONE)
 
 set(YOMK_DDS_VERSION "${PROJECT_VERSION}")
 
@@ -50,7 +50,23 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/yomk/dds/_version.py"
     DESTINATION "${PYTHON_SITE_PACKAGES}/yomk/dds"
 )
 
-# ---------- 5. 安装期校验 ----------
+# ---------- 5. 第三方依赖随库安装（对齐 C++ YomkDds main 分支） ----------
+# C++ 库把 thirdparty 预编译安装树随库装入前缀；本扩展面向 Python-only 用户
+# （不装 C++ 库，C++ 安装树不存在），故同样随库安装三件套，保证 import fastdds 可用：
+# - Fast-DDS-3.6.1/install      → bin/include/lib/share/tools（libfastdds/libfastcdr 等
+#                                 动态库落 lib/，由 build_ubuntu.sh 注册 ldconfig 解析）
+# - Fast-DDS-python-2.6.1/install → lib/pythonX.Y/site-packages/fastdds（SWIG 绑定模块，
+#                                 _fastdds_python.so 无 RPATH，依赖上述 lib/ 动态库）
+# - Fast-DDS-Gen-4.3.0          → scripts/fastddsgen 等（IDL 代码生成，运行需 java 17）
+# mcap/nlohmann_json 为纯头文件依赖（仅 C++ 编译期使用），与 C++ main 一致不安装
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Fast-DDS-3.6.1/install/"
+    DESTINATION .)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Fast-DDS-python-2.6.1/install/"
+    DESTINATION .)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Fast-DDS-Gen-4.3.0/"
+    DESTINATION .)
+
+# ---------- 6. 安装期校验 ----------
 # 框架就位校验：扩展必须装入 YomkServerPy 所在安装前缀（PEP 420 命名空间合并的前提）。
 # 纯文件存在性检查，不调用 python——import 冒烟依赖 user-site 的 pip 依赖
 # （readerwriterlock 等），sudo 安装时以 root 身份不可见，故放 build_ubuntu.sh

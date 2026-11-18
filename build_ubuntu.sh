@@ -61,11 +61,25 @@ fi
 ${SUDO} cmake --install "${BUILD_DIR}" || fail "cmake 安装失败"
 # -------------el 3. CMake 配置 + 安装 ----------------
 
+# -------------sl 3.2 注册动态库搜索路径（对齐 C++ YomkDds build_ubuntu.sh，幂等追加） ----------------
+# 第三方 Fast-DDS 动态库（libfastdds/libfastcdr 等）随库落入 ${INSTALL_PREFIX}/lib，
+# fastdds 绑定模块（_fastdds_python.so）无 RPATH，需注册 ldconfig 方可解析依赖
+YOMK_LDCONF_FILE="/etc/ld.so.conf.d/yomk.conf"
+if ! grep -qxF "${INSTALL_PREFIX}/lib" "${YOMK_LDCONF_FILE}" 2>/dev/null; then
+    echo "-- 注册动态库搜索路径: ${YOMK_LDCONF_FILE}"
+    echo "${INSTALL_PREFIX}/lib" | sudo tee -a "${YOMK_LDCONF_FILE}" >/dev/null \
+        || fail "动态库搜索路径注册失败"
+fi
+# 刷新动态库缓存：新增的 so 不会自动进入 ld.so.cache，必须重新执行 ldconfig
+echo "-- 刷新动态库缓存 (ldconfig)..."
+sudo ldconfig || fail "ldconfig 执行失败"
+# -------------el 3.2 注册动态库搜索路径 ----------------
+
 # -------------sl 3.5 安装后 import 冒烟（调用者身份，非 sudo 环境） ----------------
 PY_SITE_DIR="$(ls -d "${INSTALL_PREFIX}"/lib/python*/site-packages 2>/dev/null | head -1)"
 [ -n "${PY_SITE_DIR}" ] || fail "安装后未找到 site-packages 目录: ${INSTALL_PREFIX}/lib/pythonX.Y/site-packages"
 echo "-- 扩展导入验证（PYTHONPATH=${PY_SITE_DIR}）..."
-PYTHONPATH="${PY_SITE_DIR}${PYTHONPATH:+:${PYTHONPATH}}" python3 -c "import yomk.dds, yomk.msgs.dds, yomk.url.dds; print('-- 扩展导入验证通过, 版本:', yomk.dds.__version__)" \
+PYTHONPATH="${PY_SITE_DIR}${PYTHONPATH:+:${PYTHONPATH}}" python3 -c "import yomk.dds, yomk.msgs.dds, yomk.url.dds, fastdds; print('-- 扩展导入验证通过, 版本:', yomk.dds.__version__, ', fastdds 绑定:', fastdds.__file__ is not None)" \
     || fail "扩展安装后导入验证失败（若为依赖缺失，请确认当前用户已安装框架运行时依赖）"
 # -------------el 3.5 安装后 import 冒烟 ----------------
 

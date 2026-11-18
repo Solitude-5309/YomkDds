@@ -30,6 +30,10 @@ YomkDdsPython/                  # 扩展仓库根
 │       └── py.typed
 ├── test/run_tests.sh           # 全量测试运行器（与 YomkServerPy run_tests.sh 同构）
 ├── test/test_dds.py
+├── thirdparty/                 # 第三方预编译安装树（与 C++ YomkDds main 同款，随库安装）
+│   ├── Fast-DDS-3.6.1/install      #   Fast-DDS C++ 库（libfastdds/libfastcdr 等动态库）
+│   ├── Fast-DDS-python-2.6.1/install #   fastdds Python 绑定模块（SWIG，落 site-packages/fastdds）
+│   └── Fast-DDS-Gen-4.3.0          #   IDL 代码生成器（运行需 java 17）
 ├── CMakeLists.txt              # 安装规则 + 版本注入（单一来源 project(VERSION)）+ 命名空间守卫 + 框架就位校验
 ├── build_ubuntu.sh             # 一键安装脚本（参考 YomkServerPy，交互输入安装前缀）
 └── README.md
@@ -98,6 +102,15 @@ dds 域 builder 与框架各域同构，遵循三条 API 形态纪律：
 ```python
 server().url(ECHO).msg(DdsRequest("hi")).request()
 ```
+
+## 第三方依赖（随库安装）
+
+Python-only 用户不装 C++ YomkDds 库，其 Fast-DDS 运行时依赖由本扩展自行随库安装
+（对齐 C++ main 分支：`thirdparty/` 预编译安装树经 CMake `install(DIRECTORY ...)` 落入
+同一前缀）：`fastdds` 绑定模块落 `lib/pythonX.Y/site-packages/fastdds`，
+`libfastdds`/`libfastcdr` 等动态库落 `lib/`，`build_ubuntu.sh` 幂等注册 ldconfig
+（`/etc/ld.so.conf.d/yomk.conf`）解析绑定模块的动态库依赖（无 RPATH）。
+安装后任意终端可直接 `import fastdds`。
 
 ## 版本号管理
 

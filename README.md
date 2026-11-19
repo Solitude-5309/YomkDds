@@ -138,7 +138,7 @@ bash scripts/yomkdds_build_idl.sh idl/std_msgs.idl -p /opt/yomk          # 推�
 
 流程与产物：
 
-1. **生成**：当前目录 `./yomkdds_build_idl_<YYYYMMDD_HHMMSS>/` 下生成类型工程（被 .gitignore 的 `build*/` 规则忽略）
+1. **生成**：当前目录 `./build_idl_<YYYYMMDD_HHMMSS>/` 下生成类型工程（被 .gitignore 的 `build*/` 规则忽略）
    （`fastddsgen -python -d . -de final <idl>`，`-de final` 即 loan 支持）；
    工程可重复编译，留作源码归档或删除均可
 2. **编译**：生成目录内 cmake 配置/编译；自定义前缀无 Fast-DDS 安装树时，

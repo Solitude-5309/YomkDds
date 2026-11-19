@@ -5,11 +5,11 @@
 #        bash scripts/yomkdds_build_idl.sh ...）
 #       安装前缀推荐用 -p 传入（可 tab 补全已存在路径），缺省交互询问
 # 流程:
-#   1. 生成：当前目录 ./yomkdds_build_idl_<时间戳> 下生成支持 loan 的类型工程
+#   1. 生成：当前目录 ./build_idl_<时间戳> 下生成支持 loan 的类型工程
 #      （fastddsgen -python -d . -de final <idl>）；
 #      生成工具使用 $YOMK_PREFIX_PATH 安装树内的 fastddsgen（/opt/yomk/scripts/fastddsgen），
 #      不使用源码 thirdparty 中的生成工具
-#   2. 编译：在 ./yomkdds_build_idl_<时间戳> 内 cmake 配置/编译
+#   2. 编译：在 ./build_idl_<时间戳> 内 cmake 配置/编译
 #      （CMAKE_PREFIX_PATH 指向安装前缀，find_package(fastcdr/fastdds) 经前缀内
 #      Fast-DDS 安装树解析）
 #   3. 安装：默认 $YOMK_PREFIX_PATH（交互询问，支持修改），与现有安装一致：
@@ -135,8 +135,8 @@ DDS_DIR="${SITE_PACKAGES}/yomk/dds_idl"
 ${SUDO} mkdir -p "${DDS_DIR}" || fail "扩展域目录创建失败: ${DDS_DIR}"
 # -------------el 3. 交互确定安装路径 ----------------
 
-# -------------sl 4. 生成（./yomkdds_build_idl_<时间戳>，支持 loan） ----------------
-GENDIR="$(pwd)/yomkdds_build_idl_$(date +%Y%m%d_%H%M%S)"
+# -------------sl 4. 生成（./build_idl_<时间戳>，支持 loan） ----------------
+GENDIR="$(pwd)/build_idl_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "${GENDIR}"
 echo "-- 生成目录: ${GENDIR}"
 echo "-- 生成 loan 支持 msg: fastddsgen -python -d . -de final ${IDL_FILE}"
@@ -149,7 +149,7 @@ sh "${FASTDDSGEN}" -python -d . -de final "${IDL_FILE}" || fail "fastddsgen 生�
 MODULE_SRC_BASE="$(python3 -c "from sysconfig import get_path; print(get_path('purelib', vars={'base': '${INSTALL_PREFIX}'}))")"
 # -------------el 4. 生成 ----------------
 
-# -------------sl 5. 编译（在 ./yomkdds_build_idl_<时间戳> 内） ----------------
+# -------------sl 5. 编译（在 ./build_idl_<时间戳> 内） ----------------
 # 依赖解析：安装前缀优先，回退框架前缀（与生成工具同源）——
 # 自定义前缀可能尚无 Fast-DDS 安装树，find_package(fastcdr/fastdds) 需回退解析
 echo "-- 编译 msg 类型工程..."

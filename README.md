@@ -138,7 +138,7 @@ bash scripts/install_idl.sh scripts/rpc.idl -p /opt/yomk         # 推荐：-p �
 
 流程与产物：
 
-1. **生成**：当前目录 `./msg_<YYYYMMDD_HHMMSS>/` 下生成类型工程
+1. **生成**：当前目录 `./build_idl_<YYYYMMDD_HHMMSS>/` 下生成类型工程（被 .gitignore 的 `build*/` 规则忽略）
    （`fastddsgen -python -d . -de final <idl>`，`-de final` 即 loan 支持）；
    工程可重复编译，留作源码归档或删除均可
 2. **编译**：生成目录内 cmake 配置/编译；自定义前缀无 Fast-DDS 安装树时，
@@ -149,8 +149,13 @@ bash scripts/install_idl.sh scripts/rpc.idl -p /opt/yomk         # 推荐：-p �
 
 | 安装前缀 | Python 模块落点 | 导入形态 |
 | --- | --- | --- |
-| 默认（`$YOMK_PREFIX_PATH`，与框架同前缀） | `<前缀>/lib/pythonX.Y/site-packages/yomk/dds/` | `yomk.dds.<IDL文件名>`；IDL 含 `module` 声明时为 `yomk.dds.<IDL模块>.<IDL文件名>`（与主库同域） |
+| 默认（`$YOMK_PREFIX_PATH`，与框架同前缀） | `<前缀>/lib/pythonX.Y/site-packages/yomk/dds/` | `yomk.dds.<IDL文件名>`（与主库同域） |
 | 自定义前缀 | `<前缀>/lib/pythonX.Y/site-packages/yomk/dds/`（同上） | 同上 |
+
+安装脚本会自动消除 module 声明带来的多余层级：IDL 的 module 声明（如
+`module yomk { module dds {`）与扩展域 `yomk/dds` 同名的父目录、以及剩余
+module 层与文件名工程目录同名（如 `std_idl/std_idl`）的同名层，都会在安装
+时被剥离/合并，最终一律单层落在 `yomk/dds/<IDL文件名>/`。
 
 脚本收尾会打印本次实际的落点与导入形态（无需自行推导）。
 

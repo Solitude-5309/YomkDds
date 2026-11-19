@@ -3,11 +3,11 @@
 # 用法: bash scripts/install_idl.sh <idl 文件路径> [-p|--prefix 安装前缀]
 #       安装前缀推荐用 -p 传入（可 tab 补全已存在路径），缺省交互询问
 # 流程:
-#   1. 生成：当前目录 ./msg_<时间戳> 下生成支持 loan 的类型工程
+#   1. 生成：当前目录 ./build_idl_<时间戳> 下生成支持 loan 的类型工程
 #      （fastddsgen -python -d . -de final <idl>）；
 #      生成工具使用 $YOMK_PREFIX_PATH 安装树内的 fastddsgen（/opt/yomk/scripts/fastddsgen），
 #      不使用源码 thirdparty 中的生成工具
-#   2. 编译：在 ./msg_<时间戳> 内 cmake 配置/编译
+#   2. 编译：在 ./build_idl_<时间戳> 内 cmake 配置/编译
 #      （CMAKE_PREFIX_PATH 指向安装前缀，find_package(fastcdr/fastdds) 经前缀内
 #      Fast-DDS 安装树解析）
 #   3. 安装：默认 $YOMK_PREFIX_PATH（交互询问，支持修改），与现有安装一致：
@@ -118,8 +118,8 @@ DDS_DIR="${SITE_PACKAGES}/yomk/dds"
 mkdir -p "${DDS_DIR}" || fail "扩展域目录创建失败: ${DDS_DIR}"
 # -------------el 3. 交互确定安装路径 ----------------
 
-# -------------sl 4. 生成（./msg_<时间戳>，支持 loan） ----------------
-GENDIR="$(pwd)/msg_$(date +%Y%m%d_%H%M%S)"
+# -------------sl 4. 生成（./build_idl_<时间戳>，支持 loan） ----------------
+GENDIR="$(pwd)/build_idl_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "${GENDIR}"
 echo "-- 生成目录: ${GENDIR}"
 echo "-- 生成 loan 支持 msg: fastddsgen -python -d . -de final ${IDL_FILE}"
@@ -134,7 +134,7 @@ SNAP_BEFORE="$(mktemp)"
 [ -d "${MODULE_SRC_BASE}" ] && ls -A "${MODULE_SRC_BASE}" > "${SNAP_BEFORE}" || : > "${SNAP_BEFORE}"
 # -------------el 4. 生成 ----------------
 
-# -------------sl 5. 编译（在 ./msg_<时间戳> 内） ----------------
+# -------------sl 5. 编译（在 ./build_idl_<时间戳> 内） ----------------
 # 依赖解析：安装前缀优先，回退框架前缀（与生成工具同源）——
 # 自定义前缀可能尚无 Fast-DDS 安装树，find_package(fastcdr/fastdds) 需回退解析
 echo "-- 编译 msg 类型工程..."
@@ -189,9 +189,18 @@ for e in ${NEW_ENTRIES}; do
             fi
         done
         for child in $(ls -A "${POS}" 2>/dev/null); do
-            echo "-- 目的地校正(域层级去重): ${POS}/${child} -> ${DDS_DIR}/${child}"
-            ${SUDO} rm -rf "${DDS_DIR}/${child}"
-            ${SUDO} mv "${POS}/${child}" "${DDS_DIR}/${child}" || fail "目的地校正失败: ${child}"
+            # 剩余 module 层与工程目录（文件名）同名时合并为一层
+            # （如 module ... std_idl + 文件 std_idl.idl → std_idl/std_idl）
+            if [ -d "${POS}/${child}/${child}" ]; then
+                echo "-- 目的地校正(同名层级合并): ${POS}/${child}/${child} -> ${DDS_DIR}/${child}"
+                ${SUDO} rm -rf "${DDS_DIR}/${child}"
+                ${SUDO} mv "${POS}/${child}/${child}" "${DDS_DIR}/${child}" || fail "目的地校正失败: ${child}"
+                ${SUDO} rm -rf "${POS}/${child}"
+            else
+                echo "-- 目的地校正(域层级去重): ${POS}/${child} -> ${DDS_DIR}/${child}"
+                ${SUDO} rm -rf "${DDS_DIR}/${child}"
+                ${SUDO} mv "${POS}/${child}" "${DDS_DIR}/${child}" || fail "目的地校正失败: ${child}"
+            fi
             PLACED="${PLACED}${child} "
         done
         ${SUDO} rmdir "${POS}" "${SRC}" 2>/dev/null || true

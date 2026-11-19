@@ -13,11 +13,11 @@
 ## 前提与准备
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成 YomkDds 编译安装：`source build_ubuntu.sh` 三步编译安装会一并构建示例程序，安装后 `<安装路径>/bin` 下有 `ExampleDiscoverServerPub`、`ExampleDiscoverServerSub` 与 `LaunchDiscoverServer.sh`；
-- 如需在仓库内按 `./examples/build/` 路径单独构建运行 examples：
+- 如需在仓库内按 `./build/examples/` 路径单独构建运行 examples：
 
 ```bash
-cmake -S examples -B examples/build -DCMAKE_PREFIX_PATH="$YOMK_PREFIX_PATH"
-cmake --build examples/build
+cmake -S examples -B build/examples -DCMAKE_PREFIX_PATH="$YOMK_PREFIX_PATH"
+cmake --build build/examples
 ```
 
 - 两个背景概念（详见 [../features/discovery-server.md](../features/discovery-server.md)）：
@@ -156,8 +156,8 @@ TCP 场景实操（与第 2 步同一对示例）：
 # 终端 2/3：export 换 TCP 通道串（总开关不变）
 export YOMKDDS_USE_DISCOVER_SERVER=true
 export YOMKDDS_TCP_DISCOVER_SERVERS="127.0.0.1:42100"
-./examples/build/ExampleDiscoverServerSub   # 终端 2
-./examples/build/ExampleDiscoverServerPub   # 终端 3
+./build/examples/ExampleDiscoverServerSub   # 终端 2
+./build/examples/ExampleDiscoverServerPub   # 终端 3
 ```
 
 ### 第 4 步：环境变量门控方式（进程级直配，无需改代码）
@@ -214,14 +214,14 @@ yomk::dds().node("combo_node").domain(0).udp_ds("127.0.0.1:11811").create();   /
 # 终端 2：订阅端（域 200，env 直配；export 两行可直接复制终端 1 启动横幅提示）
 export YOMKDDS_USE_DISCOVER_SERVER=true
 export YOMKDDS_UDP_DISCOVER_SERVERS="127.0.0.1:11811"
-./examples/build/ExampleDiscoverServerSub
+./build/examples/ExampleDiscoverServerSub
 ```
 
 ```bash
 # 终端 3：发布端（域 100，env 直配，同组环境变量）
 export YOMKDDS_USE_DISCOVER_SERVER=true
 export YOMKDDS_UDP_DISCOVER_SERVERS="127.0.0.1:11811"
-./examples/build/ExampleDiscoverServerPub
+./build/examples/ExampleDiscoverServerPub
 ```
 
 正常输出（时间戳等日志前缀以实际环境为准）：

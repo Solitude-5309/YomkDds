@@ -102,7 +102,7 @@ if [ ${RUN_CPPCHECK} -eq 1 ]; then
         -I "${YOMK_PREFIX_PATH:-/opt/yomk}/include" \
         --suppress='*:*/thirdparty/*' \
         --suppress="*:${YOMK_PREFIX_PATH:-/opt/yomk}/include/*" \
-        -i"${REPO_DIR}/examples/build" \
+        -i"${REPO_DIR}/build" \
         --error-exitcode=1 \
         "${REPO_DIR}/src" "${REPO_DIR}/include" "${REPO_DIR}/examples" 2>&1 \
     | {

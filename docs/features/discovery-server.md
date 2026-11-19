@@ -71,12 +71,12 @@ export YOMKDDS_UDP_DISCOVER_SERVERS="192.168.1.10:11811;192.168.1.11:11811"  # T
 # 终端 2：订阅端（域 200，env 直配；export 两行可直接复制终端 1 启动横幅提示）
 export YOMKDDS_USE_DISCOVER_SERVER=true
 export YOMKDDS_UDP_DISCOVER_SERVERS="127.0.0.1:11811"
-./examples/build/ExampleDiscoverServerSub
+./build/examples/ExampleDiscoverServerSub
 
 # 终端 3：发布端（域 100，env 直配，同组环境变量）
 export YOMKDDS_USE_DISCOVER_SERVER=true
 export YOMKDDS_UDP_DISCOVER_SERVERS="127.0.0.1:11811"
-./examples/build/ExampleDiscoverServerPub
+./build/examples/ExampleDiscoverServerPub
 ```
 
 TCP 场景：终端 1 换 `--type tcp --port 42100` 启动，终端 2/3 换 export `YOMKDDS_TCP_DISCOVER_SERVERS="127.0.0.1:42100"`（开关不变）。`LaunchDiscoverServer.sh` 启动横幅打印当次传输类型对应的 export 提示（总开关 + 对应通道 server 串），可直接复制到终端 2/3。运行后发布端每秒打印 `[SEND] hello world N`，订阅端同步打印 `[RECV] hello world N`，Ctrl+C 优雅退出。

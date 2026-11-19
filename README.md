@@ -122,13 +122,13 @@ source build_ubuntu.sh
 测试树（`test/`）为独立 CMake 工程，只测 YomkDds 自有源码（`src/`、`include/`），第三方（FastDDS / YomkServer / YomkDdsStdMsgs）仅链接不插桩：
 
 ```bash
-cmake -S test -B test/build -DCMAKE_PREFIX_PATH="${YOMK_PREFIX_PATH:-/opt/yomk}"
-cmake --build test/build -j
+cmake -S test -B build/test -DCMAKE_PREFIX_PATH="${YOMK_PREFIX_PATH:-/opt/yomk}"
+cmake --build build/test -j
 ```
 
-构建产物为 22 个测试可执行（位于 `test/build/harness/`、`test/build/yomk_dds_handler/`、`test/build/fast_dds_debug_node/`、`test/build/yomk_dds_debug_handler/`、`test/build/yomk_dds_bag_handler/`、`test/build/fast_dds_bag_node/`）：
+构建产物为 22 个测试可执行（位于 `build/test/harness/`、`build/test/yomk_dds_handler/`、`build/test/fast_dds_debug_node/`、`build/test/yomk_dds_debug_handler/`、`build/test/yomk_dds_bag_handler/`、`build/test/fast_dds_bag_node/`）：
 
-> 另有 `test/build/ros2_interop/` 下的 `TestRos2InteropPub` / `TestRos2InteropSub` 两个 ROS2 真机互通判定程序，不注册 CTest，由 `./test/run_ros2_interop.sh` 手动驱动（详见 [ros2-interop.md](docs/features/ros2-interop.md)）。
+> 另有 `build/test/ros2_interop/` 下的 `TestRos2InteropPub` / `TestRos2InteropSub` 两个 ROS2 真机互通判定程序，不注册 CTest，由 `./test/run_ros2_interop.sh` 手动驱动（详见 [ros2-interop.md](docs/features/ros2-interop.md)）。
 
 | 模块 | 测试目标 |
 |---|---|
@@ -150,7 +150,7 @@ cmake --build test/build -j
 ./test/run_tests.sh                # 全量运行（含 2 个 stress，编译期规模 5000/30）
 ./test/run_tests.sh --skip-stress  # 快速冒烟（跳过 2 个 stress）
 ./test/run_tests.sh --full         # 闭环规模：自动重配+重编 stress（100000/50）后全量运行
-./test/run_tests.sh --bin DIR      # 指定测试可执行根目录（默认 test/build，自动定位子目录）
+./test/run_tests.sh --bin DIR      # 指定测试可执行根目录（默认 build/test，自动定位子目录）
 ./test/run_tests.sh --timeout N    # 单测试超时秒数（默认 300；stress 默认 1800）
 ./test/run_tests.sh --sanitizer asan,tsan  # 插桩全量回归：asan、tsan 各一轮顺序执行
 ```
@@ -162,7 +162,7 @@ cmake --build test/build -j
 每个测试为独立可执行（纯 `main()` + `CHECK` 断言，返回 0 = 全部通过），可直接单独运行：
 
 ```bash
-./test/build/yomk_dds_handler/TestYomkDdsTopic
+./build/test/yomk_dds_handler/TestYomkDdsTopic
 ```
 
 2 个 stress 测试的规模是**编译期**旋钮，由 CMake 变量 `STRESS_ITERS` / `STRESS_CYCLES` 注入（缺省 5000/30，闭环规模 100000/50），`./test/run_tests.sh --full` 会自动重配+重编后全量运行。

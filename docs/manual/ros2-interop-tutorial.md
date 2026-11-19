@@ -15,8 +15,8 @@
 - YomkDds 已按 [setup-and-build.md](./setup-and-build.md) 编译安装，examples 已构建（构建方式同 [discovery-server-tutorial.md](./discovery-server-tutorial.md) 前提一节）：
 
 ```bash
-cmake -S examples -B examples/build -DCMAKE_PREFIX_PATH="$YOMK_PREFIX_PATH"
-cmake --build examples/build
+cmake -S examples -B build/examples -DCMAKE_PREFIX_PATH="$YOMK_PREFIX_PATH"
+cmake --build build/examples
 ```
 
 - 已安装 ROS2 并 source 环境（README 真机回归以 Humble 为验证口径；Ubuntu 22.04 示例：`sudo apt install ros-humble-desktop`）：
@@ -111,7 +111,7 @@ ros2 topic echo /chatter_interop std_msgs/msg/String
 
 ```bash
 # 终端 2
-./examples/build/ExampleRos2InteropPub
+./build/examples/ExampleRos2InteropPub
 ```
 
 ROS2 侧观察注意：`ros2 topic list`/`node list` 看不到 YomkDds 端点属正常（机制差异）——图可见性与数据匹配相互独立，互通判定以数据到达为准。
@@ -120,7 +120,7 @@ ROS2 侧观察注意：`ros2 topic list`/`node list` 看不到 YomkDds 端点属
 
 ```bash
 # 终端 1（先启动订阅端：VOLATILE 不回放，订阅端先行匹配后再发布保证送达）
-./examples/build/ExampleRos2InteropSub
+./build/examples/ExampleRos2InteropSub
 ```
 
 ```bash
@@ -131,7 +131,7 @@ ros2 topic pub /chatter_interop std_msgs/msg/String "{data: hello ros2}" -r 1
 
 ### 自动化回归（可选）
 
-真机回归脚本 `./test/run_ros2_interop.sh`（ctest 树不含，手动执行；无参默认取 test 树构建产物 `test/build/ros2_interop/TestRos2InteropPub|Sub`，可选传参覆盖）：两项判定均以数据到达为准并逐行列出两侧收发消息流——方向 1 YomkDds pub 发 30 条 `hello ros2 N` 后 `ros2 topic echo` 在 6s 窗口收到多条；方向 2 `ros2 topic pub` 三路各 `-r 1` 发 `hello yomkdds N`（N=1..3），YomkDds sub 收满 3 条 `[RECV]` 即退；退出码 0 = 两项全过；前置 humble 环境与 test 树构建产物。
+真机回归脚本 `./test/run_ros2_interop.sh`（ctest 树不含，手动执行；无参默认取 test 树构建产物 `build/test/ros2_interop/TestRos2InteropPub|Sub`，可选传参覆盖）：两项判定均以数据到达为准并逐行列出两侧收发消息流——方向 1 YomkDds pub 发 30 条 `hello ros2 N` 后 `ros2 topic echo` 在 6s 窗口收到多条；方向 2 `ros2 topic pub` 三路各 `-r 1` 发 `hello yomkdds N`（N=1..3），YomkDds sub 收满 3 条 `[RECV]` 即退；退出码 0 = 两项全过；前置 humble 环境与 test 树构建产物。
 
 ## 预期输出
 

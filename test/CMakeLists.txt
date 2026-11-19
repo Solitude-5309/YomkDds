@@ -9,9 +9,9 @@
 #   3. 每个被测主题一个独立可执行程序（单一 TU + 纯 main + CHECK），进程隔离，
 #      规避 YomkServer 单进程单次初始化约束。
 #
-# 构建（在 test/ 下独立配置，勿污染主库构建）：
-#   cmake -S test -B test/build -DCMAKE_PREFIX_PATH="/opt/yomk"
-#   cmake --build test/build -j
+# 构建（独立 CMake 工程，构建目录统一收敛到仓库外层 build/ 下）：
+#   cmake -S test -B build/test -DCMAKE_PREFIX_PATH="/opt/yomk"
+#   cmake --build build/test -j
 # sanitizer / coverage 开关见下方 CACHE 选项；静态检查用 test/run_static_checks.sh（独立运行器，读仓库根 .clang-tidy）。
 # =============================================================================
 cmake_minimum_required(VERSION 3.14)

@@ -13,9 +13,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_NAME="YomkDds"
 BUILD_DIR="${SCRIPT_DIR}/build"
 EXAMPLES_DIR="${SCRIPT_DIR}/examples"
-EXAMPLES_BUILD_DIR="${EXAMPLES_DIR}/build"
+EXAMPLES_BUILD_DIR="${BUILD_DIR}/examples"
 TEST_DIR="${SCRIPT_DIR}/test"
-TEST_BUILD_DIR="${TEST_DIR}/build"
+TEST_BUILD_DIR="${BUILD_DIR}/test"
 _ORIG_DIR="$(pwd)"
 
 # 路径规范化：展开 ~ 、相对路径补全

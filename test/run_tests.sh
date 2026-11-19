@@ -7,7 +7,7 @@
 #   ./run_tests.sh --skip-stress 仅运行 20 个非 stress 测试（快速冒烟）
 #   ./run_tests.sh --full        以闭环规模(STRESS_ITERS=100000, STRESS_CYCLES=50)
 #                                 重配+重编 stress 目标后全量运行
-#   ./run_tests.sh --bin DIR     指定测试可执行根目录（默认 <test>/build，自动定位子目录）
+#   ./run_tests.sh --bin DIR     指定测试可执行根目录（默认 <repo>/build/test，自动定位子目录）
 #   ./run_tests.sh --timeout N   覆盖单测试超时秒数（默认 300；stress 默认 1800）
 #   ./run_tests.sh --sanitizer <套件列表>   插桩全量回归，逗号分隔多套顺序执行:
 #       ./run_tests.sh --sanitizer asan        仅 ASan+UBSan 一轮
@@ -22,7 +22,7 @@
 #                    确定性假阳性 double lock（exit 66）并级联假 data race，已在源码侧以
 #                    sleep 轮询等价规避（workerLoop 去 cv 化，论证链见 test/tsan.supp 头注），
 #                    tsan 轮现可全绿
-#       （默认 off 行为不变；插桩可执行缺失时自动配置+构建独立目录 test/build-<套件>，不污染默认 test/build；
+#       （默认 off 行为不变；插桩可执行缺失时自动配置+构建独立目录 build/test-<套件>，不污染默认 build/test；
 #        构建输出实时透传控制台，进度百分比逐行可见，不落盘日志文件——插桩全新全量编译需数分钟）
 #   ./run_tests.sh -h/--help     显示本帮助
 #
@@ -56,8 +56,8 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_DIR="${SCRIPT_DIR}/build"   # --full 重编 stress 的默认构建目录
-BIN_DIR="${BUILD_DIR}"            # 默认从 test/build 定位测试可执行
+BUILD_DIR="${SCRIPT_DIR}/../build/test"   # --full 重编 stress 的默认构建目录（统一收敛到仓库外层 build/ 下）
+BIN_DIR="${BUILD_DIR}"            # 默认从 build/test 定位测试可执行
 USER_BIN_DIR=""                   # 用户显式 --bin 值（多轮 sanitizer 间每轮重置 BIN_DIR 的依据）
 TIMEOUT_SECS=300
 USER_TIMEOUT=0
@@ -151,7 +151,7 @@ cleanup_workdir() {
 trap cleanup_workdir EXIT
 trap 'echo ""; echo "被用户中断"; exit 130' INT TERM
 
-# 定位每个测试可执行（兼容 test/build/<模块目录>/ 与单一 bin 目录两种布局）
+# 定位每个测试可执行（兼容 build/test/<模块目录>/ 与单一 bin 目录两种布局）
 declare -A TEST_BIN
 locate_tests() {
     TEST_BIN=()   # 多轮 sanitizer 间复用: 先清空，防上一轮 BIN_DIR 的旧路径残留误判为就绪
@@ -164,12 +164,12 @@ locate_tests() {
     done
 }
 
-# 构建提示按 sanitizer 轮次生成（插桩使用独立构建目录 test/build-<套件>，输出目录隔离避免污染默认 test/build）
+# 构建提示按 sanitizer 轮次生成（插桩使用独立构建目录 build/test-<套件>，输出目录隔离避免污染默认 build/test）
 build_hint() {
     if [ "${SANITIZER}" = "off" ]; then
-        echo "cmake -S ${SCRIPT_DIR} -B ${SCRIPT_DIR}/build -DCMAKE_PREFIX_PATH=\"\${YOMK_PREFIX_PATH:-/opt/yomk}\" && cmake --build ${SCRIPT_DIR}/build -j"
+        echo "cmake -S ${SCRIPT_DIR} -B ${SCRIPT_DIR}/../build/test -DCMAKE_PREFIX_PATH=\"\${YOMK_PREFIX_PATH:-/opt/yomk}\" && cmake --build ${SCRIPT_DIR}/../build/test -j"
     else
-        echo "cmake -S ${SCRIPT_DIR} -B ${SCRIPT_DIR}/build-${SANITIZER} -DYOMKDDS_TEST_SANITIZER=${SANITIZER} -DCMAKE_PREFIX_PATH=\"\${YOMK_PREFIX_PATH:-/opt/yomk}\" && cmake --build ${SCRIPT_DIR}/build-${SANITIZER} -j"
+        echo "cmake -S ${SCRIPT_DIR} -B ${SCRIPT_DIR}/../build/test-${SANITIZER} -DYOMKDDS_TEST_SANITIZER=${SANITIZER} -DCMAKE_PREFIX_PATH=\"\${YOMK_PREFIX_PATH:-/opt/yomk}\" && cmake --build ${SCRIPT_DIR}/../build/test-${SANITIZER} -j"
     fi
 }
 
@@ -205,11 +205,11 @@ check_bin_ready() {
     return 0
 }
 
-# 插桩轮独有: 测试可执行缺失即自动配置+构建独立插桩目录 test/build-<套件>
+# 插桩轮独有: 测试可执行缺失即自动配置+构建独立插桩目录 build/test-<套件>
 # （构建输出实时透传控制台——进度百分比逐行可见，不落盘日志文件；FULL_MODE 时一并注入
 #   闭环 stress 规模，免去构建完成后再 rebuild_stress_full 的二次重编；插桩开关持久写入该目录 cache）
 ensure_sanitizer_build() {
-    local bdir="${SCRIPT_DIR}/build-${SANITIZER}"
+    local bdir="${SCRIPT_DIR}/../build/test-${SANITIZER}"
     echo "-- [sanitizer=${SANITIZER}] 测试可执行缺失，自动构建 ${bdir}（插桩全新全量编译需数分钟，进度逐行输出）..."
     local start=${SECONDS}
     local -a cfg=(-S "${SCRIPT_DIR}" -B "${bdir}"
@@ -414,7 +414,7 @@ timeout_for() {
 }
 
 # --full：以闭环规模重配+重编 2 个 stress 目标（规模持久写入 <构建目录>/CMakeCache.txt）
-# 入参为构建根目录：默认模式 test/build；插桩轮为其对应 build-<套件> 目录
+# 入参为构建根目录：默认模式 build/test；插桩轮为其对应 test-<套件> 目录
 # （重配沿用该目录既有 cache —— YOMKDDS_TEST_SANITIZER 已持久化，插桩标志不会被清除）
 rebuild_stress_full() {
     local bdir="$1"
@@ -466,9 +466,9 @@ main() {
 
 # 单轮完整流程: 定位/自动构建插桩目录 → 环境契约注入 → 测试循环 → 残留验收
 run_one_suite() {
-    local san_build="${SCRIPT_DIR}/build-${SANITIZER}"
+    local san_build="${SCRIPT_DIR}/../build/test-${SANITIZER}"
     # 多轮 sanitizer 间重置可执行目录: 无显式 --bin 时每轮从默认 build/ 出发（插桩轮
-    # 再切 test/build-<套件>）——否则上一轮的插桩目录（如 build-asan）会被下方 L474/477
+    # 再切 build/test-<套件>）——否则上一轮的插桩目录（如 build-asan）会被下方 L474/477
     # 误判为用户显式 --bin 而原样复用：asan,tsan 连跑时 tsan 轮曾拿 build-asan 的
     # asan 二进制跑（setarch -R 下无 TSan runtime 不报错，测试全过但 tsan 名不副实）
     BIN_DIR="${USER_BIN_DIR:-${BUILD_DIR}}"
@@ -481,7 +481,7 @@ run_one_suite() {
         fi
         precheck_bin
     else
-        # 插桩轮: 默认指向独立插桩构建目录 test/build-<套件>（用户显式 --bin 时尊重其值）
+        # 插桩轮: 默认指向独立插桩构建目录 build/test-<套件>（用户显式 --bin 时尊重其值）
         if [ "${BIN_DIR}" = "${BUILD_DIR}" ]; then
             BIN_DIR="${san_build}"
         fi

@@ -56,7 +56,7 @@ ros2 topic echo /chatter std_msgs/msg/String
 
 ### 真机回归脚本
 
-`./test/run_ros2_interop.sh`（ctest 树不含，手动执行；无参默认取 test 树构建产物 `test/build/ros2_interop/TestRos2InteropPub|Sub`，可选传参覆盖；examples 侧示例仅面向用户教学，不承担判定职责）。两项判定均以**数据到达**为准并逐行列出两侧收发消息流：方向 1 YomkDds pub 发 30 条 `hello ros2 N` → `ros2 topic echo` 6s 窗口收到多条；方向 2 `ros2 topic pub` 三路各 `-r 1` 发 `hello yomkdds N`（N=1..3）→ YomkDds sub 收满 3 条 `[RECV]` 即退。退出码 0=两项全过；前置 humble 环境与 test 树构建产物。
+`./test/run_ros2_interop.sh`（ctest 树不含，手动执行；无参默认取 test 树构建产物 `build/test/ros2_interop/TestRos2InteropPub|Sub`，可选传参覆盖；examples 侧示例仅面向用户教学，不承担判定职责）。两项判定均以**数据到达**为准并逐行列出两侧收发消息流：方向 1 YomkDds pub 发 30 条 `hello ros2 N` → `ros2 topic echo` 6s 窗口收到多条；方向 2 `ros2 topic pub` 三路各 `-r 1` 发 `hello yomkdds N`（N=1..3）→ YomkDds sub 收满 3 条 `[RECV]` 即退。退出码 0=两项全过；前置 humble 环境与 test 树构建产物。
 
 ## 错误与边界行为（限制与注意事项）
 

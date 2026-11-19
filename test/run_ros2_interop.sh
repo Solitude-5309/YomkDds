@@ -5,15 +5,15 @@
 # 前置：
 #   1. ROS2 环境（脚本自动探测版本：优先继承当前终端已 source 的 ROS_DISTRO，
 #      否则取 /opt/ros/* 字典序最后一个发行版；缺失时 exit 2 并提示安装后重跑）
-#   2. test 树构建后的判定二进制（test/build/ros2_interop/TestRos2InteropPub|Sub，
+#   2. test 树构建后的判定二进制（build/test/ros2_interop/TestRos2InteropPub|Sub，
 #      examples 的 ExampleRos2InteropPub|Sub 为用户教学示例，不承担判定职责）
 #
 # 用法：
 #   ./test/run_ros2_interop.sh                # 无参：默认取 test 树构建产物
 #   ./test/run_ros2_interop.sh <Pub> [<Sub>]  # 可选：显式覆盖判定程序路径
 #   （默认：本脚本同目录下 build/ros2_interop/TestRos2InteropPub 与同目录 TestRos2InteropSub；
-#     未构建时先执行 cmake -S test -B test/build -DCMAKE_PREFIX_PATH=/opt/yomk &&
-#     cmake --build test/build --target TestRos2InteropPub TestRos2InteropSub）
+#     未构建时先执行 cmake -S test -B build/test -DCMAKE_PREFIX_PATH=/opt/yomk &&
+#     cmake --build build/test --target TestRos2InteropPub TestRos2InteropSub）
 #
 # 两项判定（以数据到达为准；两侧收发消息流逐条一行展示再判 PASS/FAIL）：
 #   方向 1：TestRos2InteropPub（set_name 新名 + 1Hz 发 30 条 "hello ros2 N" 后自退）→ ros2 topic echo（6s 窗口）收到多条
@@ -27,13 +27,13 @@ set -u
 
 # 判定程序路径：无参默认取本脚本同目录 test 树构建产物，可选传参覆盖（路径固定非必输）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PUB_EXE="${1:-${SCRIPT_DIR}/build/ros2_interop/TestRos2InteropPub}"
+PUB_EXE="${1:-${SCRIPT_DIR}/../build/test/ros2_interop/TestRos2InteropPub}"
 SUB_EXE="${2:-$(dirname "$PUB_EXE")/TestRos2InteropSub}"
 if [ ! -x "$PUB_EXE" ]; then
     echo "[FAIL] 发布端不存在或不可执行: $PUB_EXE"
     echo "       先构建 test 树判定程序："
-    echo "         cmake -S $(dirname "$SCRIPT_DIR")/test -B $SCRIPT_DIR/build -DCMAKE_PREFIX_PATH=/opt/yomk"
-    echo "         cmake --build $SCRIPT_DIR/build --target TestRos2InteropPub TestRos2InteropSub"
+    echo "         cmake -S $(dirname "$SCRIPT_DIR")/test -B $SCRIPT_DIR/../build/test -DCMAKE_PREFIX_PATH=/opt/yomk"
+    echo "         cmake --build $SCRIPT_DIR/../build/test --target TestRos2InteropPub TestRos2InteropSub"
     exit 2
 fi
 if [ ! -x "$SUB_EXE" ]; then

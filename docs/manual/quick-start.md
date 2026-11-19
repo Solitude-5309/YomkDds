@@ -14,7 +14,7 @@
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成 YomkDds 编译安装（能直接运行 `ExampleYomkDdsTopic`）；
 - 一个可用的 C++17 + CMake（>= 3.14）工程环境；
-- YomkDds 示例统一使用 `yomk::dds()` 链式 API（定义于 `YomkDdsAPI.h`），均为完整可复制编译的程序，链接 `YomkDds::YomkDds YomkServer::YomkServer YomkDdsStdMsgs`。
+- YomkDds 示例统一使用 `yomk::dds()` 链式 API（定义于 `YomkDdsAPI.h`），均为完整可复制编译的程序，链接 `YomkDds::YomkDds YomkServer::YomkServer std_msgs`。
 
 ## 分步操作
 
@@ -32,14 +32,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(YomkServer REQUIRED)
 find_package(YomkDds REQUIRED)
 
-# YomkDdsStdMsgs 无导出包、以裸库名链接，需由扩展 Config 提供的 lib 目录补齐搜索路径
+# std_msgs 无导出包、以裸库名链接，需由扩展 Config 提供的 lib 目录补齐搜索路径
 link_directories(${YomkDds_LIB_DIR})
 
 add_executable(first_pubsub first_pubsub.cpp)
-target_link_libraries(first_pubsub PRIVATE YomkDds::YomkDds YomkServer::YomkServer YomkDdsStdMsgs)
+target_link_libraries(first_pubsub PRIVATE YomkDds::YomkDds YomkServer::YomkServer std_msgs)
 ```
 
-要点：链接 `YomkDds::YomkDds YomkServer::YomkServer YomkDdsStdMsgs` 三个库目标；`YomkDdsStdMsgs` 以裸库名链接，须保留 `link_directories(${YomkDds_LIB_DIR})` 这一行（该写法与仓库 `examples/CMakeLists.txt` 一致）。
+要点：链接 `YomkDds::YomkDds YomkServer::YomkServer std_msgs` 三个库目标；`std_msgs` 以裸库名链接，须保留 `link_directories(${YomkDds_LIB_DIR})` 这一行（该写法与仓库 `examples/CMakeLists.txt` 一致）。
 
 ### 第 2 步：编写第一个发布订阅程序
 
@@ -49,8 +49,8 @@ target_link_libraries(first_pubsub PRIVATE YomkDds::YomkDds YomkServer::YomkServ
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 #include <yomk/dds/YomkDdsAPI.h>
-#include <yomk/dds/YomkDdsStdMsgs.hpp>
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
+#include <yomk/dds_idl/std_msgs.hpp>
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp>
 #include <atomic>
 #include <chrono>
 #include <string>
@@ -75,23 +75,23 @@ int main(int argc, char *argv[])
     yomk::dds().node("node0").create();
 
     // 3. 注册发布主题（type 所有权移交 FastDDSNode）
-    yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).create_pub();
+    yomk::dds().node("node0").topic("my_topic").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).create_pub();
 
     // 4. 注册订阅主题（data 由内部 create_data() 创建，回调中转型使用）
     std::atomic<int> received{0};
     auto onMessage = [&](const void *data)
     {
-        auto *msg = static_cast<const YomkDdsStd::MString *>(data);
+        auto *msg = static_cast<const yomk::dds_idl::std_msgs::MString *>(data);
         received++;
         yomk::log().tag("PubSubExample").info("[RECV] ", msg->data());
     };
-    yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
+    yomk::dds().node("node0").topic("my_topic").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).sub_cb(onMessage).create_sub();
 
     // 5. 等待 DDS discovery 完成后发布数据
     std::this_thread::sleep_for(std::chrono::seconds(1));
     for (int i = 0; i < 5; ++i)
     {
-        YomkDdsStd::MString msg;
+        yomk::dds_idl::std_msgs::MString msg;
         msg.data("hello " + std::to_string(i));
         yomk::dds().node("node0").topic("my_topic").data(&msg).pub();
         yomk::log().tag("PubSubExample").info("[SEND] ", msg.data());
@@ -178,7 +178,7 @@ Ctrl+C 先停发布端，再停订阅端，订阅端会打印累计接收条数�
 | 订阅端一条消息都收不到 | 先查两端**域号**是否一致：`yomk::dds().node(...).create()` 的 domain() 缺省读环境变量 `YOMKDDS_DDS_DOMAIN_ID`（合法范围 [0,232]，默认 0），两个进程域号不同即互不可见，`echo $YOMKDDS_DDS_DOMAIN_ID` 对齐；再查 **discovery 是否完成**：注册订阅后立即发布，首条消息可能因 discovery 时序丢失，发布前 `sleep 1s`（本文示例已内置） |
 | 双进程演示订阅端有输出、自己编译的程序收不到 | 检查两端主题名是否逐字节一致（本文示例为 `my_topic` / `hello_world`），以及 type 是否为同一种消息类型 |
 | 编译报找不到 `yomk/dds/YomkDdsAPI.h` 等头文件 | CMake 未找到包：确认 `-DCMAKE_PREFIX_PATH="$YOMK_PREFIX_PATH"`，且 `find_package(YomkServer REQUIRED)` 与 `find_package(YomkDds REQUIRED)` 均在 target 之前 |
-| 链接报 `cannot find -lYomkDdsStdMsgs` | `YomkDdsStdMsgs` 无导出包、以裸库名链接：保留 `link_directories(${YomkDds_LIB_DIR})` 一行（见第 1 步 CMake 片段） |
+| 链接报 `cannot find -lstd_msgs` | `std_msgs` 无导出包、以裸库名链接：保留 `link_directories(${YomkDds_LIB_DIR})` 一行（见第 1 步 CMake 片段） |
 | 运行报 `error while loading shared libraries` | 动态库缓存未注册：按 [setup-and-build.md](./setup-and-build.md) 排障一节处理（检查 `/etc/ld.so.conf.d/yomk.conf` 并 `sudo ldconfig`） |
 | 程序退出前崩溃或资源告警 | 未删除节点即退出：退出前调用 `yomk::dds().node("node0").remove()` 显式销毁 DDS 实体 |
 

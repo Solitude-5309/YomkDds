@@ -37,10 +37,10 @@ yomkdds topic pub -e <主题名>        # 等价长名 --example
 - **示例输出**：
 
 ```
-Type: YomkDdsStd::MString
+Type: yomk::dds_idl::std_msgs::MString
 
 IDL:
-struct YomkDdsStd::MString {
+struct yomk::dds_idl::std_msgs::MString {
     string data;
 };
 
@@ -75,7 +75,7 @@ yomkdds topic pub -ef <主题名> [-o 目录]        # 等价长名 --example-fi
 - **示例输出**：
 
 ```
-message description written: hello_world_msg_2026-09-28-12-14-42-626.json (topic: hello_world, type: YomkDdsStd::MString)
+message description written: hello_world_msg_2026-09-28-12-14-42-626.json (topic: hello_world, type: yomk::dds_idl::std_msgs::MString)
 ```
 
 文件名 `<主题名>_msg_<时间戳>.json`，时间戳格式为 年-月-日-时-分-秒-毫秒。文件内容（整体就是一份合法发布载荷）：
@@ -131,7 +131,7 @@ yomkdds topic pub [--qos-ros | --qos-KEY VAL ... | --qos-file FILE] <主题名> 
 
 ```bash
 $ yomkdds topic pub -ef hello_world
-message description written: hello_world_msg_2026-09-28-12-14-42-626.json (topic: hello_world, type: YomkDdsStd::MString)
+message description written: hello_world_msg_2026-09-28-12-14-42-626.json (topic: hello_world, type: yomk::dds_idl::std_msgs::MString)
 # 编辑文件改字段值后按文件发布（同一发布链路，多行缩进 JSON 直接可发）
 $ yomkdds topic pub hello_world -f hello_world_msg_2026-09-28-12-14-42-626.json
 publishing to topic "hello_world" at 1.000000 Hz, press Ctrl+C to stop
@@ -218,7 +218,7 @@ yomkdds interface show <类型名>
 - **示例输出**（无依赖类型时单块）：
 
 ```
-struct YomkDdsStd::MString {
+struct yomk::dds_idl::std_msgs::MString {
     string data;
 };
 ```
@@ -226,19 +226,19 @@ struct YomkDdsStd::MString {
 - **示例输出**（含嵌套 struct 依赖时，依赖定义按拓扑序前置平铺，块间空行）：
 
 ```
-struct YomkDdsStd::MultiArrayDimension {
+struct yomk::dds_idl::std_msgs::MultiArrayDimension {
     string label;
     uint32 size;
     uint32 stride;
 };
 
-struct YomkDdsStd::MultiArrayLayout {
-    sequence<YomkDdsStd::MultiArrayDimension> dim;
+struct yomk::dds_idl::std_msgs::MultiArrayLayout {
+    sequence<yomk::dds_idl::std_msgs::MultiArrayDimension> dim;
     uint32 data_offset;
 };
 
-struct YomkDdsStd::MUCharMultiArray {
-    YomkDdsStd::MultiArrayLayout layout;
+struct yomk::dds_idl::std_msgs::MUCharMultiArray {
+    yomk::dds_idl::std_msgs::MultiArrayLayout layout;
     sequence<octet> data;
 };
 ```
@@ -267,7 +267,7 @@ yomkdds interface list
 - **示例输出**：
 
 ```
-YomkDdsStd::MString
+yomk::dds_idl::std_msgs::MString
 ```
 
 - **要点**：域内无任何类型报错退出（find 族语义）。
@@ -282,7 +282,7 @@ YomkDdsStd::MString
 yomkdds topic list -t
 
 # 2. 看消息结构（确认字段名与类型，便于构造 JSON）
-yomkdds interface show YomkDdsStd::MString
+yomkdds interface show yomk::dds_idl::std_msgs::MString
 
 # 3. 拿载荷模板（example 段是可直接改值发布的完整命令）
 yomkdds topic pub -e hello_world
@@ -308,18 +308,18 @@ ExampleYomkDdsSub
 ```bash
 # 终端 2
 yomkdds interface list
-# YomkDdsStd::MString
+# yomk::dds_idl::std_msgs::MString
 
-yomkdds interface show YomkDdsStd::MString
-# struct YomkDdsStd::MString {
+yomkdds interface show yomk::dds_idl::std_msgs::MString
+# struct yomk::dds_idl::std_msgs::MString {
 #     string data;
 # };
 
 yomkdds topic pub -e hello_world
-# Type: YomkDdsStd::MString
+# Type: yomk::dds_idl::std_msgs::MString
 #
 # IDL:
-# struct YomkDdsStd::MString {
+# struct yomk::dds_idl::std_msgs::MString {
 #     string data;
 # };
 #

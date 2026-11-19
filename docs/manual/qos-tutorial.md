@@ -36,8 +36,8 @@
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 #include <yomk/dds/YomkDdsAPI.h>
-#include <yomk/dds/YomkDdsStdMsgs.hpp>
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
+#include <yomk/dds_idl/std_msgs.hpp>
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp>
 #include <atomic>
 #include <chrono>
 #include <string>
@@ -58,22 +58,22 @@ int main(int argc, char *argv[])
     std::atomic<int> received{0};
     auto onMessage = [&](const void *data)
     {
-        auto *msg = static_cast<const YomkDdsStd::MString *>(data);
+        auto *msg = static_cast<const yomk::dds_idl::std_msgs::MString *>(data);
         received++;
         yomk::log().tag("QosExample").info("[RECV] ", msg->data());
     };
-    yomk::dds().node("qos_node").topic("qos_topic").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
+    yomk::dds().node("qos_node").topic("qos_topic").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).sub_cb(onMessage).qos(DDSQosProfile::ros2DefaultSubscriber()).create_sub();
 
     // 4. 注册发布主题：ROS2 默认发布底座上逐项覆盖（如只设 depth=10）
     DDSQosProfile pubQos = DDSQosProfile::ros2DefaultPublisher();
     pubQos.depth = 10;
-    yomk::dds().node("qos_node").topic("qos_topic").type(new YomkDdsStd::MStringPubSubType()).qos(pubQos).create_pub();
+    yomk::dds().node("qos_node").topic("qos_topic").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).qos(pubQos).create_pub();
 
     // 5. 等待 DDS discovery 完成后发布
     std::this_thread::sleep_for(std::chrono::seconds(1));
     for (int i = 0; i < 5; ++i)
     {
-        YomkDdsStd::MString msg;
+        yomk::dds_idl::std_msgs::MString msg;
         msg.data("hello " + std::to_string(i));
         yomk::dds().node("qos_node").topic("qos_topic").data(&msg).pub();
         yomk::log().tag("QosExample").info("[SEND] ", msg.data());

@@ -64,10 +64,10 @@ source build_ubuntu.sh
 | 步骤 | 内容 |
 |---|---|
 | 步骤 1/3 | 编译安装主库 YomkDds |
-| 步骤 2/3 | 编译安装 msg 类型库 YomkDdsStdMsgs（含 SWIG Python 绑定） |
+| 步骤 2/3 | 调用 `scripts/build_idl.sh` 编译安装 msg 类型库 std_msgs（源 `idl/std_msgs.idl`，含 SWIG Python 绑定） |
 | 步骤 3/3 | 编译安装示例程序（随扩展一并安装到 `<安装路径>/bin`） |
 
-任一步失败（如「cmake 配置失败」「编译失败」「msg 编译安装失败」「示例程序编译失败」）脚本立即中止，修复后重新 `source build_ubuntu.sh` 即可。
+任一步失败（如「cmake 配置失败」「编译失败」「msg 类型库编译安装失败」「示例程序编译失败」）脚本立即中止，修复后重新 `source build_ubuntu.sh` 即可。
 
 ### 第 6 步：动态库注册（自动完成，无需手动配置）
 
@@ -146,7 +146,7 @@ ExampleYomkDdsTopic
 | 脚本提示「未检测到环境变量 YOMK_PREFIX_PATH」 | 未通过 YomkServer 的 `build_ubuntu.sh` 安装或未生效：手动输入 YomkServer 安装路径；新终端需确认 YomkServer 安装时已写入的环境变量（重开终端或检查其安装文档） |
 | 脚本询问依赖时选择 n 后提示「依赖不完整，脚本终止」 | 按提示先手动补齐缺失项（如 `sudo apt install build-essential cmake swig python3-dev`），或重跑脚本回车选择 y |
 | 步骤 1/3 报「cmake 配置失败」 | YomkServer 安装路径输入错误（找不到 YomkServer 包）：重新 `source build_ubuntu.sh`，第 2 步输入正确的 YomkServer 安装路径 |
-| 步骤 2/3 报「msg 编译安装失败」 | 多为 swig / python3-dev 缺失（msg 类型库 SWIG Python 绑定编译依赖）：回到第 4 步让脚本检测补齐后重跑 |
+| 步骤 2/3 报「msg 类型库编译安装失败」 | 多为 swig / python3-dev 缺失（build_idl.sh 编译 msg 类型库 SWIG Python 绑定的依赖；缺 java 时报 fastddsgen 无法运行）：回到第 4 步让脚本检测补齐后重跑 |
 | 运行示例报 `error while loading shared libraries`（找不到扩展 so） | 动态库缓存未更新：检查 `/etc/ld.so.conf.d/yomk.conf` 是否包含 `<安装路径>/lib` 一行（缺失则重新运行安装脚本），随后执行 `sudo ldconfig` 刷新；或确认是在安装完成之后新开的终端中运行 |
 | 安装路径输错，想重新安装 | 直接重新 `source build_ubuntu.sh`，在路径询问处输入正确路径即可 |
 | `ExampleYomkDdsTopic` 命令未找到 | 安装路径的 `bin` 不在 `PATH` 中：用完整路径运行（`$YOMK_PREFIX_PATH/bin/ExampleYomkDdsTopic`），或先 `export PATH=$YOMK_PREFIX_PATH/bin:$PATH` |

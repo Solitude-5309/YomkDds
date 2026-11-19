@@ -25,7 +25,7 @@ cmake --build build/examples
 source /opt/ros/humble/setup.bash
 ```
 
-- 消息类型对应：示例使用 `YomkDdsStd::MString` 与 ROS2 `std_msgs/msg/String`——两者同为单 string 字段，CDR 编码布局一致（ROS2 msg 严格转 idl 生成即满足布局前提）；
+- 消息类型对应：示例使用 `yomk::dds_idl::std_msgs::MString` 与 ROS2 `std_msgs/msg/String`——两者同为单 string 字段，CDR 编码布局一致（ROS2 msg 严格转 idl 生成即满足布局前提）；
 - **互通三要素**（任一不一致即不匹配，[ros2-interop.md](../features/ros2-interop.md) 原文）：
 
 | 要素 | 说明 |
@@ -55,7 +55,7 @@ if (resp.status != yomk::payload::ResStatus::Succeeded)
 }
 
 // 2. 类型对象 new 后、移交前 set_name 成 ROS2 约定名（type() 实参位内联 new 无法先改名）
-auto *type = new YomkDdsStd::MStringPubSubType();
+auto *type = new yomk::dds_idl::std_msgs::MStringPubSubType();
 type->set_name("std_msgs::msg::dds_::String_");
 // QoS 用 ROS2 发布端默认底座：RELIABLE offered 对 ros2 topic echo 任意 requested 可匹配
 resp = yomk::dds().node("interop_pub").topic("rt/chatter_interop").type(type).qos(DDSQosProfile::ros2DefaultPublisher()).create_pub();
@@ -67,7 +67,7 @@ if (resp.status != yomk::payload::ResStatus::Succeeded)
 }
 
 // 3. 1Hz 持续发布（Ctrl+C/SIGTERM 置位 g_stop 后跳出，清理退出）
-YomkDdsStd::MString msg;
+yomk::dds_idl::std_msgs::MString msg;
 msg.data("interop hello " + std::to_string(seq++));
 resp = yomk::dds().node("interop_pub").topic("rt/chatter_interop").data(&msg).pub();
 ```
@@ -75,7 +75,7 @@ resp = yomk::dds().node("interop_pub").topic("rt/chatter_interop").data(&msg).pu
 两个关键约束：
 
 - `set_name` 必须在类型对象**移交（传入 `type()`）之前**调用——`type()` 实参位内联 `new` 无法先改名；
-- **原自名失效**：改名后原类型名（如 `YomkDdsStd::MString`）不再注册——同进程内 YomkDds 原生话题与互通话题需两个类型实例两个名。
+- **原自名失效**：改名后原类型名（如 `yomk::dds_idl::std_msgs::MString`）不再注册——同进程内 YomkDds 原生话题与互通话题需两个类型实例两个名。
 
 ### 第 2 步：YomkDds 侧代码走读（订阅端）
 
@@ -87,11 +87,11 @@ auto resp = yomk::dds().node("interop_sub").domain(0).create();
 
 // 类型对象 new 后、移交前 set_name 成 ROS2 约定名（type() 实参位内联 new 无法先改名）
 std::atomic<int> received{0};
-auto* type = new YomkDdsStd::MStringPubSubType();
+auto* type = new yomk::dds_idl::std_msgs::MStringPubSubType();
 type->set_name("std_msgs::msg::dds_::String_");
 auto onMessage = [&](const void* data)
 {
-    auto* msg = static_cast<const YomkDdsStd::MString*>(data);
+    auto* msg = static_cast<const yomk::dds_idl::std_msgs::MString*>(data);
     received++;
     yomk::log().tag("ExampleRos2InteropSub").info("[RECV] ", msg->data());
 };
@@ -147,7 +147,7 @@ ros2 topic pub /chatter_interop std_msgs/msg/String "{data: hello ros2}" -r 1
 | 类型名不匹配 | `set_name` 未调用、名字拼错或时机错误——必须在类型对象移交（传入 `type()`）之前调用，`type()` 实参位内联 `new` 无法先改名；名字须为 ROS2 约定形态 `pkg::msg::dds_::Type_` |
 | RELIABLE 订阅端收不到 BEST_EFFORT 发布端 | QoS 不兼容：匹配规则 requested≤offered——自定义 QoS 时注意匹配规则（如 RELIABLE 订阅端收不到 BEST_EFFORT 发布端），不当配置可能静默断链；建议先用示例口径（pub `ros2DefaultPublisher()` + sub `ros2DefaultSubscriber()`，对 `ros2 topic echo/pub` 全兼容） |
 | 类型名一致仍收不到 | 两端消息 CDR 编码布局不一致：字段结构不同的类型即使同名也不兼容——ROS2 msg 严格转 idl 生成即满足（示例的 MString 与 std_msgs/msg/String 同为单 string 字段） |
-| 同进程内 YomkDds 原生话题失效 | 原自名失效副作用：改名后原类型名（如 `YomkDdsStd::MString`）不再注册——原生话题与互通话题需两个类型实例两个名 |
+| 同进程内 YomkDds 原生话题失效 | 原自名失效副作用：改名后原类型名（如 `yomk::dds_idl::std_msgs::MString`）不再注册——原生话题与互通话题需两个类型实例两个名 |
 | `ros2 topic list`/`node list` 看不到 YomkDds 端点 | 属正常（机制差异）：图可见性与数据匹配相互独立，互通判定以数据到达为准 |
 | ROS2 侧 `ros2 topic pub` 发出后 YomkDds 订阅端收不到 | 先启动订阅端再发布：VOLATILE 不回放历史，订阅端先行匹配后再发布保证送达（方向 2 验证步骤已按此排序） |
 

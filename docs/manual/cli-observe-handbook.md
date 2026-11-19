@@ -49,7 +49,7 @@ yomkdds topic print [--qos-ros | --qos-KEY VAL ... | --qos-file FILE] <主题名
 - **示例输出**：
 
 ```
-[17:18:34.868398] topic=hello_world type=YomkDdsStd::MString seq=1
+[17:18:34.868398] topic=hello_world type=yomk::dds_idl::std_msgs::MString seq=1
 {"data":"hello world 0"}
 ```
 
@@ -111,7 +111,7 @@ hello_world
 `-t` 类型名模式输出示例：
 
 ```
-hello_world [YomkDdsStd::MString]
+hello_world [yomk::dds_idl::std_msgs::MString]
 ```
 
 域内无任何已发布主题时输出 `no topics discovered on domain N`（types 模式同）。
@@ -135,7 +135,7 @@ yomkdds topic info -v hello_world     # 端点详情模式：逐端点列出 Nod
 - **示例输出**（三行详情，类型名与计数直出）：
 
 ```
-Type: YomkDdsStd::MString
+Type: yomk::dds_idl::std_msgs::MString
 Publisher count: 1
 Subscription count: 0
 ```
@@ -143,7 +143,7 @@ Subscription count: 0
 `-v` 端点详情模式输出示例（count 为 0 的端点类型无清单段，多端点时逐端点块以空行分隔）：
 
 ```
-Type: YomkDdsStd::MString
+Type: yomk::dds_idl::std_msgs::MString
 
 Publisher count: 1
 
@@ -179,7 +179,7 @@ QoS 键值行分两组：**ROS2 对齐组**恒输出前 8 行（History/Depth/Re
 - **完整命令行**：
 
 ```bash
-yomkdds topic type hello_world        # 输出：YomkDdsStd::MString
+yomkdds topic type hello_world        # 输出：yomk::dds_idl::std_msgs::MString
 ```
 
 - **关键选项**：无；未发现主题时报错退出（`topic [<主题名>] not found`，与 topic info 同语义）。
@@ -191,7 +191,7 @@ yomkdds topic type hello_world        # 输出：YomkDdsStd::MString
 - **完整命令行**：
 
 ```bash
-yomkdds topic find YomkDdsStd::MString       # 输出：hello_world
+yomkdds topic find yomk::dds_idl::std_msgs::MString       # 输出：hello_world
 ```
 
 - **关键选项**：无；类型名精确匹配（可发现类型名拼写错误），域内无该类型主题时报错退出（`type [<类型名>] not found`）。
@@ -235,7 +235,7 @@ yomkdds node info pub_node          # 默认域 0
 pub_node
   Subscribers:
   Publishers:
-    hello_world: YomkDdsStd::MString
+    hello_world: yomk::dds_idl::std_msgs::MString
 ```
 
 - **等价库调用**：`yomk::dds().debug().node("pub_node").rounds(5).interval(200).info()`（返回结构化 `NodeInfo`，段头与缩进属 CLI 渲染）。
@@ -277,17 +277,17 @@ ExampleYomkDdsPub
 ```bash
 # 终端 2：主题与类型观察
 yomkdds topic list -t
-# hello_world [YomkDdsStd::MString]
+# hello_world [yomk::dds_idl::std_msgs::MString]
 
 yomkdds topic info hello_world
-# Type: YomkDdsStd::MString
+# Type: yomk::dds_idl::std_msgs::MString
 # Publisher count: 1
 # Subscription count: 0
 
 yomkdds topic type hello_world
-# YomkDdsStd::MString
+# yomk::dds_idl::std_msgs::MString
 
-yomkdds topic find YomkDdsStd::MString
+yomkdds topic find yomk::dds_idl::std_msgs::MString
 # hello_world
 ```
 
@@ -300,13 +300,13 @@ yomkdds node info pub_node
 # pub_node
 #   Subscribers:
 #   Publishers:
-#     hello_world: YomkDdsStd::MString
+#     hello_world: yomk::dds_idl::std_msgs::MString
 ```
 
 ```bash
 # 终端 2：数据流观察（持续型，Ctrl+C 退出）
 yomkdds topic print hello_world
-# [17:18:34.868398] topic=hello_world type=YomkDdsStd::MString seq=1
+# [17:18:34.868398] topic=hello_world type=yomk::dds_idl::std_msgs::MString seq=1
 # {"data":"hello world 0"}
 # （每秒新增一条）
 

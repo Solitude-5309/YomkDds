@@ -30,7 +30,7 @@ yomk::dds().node("interop_pub").topic("rt/chatter").type(type).qos(DDSQosProfile
 ```cpp
 DDSQosProfile qos = DDSQosProfile::ros2DefaultPublisher();
 qos.depth = 10;   // 未设置项为哨兵保持底座值，仅覆盖 depth
-yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).qos(qos).create_pub();
+yomk::dds().node("node0").topic("my_topic").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).qos(qos).create_pub();
 ```
 
 ### CLI 侧（yomkdds 命令行）

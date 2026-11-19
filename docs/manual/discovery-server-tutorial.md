@@ -90,7 +90,7 @@ if (resp.status != yomk::payload::ResStatus::Succeeded)
 }
 
 // 2. 注册发布主题：type 所有权移交服务端，new 后无需自行 delete
-resp = yomk::dds().node("ds_pub_node").topic("ds_hello_world").type(new YomkDdsStd::MStringPubSubType()).create_pub();
+resp = yomk::dds().node("ds_pub_node").topic("ds_hello_world").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).create_pub();
 ```
 
 发布主循环（每 1s 发布一次直到 Ctrl+C；`pub()` 失败计数）：
@@ -98,7 +98,7 @@ resp = yomk::dds().node("ds_pub_node").topic("ds_hello_world").type(new YomkDdsS
 ```cpp
 while (!g_stop.load())
 {
-    YomkDdsStd::MString msg;
+    yomk::dds_idl::std_msgs::MString msg;
     msg.data("hello world " + std::to_string(total));
     resp = yomk::dds().node("ds_pub_node").topic("ds_hello_world").data(&msg).pub();
     // ... 成功打印 [SEND]，失败打印 [SEND] publish failed ...
@@ -117,11 +117,11 @@ auto resp = yomk::dds().node("ds_sub_node").domain(200).create();
 std::atomic<int> received{0};
 auto onMessage = [&](const void* data)
 {
-    auto* msg = static_cast<const YomkDdsStd::MString*>(data);
+    auto* msg = static_cast<const yomk::dds_idl::std_msgs::MString*>(data);
     received++;
     yomk::log().tag("ExampleDiscoverServerSub").info("[RECV] ", msg->data());
 };
-resp = yomk::dds().node("ds_sub_node").topic("ds_hello_world").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
+resp = yomk::dds().node("ds_sub_node").topic("ds_hello_world").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).sub_cb(onMessage).create_sub();
 ```
 
 两端主题均为 `ds_hello_world`（MString 类型）；三个终端的运行命令见「预期输出」一节。

@@ -35,8 +35,8 @@ loan 发布的四步循环：
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 #include <yomk/dds/YomkDdsAPI.h>
-#include <yomk/dds/YomkDdsStdMsgs.hpp>
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
+#include <yomk/dds_idl/std_msgs.hpp>
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp>
 #include <chrono>
 #include <thread>
 
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     // 2. 创建节点与发布主题（loan 仅支持 plain 类型：纯基础类型成员 + FINAL 可扩展性；
     //    domainId 缺省取环境变量 YOMKDDS_DDS_DOMAIN_ID）
     yomk::dds().node("node0").create();
-    yomk::dds().node("node0").topic("int_topic").type(new YomkDdsStd::MInt32PubSubType()).create_pub();
+    yomk::dds().node("node0").topic("int_topic").type(new yomk::dds_idl::std_msgs::MInt32PubSubType()).create_pub();
 
     // 3. 等待 DDS discovery 完成后借出发布
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -61,13 +61,13 @@ int main(int argc, char *argv[])
         if (sample != nullptr)
         {
             // 直接在池内填值后发布，免序列化；write 后中间件收回指针，不可再访问
-            static_cast<YomkDdsStd::MInt32 *>(sample)->data(i);
+            static_cast<yomk::dds_idl::std_msgs::MInt32 *>(sample)->data(i);
             yomk::dds().node("node0").topic("int_topic").data(sample).pub();
         }
         else
         {
             // loan 失败：回退普通发布路径
-            YomkDdsStd::MInt32 msg;
+            yomk::dds_idl::std_msgs::MInt32 msg;
             msg.data(i);
             yomk::dds().node("node0").topic("int_topic").data(&msg).pub();
         }
@@ -93,14 +93,14 @@ int main(int argc, char *argv[])
 |---|---|
 | `void* sample = yomk::dds().node("node0").topic("int_topic").loan();` | 借出 writer 池内样本；返回值即样本指针，判空即失败判定 |
 | `if (sample != nullptr)` | **必须判空**：非 plain 类型或池耗尽时返回 `nullptr` |
-| `static_cast<YomkDdsStd::MInt32 *>(sample)->data(i);` | 直接在池内样本上填值，免序列化 |
+| `static_cast<yomk::dds_idl::std_msgs::MInt32 *>(sample)->data(i);` | 直接在池内样本上填值，免序列化 |
 | `yomk::dds().node("node0").topic("int_topic").data(sample).pub();` | 用与普通发布相同的 pub() 链发布借出样本；write 后指针即被中间件收回，**不可再访问、须重新借出** |
 | `else` 分支 | loan 失败回退普通发布路径：栈上实例填值后按借用指针发布 |
 | `...topic(topicName).sample(sample).return_loan()` | 归还未发布的借出缓冲，避免池泄漏；仅对借出后**未发布**的样本调用 |
 
 ### plain 类型判定与失败回退
 
-- **适用条件**：仅 plain 类型可借出（纯基础类型成员 + FINAL 可扩展性，如 MInt32、MColorRGBA）；
+- **适用条件**：仅 plain 类型可借出（纯基础类型成员 + FINAL 可扩展性，如 MInt32、MFloat32）；
 - **失败回退**：含 string/sequence 的类型 loan 失败返回 nullptr，自动回退普通发布（示例程序因此无论借出成败都能发出消息）。
 
 ### 何时用 / 不用 loan

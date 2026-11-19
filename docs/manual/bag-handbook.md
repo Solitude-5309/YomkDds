@@ -131,7 +131,7 @@ yomkdds bag record hello_world
         {
             "topic_metadata": {
                 "name": "hello_world",
-                "type": "YomkDdsStd::MString",
+                "type": "yomk::dds_idl::std_msgs::MString",
                 "qos": "RELIABLE,TRANSIENT_LOCAL"
             },
             "message_count": 12
@@ -292,7 +292,7 @@ ExampleYomkDdsPub
 # 终端 2：录制 hello_world 约 10 秒后按 Ctrl+C 停止
 yomkdds bag record hello_world
 # [19:37:30.123456] recording topics from 1 list item(s) on domain 0, press p to pause, r to resume, Ctrl+C to stop
-# recording topic=hello_world type=YomkDdsStd::MString
+# recording topic=hello_world type=yomk::dds_idl::std_msgs::MString
 # ...等待约 10 秒...
 # ^C
 ```
@@ -340,7 +340,7 @@ yomkdds bag info out_trimmed
 
 ```
 [19:37:30.123456] recording topics from 1 list item(s) on domain 0, press p to pause, r to resume, Ctrl+C to stop
-recording topic=hello_world type=YomkDdsStd::MString
+recording topic=hello_world type=yomk::dds_idl::std_msgs::MString
 recording paused
 recording resumed
 ^C
@@ -363,7 +363,7 @@ Duration:          4.012345678s
 Start:             Oct  2 2026 19:37:33.726412000 (1791953853.726412000)
 End:               Oct  2 2026 19:37:37.738757678 (1791953857.738757678)
 Messages:          12
-Topic information: Topic: hello_world | Type: YomkDdsStd::MString | QoS: RELIABLE,TRANSIENT_LOCAL | Count: 12 | Serialization Format: cdr
+Topic information: Topic: hello_world | Type: yomk::dds_idl::std_msgs::MString | QoS: RELIABLE,TRANSIENT_LOCAL | Count: 12 | Serialization Format: cdr
 ```
 
 ### bag play
@@ -372,8 +372,8 @@ Topic information: Topic: hello_world | Type: YomkDdsStd::MString | QoS: RELIABL
 
 ```text
 replaying bag [ bag_in ] on domain 0 , rate=1 , press p to pause, r to resume, +/- rate, Ctrl+C to stop
-replaying topic=/chatter type=YomkDdsStd::MString qos=RELIABLE,TRANSIENT_LOCAL
-replaying topic=/battery type=YomkDdsStd::MInt32 qos=RELIABLE,TRANSIENT_LOCAL
+replaying topic=/chatter type=yomk::dds_idl::std_msgs::MString qos=RELIABLE,TRANSIENT_LOCAL
+replaying topic=/battery type=yomk::dds_idl::std_msgs::MInt32 qos=RELIABLE,TRANSIENT_LOCAL
 replaying bag [bag_in]: 60 messages / duration 00-00-06_000-000-000 / start 2026-10-08_09-52-22_685-614-542
 bag_in
 /chatter: 30 条 / 150 字节
@@ -398,7 +398,7 @@ reindexing complete
 
 1. 终端 2 录制收尾打印 bag 目录名与 `hello_world: N 条 / M 字节`（N 约等于录制秒数，发布端 1 Hz）；
 2. `bag info` 显示 `Storage id: mcap` 与该主题计数行；
-3. 回放期间终端 3 的 `topic print` 逐条打印消息 JSON（形如 `[17:18:34.868398] topic=hello_world type=YomkDdsStd::MString seq=1` 与 `{"data":"hello world 0"}` 两行一组）；
+3. 回放期间终端 3 的 `topic print` 逐条打印消息 JSON（形如 `[17:18:34.868398] topic=hello_world type=yomk::dds_idl::std_msgs::MString seq=1` 与 `{"data":"hello world 0"}` 两行一组）；
 4. `bag play` 播毕打印收尾统计行 `hello_world: N 条 / M 字节`；
 5. convert 打印 `converted out_trimmed: ...` 一行，`bag info out_trimmed` 可正常查看（时长约 5 秒分片）。
 

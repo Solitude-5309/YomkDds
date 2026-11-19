@@ -23,10 +23,10 @@ YomkDds 与 ROS2 在同一 DDS 域内互通（YomkDds 节点发布、`ros2` 节�
 
 ```cpp
 #include <yomk/dds/YomkDdsAPI.h>
-#include <yomk/dds/YomkDdsStdMsgs.hpp>
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
+#include <yomk/dds_idl/std_msgs.hpp>
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp>
 
-auto *type = new YomkDdsStd::MStringPubSubType();
+auto *type = new yomk::dds_idl::std_msgs::MStringPubSubType();
 type->set_name("std_msgs::msg::dds_::String_");   // ROS2 命名（须在移交前改）
 yomk::dds().node("interop_pub").domain(0).create();
 // DDS 层话题名带 rt/ 前缀（rmw_fastrtps 对语义名 /chatter 的实际 DDS 名），QoS 用 ROS2 发布端默认底座
@@ -62,7 +62,7 @@ ros2 topic echo /chatter std_msgs/msg/String
 
 副作用提示（按 README 原文逐条）：
 
-- **原自名失效**：改名后原类型名（如 `YomkDdsStd::MString`）不再注册——同进程内 YomkDds 原生话题与互通话题需两个类型实例两个名；
+- **原自名失效**：改名后原类型名（如 `yomk::dds_idl::std_msgs::MString`）不再注册——同进程内 YomkDds 原生话题与互通话题需两个类型实例两个名；
 - **匹配语义**：ROS2 Humble 不注册 TypeObject、不发 TypeInformation，匹配退化为端点 `type_name` 字符串比较，改名全链路一致即通；Fast DDS 3.x 内部对跑：对称/不对称改名均匹配正常（两端均携带 TypeInformation，EDP 按 tid/TypeObject 兼容性匹配而 tid 与名字无关，实测 TestYomkDdsSetNaming S2 固化，不对称改名不隔离）；Jazzy+ 两端均发 TypeInformation 走类型一致性检查，未验证；
 - **图可见性与数据匹配相互独立**：`ros2 topic list`/`node list` 看不到 YomkDds 端点属正常（机制差异），互通判定以数据到达为准（run_ros2_interop.sh 两项实测 PASS）；
 - **QoS 兼容**：两端默认 RELIABLE+VOLATILE 自然满足 requested≤offered；自定义 QoS 时注意匹配规则（如 RELIABLE 订阅端收不到 BEST_EFFORT 发布端），不当配置可能静默断链；真机实测口径：pub 端 `DDSQosProfile::ros2DefaultPublisher()`（RELIABLE offered）+ sub 端 `ros2DefaultSubscriber()`（BEST_EFFORT requested）对脚本两侧 `ros2 topic echo/pub` 全兼容；

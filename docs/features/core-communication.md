@@ -40,8 +40,8 @@ yomk::server().srv<YomkDdsHandler>().create();
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 #include <yomk/dds/YomkDdsAPI.h>
-#include <yomk/dds/YomkDdsStdMsgs.hpp>
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
+#include <yomk/dds_idl/std_msgs.hpp>
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp>
 #include <atomic>
 #include <chrono>
 #include <string>
@@ -66,23 +66,23 @@ int main(int argc, char *argv[])
     yomk::dds().node("node0").create();
 
     // 3. 注册发布主题（type 所有权移交 FastDDSNode）
-    yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).create_pub();
+    yomk::dds().node("node0").topic("my_topic").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).create_pub();
 
     // 4. 注册订阅主题（data 由内部 create_data() 创建，回调中转型使用）
     std::atomic<int> received{0};
     auto onMessage = [&](const void *data)
     {
-        auto *msg = static_cast<const YomkDdsStd::MString *>(data);
+        auto *msg = static_cast<const yomk::dds_idl::std_msgs::MString *>(data);
         received++;
         yomk::log().tag("PubSubExample").info("[RECV] ", msg->data());
     };
-    yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
+    yomk::dds().node("node0").topic("my_topic").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).sub_cb(onMessage).create_sub();
 
     // 5. 等待 DDS discovery 完成后发布数据
     std::this_thread::sleep_for(std::chrono::seconds(1));
     for (int i = 0; i < 5; ++i)
     {
-        YomkDdsStd::MString msg;
+        yomk::dds_idl::std_msgs::MString msg;
         msg.data("hello " + std::to_string(i));
         yomk::dds().node("node0").topic("my_topic").data(&msg).pub();
         yomk::log().tag("PubSubExample").info("[SEND] ", msg.data());
@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
 auto onMessage = [&](const void *data)
 {
     // alignof≤4 的 plain 类型（如 MInt32、float/byte 定长数组）：直接转型解引用
-    int32_t v = static_cast<const YomkDdsStd::MInt32 *>(data)->data();
+    int32_t v = static_cast<const yomk::dds_idl::std_msgs::MInt32 *>(data)->data();
 
     // alignof>4 的 plain 标量（如 MFloat64）：从裸指针 memcpy 到对齐局部再读，规避严格对齐平台 SIGBUS
     // double d;
@@ -162,7 +162,7 @@ auto onMessage = [&](const void *data)
 ### 代码位置与链接要求
 
 - 链式 API 位于 `include/dds/YomkDdsAPI.h`（`yomk::dds()` 域入口，builder 机制内敛于 `yomk::detail::dds`）；DDS 节点实现位于 `src/FastDDSNode.h` / `src/FastDDSNode.cpp`（发布订阅与 QoS/Loan 底层交付路径）；请求包与服务声明位于 `include/dds/YomkDdsHandler.h`。
-- 示例均为完整可复制编译的程序，链接 `YomkDds::YomkDds YomkServer::YomkServer YomkDdsStdMsgs`。
+- 示例均为完整可复制编译的程序，链接 `YomkDds::YomkDds YomkServer::YomkServer std_msgs`。
 
 ## 错误与边界行为
 

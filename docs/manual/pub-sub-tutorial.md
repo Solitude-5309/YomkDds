@@ -1,19 +1,19 @@
 # 使用手册：发布订阅进阶教程
 
-> **本文档覆盖范围**：在跑通第一个发布订阅（见 [quick-start.md](./quick-start.md)）之后，讲透三件事——订阅回调与数据消费的正确姿势（含转型、生命周期与对齐约束）、消息类型从哪来（msg/ 目录 IDL 定义与 fastddsgen 生成代码）、一个进程内多节点多主题的注册方式与资源清理。QoS 配置见 [qos-tutorial.md](./qos-tutorial.md)。
+> **本文档覆盖范围**：在跑通第一个发布订阅（见 [quick-start.md](./quick-start.md)）之后，讲透三件事——订阅回调与数据消费的正确姿势（含转型、生命周期与对齐约束）、消息类型从哪来（idl/std_msgs.idl IDL 定义经 build_idl.sh 生成编译）、一个进程内多节点多主题的注册方式与资源清理。QoS 配置见 [qos-tutorial.md](./qos-tutorial.md)。
 
 ## 目标
 
 完成本文档后，你将能够：
 
 1. 正确编写订阅回调：转型读取消息字段、遵守 `data` 指针生命周期、按消息类型选对消费方式（含 ARM 严格对齐平台的安全写法）；
-2. 说清楚 `MString` 等消息类型的来源（msg/ 目录 IDL + fastddsgen 生成代码 + YomkDdsStdMsgs 类型库），并在代码中正确包含头文件；
+2. 说清楚 `MString` 等消息类型的来源（idl/std_msgs.idl + build_idl.sh 生成编译 + std_msgs 类型库），并在代码中正确包含头文件；
 3. 在一个进程里创建多个节点、注册多个主题并正确清理。
 
 ## 前提与准备
 
 - 已按 [setup-and-build.md](./setup-and-build.md) 完成安装，并按 [quick-start.md](./quick-start.md) 跑通第一个程序；
-- 工程链接 `YomkDds::YomkDds YomkServer::YomkServer YomkDdsStdMsgs`（CMake 写法见 quick-start 第 1 步）；
+- 工程链接 `YomkDds::YomkDds YomkServer::YomkServer std_msgs`（CMake 写法见 quick-start 第 1 步）；
 - 知道消息类型实例用法：`new XxxPubSubType()` 传给 `type()` 后所有权移交服务端，caller 不再持有/释放。
 
 ## 分步操作
@@ -39,7 +39,7 @@
 auto onMessage = [&](const void *data)
 {
     // alignof<=4 的 plain 类型（如 MInt32、float/byte 定长数组）：直接转型解引用
-    int32_t v = static_cast<const YomkDdsStd::MInt32 *>(data)->data();
+    int32_t v = static_cast<const yomk::dds_idl::std_msgs::MInt32 *>(data)->data();
 
     // alignof>4 的 plain 标量（如 MFloat64）：从裸指针 memcpy 到对齐局部再读，规避严格对齐平台 SIGBUS
     // double d;
@@ -51,24 +51,24 @@ auto onMessage = [&](const void *data)
 
 ### 第 2 步：消息类型从哪来
 
-示例中用到的 `YomkDdsStd::MString`、`YomkDdsStd::MInt32` 等类型来自仓库的 `msg/` 目录：
+示例中用到的 `yomk::dds_idl::std_msgs::MString`、`yomk::dds_idl::std_msgs::MInt32` 等类型来自仓库的 `idl/std_msgs.idl`（源码树不再存放生成代码）：
 
-- `msg/YomkDdsStdMsgs.idl` 是 IDL 消息定义（如 `MString`：`module YomkDds` 内 `struct MString { string data; }`）；
-- 类型库提供 43 个 ROS2 风格消息类型：布尔/字节/字符/字符串（`MBool`、`MByte`、`MChar`、`MString`），有符号整型 `MInt8/16/32/64`、无符号整型 `MUInt8/16/32/64`、浮点 `MFloat32/64`，复合类型 `MColorRGBA`、`MDuration`、`MHeader`、`MTime`；每个数值类型均配套 `Array` 与 `MultiArray` 变体（如 `MInt32Array`/`MInt32MultiArray`、`MByteArray`/`MByteMultiArray`）；
-- 目录内其余 `.hpp/.cxx` 等文件为 fastddsgen 生成代码，编译为独立类型库 **YomkDdsStdMsgs**（含 SWIG Python 绑定，这也是安装依赖里需要 swig 与 python3-dev 的原因）。
+- `idl/std_msgs.idl` 是 IDL 消息定义（如 `MString`：`module yomk/dds_idl/std_msgs` 内 `struct MString { string data; }`），由 `scripts/build_idl.sh` 经 fastddsgen 一键生成/编译/安装（随 `build_ubuntu.sh` 自动执行，详见 [idl-type-install.md](./idl-type-install.md)）；
+- 类型库提供 41 个 ROS2 风格消息类型：布尔/字节/字符/字符串（`MBool`、`MByte`、`MChar`、`MString`），有符号整型 `MInt8/16/32/64`、无符号整型 `MUInt8/16/32/64`、浮点 `MFloat32/64`，及 `MultiArrayDimension`、`MultiArrayLayout`；每个数值类型均配套 `Array` 与 `MultiArray` 变体（如 `MInt32Array`/`MInt32MultiArray`、`MByteArray`/`MByteMultiArray`）；
+- fastddsgen 生成代码编译为独立类型库 **std_msgs**（`libstd_msgs.so`，含 SWIG Python 绑定，这也是安装依赖里需要 swig 与 python3-dev 的原因）。
 
 代码中包含两个头文件即可使用全部消息类型与其 PubSubType：
 
 ```cpp
-#include <yomk/dds/YomkDdsStdMsgs.hpp>              // 消息类型（MString、MInt32 等）
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>   // 对应 PubSubType（MStringPubSubType 等）
+#include <yomk/dds_idl/std_msgs.hpp>              // 消息类型（MString、MInt32 等）
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp>   // 对应 PubSubType（MStringPubSubType 等）
 ```
 
 注册主题时成对使用：
 
 ```cpp
-yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).create_pub();
-yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
+yomk::dds().node("node0").topic("my_topic").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).create_pub();
+yomk::dds().node("node0").topic("my_topic").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).sub_cb(onMessage).create_sub();
 ```
 
 两端主题类型必须一致（同一 PubSubType 生成的类型）才能匹配收发。
@@ -81,8 +81,8 @@ yomk::dds().node("node0").topic("my_topic").type(new YomkDdsStd::MStringPubSubTy
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 #include <yomk/dds/YomkDdsAPI.h>
-#include <yomk/dds/YomkDdsStdMsgs.hpp>
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
+#include <yomk/dds_idl/std_msgs.hpp>
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp>
 #include <atomic>
 #include <chrono>
 #include <string>
@@ -101,35 +101,35 @@ int main(int argc, char *argv[])
     yomk::dds().node("node_sub").create();
 
     // 3. 在同一节点上注册多个主题；发布/订阅也可分属不同节点
-    yomk::dds().node("node_pub").topic("topic_a").type(new YomkDdsStd::MStringPubSubType()).create_pub();
-    yomk::dds().node("node_pub").topic("topic_b").type(new YomkDdsStd::MInt32PubSubType()).create_pub();
+    yomk::dds().node("node_pub").topic("topic_a").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).create_pub();
+    yomk::dds().node("node_pub").topic("topic_b").type(new yomk::dds_idl::std_msgs::MInt32PubSubType()).create_pub();
 
     std::atomic<int> recvA{0};
     std::atomic<int> recvB{0};
     auto onA = [&](const void *data)
     {
-        auto *msg = static_cast<const YomkDdsStd::MString *>(data);
+        auto *msg = static_cast<const yomk::dds_idl::std_msgs::MString *>(data);
         recvA++;
         yomk::log().tag("MultiTopicExample").info("[RECV A] ", msg->data());
     };
     auto onB = [&](const void *data)
     {
-        auto *msg = static_cast<const YomkDdsStd::MInt32 *>(data);
+        auto *msg = static_cast<const yomk::dds_idl::std_msgs::MInt32 *>(data);
         recvB++;
         yomk::log().tag("MultiTopicExample").info("[RECV B] ", msg->data());
     };
-    yomk::dds().node("node_sub").topic("topic_a").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onA).create_sub();
-    yomk::dds().node("node_sub").topic("topic_b").type(new YomkDdsStd::MInt32PubSubType()).sub_cb(onB).create_sub();
+    yomk::dds().node("node_sub").topic("topic_a").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).sub_cb(onA).create_sub();
+    yomk::dds().node("node_sub").topic("topic_b").type(new yomk::dds_idl::std_msgs::MInt32PubSubType()).sub_cb(onB).create_sub();
 
     // 4. 等待 DDS discovery 完成后，两个主题各自循环发布
     std::this_thread::sleep_for(std::chrono::seconds(1));
     for (int i = 0; i < 5; ++i)
     {
-        YomkDdsStd::MString msgA;
+        yomk::dds_idl::std_msgs::MString msgA;
         msgA.data("hello " + std::to_string(i));
         yomk::dds().node("node_pub").topic("topic_a").data(&msgA).pub();
 
-        YomkDdsStd::MInt32 msgB;
+        yomk::dds_idl::std_msgs::MInt32 msgB;
         msgB.data(i);
         yomk::dds().node("node_pub").topic("topic_b").data(&msgB).pub();
 

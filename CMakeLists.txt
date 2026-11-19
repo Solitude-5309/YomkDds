@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 # project(VERSION) → YOMK_DDS_VERSION → configure_file 生成 yomk/dds/_version.py
 # 的 __version__ → yomk.dds.__version__（DdsService.version 端点暴露）。
 # 本行即版本唯一来源，发布时手动 bump。
-project(YomkDds VERSION 0.1.2 LANGUAGES NONE)
+project(YomkDds VERSION 0.1.3 LANGUAGES NONE)
 
 set(YOMK_DDS_VERSION "${PROJECT_VERSION}")
 
@@ -82,4 +82,10 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Fast-DDS-python-2.6.1/
     DESTINATION .)
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Fast-DDS-Gen-4.3.0/"
     DESTINATION .)
+
+# ---------- 7. IDL 构建脚本随库安装 ----------
+# build_idl.sh 装入 <前缀>/bin，供用户自定义 IDL 类型工程（生成/编译/安装）；
+# 脚本内生成工具与依赖均按安装树路径解析（<前缀>/scripts/fastddsgen 等），
+# 不依赖源码目录，故可随库发布
+install(PROGRAMS scripts/build_idl.sh DESTINATION bin)
 

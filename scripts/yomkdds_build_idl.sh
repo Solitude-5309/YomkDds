@@ -1,6 +1,6 @@
 #!/bin/bash
-# build_idl.sh —— IDL 消息类型一键 生成/编译/安装（支持 loan 的 msg 类型）
-# 用法: bash scripts/build_idl.sh <idl 文件路径> [-p|--prefix 安装前缀]
+# scripts/yomkdds_build_idl.sh —— IDL 消息类型一键 生成/编译/安装（支持 loan 的 msg 类型）
+# 用法: bash scripts/yomkdds_build_idl.sh <idl 文件路径> [-p|--prefix 安装前缀]
 #       安装前缀推荐用 -p 传入（可 tab 补全已存在路径），缺省交互询问
 # 流程:
 #   1. 生成：当前目录 ./build_idl_<时间戳> 下生成支持 loan 的类型工程
@@ -61,7 +61,7 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-[ -n "${IDL_FILE}" ] || fail "用法: bash scripts/build_idl.sh <idl 文件路径> [-p|--prefix 安装前缀]"
+[ -n "${IDL_FILE}" ] || fail "用法: bash scripts/yomkdds_build_idl.sh <idl 文件路径> [-p|--prefix 安装前缀]"
 IDL_FILE="$(_normalize_path "${IDL_FILE}")"
 [ -f "${IDL_FILE}" ] || fail "IDL 文件不存在: ${IDL_FILE}"
 IDL_STEM="$(basename "${IDL_FILE}")"

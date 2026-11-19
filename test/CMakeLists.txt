@@ -39,7 +39,7 @@ find_package(fastdds 3 REQUIRED)
 message(STATUS "[test] fastdds found")
 
 # MC3+ 端到端收发需 std_msgs 真实类型（MString/MInt32 等 PubSubType）；
-# std_msgs 类型库由 scripts/build_idl.sh 编译 idl/std_msgs.idl 生成并安装
+# std_msgs 类型库由 scripts/yomkdds_build_idl.sh 编译 idl/std_msgs.idl 生成并安装
 # （头文件落安装前缀 include/yomk/dds_idl/，库落 lib/，无导出包）。
 # 置于 vendored fastdds 之后：find_package(YomkDds) 取安装前缀的 include 根
 # （YomkDds_INCLUDE_DIRS → <yomk/dds_idl/std_msgs.hpp>）与 lib 目录

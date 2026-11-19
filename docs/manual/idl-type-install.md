@@ -1,6 +1,6 @@
 # 使用手册：安装 IDL 通信数据包（自定义消息类型）
 
-> **本文档覆盖范围**：用 `scripts/build_idl.sh` 一键把自定义 IDL 消息类型生成、编译并安装进安装前缀——产出支持 loan 的 C++ 类型库与 SWIG Python 模块，安装完成即可在 Python 侧 `import yomk.dds_idl.<模块>` 使用。IDL 语法本身、已内置的 std_msgs 类型用法见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)。
+> **本文档覆盖范围**：用 `scripts/yomkdds_build_idl.sh` 一键把自定义 IDL 消息类型生成、编译并安装进安装前缀——产出支持 loan 的 C++ 类型库与 SWIG Python 模块，安装完成即可在 Python 侧 `import yomk.dds_idl.<模块>` 使用。IDL 语法本身、已内置的 std_msgs 类型用法见 [pub-sub-tutorial.md](./pub-sub-tutorial.md)。
 
 ## 目标
 
@@ -49,17 +49,17 @@ module yomk
 
 ### 第 2 步：运行一键安装脚本
 
-脚本有两个等价入口（内容相同）：仓库内 `scripts/build_idl.sh`，或安装树 `<安装路径>/bin/build_idl.sh`（随 `build_ubuntu.sh` 随库装入，部署机无源码树亦可使用）。
+脚本有两个等价入口（内容相同）：仓库内 `scripts/yomkdds_build_idl.sh`，或安装树 `<安装路径>/bin/yomkdds_build_idl.sh`（随 `build_ubuntu.sh` 随库装入，部署机无源码树亦可使用）。
 
 ```bash
 # 仓库内入口：交互模式（默认前缀取 $YOMK_PREFIX_PATH，可输入修改）
-bash scripts/build_idl.sh idl/std_msgs.idl
+bash scripts/yomkdds_build_idl.sh idl/std_msgs.idl
 
 # 仓库内入口：推荐用法，-p 直传前缀（可 tab 补全已存在路径），完全绕开交互输入
-bash scripts/build_idl.sh idl/std_msgs.idl -p /opt/yomk
+bash scripts/yomkdds_build_idl.sh idl/std_msgs.idl -p /opt/yomk
 
 # 安装树入口（PATH 含 <安装路径>/bin 时直接调用，等价）
-build_idl.sh /path/to/自定义.idl -p /opt/yomk
+yomkdds_build_idl.sh /path/to/自定义.idl -p /opt/yomk
 ```
 
 脚本会依次执行（`-p` 传入前缀时全程自动，仅在缺目录时交互确认一次）：

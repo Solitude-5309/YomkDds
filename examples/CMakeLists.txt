@@ -47,7 +47,7 @@ target_link_libraries(ExampleRos2InteropSub PRIVATE YomkDds::YomkDds YomkServer:
 
 # 发现服务器示例（跨域互通）：发布端域 100 / 订阅端域 200 异域经同一发现服务器互通
 # （serverLocator 直配 CLIENT，域号在 DS 模式下不参与匹配），可选首参传 "ip[:port]" 覆盖；
-# 配套 launch_discover_server.sh 启动发现服务器（运行方式见 docs/manual/discovery-server-tutorial.md）
+# 配套 yomkdds_launch_discover_server.sh 启动发现服务器（运行方式见 docs/manual/discovery-server-tutorial.md）
 add_executable(ExampleDiscoverServerPub ExampleDiscoverServerPub.cpp)
 target_link_libraries(ExampleDiscoverServerPub PRIVATE YomkDds::YomkDds YomkServer::YomkServer std_msgs)
 
@@ -78,4 +78,4 @@ install(TARGETS
 )
 
 # 发现服务器启动脚本随示例一并安装到 <安装路径>/bin（源文件位于仓库 scripts/ 下）
-install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/launch_discover_server.sh DESTINATION bin)
+install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/yomkdds_launch_discover_server.sh DESTINATION bin)

@@ -22,7 +22,7 @@ Fast DDS 默认走**简单发现**（多播 PDP）：同网段参与者经多播
 | TCP 通道自动补注入 TCPv4 传输 | TCP 直配串非空时自动 |
 | 与 XML profiles 组合（XML 打底，直配 server 项覆盖） | 配合 `yomk::dds().load_cfg()` |
 | 跨域互通（域号与 server 无关） | CLIENT 直配语义 |
-| 发现服务器启动脚本 | `scripts/launch_discover_server.sh` |
+| 发现服务器启动脚本 | `scripts/yomkdds_launch_discover_server.sh` |
 
 ## 使用方式概述
 
@@ -66,7 +66,7 @@ export YOMKDDS_UDP_DISCOVER_SERVERS="192.168.1.10:11811;192.168.1.11:11811"  # T
 
 ```bash
 # 终端 1：启动发现服务器（--type udp/tcp 可选缺省 udp；--ip/--port 可选，端口缺省随类型 11811/42100；前台运行 Ctrl+C 停止）
-./scripts/launch_discover_server.sh --ip 127.0.0.1 --port 11811
+./scripts/yomkdds_launch_discover_server.sh --ip 127.0.0.1 --port 11811
 
 # 终端 2：订阅端（域 200，env 直配；export 两行可直接复制终端 1 启动横幅提示）
 export YOMKDDS_USE_DISCOVER_SERVER=true
@@ -79,7 +79,7 @@ export YOMKDDS_UDP_DISCOVER_SERVERS="127.0.0.1:11811"
 ./build/examples/ExampleDiscoverServerPub
 ```
 
-TCP 场景：终端 1 换 `--type tcp --port 42100` 启动，终端 2/3 换 export `YOMKDDS_TCP_DISCOVER_SERVERS="127.0.0.1:42100"`（开关不变）。`launch_discover_server.sh` 启动横幅打印当次传输类型对应的 export 提示（总开关 + 对应通道 server 串），可直接复制到终端 2/3。运行后发布端每秒打印 `[SEND] hello world N`，订阅端同步打印 `[RECV] hello world N`，Ctrl+C 优雅退出。
+TCP 场景：终端 1 换 `--type tcp --port 42100` 启动，终端 2/3 换 export `YOMKDDS_TCP_DISCOVER_SERVERS="127.0.0.1:42100"`（开关不变）。`yomkdds_launch_discover_server.sh` 启动横幅打印当次传输类型对应的 export 提示（总开关 + 对应通道 server 串），可直接复制到终端 2/3。运行后发布端每秒打印 `[SEND] hello world N`，订阅端同步打印 `[RECV] hello world N`，Ctrl+C 优雅退出。
 
 ## 参数与约束
 
@@ -126,7 +126,7 @@ TCP 场景：终端 1 换 `--type tcp --port 42100` 启动，终端 2/3 换 expo
 | 多 server | 两通道各自可分号分隔多 server，任一通道 server 在场即完成发现 |
 | 双通道 | 两通道可同时使用；仅 TCP 直配时 UDP 传空串占位 |
 
-### launch_discover_server.sh 参数
+### yomkdds_launch_discover_server.sh 参数
 
 | 参数 | 说明 |
 |---|---|

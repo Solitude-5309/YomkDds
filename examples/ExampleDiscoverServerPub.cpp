@@ -1,7 +1,7 @@
 /**
  * @file ExampleDiscoverServerPub.cpp
  * @brief 发现服务器直配发布端示例：ds_pub_node 发布 ds_hello_world（MString，1Hz），
- *       配合 launch_discover_server.sh 与发现服务器环境变量实现多播受限场景互通；
+ *       配合 yomkdds_launch_discover_server.sh 与发现服务器环境变量实现多播受限场景互通；
  *       步骤详见 docs/manual/discovery-server-tutorial.md。
  */
 #include <yomk/dds/YomkDdsAPI.h>
@@ -30,7 +30,7 @@ static void onSignal(int)
 // server 不校验域 id，原理见 docs/features/discovery-server.md）。
 // 直配串经环境变量自动填入（node().create() 缺省形态，domain/udp/tcp 全缺省读 env）：
 //   export YOMKDDS_USE_DISCOVER_SERVER=true
-//   export YOMKDDS_UDP_DISCOVER_SERVERS=127.0.0.1:11811   // 须与 launch_discover_server.sh
+//   export YOMKDDS_UDP_DISCOVER_SERVERS=127.0.0.1:11811   // 须与 yomkdds_launch_discover_server.sh
 //                                                         // 启动的 server 一致；TCP 场景改用
 //                                                         // YOMKDDS_TCP_DISCOVER_SERVERS
 // 未配置时回落多播发现，本示例跨域 100/200 场景将无法互通，运行前务必先 export。

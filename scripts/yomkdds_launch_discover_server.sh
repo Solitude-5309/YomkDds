@@ -1,7 +1,7 @@
 #!/bin/bash
-# scripts/launch_discover_server.sh —— 启动 Fast DDS 发现服务器（Discovery Server）
+# scripts/yomkdds_launch_discover_server.sh —— 启动 Fast DDS 发现服务器（Discovery Server）
 #
-# 用法: bash scripts/launch_discover_server.sh [--ip <监听IP>] [--port <监听端口>] [--type <udp|tcp>]
+# 用法: bash scripts/yomkdds_launch_discover_server.sh [--ip <监听IP>] [--port <监听端口>] [--type <udp|tcp>]
 #   --ip   监听地址，缺省 127.0.0.1
 #   --port 监听端口，缺省随 --type（udp→11811，tcp→42100）
 #   --type 监听协议，缺省 udp；tcp 模式 client 走 YOMKDDS_TCP_DISCOVER_SERVERS 直配

@@ -9,7 +9,7 @@
 // All messages register into the dds sub-root (yomk::msgs::dds::...) so the
 // suite's message names never collide with other suites in yomk::msgs.
 // User payload types (MString/MInt32..., namespace yomk::dds_idl::std_msgs) are
-// fastddsgen-generated from idl/std_msgs.idl via scripts/build_idl.sh and
+// fastddsgen-generated from idl/std_msgs.idl via scripts/yomkdds_build_idl.sh and
 // installed as the separate entry <yomk/dds_idl/std_msgs.hpp> (types +
 // PubSubTypes); include it directly when needed, not through this header.
 

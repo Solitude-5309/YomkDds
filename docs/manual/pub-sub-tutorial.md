@@ -1,13 +1,13 @@
 # 使用手册：发布订阅进阶教程
 
-> **本文档覆盖范围**：在跑通第一个发布订阅（见 [quick-start.md](./quick-start.md)）之后，讲透三件事——订阅回调与数据消费的正确姿势（含转型、生命周期与对齐约束）、消息类型从哪来（idl/std_msgs.idl IDL 定义经 build_idl.sh 生成编译）、一个进程内多节点多主题的注册方式与资源清理。QoS 配置见 [qos-tutorial.md](./qos-tutorial.md)。
+> **本文档覆盖范围**：在跑通第一个发布订阅（见 [quick-start.md](./quick-start.md)）之后，讲透三件事——订阅回调与数据消费的正确姿势（含转型、生命周期与对齐约束）、消息类型从哪来（idl/std_msgs.idl IDL 定义经 yomkdds_build_idl.sh 生成编译）、一个进程内多节点多主题的注册方式与资源清理。QoS 配置见 [qos-tutorial.md](./qos-tutorial.md)。
 
 ## 目标
 
 完成本文档后，你将能够：
 
 1. 正确编写订阅回调：转型读取消息字段、遵守 `data` 指针生命周期、按消息类型选对消费方式（含 ARM 严格对齐平台的安全写法）；
-2. 说清楚 `MString` 等消息类型的来源（idl/std_msgs.idl + build_idl.sh 生成编译 + std_msgs 类型库），并在代码中正确包含头文件；
+2. 说清楚 `MString` 等消息类型的来源（idl/std_msgs.idl + yomkdds_build_idl.sh 生成编译 + std_msgs 类型库），并在代码中正确包含头文件；
 3. 在一个进程里创建多个节点、注册多个主题并正确清理。
 
 ## 前提与准备
@@ -53,7 +53,7 @@ auto onMessage = [&](const void *data)
 
 示例中用到的 `yomk::dds_idl::std_msgs::MString`、`yomk::dds_idl::std_msgs::MInt32` 等类型来自仓库的 `idl/std_msgs.idl`（源码树不再存放生成代码）：
 
-- `idl/std_msgs.idl` 是 IDL 消息定义（如 `MString`：`module yomk/dds_idl/std_msgs` 内 `struct MString { string data; }`），由 `scripts/build_idl.sh` 经 fastddsgen 一键生成/编译/安装（随 `build_ubuntu.sh` 自动执行，详见 [idl-type-install.md](./idl-type-install.md)）；
+- `idl/std_msgs.idl` 是 IDL 消息定义（如 `MString`：`module yomk/dds_idl/std_msgs` 内 `struct MString { string data; }`），由 `scripts/yomkdds_build_idl.sh` 经 fastddsgen 一键生成/编译/安装（随 `build_ubuntu.sh` 自动执行，详见 [idl-type-install.md](./idl-type-install.md)）；
 - 类型库提供 41 个 ROS2 风格消息类型：布尔/字节/字符/字符串（`MBool`、`MByte`、`MChar`、`MString`），有符号整型 `MInt8/16/32/64`、无符号整型 `MUInt8/16/32/64`、浮点 `MFloat32/64`，及 `MultiArrayDimension`、`MultiArrayLayout`；每个数值类型均配套 `Array` 与 `MultiArray` 变体（如 `MInt32Array`/`MInt32MultiArray`、`MByteArray`/`MByteMultiArray`）；
 - fastddsgen 生成代码编译为独立类型库 **std_msgs**（`libstd_msgs.so`，含 SWIG Python 绑定，这也是安装依赖里需要 swig 与 python3-dev 的原因）。
 

@@ -38,12 +38,12 @@ YomkDdsPython/                  # 扩展仓库根
 │   ├── Fast-DDS-3.6.1/install      #   Fast-DDS C++ 库（libfastdds/libfastcdr 等动态库）
 │   ├── Fast-DDS-python-2.6.1/install #   fastdds Python 绑定模块（SWIG，落 site-packages/fastdds）
 │   └── Fast-DDS-Gen-4.3.0          #   IDL 代码生成器（运行需 java 17）
-├── idl/                        # IDL 源文件目录（只存 .idl，生成源码不入库，build_ubuntu.sh 经 build_idl.sh 直编）
+├── idl/                        # IDL 源文件目录（只存 .idl，生成源码不入库，build_ubuntu.sh 经 yomkdds_build_idl.sh 直编）
 │   └── std_msgs.idl                #   消息类型定义（module yomk/dds_idl/std_msgs，全部 M* 类型）
 ├── CMakeLists.txt              # 安装规则 + 版本注入（单一来源 project(VERSION)）+ 命名空间守卫 + 框架就位校验
 ├── build_ubuntu.sh             # 一键安装脚本（参考 YomkServerPy，交互输入安装前缀）
 ├── scripts/
-│   └── build_idl.sh           # IDL 类型一键 生成/编译/安装（loan 支持，装入 yomk/dds_idl/ 类型域）
+│   └── yomkdds_build_idl.sh    # IDL 类型一键 生成/编译/安装（loan 支持，随库装入 <前缀>/bin，装 yomk/dds_idl/ 类型域）
 └── README.md
 ```
 
@@ -120,23 +120,25 @@ Python-only 用户不装 C++ YomkDds 库，其 Fast-DDS 运行时依赖由本扩
 （`/etc/ld.so.conf.d/yomk.conf`）解析绑定模块的动态库依赖（无 RPATH）。
 安装后任意终端可直接 `import fastdds`。
 
-## IDL 通信数据包安装（build_idl.sh）
+## IDL 通信数据包安装（yomkdds_build_idl.sh）
 
 将自定义 IDL 一键生成/编译/安装为可 import 的消息类型工程（支持 loan）。
+随库装入 `<前缀>/bin/yomkdds_build_idl`（install(PROGRAMS)），安装后任意终端
+可直接调起；源码树内调试用 `bash scripts/yomkdds_build_idl.sh ...`（下同）。
 依赖：cmake/python3/g++/swig/python3-dev/java 17（fastddsgen 运行时）；
 生成工具**仅使用安装树内的 fastddsgen**（`$YOMK_PREFIX_PATH/scripts/fastddsgen`），
 不使用源码 `thirdparty/` 中的：
 
 ```bash
-bash scripts/build_idl.sh idl/std_msgs.idl                       # 交互输入安装路径
-bash scripts/build_idl.sh idl/std_msgs.idl -p /opt/yomk          # 推荐：-p 指定（可 tab 补全）
+bash scripts/yomkdds_build_idl.sh idl/std_msgs.idl                       # 交互输入安装路径
+bash scripts/yomkdds_build_idl.sh idl/std_msgs.idl -p /opt/yomk          # 推荐：-p 指定（可 tab 补全）
 # 交互输入时若前缀父目录不存在会判定为疑似拼写错误并拒绝；调试输入链路:
-# INSTALL_IDL_DEBUG=1 bash scripts/build_idl.sh ...
+# INSTALL_IDL_DEBUG=1 bash scripts/yomkdds_build_idl.sh ...
 ```
 
 流程与产物：
 
-1. **生成**：当前目录 `./build_idl_<YYYYMMDD_HHMMSS>/` 下生成类型工程（被 .gitignore 的 `build*/` 规则忽略）
+1. **生成**：当前目录 `./yomkdds_build_idl_<YYYYMMDD_HHMMSS>/` 下生成类型工程（被 .gitignore 的 `build*/` 规则忽略）
    （`fastddsgen -python -d . -de final <idl>`，`-de final` 即 loan 支持）；
    工程可重复编译，留作源码归档或删除均可
 2. **编译**：生成目录内 cmake 配置/编译；自定义前缀无 Fast-DDS 安装树时，
@@ -202,7 +204,7 @@ export PYTHONPATH=<自定义前缀>/lib/pythonX.Y/site-packages:$PYTHONPATH
 $EDITOR idl/<新名称>.idl
 
 # 2. 编译安装（二选一）
-bash scripts/build_idl.sh idl/<新名称>.idl -p /opt/yomk    # 单独安装该 IDL（推荐）
+bash scripts/yomkdds_build_idl.sh idl/<新名称>.idl -p /opt/yomk    # 单独安装该 IDL（推荐）
 ./build_ubuntu.sh                                          # 或全量重建（对 idl/*.idl 逐个执行）
 
 # 3. 使用（导入形态 yomk.dds_idl.<文件名>，类型字段走 getter/setter）

@@ -9,7 +9,7 @@
 #   3. CMake 配置 + 安装：版本号单一来源为 CMakeLists.txt project(VERSION)，
 #      configure_file 生成 yomk/dds/_version.py 注入安装副本；
 #      install 期校验框架就位（纯文件检查，含命名空间守卫于 configure 期）
-#   3.1 编译安装 msg 类型库（经 scripts/build_idl.sh 从 idl/*.idl 直接生成/编译/安装）
+#   3.1 编译安装 msg 类型库（经 scripts/yomkdds_build_idl.sh 从 idl/*.idl 直接生成/编译/安装）
 #   4. 安装后 import 冒烟（调用者身份执行——sudo 安装时 root 看不见 user-site 的
 #      pip 依赖 readerwriterlock，故冒烟不放 install(CODE)，与框架设计一致）
 
@@ -68,16 +68,16 @@ fi
 ${SUDO} cmake --install "${BUILD_DIR}" || fail "cmake 安装失败"
 # -------------el 3. CMake 配置 + 安装 ----------------
 
-# -------------sl 3.1 编译安装 msg 类型库（经 scripts/build_idl.sh 从 idl/*.idl 直编） ----------------
-# idl/ 仅存 .idl 源文件（生成源码不入库）：逐个经 build_idl.sh 完成
+# -------------sl 3.1 编译安装 msg 类型库（经 scripts/yomkdds_build_idl.sh 从 idl/*.idl 直编） ----------------
+# idl/ 仅存 .idl 源文件（生成源码不入库）：逐个经 yomkdds_build_idl.sh 完成
 # fastddsgen 生成（loan 支持）→ 编译 → 安装（含 posix_local 目的地校正、
 # yomk/dds 域层级去重与同名层合并）。Fast-DDS 已随主安装落入前缀，
-# build_idl.sh 的 find_package 经 CMAKE_PREFIX_PATH（安装前缀 + 框架前缀回退）解析；
+# yomkdds_build_idl.sh 的 find_package 经 CMAKE_PREFIX_PATH（安装前缀 + 框架前缀回退）解析；
 # 编译以调用者身份执行、仅 install 走特权（与主安装相同的特权边界）
 for idl_file in "${SCRIPT_DIR}"/idl/*.idl; do
     [ -f "${idl_file}" ] || continue
     echo "-- 构建 msg 类型库: $(basename "${idl_file}")"
-    bash "${SCRIPT_DIR}/scripts/build_idl.sh" "${idl_file}" -p "${INSTALL_PREFIX}" \
+    bash "${SCRIPT_DIR}/scripts/yomkdds_build_idl.sh" "${idl_file}" -p "${INSTALL_PREFIX}" \
         || fail "msg 类型库构建失败: ${idl_file}"
 done
 # -------------el 3.1 编译安装 msg 类型库 ----------------

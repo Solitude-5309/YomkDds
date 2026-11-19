@@ -113,7 +113,8 @@ source build_ubuntu.sh
 | `ExampleRos2InteropSub` | ROS2 互通订阅端示例（监听 `rt/chatter_interop` 逐条打印，Ctrl+C 退出） |
 | `ExampleDiscoverServerPub` | 发现服务器跨域发布端示例（域 100，经环境变量直配） |
 | `ExampleDiscoverServerSub` | 发现服务器跨域订阅端示例（域 200，经环境变量直配） |
-| `LaunchDiscoverServer.sh` | 启动 UDP/TCP 发现服务器（`--type`/`--ip`/`--port`） |
+| `launch_discover_server.sh` | 启动 UDP/TCP 发现服务器（`--type`/`--ip`/`--port`） |
+| `build_idl.sh` | IDL 类型一键安装：生成/编译/安装自定义 IDL 消息类型（用法见 [idl-type-install.md](./idl-type-install.md)） |
 | `yomkdds` | 命令行工具：观察任意 DDS 主题与频率（topic print/type/find/hz）、列出域内主题与类型（topic list）、查询主题与节点详情（topic info/node info）、查看类型 IDL 结构（interface show/list）、按 JSON 载荷发布消息（topic pub）、录制/查看/回放/重建/转换 mcap bag（bag record/info/play/reindex/convert） |
 
 确认程序就位：

@@ -1,18 +1,18 @@
 # 使用手册：发现服务器与跨域互通教程
 
-> **本文档覆盖范围**：在无多播、跨网段或跨域（domain id 不同）环境中，用发现服务器（Discovery Server）完成 YomkDds 节点间的发现与互通——启动发现服务器（`examples/LaunchDiscoverServer.sh`）、UDP/TCP 直配（链式累积器显式直配与环境变量门控两种方式）、直配与 XML profiles 打底的组合使用，并用 examples 自带的跨域示例（域 100/200）验证端到端互通。功能原理与参数约束详见[功能文档](../features/discovery-server.md)。
+> **本文档覆盖范围**：在无多播、跨网段或跨域（domain id 不同）环境中，用发现服务器（Discovery Server）完成 YomkDds 节点间的发现与互通——启动发现服务器（`scripts/launch_discover_server.sh`）、UDP/TCP 直配（链式累积器显式直配与环境变量门控两种方式）、直配与 XML profiles 打底的组合使用，并用 examples 自带的跨域示例（域 100/200）验证端到端互通。功能原理与参数约束详见[功能文档](../features/discovery-server.md)。
 
 ## 目标
 
 完成本文档后，你将：
 
-1. 用 `LaunchDiscoverServer.sh` 启动一个 UDP 或 TCP 发现服务器；
+1. 用 `launch_discover_server.sh` 启动一个 UDP 或 TCP 发现服务器；
 2. 跑通跨域互通示例：发布端（域 100）与订阅端（域 200）经同一发现服务器持续收发数据；
 3. 掌握三种直配方式：链式累积器显式直配、环境变量自动直配（进程级，无需改代码）、XML 打底加直配覆盖的组合。
 
 ## 前提与准备
 
-- 已按 [setup-and-build.md](./setup-and-build.md) 完成 YomkDds 编译安装：`source build_ubuntu.sh` 三步编译安装会一并构建示例程序，安装后 `<安装路径>/bin` 下有 `ExampleDiscoverServerPub`、`ExampleDiscoverServerSub` 与 `LaunchDiscoverServer.sh`；
+- 已按 [setup-and-build.md](./setup-and-build.md) 完成 YomkDds 编译安装：`source build_ubuntu.sh` 三步编译安装会一并构建示例程序，安装后 `<安装路径>/bin` 下有 `ExampleDiscoverServerPub`、`ExampleDiscoverServerSub` 与 `launch_discover_server.sh`；
 - 如需在仓库内按 `./build/examples/` 路径单独构建运行 examples：
 
 ```bash
@@ -31,7 +31,7 @@ cmake --build build/examples
 任选一台主机（跨域演示用本机即可）运行启动脚本：
 
 ```bash
-./examples/LaunchDiscoverServer.sh --ip 127.0.0.1 --port 11811
+./scripts/launch_discover_server.sh --ip 127.0.0.1 --port 11811
 ```
 
 参数说明（全部可省略；前台运行，Ctrl+C 停止；server id 固定 `-i 0`）：
@@ -149,7 +149,7 @@ TCP 场景实操（与第 2 步同一对示例）：
 
 ```bash
 # 终端 1：换 TCP 启动
-./examples/LaunchDiscoverServer.sh --type tcp --port 42100
+./scripts/launch_discover_server.sh --type tcp --port 42100
 ```
 
 ```bash
@@ -207,7 +207,7 @@ yomk::dds().node("combo_node").domain(0).udp_ds("127.0.0.1:11811").create();   /
 
 ```bash
 # 终端 1：启动发现服务器（--type udp/tcp 可选缺省 udp；--ip/--port 可选，端口缺省随类型 11811/42100；前台运行 Ctrl+C 停止）
-./examples/LaunchDiscoverServer.sh --ip 127.0.0.1 --port 11811
+./scripts/launch_discover_server.sh --ip 127.0.0.1 --port 11811
 ```
 
 ```bash

@@ -5,7 +5,7 @@ include(cmake/AbiInfo.cmake)
 # YomkServer 版本检测模块：find_package(YomkServer) 之后调用 yomk_server_version_check()
 include(cmake/YomkServerVersionCheck.cmake)
 
-project(YomkDds VERSION 2.7.2 LANGUAGES CXX)
+project(YomkDds VERSION 2.7.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -122,4 +122,10 @@ install(DIRECTORY thirdparty/Fast-DDS-python-2.6.1/install/
 
 install(DIRECTORY thirdparty/Fast-DDS-Gen-4.3.0/
     DESTINATION .
+)
+
+# IDL 类型一键安装脚本随库装入 <prefix>/bin（与安装树内 fastddsgen 配套：
+# 脚本经 -p 前缀/YOMK_PREFIX_PATH 查找安装树内生成工具，部署机无源码树亦可安装自定义类型）
+install(PROGRAMS scripts/build_idl.sh
+    DESTINATION bin
 )

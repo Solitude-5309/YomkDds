@@ -1,6 +1,6 @@
 #!/bin/bash
-# install_idl.sh —— IDL 消息类型一键 生成/编译/安装（支持 loan 的 msg 类型）
-# 用法: bash scripts/install_idl.sh <idl 文件路径> [-p|--prefix 安装前缀]
+# build_idl.sh —— IDL 消息类型一键 生成/编译/安装（支持 loan 的 msg 类型）
+# 用法: bash scripts/build_idl.sh <idl 文件路径> [-p|--prefix 安装前缀]
 #       安装前缀推荐用 -p 传入（可 tab 补全已存在路径），缺省交互询问
 # 流程:
 #   1. 生成：当前目录 ./build_idl_<时间戳> 下生成支持 loan 的类型工程
@@ -61,14 +61,21 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-[ -n "${IDL_FILE}" ] || fail "用法: bash scripts/install_idl.sh <idl 文件路径> [-p|--prefix 安装前缀]"
+[ -n "${IDL_FILE}" ] || fail "用法: bash scripts/build_idl.sh <idl 文件路径> [-p|--prefix 安装前缀]"
 IDL_FILE="$(_normalize_path "${IDL_FILE}")"
 [ -f "${IDL_FILE}" ] || fail "IDL 文件不存在: ${IDL_FILE}"
 
-# 生成工具：仅使用 YOMK_PREFIX_PATH 安装树内的 fastddsgen，不用源码 thirdparty 中的
+# 生成工具：优先 -p 指定的安装前缀（build_ubuntu 调用场景，Fast-DDS-Gen 已随
+# 主安装落入前缀），回退 $YOMK_PREFIX_PATH；均不用源码 thirdparty 中的
 INSTALL_PREFIX_DEFAULT="${YOMK_PREFIX_PATH:-/opt/yomk}"
-FASTDDSGEN="${INSTALL_PREFIX_DEFAULT}/scripts/fastddsgen"
-[ -f "${FASTDDSGEN}" ] || fail "未找到生成工具 ${FASTDDSGEN}，请先安装扩展（./build_ubuntu.sh，随库安装 Fast-DDS-Gen）"
+FASTDDSGEN=""
+for _gen_base in "${ARG_PREFIX}" "${INSTALL_PREFIX_DEFAULT}"; do
+    if [ -n "${_gen_base}" ] && [ -f "${_gen_base}/scripts/fastddsgen" ]; then
+        FASTDDSGEN="${_gen_base}/scripts/fastddsgen"
+        break
+    fi
+done
+[ -n "${FASTDDSGEN}" ] || fail "未找到生成工具 fastddsgen（查找路径: ${ARG_PREFIX:-无}, ${INSTALL_PREFIX_DEFAULT}），请先安装扩展（./build_ubuntu.sh，随库安装 Fast-DDS-Gen）"
 echo "-- 生成工具: ${FASTDDSGEN}（安装树内）"
 # -------------el 2. 解析 IDL 文件与生成工具 ----------------
 
@@ -128,10 +135,8 @@ echo "-- 生成 loan 支持 msg: fastddsgen -python -d . -de final ${IDL_FILE}"
 cd "${GENDIR}"
 sh "${FASTDDSGEN}" -python -d . -de final "${IDL_FILE}" || fail "fastddsgen 生成失败"
 [ -f "${GENDIR}/CMakeLists.txt" ] || fail "生成产物缺少 CMakeLists.txt: ${GENDIR}"
-# 记录安装前 Python 模块目的地已有条目（用于安装后只搬移本次新增，不动既有包）
+# Python 模块源目的地（生成的 CMakeLists 经 sysconfig purelib(vars={'base': 前缀}) 计算）
 MODULE_SRC_BASE="$(python3 -c "from sysconfig import get_path; print(get_path('purelib', vars={'base': '${INSTALL_PREFIX}'}))")"
-SNAP_BEFORE="$(mktemp)"
-[ -d "${MODULE_SRC_BASE}" ] && ls -A "${MODULE_SRC_BASE}" > "${SNAP_BEFORE}" || : > "${SNAP_BEFORE}"
 # -------------el 4. 生成 ----------------
 
 # -------------sl 5. 编译（在 ./build_idl_<时间戳> 内） ----------------
@@ -155,77 +160,48 @@ echo "-- 安装到 ${INSTALL_PREFIX} ..."
 ${SUDO} cmake --install "${GENDIR}/build" || fail "msg 类型工程安装失败"
 # -------------el 6. 安装 ----------------
 
-# -------------sl 7. 目的地校正 ----------------
-# 生成的 CMakeLists 经 sysconfig purelib(vars={'base': 前缀}) 计算模块目的地，
-# Debian/Ubuntu 系统 Python 为 posix_local scheme，落在 <前缀>/local/.../dist-packages
-# （sys.path 外不可导入）；非 Debian 布局则直接落在 site-packages 顶层。
-# 目的地统一为扩展域 yomk/dds/，与主库同域（导入 yomk.dds.<模块>）；
-# 仅搬本次新增条目，不动既有包。
-# 注意：自定义前缀若仅含 msg 模块（未完整部署扩展域），与框架同时挂载时，
-# 框架侧的 yomk.dds 常规包（带 __init__.py）按 PEP 420 会遮蔽本前缀的
-# yomk.dds 命名空间段——验证步骤会检测此情况并给出部署提示
-TARGET_BASE="${DDS_DIR}"
+# -------------sl 7. 目的地校正（确定性路径，幂等） ----------------
+# 生成的 CMakeLists 安装到 <sysconfig purelib>/<IDL module 链>/<文件名>：
+# Debian posix_local 下 purelib = <前缀>/local/.../dist-packages（sys.path 外不可
+# 导入），且该目录可能带历次运行残留——不用快照差集，按 IDL 推导的确定性路径
+# 直接定位搬移（幂等，重装自愈）。统一搬移模块目录 →
+# <site-packages>/yomk/dds/<文件名>/（与主库同域、单层，导入 yomk.dds.<文件名>；
+# IDL 的 module 声明层级由目的地本身表达，不重复落盘）
 IMPORT_NS="yomk.dds"
-DOMAIN_REL="${DDS_DIR#"${SITE_PACKAGES}/"}"   # 扩展域相对段，如 yomk/dds
-NEW_ENTRIES="$(ls -A "${MODULE_SRC_BASE}" 2>/dev/null | while read -r e; do grep -qxF "${e}" "${SNAP_BEFORE}" || echo "${e}"; done)"
-rm -f "${SNAP_BEFORE}"
-PLACED=""
-for e in ${NEW_ENTRIES}; do
-    SRC="${MODULE_SRC_BASE}/${e}"
-    DOMAIN_FIRST="${DOMAIN_REL%%/*}"
-    if [ "${e}" = "${DOMAIN_FIRST}" ]; then
-        # IDL module 声明与扩展域同名（如 module yomk { module dds）时，生成的
-        # CMakeLists 会以 module 名为父目录，出现 yomk/dds/yomk/dds 双层——
-        # 沿域相对段向内剥离重复组件，类型工程目录直挂 DDS_DIR
-        POS="${SRC}"
-        REMAIN="${DOMAIN_REL#*/}"
-        while [ -n "${REMAIN}" ]; do
-            c="${REMAIN%%/*}"
-            if [ -d "${POS}/${c}" ]; then
-                POS="${POS}/${c}"
-                if [ "${REMAIN}" = "${c}" ]; then REMAIN=""; else REMAIN="${REMAIN#*/}"; fi
-            else
-                break
-            fi
-        done
-        for child in $(ls -A "${POS}" 2>/dev/null); do
-            # 剩余 module 层与工程目录（文件名）同名时合并为一层
-            # （如 module ... std_idl + 文件 std_idl.idl → std_idl/std_idl）
-            if [ -d "${POS}/${child}/${child}" ]; then
-                echo "-- 目的地校正(同名层级合并): ${POS}/${child}/${child} -> ${DDS_DIR}/${child}"
-                ${SUDO} rm -rf "${DDS_DIR}/${child}"
-                ${SUDO} mv "${POS}/${child}/${child}" "${DDS_DIR}/${child}" || fail "目的地校正失败: ${child}"
-                ${SUDO} rm -rf "${POS}/${child}"
-            else
-                echo "-- 目的地校正(域层级去重): ${POS}/${child} -> ${DDS_DIR}/${child}"
-                ${SUDO} rm -rf "${DDS_DIR}/${child}"
-                ${SUDO} mv "${POS}/${child}" "${DDS_DIR}/${child}" || fail "目的地校正失败: ${child}"
-            fi
-            PLACED="${PLACED}${child} "
-        done
-        ${SUDO} rmdir "${POS}" "${SRC}" 2>/dev/null || true
-    else
-        if [ "${MODULE_SRC_BASE}" != "${TARGET_BASE}" ]; then
-            echo "-- 目的地校正: ${SRC} -> ${TARGET_BASE}/${e}"
-            ${SUDO} rm -rf "${TARGET_BASE}/${e}"
-            ${SUDO} mv "${SRC}" "${TARGET_BASE}/${e}" || fail "目的地校正失败: ${e}"
-        fi
-        PLACED="${PLACED}${e} "
-    fi
-done
-# 可导入名推导：本次放入 DDS_DIR 的子项中含 __init__.py 的即类型模块
-MOVED_IMPORTS=""
-for c in ${PLACED}; do
-    [ -f "${DDS_DIR}/${c}/__init__.py" ] && MOVED_IMPORTS="${MOVED_IMPORTS}${IMPORT_NS}.${c} "
-done
-# 清理 local/ 空壳（dist-packages -> python3.10 -> lib -> local，逐级 rmdir，
-# 非空目录 rmdir 失败即保留，安全）；仅当源目的地与 site-packages 不同级时需要
+IDL_STEM="$(basename "${IDL_FILE}")"
+IDL_STEM="${IDL_STEM%.idl}"
+MODULE_CHAIN="$(sed -nE 's/^[[:space:]]*module[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\1/p' "${IDL_FILE}" | paste -sd/ -)"
+EXPECTED_REL="${MODULE_CHAIN:+${MODULE_CHAIN}/}${IDL_STEM}"
+MODULE_DIR="${MODULE_SRC_BASE}/${EXPECTED_REL}"
+TARGET_MODULE_DIR="${DDS_DIR}/${IDL_STEM}"
+echo "-- 目的地校正: ${MODULE_DIR} -> ${TARGET_MODULE_DIR}"
+if [ ! -f "${MODULE_DIR}/__init__.py" ]; then
+    fail "未在 ${MODULE_SRC_BASE} 找到生成的模块目录 ${EXPECTED_REL}/__init__.py，请人工核对生成产物"
+fi
+# 非 Debian 布局下 MODULE_DIR 可能与目标同址（purelib == site-packages 且
+# module 链 == yomk/dds），realpath 相同则跳过搬移
+if [ "$(realpath "${MODULE_DIR}" 2>/dev/null)" != "$(realpath "${TARGET_MODULE_DIR}" 2>/dev/null)" ]; then
+    ${SUDO} rm -rf "${TARGET_MODULE_DIR}"
+    ${SUDO} mv "${MODULE_DIR}" "${TARGET_MODULE_DIR}" || fail "目的地校正失败: ${EXPECTED_REL}"
+fi
+PLACED="${IDL_STEM} "
+MOVED_IMPORTS="${IMPORT_NS}.${IDL_STEM}"
+# 空目录清理：模块链与 local/ 空壳自底向上逐级 rmdir（非空即停，安全）；
+# 仅当源目的地与 site-packages 不同级时需要
 if [ "${MODULE_SRC_BASE}" != "${SITE_PACKAGES}" ]; then
-    for d in "${MODULE_SRC_BASE}" "${MODULE_SRC_BASE%/*}" "${MODULE_SRC_BASE%/*/*}" "${INSTALL_PREFIX}/local"; do
-        ${SUDO} rmdir "${d}" 2>/dev/null || true
+    if [ -n "${MODULE_CHAIN}" ]; then
+        d="${MODULE_SRC_BASE}/${MODULE_CHAIN}"
+        while [ "${d}" != "${MODULE_SRC_BASE}" ] && [ -n "${d}" ] && [ "${d}" != "/" ]; do
+            ${SUDO} rmdir "${d}" 2>/dev/null || break
+            d="$(dirname "${d}")"
+        done
+    fi
+    d="${MODULE_SRC_BASE}"
+    while [ -n "${d}" ] && [ "${d}" != "${INSTALL_PREFIX}" ] && [ "${d}" != "/" ]; do
+        ${SUDO} rmdir "${d}" 2>/dev/null || break
+        d="$(dirname "${d}")"
     done
 fi
-[ -n "${PLACED}" ] || echo "-- 警告: 未检测到新增 Python 模块条目，请人工核对 ${MODULE_SRC_BASE}"
 # -------------el 7. 目的地校正 ----------------
 
 # -------------sl 8. 刷新动态库缓存（C++ 类型库 lib<工程名>.so 落 <前缀>/lib） ----------------

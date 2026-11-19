@@ -9,8 +9,7 @@
 #   3. CMake 配置 + 安装：版本号单一来源为 CMakeLists.txt project(VERSION)，
 #      configure_file 生成 yomk/dds/_version.py 注入安装副本；
 #      install 期校验框架就位（纯文件检查，含命名空间守卫于 configure 期）
-#   3.1 编译安装 msg 类型库（对齐 C++ YomkDds build_ubuntu.sh 步骤 2/3：独立 cmake
-#      工程，C++ 类型库 + SWIG Python 绑定装至前缀，ldconfig 在其后注册）
+#   3.1 编译安装 msg 类型库（经 scripts/build_idl.sh 从 idl/*.idl 直接生成/编译/安装）
 #   4. 安装后 import 冒烟（调用者身份执行——sudo 安装时 root 看不见 user-site 的
 #      pip 依赖 readerwriterlock，故冒烟不放 install(CODE)，与框架设计一致）
 
@@ -69,48 +68,19 @@ fi
 ${SUDO} cmake --install "${BUILD_DIR}" || fail "cmake 安装失败"
 # -------------el 3. CMake 配置 + 安装 ----------------
 
-# -------------sl 3.1 编译安装 msg 类型库（对齐 C++ YomkDds build_ubuntu.sh 步骤 2/3） ----------------
-# fastddsgen 生成工程（独立 CMakeLists，根构建不含 msg）：C++ 类型库 libYomkDdsStdMsgs.so
-# + SWIG Python 绑定（site-packages/YomkDds/YomkDdsStdMsgs/ 包）。
-# Fast-DDS 已随主安装落入前缀（CMakeLists 第 6 节），find_package(fastcdr/fastdds)
-# 经 CMAKE_PREFIX_PATH 指向前缀解析；msg 库同样安装到前缀（与 main 分支同逻辑）。
-# 编译以调用者身份执行、仅 install 走特权（与主安装相同的特权边界，
-# 避免构建产物 root 属主残留破坏后续重建）
-MSG_DIR="${SCRIPT_DIR}/idl"
-MSG_BUILD_DIR="${SCRIPT_DIR}/build/msg"
-echo "-- 编译安装 msg 类型库..."
-cmake -S "${MSG_DIR}" -B "${MSG_BUILD_DIR}" \
-    -DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}" \
-    -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
-    -DCMAKE_BUILD_TYPE=Release \
-    || fail "msg cmake 配置失败"
-cmake --build "${MSG_BUILD_DIR}" -j"$(nproc)" || fail "msg 编译失败"
-${SUDO} cmake --install "${MSG_BUILD_DIR}" || fail "msg 安装失败"
+# -------------sl 3.1 编译安装 msg 类型库（经 scripts/build_idl.sh 从 idl/*.idl 直编） ----------------
+# idl/ 仅存 .idl 源文件（生成源码不入库）：逐个经 build_idl.sh 完成
+# fastddsgen 生成（loan 支持）→ 编译 → 安装（含 posix_local 目的地校正、
+# yomk/dds 域层级去重与同名层合并）。Fast-DDS 已随主安装落入前缀，
+# build_idl.sh 的 find_package 经 CMAKE_PREFIX_PATH（安装前缀 + 框架前缀回退）解析；
+# 编译以调用者身份执行、仅 install 走特权（与主安装相同的特权边界）
+for idl_file in "${SCRIPT_DIR}"/idl/*.idl; do
+    [ -f "${idl_file}" ] || continue
+    echo "-- 构建 msg 类型库: $(basename "${idl_file}")"
+    bash "${SCRIPT_DIR}/scripts/build_idl.sh" "${idl_file}" -p "${INSTALL_PREFIX}" \
+        || fail "msg 类型库构建失败: ${idl_file}"
+done
 # -------------el 3.1 编译安装 msg 类型库 ----------------
-
-# -------------sl 3.1a msg 模块安装目的地校正（不改 idl/ 生成文件的前提下） ----------------
-# idl/CMakeLists（fastddsgen 生成物，不得修改）在 configure 期用 sysconfig
-# purelib(vars={'base': 前缀}) 计算模块目的地，Debian/Ubuntu 系统 Python 为
-# posix_local scheme，得到 <前缀>/local/lib/pythonX.Y/dist-packages——不在
-# PYTHONPATH（<前缀>/lib/pythonX.Y/site-packages）内，模块不可导入。
-# 本分支契约：msg Python 模块并入扩展域，与主库同挂 yomk/dds/ 下
-# （yomk/dds/YomkDdsStdMsgs/，导入形态 yomk.dds.YomkDdsStdMsgs），
-# 此处安装后搬移到位，并清理 local/ 空壳残留（rmdir 仅删空目录，误伤面为零）
-_MSG_WRONG_BASE="$(python3 -c "from sysconfig import get_path; print(get_path('purelib', vars={'base': '${INSTALL_PREFIX}'}))")"
-if [ -d "${_MSG_WRONG_BASE}/YomkDds/YomkDdsStdMsgs" ]; then
-    _DDS_SITE_DIR="$(ls -d "${INSTALL_PREFIX}"/lib/python*/site-packages 2>/dev/null | head -1)"
-    echo "-- msg 模块目的地校正: ${_MSG_WRONG_BASE}/YomkDds/YomkDdsStdMsgs -> ${_DDS_SITE_DIR}/yomk/dds/YomkDdsStdMsgs"
-    ${SUDO} rm -rf "${_DDS_SITE_DIR}/yomk/dds/YomkDdsStdMsgs"
-    ${SUDO} mv "${_MSG_WRONG_BASE}/YomkDds/YomkDdsStdMsgs" "${_DDS_SITE_DIR}/yomk/dds/YomkDdsStdMsgs" \
-        || fail "msg 模块目的地校正失败"
-    # 清理 local/ 空壳（dist-packages -> python3.10 -> lib -> local，逐级 rmdir，
-    # 非空目录 rmdir 失败即保留，安全）
-    for _d in "${_MSG_WRONG_BASE}" "${_MSG_WRONG_BASE%/*}" "${_MSG_WRONG_BASE%/*/*}" "${INSTALL_PREFIX}/local"; do
-        ${SUDO} rmdir "${_d}" 2>/dev/null || true
-    done
-fi
-unset _MSG_WRONG_BASE _DDS_SITE_DIR
-# -------------el 3.1a msg 模块安装目的地校正 ----------------
 
 # -------------sl 3.2 注册动态库搜索路径（对齐 C++ YomkDds build_ubuntu.sh，幂等追加） ----------------
 # 第三方 Fast-DDS 动态库（libfastdds/libfastcdr 等）随库落入 ${INSTALL_PREFIX}/lib，
@@ -130,7 +100,7 @@ sudo ldconfig || fail "ldconfig 执行失败"
 PY_SITE_DIR="$(ls -d "${INSTALL_PREFIX}"/lib/python*/site-packages 2>/dev/null | head -1)"
 [ -n "${PY_SITE_DIR}" ] || fail "安装后未找到 site-packages 目录: ${INSTALL_PREFIX}/lib/pythonX.Y/site-packages"
 echo "-- 扩展导入验证（PYTHONPATH=${PY_SITE_DIR}）..."
-PYTHONPATH="${PY_SITE_DIR}${PYTHONPATH:+:${PYTHONPATH}}" python3 -c "import yomk.dds, yomk.msgs.dds, yomk.url.dds, fastdds, yomk.dds.YomkDdsStdMsgs; print('-- 扩展导入验证通过, 版本:', yomk.dds.__version__, ', fastdds 绑定:', fastdds.__file__ is not None, ', msg 类型库:', yomk.dds.YomkDdsStdMsgs.__file__ is not None)" \
+PYTHONPATH="${PY_SITE_DIR}${PYTHONPATH:+:${PYTHONPATH}}" python3 -c "import yomk.dds, yomk.msgs.dds, yomk.url.dds, fastdds, yomk.dds.std_idl; print('-- 扩展导入验证通过, 版本:', yomk.dds.__version__, ', fastdds 绑定:', fastdds.__file__ is not None, ', msg 类型库:', yomk.dds.std_idl.__file__ is not None)" \
     || fail "扩展安装后导入验证失败（若为依赖缺失，请确认当前用户已安装框架运行时依赖）"
 # -------------el 3.5 安装后 import 冒烟 ----------------
 

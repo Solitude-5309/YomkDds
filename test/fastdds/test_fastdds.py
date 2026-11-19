@@ -25,7 +25,7 @@ if SITE not in sys.path:
     sys.path.insert(0, SITE)
 
 import fastdds                              # noqa: E402  # 安装树导入
-import yomk.dds.YomkDdsStdMsgs as YomkDdsStd  # noqa: E402  # msg 生成的类型模块
+import yomk.dds.std_idl as YomkDdsStd  # noqa: E402  # idl/std_idl.idl 生成的类型模块
 
 DOMAIN = 77  # 独立测试域，避免与机器上其他 DDS 应用串扰
 FAILURES = []
@@ -175,23 +175,23 @@ def case_mstring():
         ep.teardown()
 
 
-def case_mheader():
-    """用例 3：MHeader（msg 嵌套类型 MTime + string）发布/订阅互通"""
-    name = "MHeader 发布/订阅互通（msg 嵌套类型）"
-    ep = Endpoint("yomkdds_test_mheader", YomkDdsStd.MHeader, YomkDdsStd.MHeaderPubSubType)
+def case_multarraydim():
+    """用例 3：MultiArrayDimension（msg 多字段类型 label/size/stride）发布/订阅互通"""
+    name = "MultiArrayDimension 发布/订阅互通（msg 多字段类型）"
+    ep = Endpoint("yomkdds_test_madim", YomkDdsStd.MultiArrayDimension, YomkDdsStd.MultiArrayDimensionPubSubType)
     try:
         def make():
             for i in range(3):
-                data = YomkDdsStd.MHeader()
-                data.stamp().sec(1710000000 + i)
-                data.stamp().nanosec(i)
-                data.frame_id(f"frame-{i}")
+                data = YomkDdsStd.MultiArrayDimension()
+                data.label(f"dim-{i}")
+                data.size(i + 1)
+                data.stride(i * 2)
                 yield data
 
         ok, recv = write_and_collect(ep, make(), 3)
         if ok:
-            got = sorted((d.frame_id(), d.stamp().sec()) for d in recv)
-            expected = sorted((f"frame-{i}", 1710000000 + i) for i in range(3))
+            got = sorted((d.label(), d.size(), d.stride()) for d in recv)
+            expected = sorted((f"dim-{i}", i + 1, i * 2) for i in range(3))
             check(name, got == expected, f"期望 {expected}，实收 {got}")
         else:
             check(name, False, recv)
@@ -204,7 +204,7 @@ def main():
     print(f"site-packages: {SITE}")
     case_import_origin()
     case_mstring()
-    case_mheader()
+    case_multarraydim()
     total = 3
     passed = total - len(FAILURES)
     print(f"Test Summary: {passed}/{total} 通过")

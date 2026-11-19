@@ -12,7 +12,7 @@
 #   test/run_ros2_interop.sh test/build/Ros2Interop/TestRos2InteropPub [TestRos2InteropSub]
 # =============================================================================
 add_executable(TestRos2InteropPub TestRos2InteropPub.cpp)
-target_link_libraries(TestRos2InteropPub PRIVATE yomkdds_under_test YomkDdsStdMsgs)
+target_link_libraries(TestRos2InteropPub PRIVATE yomkdds_under_test std_msgs)
 
 add_executable(TestRos2InteropSub TestRos2InteropSub.cpp)
-target_link_libraries(TestRos2InteropSub PRIVATE yomkdds_under_test YomkDdsStdMsgs)
+target_link_libraries(TestRos2InteropSub PRIVATE yomkdds_under_test std_msgs)

@@ -53,8 +53,8 @@
 // participantQosFromXml）
 #include "FastDDSXmlHelper.h"
 
-#include <yomk/dds/YomkDdsStdMsgs.hpp>            // Part F 收发类型
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType
+#include <yomk/dds_idl/std_msgs.hpp>            // Part F 收发类型
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp> // MStringPubSubType
 
 #include <atomic>
 #include <chrono>
@@ -563,16 +563,16 @@ namespace
             check(nodeB.setDomainId(202, "ds_conn_b", dsSpec), "Part F: 节点 B 直配 CLIENT（域 202）→ true");
 
             std::atomic<int> recvCount{0};
-            check(nodeB.registerSubTopic("ds_conn_topic", new YomkDdsStd::MStringPubSubType(),
+            check(nodeB.registerSubTopic("ds_conn_topic", new yomk::dds_idl::std_msgs::MStringPubSubType(),
                       [&recvCount](const void *) { recvCount.fetch_add(1, std::memory_order_relaxed); }),
                   "Part F: B 登记 ds_conn_topic 订阅（收到即计数）");
-            check(nodeA.registerPubTopic("ds_conn_topic", new YomkDdsStd::MStringPubSubType()),
+            check(nodeA.registerPubTopic("ds_conn_topic", new yomk::dds_idl::std_msgs::MStringPubSubType()),
                   "Part F: A 登记 ds_conn_topic 发布");
 
             // 发布线程持续发（200ms 周期，覆盖 server 发现收敛窗）
             std::atomic<bool> stopPub{false};
             std::thread pubThread([&] {
-                  YomkDdsStd::MString msg;
+                  yomk::dds_idl::std_msgs::MString msg;
                   int seq = 0;
                   while (!stopPub.load(std::memory_order_relaxed))
                   {
@@ -665,18 +665,18 @@ namespace
 
             std::atomic<int> recvCount{0};
             check(testInvoke(svc, "/register_sub_topic",
-                      yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{"env_sub_node", "env_conn_topic", new YomkDdsStd::MStringPubSubType(),
+                      yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{"env_sub_node", "env_conn_topic", new yomk::dds_idl::std_msgs::MStringPubSubType(),
                               [&recvCount](const void *) { recvCount.fetch_add(1, std::memory_order_relaxed); }}))
                       .status == yomk::payload::ResStatus::Succeeded,
                   "Part G: env_sub_node 登记 env_conn_topic 订阅（收到即计数）");
             check(testInvoke(svc, "/register_pub_topic",
-                      yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"env_pub_node", "env_conn_topic", new YomkDdsStd::MStringPubSubType()}))
+                      yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"env_pub_node", "env_conn_topic", new yomk::dds_idl::std_msgs::MStringPubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
                   "Part G: env_pub_node 登记 env_conn_topic 发布");
 
             // 主线程同步发布（100ms×60=6s 收流窗 ≥5s server 发现收敛；不经发布线程，
             // invoke 主线程逐次调用无并发问题）
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             bool received = false;
             for (int i = 0; i < 60 && !received; ++i)
             {

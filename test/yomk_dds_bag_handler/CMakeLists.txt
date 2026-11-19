@@ -13,7 +13,7 @@ set_tests_properties(TestYomkDdsBagHandlerContract PROPERTIES
 )
 
 add_executable(TestYomkDdsBagHandlerLifecycle TestYomkDdsBagHandlerLifecycle.cpp)
-target_link_libraries(TestYomkDdsBagHandlerLifecycle PRIVATE yomkdds_under_test YomkDdsStdMsgs)
+target_link_libraries(TestYomkDdsBagHandlerLifecycle PRIVATE yomkdds_under_test std_msgs)
 
 add_test(NAME TestYomkDdsBagHandlerLifecycle COMMAND ${YOMKDDS_TEST_LAUNCHER} $<TARGET_FILE:TestYomkDdsBagHandlerLifecycle>)
 set_tests_properties(TestYomkDdsBagHandlerLifecycle PROPERTIES

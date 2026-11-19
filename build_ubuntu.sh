@@ -14,8 +14,6 @@ PROJECT_NAME="YomkDds"
 BUILD_DIR="${SCRIPT_DIR}/build"
 EXAMPLES_DIR="${SCRIPT_DIR}/examples"
 EXAMPLES_BUILD_DIR="${EXAMPLES_DIR}/build"
-MSG_DIR="${SCRIPT_DIR}/msg"
-MSG_BUILD_DIR="${MSG_DIR}/build"
 TEST_DIR="${SCRIPT_DIR}/test"
 TEST_BUILD_DIR="${TEST_DIR}/build"
 _ORIG_DIR="$(pwd)"
@@ -157,28 +155,18 @@ fi
 
 cd "${_ORIG_DIR}"
 
-# 步骤 2/3: 编译 msg 类型库（fastddsgen 生成工程，含 SWIG Python 绑定）
-# FastDDS 已随主库装入 INSTALL_DIR，msg 库同样安装到扩展安装路径
+# 步骤 2/3: 编译安装标准 msg 类型库（fastddsgen 生成工程，含 SWIG Python 绑定）
+# 源码 msg/ 目录已删除，改用 scripts/build_idl.sh 一键 生成/编译/安装 idl/std_msgs.idl：
+# -p 非交互传入扩展安装路径（与主库安装到一起）；build_idl.sh 内部自带依赖检查、
+# sudo 特权处理、目的地校正、ldconfig 刷新与导入验证，失败码透传即中止
 echo ""
-echo "步骤 2/3: 编译 msg 类型库"
-mkdir -p "${MSG_BUILD_DIR}"
-cd "${MSG_BUILD_DIR}" || return 1
-
-cmake "${MSG_DIR}" -DCMAKE_PREFIX_PATH="${INSTALL_DIR}" -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" -DCMAKE_BUILD_TYPE=Release
+echo "步骤 2/3: 编译 msg 类型库（scripts/build_idl.sh → idl/std_msgs.idl）"
+bash "${SCRIPT_DIR}/scripts/build_idl.sh" "${SCRIPT_DIR}/idl/std_msgs.idl" -p "${INSTALL_DIR}"
 if [ $? -ne 0 ]; then
-    echo "msg cmake 配置失败"
+    echo "msg 类型库编译安装失败"
     cd "${_ORIG_DIR}"
     return 1
 fi
-
-${SUDO} cmake --build . --config Release --target install
-if [ $? -ne 0 ]; then
-    echo "msg 编译安装失败"
-    cd "${_ORIG_DIR}"
-    return 1
-fi
-
-cd "${_ORIG_DIR}"
 
 # 注册扩展库路径到系统动态库搜索路径（扩展属于 yomk，复用 yomk.conf，幂等追加）
 YOMK_LDCONF_FILE="/etc/ld.so.conf.d/yomk.conf"

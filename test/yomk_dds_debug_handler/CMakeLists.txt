@@ -2,7 +2,7 @@
 # YomkDdsDebugHandler：调试服务两层测试
 # 契约测试（DDS-free，白盒 invoke 验证 6 端点输入校验/错误码/内省）+
 # 生命周期测试（真实 DDS：create/重复/删除/重建 + topicPrint 登记契约 + topicInfo 未发现/命中
-# + domainId 边界）。链接 YomkDdsStdMsgs：Lifecycle 为 topic_info 命中路径引入最小发布端类型
+# + domainId 边界）。链接 std_msgs：Lifecycle 为 topic_info 命中路径引入最小发布端类型
 # （MString），端到端订阅流量仍归 TestFastDDSDebugNode。
 # =============================================================================
 add_executable(TestYomkDdsDebugHandlerContract TestYomkDdsDebugHandlerContract.cpp)
@@ -14,7 +14,7 @@ set_tests_properties(TestYomkDdsDebugHandlerContract PROPERTIES
 )
 
 add_executable(TestYomkDdsDebugHandlerLifecycle TestYomkDdsDebugHandlerLifecycle.cpp)
-target_link_libraries(TestYomkDdsDebugHandlerLifecycle PRIVATE yomkdds_under_test YomkDdsStdMsgs)
+target_link_libraries(TestYomkDdsDebugHandlerLifecycle PRIVATE yomkdds_under_test std_msgs)
 
 add_test(NAME TestYomkDdsDebugHandlerLifecycle COMMAND ${YOMKDDS_TEST_LAUNCHER} $<TARGET_FILE:TestYomkDdsDebugHandlerLifecycle>)
 set_tests_properties(TestYomkDdsDebugHandlerLifecycle PROPERTIES

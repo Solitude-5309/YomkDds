@@ -8,8 +8,8 @@
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 
-#include <yomk/dds/YomkDdsStdMsgs.hpp>
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
+#include <yomk/dds_idl/std_msgs.hpp>
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -50,7 +50,7 @@ int main()
     }
 
     // 2. 注册发布主题：type 所有权移交服务端，new 后无需自行 delete
-    resp = yomk::dds().node("ds_pub_node").topic("ds_hello_world").type(new YomkDdsStd::MStringPubSubType()).create_pub();
+    resp = yomk::dds().node("ds_pub_node").topic("ds_hello_world").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         yomk::log().tag("ExampleDiscoverServerPub").error("register pub topic failed: ", resp.msg);
@@ -65,7 +65,7 @@ int main()
     int failCount = 0;
     while (!g_stop.load())
     {
-        YomkDdsStd::MString msg;
+        yomk::dds_idl::std_msgs::MString msg;
         msg.data("hello world " + std::to_string(total));
         resp = yomk::dds().node("ds_pub_node").topic("ds_hello_world").data(&msg).pub();
         if (resp.status != yomk::payload::ResStatus::Succeeded)

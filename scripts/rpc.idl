@@ -1,4 +1,0 @@
-struct RPCString
-{
-    string s;
-};

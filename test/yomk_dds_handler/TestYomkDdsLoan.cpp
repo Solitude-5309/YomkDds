@@ -33,8 +33,8 @@
 #include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
 
-#include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MInt32 / MString
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MInt32PubSubType / MStringPubSubType
+#include <yomk/dds_idl/std_msgs.hpp>            // yomk::dds_idl::std_msgs::MInt32 / MString
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp> // MInt32PubSubType / MStringPubSubType
 
 #include <atomic>
 #include <chrono>
@@ -62,7 +62,7 @@ namespace
               "创建 loan_node(domain 200) → eOk");
 
         check(testInvoke(svc, "/register_pub_topic",
-                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"loan_node", "loan_plain", new YomkDdsStd::MInt32PubSubType()}))
+                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"loan_node", "loan_plain", new yomk::dds_idl::std_msgs::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic loan_plain(MInt32,plain) → eOk");
 
@@ -74,7 +74,7 @@ namespace
         check(s != nullptr, "loan 返回 sample 非空（writer 池借出，中间件所有权）");
         if (s != nullptr)
         {
-            static_cast<YomkDdsStd::MInt32 *>(s)->data(42); // 池内直接填值（免序列化）
+            static_cast<yomk::dds_idl::std_msgs::MInt32 *>(s)->data(42); // 池内直接填值（免序列化）
             check(testInvoke(svc, "/discard_loan", yomk::msgs::dds::DiscardLoanRequest::shared(DiscardLoanRequest{"loan_node", "loan_plain", s}))
                           .status == yomk::payload::ResStatus::Succeeded,
                   "discard_loan 归还未发布样本 → eOk");
@@ -82,7 +82,7 @@ namespace
 
         // 非 plain 类型借出：loan_sample RETCODE_ILLEGAL_OPERATION → sample 保持 null → 服务层 eNo
         check(testInvoke(svc, "/register_pub_topic",
-                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"loan_node", "loan_nonplain", new YomkDdsStd::MStringPubSubType()}))
+                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"loan_node", "loan_nonplain", new yomk::dds_idl::std_msgs::MStringPubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic loan_nonplain(MString,非plain) → eOk");
         check(testInvoke(svc, "/loan", yomk::msgs::dds::LoanRequest::shared(LoanRequest{"loan_node", "loan_nonplain"}))
@@ -99,7 +99,7 @@ namespace
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "e2e_loan_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 e2e_loan_node → eOk");
         check(testInvoke(svc, "/register_pub_topic",
-                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"e2e_loan_node", "loan_e2e", new YomkDdsStd::MInt32PubSubType()}))
+                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"e2e_loan_node", "loan_e2e", new yomk::dds_idl::std_msgs::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic loan_e2e(MInt32) → eOk");
 
@@ -108,13 +108,13 @@ namespace
         int32_t lastValue = -1;
         auto cb = [&](const void *d)
         {
-            auto *m = static_cast<const YomkDdsStd::MInt32 *>(d);
+            auto *m = static_cast<const yomk::dds_idl::std_msgs::MInt32 *>(d);
             std::lock_guard<std::mutex> lk(mtx);
             lastValue = m->data();
             received++;
         };
         check(testInvoke(svc, "/register_sub_topic",
-                          yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{"e2e_loan_node", "loan_e2e", new YomkDdsStd::MInt32PubSubType(), cb}))
+                          yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{"e2e_loan_node", "loan_e2e", new yomk::dds_idl::std_msgs::MInt32PubSubType(), cb}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "register_sub_topic loan_e2e(callback) → eOk");
 
@@ -131,7 +131,7 @@ namespace
             if (lresp.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
             {
                 loanOk++;
-                static_cast<YomkDdsStd::MInt32 *>(s)->data(100 + i); // 池内填值
+                static_cast<yomk::dds_idl::std_msgs::MInt32 *>(s)->data(100 + i); // 池内填值
                 // write 后中间件收回 s（caller 不应再访问），下一轮重新 loan
                 if (testInvoke(svc, "/publish", yomk::msgs::dds::PublishRequest::shared(PublishRequest{"e2e_loan_node", "loan_e2e", s}))
                         .status == yomk::payload::ResStatus::Succeeded)
@@ -170,7 +170,7 @@ namespace
               "loan 未注册主题 → eNo（pubTopics_.find 失败）");
 
         check(testInvoke(svc, "/register_pub_topic",
-                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"lg_node", "lg_topic", new YomkDdsStd::MInt32PubSubType()}))
+                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"lg_node", "lg_topic", new yomk::dds_idl::std_msgs::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "register_pub_topic lg_topic(MInt32) → eOk");
 

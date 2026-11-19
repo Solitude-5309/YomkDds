@@ -230,7 +230,7 @@ namespace
     "duration": {"nanoseconds": 12000000000},
     "message_count": 13,
     "topics_with_message_count": [
-        {"topic_metadata": {"name": "/rt/a", "type": "YomkDdsStd::MString"}, "message_count": 5}
+        {"topic_metadata": {"name": "/rt/a", "type": "yomk::dds_idl::std_msgs::MString"}, "message_count": 5}
     ]
 }
 )";
@@ -252,7 +252,7 @@ namespace
             check(info->msg.bagSizeBytes == fs::file_size(dir + "/metadata.json", ec),
                   "BagInfo.bagSizeBytes = 目录递归字节（本目录仅 metadata.json）");
             check(info->msg.topics.size() == 1 && info->msg.topics[0].topicName == "/rt/a" &&
-                      info->msg.topics[0].typeName == "YomkDdsStd::MString" &&
+                      info->msg.topics[0].typeName == "yomk::dds_idl::std_msgs::MString" &&
                       info->msg.topics[0].qos.empty() && info->msg.topics[0].messageCount == 5,
                   "BagInfo.topics 透传 name/type/count（metadata 无 qos 键 → 空串）");
         }
@@ -335,7 +335,7 @@ namespace
         fs::remove_all(inDir, ec);
         fs::remove_all(outDir, ec);
         check(fs::create_directory(inDir, ec), "T9 前置：输入 bag 目录创建成功");
-        check(makeMcapFile(inDir + "/bag_0.mcap", "/rt/t9", 2, "YomkDdsStd::MString"),
+        check(makeMcapFile(inDir + "/bag_0.mcap", "/rt/t9", 2, "yomk::dds_idl::std_msgs::MString"),
               "T9 前置：带类型 mcap 分片造文件成功");
         const std::string cfg = "convert_svc_t9.json";
         {

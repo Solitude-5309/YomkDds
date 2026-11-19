@@ -616,7 +616,7 @@ int main()
             {"message_count", 2},
             {"topics_with_message_count", nlohmann::json::array({{
                  {"topic_metadata",
-                     {{"name", "/rt/x"}, {"type", "YomkDdsStd::MString"},
+                     {{"name", "/rt/x"}, {"type", "yomk::dds_idl::std_msgs::MString"},
                          {"qos", "RELIABLE,TRANSIENT_LOCAL"}}},
                  {"message_count", 2}}})}};
         std::ofstream out(kP5NoShard + "/metadata.json");
@@ -628,14 +628,14 @@ int main()
     // P5.7 qos 非法枚举名（reliability 段合法、durability 段拼写错误——注意 TRANSIENT/
     // PERSISTENT 是标准 DDS durability 合法档位，parseDurabilityKindName 全档支持）
     check(makeBag(kP5BadEnum,
-              {{"/rt/x", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCALL", 2}}, 1000000000ULL),
+              {{"/rt/x", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCALL", 2}}, 1000000000ULL),
           "P5.7 前置：非法枚举名 bag 构造成功");
     check(!node.play(kP5BadEnum, stats, &error) &&
               error.find("invalid qos string [RELIABLE,TRANSIENT_LOCALL]") != std::string::npos,
           "P5.7 qos 非法枚举名 → false + invalid qos string（含原串）");
     // P5.8 qos 多逗号（三段串整体拒绝）
     check(makeBag(kP5MultiComma,
-              {{"/rt/x", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL,X", 2}}, 1000000000ULL),
+              {{"/rt/x", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL,X", 2}}, 1000000000ULL),
           "P5.8 前置：多逗号 qos bag 构造成功");
     check(!node.play(kP5MultiComma, stats, &error) &&
               error.find("invalid qos string") != std::string::npos,
@@ -650,14 +650,14 @@ int main()
 
     // ---- P1：双主题基础回放对账（时间轴 6s；TRANSIENT_LOCAL 订阅端先建在场） ----
     check(makeBag(kP1Bag,
-              {{"/rt/play_a", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 30},
-                  {"/rt/play_b", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 30}},
+              {{"/rt/play_a", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL", 30},
+                  {"/rt/play_b", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL", 30}},
               200 * 1000000ULL),
           "P1 前置：双主题 bag 构造成功");
     PlayCountListener listenA;
     PlayCountListener listenB;
-    auto *topicA = makePlayTopic(participant, "/rt/play_a", "YomkDdsStd::MString");
-    auto *topicB = makePlayTopic(participant, "/rt/play_b", "YomkDdsStd::MString");
+    auto *topicA = makePlayTopic(participant, "/rt/play_a", "yomk::dds_idl::std_msgs::MString");
+    auto *topicB = makePlayTopic(participant, "/rt/play_b", "yomk::dds_idl::std_msgs::MString");
     auto *readerA = makePlayReader(subscriber, topicA, &listenA,
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     auto *readerB = makePlayReader(subscriber, topicB, &listenB,
@@ -685,7 +685,7 @@ int main()
     {
         check(p1Stats[0].topic == "/rt/play_a" && p1Stats[1].topic == "/rt/play_b",
               "P1 stats 预扫清单序（metadata 主题序）");
-        check(p1Stats[0].type == "YomkDdsStd::MString" && p1Stats[1].type == "YomkDdsStd::MString",
+        check(p1Stats[0].type == "yomk::dds_idl::std_msgs::MString" && p1Stats[1].type == "yomk::dds_idl::std_msgs::MString",
               "P1 stats.type 透传 bag 内类型名");
         check(p1Stats[0].count == 30 && p1Stats[1].count == 30,
               "P1 stats 精确条数（时间轴全播）");
@@ -695,12 +695,12 @@ int main()
 
     // ---- P3a：QoS 快照恢复正向（reliability）——RELIABLE,TRANSIENT_LOCAL bag 双口径订阅端 ----
     check(makeBag(kP3aBag,
-              {{"/rt/play_qos_tl", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 20}},
+              {{"/rt/play_qos_tl", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL", 20}},
               150 * 1000000ULL),
           "P3a 前置：RELIABLE,TRANSIENT_LOCAL bag 构造成功");
     PlayCountListener tlBest;
     PlayCountListener tlRel;
-    auto *topicTl = makePlayTopic(participant, "/rt/play_qos_tl", "YomkDdsStd::MString");
+    auto *topicTl = makePlayTopic(participant, "/rt/play_qos_tl", "yomk::dds_idl::std_msgs::MString");
     auto *readerTlBest = makePlayReader(subscriber, topicTl, &tlBest,
         dds::BEST_EFFORT_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     auto *readerTlRel = makePlayReader(subscriber, topicTl, &tlRel,
@@ -721,11 +721,11 @@ int main()
 
     // ---- P3b：QoS 快照恢复负向——BEST_EFFORT,VOLATILE bag → RELIABLE 订阅端不匹配 ----
     check(makeBag(kP3bBag,
-              {{"/rt/play_qos_be", "YomkDdsStd::MString", "BEST_EFFORT,VOLATILE", 8}},
+              {{"/rt/play_qos_be", "yomk::dds_idl::std_msgs::MString", "BEST_EFFORT,VOLATILE", 8}},
               20 * 1000000ULL),
           "P3b 前置：BEST_EFFORT,VOLATILE 短回放 bag 构造成功");
     PlayCountListener beRel;
-    auto *topicBe = makePlayTopic(participant, "/rt/play_qos_be", "YomkDdsStd::MString");
+    auto *topicBe = makePlayTopic(participant, "/rt/play_qos_be", "yomk::dds_idl::std_msgs::MString");
     auto *readerBeRel = makePlayReader(subscriber, topicBe, &beRel,
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     check(topicBe != nullptr && readerBeRel != nullptr, "P3b 前置：RELIABLE 订阅端先建在场");
@@ -745,11 +745,11 @@ int main()
     //      BEST_EFFORT 订阅端 latched 补发精确收满（若 durability 误恢复 VOLATILE 则
     //      匹配建立前的样本全部丢失，16 条无法凑满——以收数反向钉死快照恢复） ----
     check(makeBag(kP3cBag,
-              {{"/rt/play_qos_dtl", "YomkDdsStd::MString", "BEST_EFFORT,TRANSIENT_LOCAL", 16}},
+              {{"/rt/play_qos_dtl", "yomk::dds_idl::std_msgs::MString", "BEST_EFFORT,TRANSIENT_LOCAL", 16}},
               250 * 1000000ULL),
           "P3c 前置：BEST_EFFORT,TRANSIENT_LOCAL bag 构造成功");
     PlayCountListener dtlBest;
-    auto *topicDtl = makePlayTopic(participant, "/rt/play_qos_dtl", "YomkDdsStd::MString");
+    auto *topicDtl = makePlayTopic(participant, "/rt/play_qos_dtl", "yomk::dds_idl::std_msgs::MString");
     auto *readerDtl = makePlayReader(subscriber, topicDtl, &dtlBest,
         dds::BEST_EFFORT_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     check(topicDtl != nullptr && readerDtl != nullptr, "P3c 前置：BEST_EFFORT 订阅端先建在场");
@@ -765,14 +765,14 @@ int main()
 
     // ---- P4：Ctrl+C 停止（播放中途 yomk::ctrl::dds::g_bagPlayStop 置位 → 提前返回 + 部分计数） ----
     check(makeBag(kP4Bag,
-              {{"/rt/play_stop_a", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 40},
-                  {"/rt/play_stop_b", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 40}},
+              {{"/rt/play_stop_a", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL", 40},
+                  {"/rt/play_stop_b", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL", 40}},
               100 * 1000000ULL),
           "P4 前置：双主题 8s 时间轴 bag 构造成功");
     PlayCountListener stopA;
     PlayCountListener stopB;
-    auto *topicSa = makePlayTopic(participant, "/rt/play_stop_a", "YomkDdsStd::MString");
-    auto *topicSb = makePlayTopic(participant, "/rt/play_stop_b", "YomkDdsStd::MString");
+    auto *topicSa = makePlayTopic(participant, "/rt/play_stop_a", "yomk::dds_idl::std_msgs::MString");
+    auto *topicSb = makePlayTopic(participant, "/rt/play_stop_b", "yomk::dds_idl::std_msgs::MString");
     auto *readerSa = makePlayReader(subscriber, topicSa, &stopA,
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     auto *readerSb = makePlayReader(subscriber, topicSb, &stopB,
@@ -799,13 +799,13 @@ int main()
 
     // ---- P6：多分片回放守恒（bag_0/bag_1 各 10 条，时间轴连续跨分片衔接） ----
     check(makeBag(kP6Bag,
-              {{"/rt/play_shard", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 20}},
+              {{"/rt/play_shard", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL", 20}},
               200 * 1000000ULL, 2),
           "P6 前置：双分片 bag 构造成功");
     check(fs::exists(kP6Bag + "/bag_0.mcap", ec) && fs::exists(kP6Bag + "/bag_1.mcap", ec),
           "P6 前置：双分片落盘");
     PlayCountListener shardListen;
-    auto *topicShard = makePlayTopic(participant, "/rt/play_shard", "YomkDdsStd::MString");
+    auto *topicShard = makePlayTopic(participant, "/rt/play_shard", "yomk::dds_idl::std_msgs::MString");
     auto *readerShard = makePlayReader(subscriber, topicShard, &shardListen,
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
     check(topicShard != nullptr && readerShard != nullptr, "P6 前置：订阅端 reader 先建在场");
@@ -823,7 +823,7 @@ int main()
 
     // ---- P7：回放速率倍率（对齐 ros2 --rate：倍率缩放消息间调度间隔 + 运行时动态调率） ----
     check(makeBag(kP7Bag,
-              {{"/rt/play_rate", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 5}},
+              {{"/rt/play_rate", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL", 5}},
               400 * 1000000ULL),
           "P7 前置：单主题 5 条 @400ms bag 构造成功（时间轴 span 1.6s）");
 
@@ -911,15 +911,15 @@ int main()
 
     // ---- P8：主题过滤（--topics，对齐 convert topics 语义 + ros2 --topics 缺省语义） ----
     check(makeBag(kP8Bag,
-              {{"/rt/p8a", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 20},
-                  {"/rt/p8b", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 20}},
+              {{"/rt/p8a", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL", 20},
+                  {"/rt/p8b", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL", 20}},
               50 * 1000000ULL),
           "P8 前置：双主题各 20 条 @50ms bag 构造成功（span 950ms）");
 
     // P8.1 单主题过滤：--topics 只含 /rt/p8a → stats 仅 p8a 行；双 reader 都在场对账：
     // 入选主题收满、被过滤主题零收（过滤在发布侧，被过滤主题无任何发布实体）
-    auto *topicP8a = makePlayTopic(participant, "/rt/p8a", "YomkDdsStd::MString");
-    auto *topicP8b = makePlayTopic(participant, "/rt/p8b", "YomkDdsStd::MString");
+    auto *topicP8a = makePlayTopic(participant, "/rt/p8a", "yomk::dds_idl::std_msgs::MString");
+    auto *topicP8b = makePlayTopic(participant, "/rt/p8b", "yomk::dds_idl::std_msgs::MString");
     PlayCountListener p8aListen;
     PlayCountListener p8bListen;
     auto *readerP8a = makePlayReader(subscriber, topicP8a, &p8aListen,
@@ -1200,10 +1200,10 @@ int main()
     // 下界钉语义不设上界；回卷从零的错误形态每轮 6 条被 span 2500ms 节拍反压 →
     // 5s 恰 2 轮收 ≤12 条，远越下界 15
     check(makeBag(kP11Bag,
-              {{"/rt/p11", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 6}},
+              {{"/rt/p11", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL", 6}},
               500 * 1000000ULL),
           "P11.3 前置：单主题 6 条 @500ms bag 构造成功（span 2500ms）");
-    auto *topicP11 = makePlayTopic(participant, "/rt/p11", "YomkDdsStd::MString");
+    auto *topicP11 = makePlayTopic(participant, "/rt/p11", "yomk::dds_idl::std_msgs::MString");
     PlayCountListener p11Listen;
     auto *readerP11 = makePlayReader(subscriber, topicP11, &p11Listen,
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
@@ -1315,8 +1315,8 @@ int main()
     // P13 用例共用夹具：kP13Bag 双主题各 20 条 @50ms（RELIABLE,TRANSIENT_LOCAL 快照
     // 同 P12 惯例；span 1950ms 同 kP8Bag 形态）
     check(makeBag(kP13Bag,
-              {{"/rt/p13a", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 20},
-                  {"/rt/p13b", "YomkDdsStd::MString", "RELIABLE,TRANSIENT_LOCAL", 20}},
+              {{"/rt/p13a", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL", 20},
+                  {"/rt/p13b", "yomk::dds_idl::std_msgs::MString", "RELIABLE,TRANSIENT_LOCAL", 20}},
               50 * 1000000ULL),
           "P13 前置：双主题各 20 条 @50ms RELIABLE bag 构造成功");
 
@@ -1337,8 +1337,8 @@ int main()
 
     // P13.1 显式生效+播毕收满：双 RELIABLE 订阅端在线 → waitAckedMs=2000 收尾逐 writer
     // 等 ACK（进程内 RELIABLE reader ACK 快，wait 立即通过——验证不 hang 不误报）
-    auto *topicP13a = makePlayTopic(participant, "/rt/p13a", "YomkDdsStd::MString");
-    auto *topicP13b = makePlayTopic(participant, "/rt/p13b", "YomkDdsStd::MString");
+    auto *topicP13a = makePlayTopic(participant, "/rt/p13a", "yomk::dds_idl::std_msgs::MString");
+    auto *topicP13b = makePlayTopic(participant, "/rt/p13b", "yomk::dds_idl::std_msgs::MString");
     PlayCountListener p13aListen;
     PlayCountListener p13bListen;
     auto *readerP13a = makePlayReader(subscriber, topicP13a, &p13aListen,
@@ -1389,7 +1389,7 @@ int main()
     // P14.1 单主题重映射：/rt/p8a:=/rt/remap_a → 数据发新名（发布实体真实名）；新名
     // reader 精确收 20、旧名 reader 零增量（数据已迁新名无 matched）、未 remap 的 p8b
     // 照常；stats 显示 remap 后新名（预扫清单序）
-    auto *topicRma = makePlayTopic(participant, "/rt/remap_a", "YomkDdsStd::MString");
+    auto *topicRma = makePlayTopic(participant, "/rt/remap_a", "yomk::dds_idl::std_msgs::MString");
     PlayCountListener rmaListen;
     auto *readerRma = makePlayReader(subscriber, topicRma, &rmaListen,
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);
@@ -1415,8 +1415,8 @@ int main()
 
     // P14.2 多规则全 remap：双规则双主题全迁新名（/rt/ra2 /rt/rb2）各收 20；旧名双
     // reader 全零增量；stats 两行全新名
-    auto *topicRa2 = makePlayTopic(participant, "/rt/ra2", "YomkDdsStd::MString");
-    auto *topicRb2 = makePlayTopic(participant, "/rt/rb2", "YomkDdsStd::MString");
+    auto *topicRa2 = makePlayTopic(participant, "/rt/ra2", "yomk::dds_idl::std_msgs::MString");
+    auto *topicRb2 = makePlayTopic(participant, "/rt/rb2", "yomk::dds_idl::std_msgs::MString");
     PlayCountListener ra2Listen;
     PlayCountListener rb2Listen;
     auto *readerRa2 = makePlayReader(subscriber, topicRa2, &ra2Listen,
@@ -1449,7 +1449,7 @@ int main()
 
     // P14.3 与 --topics 叠加（过滤按旧名先过滤后 remap）：只回放 p8a 并 remap →
     // ra3 收 20、p8b 被过滤零发；stats 单行 remap 后新名
-    auto *topicRa3 = makePlayTopic(participant, "/rt/ra3", "YomkDdsStd::MString");
+    auto *topicRa3 = makePlayTopic(participant, "/rt/ra3", "yomk::dds_idl::std_msgs::MString");
     PlayCountListener ra3Listen;
     auto *readerRa3 = makePlayReader(subscriber, topicRa3, &ra3Listen,
         dds::RELIABLE_RELIABILITY_QOS, dds::TRANSIENT_LOCAL_DURABILITY_QOS);

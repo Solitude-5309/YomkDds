@@ -11,7 +11,7 @@
  *   R1 setDomainId(202) 成功；yomk::ctrl::dds::bagRecordReset 复位残留停止标志；
  *   R2 远端 MString 发布者（rt/bag_rec_hit）周期发布，录制线程 record 阻塞；
  *   R3 ~5s 后 yomk::ctrl::dds::g_bagRecordStop → record 返回 true；
- *   R4 stats 契约：单主题、topic/type（YomkDdsStd::MString）/count/bytes 一致；
+ *   R4 stats 契约：单主题、topic/type（yomk::dds_idl::std_msgs::MString）/count/bytes 一致；
  *   R5 落盘：bag 目录（bag_<YYYY-MM-DD_HH-MM-SS_mmm>）含 bag_0.mcap 与 metadata.json；
  *   R6 mcap 读回：条数 == stats.count；Channel topic/messageEncoding=cdr/schemaId=0/
  *      metadata type+qos 两键（qos == RELIABLE,TRANSIENT_LOCAL，FastDDS 3.x DataWriter
@@ -54,7 +54,7 @@
 #include "FastDDSBagNode.h"     // 被测节点（直测，不经服务层）
 #include "YomkDdsBagHandler.h"  // yomk::ctrl::dds::g_bagRecordStop/yomk::ctrl::dds::bagRecordReset（停止标志读写端）
 
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（远端发布端制造录制流量）
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp> // MStringPubSubType（远端发布端制造录制流量）
 
 #include <fastdds/dds/core/status/PublicationMatchedStatus.hpp> // R12 发布端等订阅匹配（防 VOLATILE 匹配前丢消息）
 #include <fastdds/dds/domain/DomainParticipant.hpp>
@@ -140,7 +140,7 @@ int main()
     auto *peerParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
         TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
     check(peerParticipant != nullptr, "R2 远端发布端 participant 创建成功");
-    dds::TypeSupport ts(new YomkDdsStd::MStringPubSubType());
+    dds::TypeSupport ts(new yomk::dds_idl::std_msgs::MStringPubSubType());
     ts.register_type(peerParticipant);
     auto *pub = peerParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
     auto *topic = peerParticipant->create_topic(REC_TOPIC, ts.get_type_name(), dds::TOPIC_QOS_DEFAULT);
@@ -152,7 +152,7 @@ int main()
     std::atomic<bool> pubStop{false};
     std::thread pubThread([&]()
     {
-        YomkDdsStd::MString msg;
+        yomk::dds_idl::std_msgs::MString msg;
         uint32_t seq = 0;
         while (!pubStop.load())
         {
@@ -197,7 +197,7 @@ int main()
     if (stats.size() == 1)
     {
         check(stats[0].topic == REC_TOPIC, "R4 stats.topic == rt/bag_rec_hit（用户输入原样）");
-        check(stats[0].type == "YomkDdsStd::MString", "R4 stats.type == YomkDdsStd::MString（远端类型名原样）");
+        check(stats[0].type == "yomk::dds_idl::std_msgs::MString", "R4 stats.type == yomk::dds_idl::std_msgs::MString（远端类型名原样）");
         check(stats[0].count >= 5, "R4 录制条数 >= 5（3s 校验窗 + 2s 录制期 @150ms/条）");
         check(stats[0].bytes >= stats[0].count * 4, "R4 bytes >= count×4（每条至少含 encapsulation header）");
     }
@@ -289,8 +289,8 @@ int main()
         check(text.find("bag_0.mcap") != std::string::npos, "R7 metadata relative_file_paths 列出 bag_0.mcap");
         check(text.find("\"name\": \"" + std::string(REC_TOPIC) + "\"") != std::string::npos,
               "R7 metadata topics_with_message_count 列出录制主题名");
-        check(text.find("\"type\": \"YomkDdsStd::MString\"") != std::string::npos,
-              "R7 metadata 主题类型 == YomkDdsStd::MString");
+        check(text.find("\"type\": \"yomk::dds_idl::std_msgs::MString\"") != std::string::npos,
+              "R7 metadata 主题类型 == yomk::dds_idl::std_msgs::MString");
         check(text.find("\"qos\": \"RELIABLE,TRANSIENT_LOCAL\"") != std::string::npos,
               "R7 metadata topic_metadata qos == RELIABLE,TRANSIENT_LOCAL（与 Channel.metadata 同源）");
         check(text.find("\"message_count\": " + std::to_string(recCount)) != std::string::npos,
@@ -334,7 +334,7 @@ int main()
         std::atomic<bool> pubStop2{false};
         std::thread pubThread2([&]()
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             uint32_t seq = 0;
             while (!pubStop2.load())
             {
@@ -376,8 +376,8 @@ int main()
                       "R9 展开清单去重且升序（a、b 各一项）");
                 check(statsPattern[0].count >= 1 && statsPattern[1].count >= 1,
                       "R9 两主题均有录制条数");
-                check(statsPattern[0].type == "YomkDdsStd::MString",
-                      "R9 展开主题类型 == YomkDdsStd::MString");
+                check(statsPattern[0].type == "yomk::dds_idl::std_msgs::MString",
+                      "R9 展开主题类型 == yomk::dds_idl::std_msgs::MString");
             }
             const std::string &bagDir2 = node2.bagDir();
             check(bagDir2.size() == std::string("bag_YYYY-MM-DD_HH-MM-SS_mmm").size(),
@@ -426,7 +426,7 @@ int main()
         std::atomic<bool> pubStop3{false};
         std::thread pubThread3([&]()
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             uint32_t seq = 0;
             while (!pubStop3.load())
             {
@@ -494,7 +494,7 @@ int main()
         std::atomic<bool> pubStop4{false};
         std::thread pubThread4([&]()
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             uint32_t seq = 0;
             while (!pubStop4.load())
             {
@@ -549,7 +549,7 @@ int main()
         std::atomic<bool> pubStop5{false};
         std::thread pubThread5([&]()
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             uint32_t seq = 0;
             while (!pubStop5.load())
             {
@@ -614,7 +614,7 @@ int main()
         std::atomic<bool> pubStop6{false};
         std::thread pubThread6([&]()
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             const std::string payload(kSplitPayloadBytes, 'x');
             dds::PublicationMatchedStatus matched{};
             for (int i = 0; i < 100; ++i) // 100×100ms=10s 上限；未匹配照发（用例必失败不掩盖）
@@ -739,7 +739,7 @@ int main()
         std::atomic<bool> pubStop7{false};
         std::thread pubThread7([&]()
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             dds::PublicationMatchedStatus matched{};
             for (int i = 0; i < 100; ++i) // 100×100ms=10s 上限；未匹配照发（用例必失败不掩盖）
             {
@@ -867,7 +867,7 @@ int main()
         std::atomic<bool> pubStop8{false};
         std::thread pubThread8([&]()
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             dds::PublicationMatchedStatus matched{};
             for (int i = 0; i < 100; ++i) // 100×100ms=10s 上限；未匹配照发（用例必失败不掩盖）
             {
@@ -981,7 +981,7 @@ int main()
         std::atomic<bool> pubStop9{false};
         std::thread pubThread9([&]()
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             dds::PublicationMatchedStatus matched{};
             for (int i = 0; i < 100; ++i) // 100×100ms=10s 上限；未匹配照发（用例必失败不掩盖）
             {
@@ -1108,7 +1108,7 @@ int main()
         std::atomic<bool> pubStop10{false};
         std::thread pubThread10([&]()
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             dds::PublicationMatchedStatus matched{};
             for (int i = 0; i < 100; ++i) // 100×100ms=10s 上限；未匹配照发（用例必失败不掩盖）
             {
@@ -1214,7 +1214,7 @@ int main()
         std::atomic<bool> pubStop11{false};
         std::thread pubThread11([&]()
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             dds::PublicationMatchedStatus matched{};
             for (int i = 0; i < 100; ++i) // 等订阅匹配（100×100ms 上限，未匹配照发）
             {
@@ -1304,7 +1304,7 @@ int main()
         // 类型对象 new 后、register_type 前 set_name（注册名随新名落发现数据）
         constexpr auto *kSetnameTopic = "rt/bag_rec_setname";
         constexpr auto *kRosTypeName = "std_msgs::msg::dds_::String_";
-        dds::TypeSupport tsSetname(new YomkDdsStd::MStringPubSubType());
+        dds::TypeSupport tsSetname(new yomk::dds_idl::std_msgs::MStringPubSubType());
         tsSetname->set_name(kRosTypeName);
         // register_type 返回值不硬断言（实测固化）：TypeObjectFactory 全局按 tid 幂等——同
         // 进程 R2 段已注册同 TypeObject 的原名 MString（tid 恒定），set_name 新名再注册返回
@@ -1330,7 +1330,7 @@ int main()
         std::atomic<bool> pubStop12{false};
         std::thread pubThread12([&]()
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             dds::PublicationMatchedStatus matched{};
             for (int i = 0; i < 100; ++i) // 100×100ms=10s 上限；未匹配照发（用例必失败不掩盖）
             {

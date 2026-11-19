@@ -31,7 +31,7 @@
 #include "TestCheck.h"
 #include "FastDDSBagNode.h" // 被测节点（直测，不经服务层）
 
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（V5 远端发布端制造"有端点"主题）
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp> // MStringPubSubType（V5 远端发布端制造"有端点"主题）
 
 #include <fastdds/dds/domain/DomainParticipant.hpp>
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
@@ -163,7 +163,7 @@ int main()
         auto *peerParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
             TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
         check(peerParticipant != nullptr, "V5 远端发布端 participant 创建成功");
-        dds::TypeSupport ts(new YomkDdsStd::MStringPubSubType());
+        dds::TypeSupport ts(new yomk::dds_idl::std_msgs::MStringPubSubType());
         ts.register_type(peerParticipant);
         auto *pub = peerParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
         auto *topic =

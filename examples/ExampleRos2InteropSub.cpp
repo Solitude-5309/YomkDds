@@ -10,8 +10,8 @@
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 
-#include <yomk/dds/YomkDdsStdMsgs.hpp>
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
+#include <yomk/dds_idl/std_msgs.hpp>
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -43,11 +43,11 @@ int main()
 
     // 类型对象 new 后、移交前 set_name 成 ROS2 约定名（type() 实参位内联 new 无法先改名）
     std::atomic<int> received{0};
-    auto* type = new YomkDdsStd::MStringPubSubType();
+    auto* type = new yomk::dds_idl::std_msgs::MStringPubSubType();
     type->set_name("std_msgs::msg::dds_::String_");
     auto onMessage = [&](const void* data)
     {
-        auto* msg = static_cast<const YomkDdsStd::MString*>(data);
+        auto* msg = static_cast<const yomk::dds_idl::std_msgs::MString*>(data);
         received++;
         yomk::log().tag("ExampleRos2InteropSub").info("[RECV] ", msg->data());
     };

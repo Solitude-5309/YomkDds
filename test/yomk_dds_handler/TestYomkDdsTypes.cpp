@@ -35,9 +35,9 @@
 #include "YomkDdsHandler.h" // 服务 + RegisterPubTopicRequest/RegisterSubTopicRequest/Publish + String + YOMK_* 宏
 #include "YomkDdsMsg.h"
 
-// 引消息类型：YomkDdsStd::MFloat32/MFloat64/MInt64/MBool/MString/MByteArray 数据类
-#include <yomk/dds/YomkDdsStdMsgs.hpp>
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // 对应 PubSubType
+// 引消息类型：yomk::dds_idl::std_msgs::MFloat32/MFloat64/MInt64/MBool/MString/MByteArray 数据类
+#include <yomk/dds_idl/std_msgs.hpp>
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp> // 对应 PubSubType
 
 #include <atomic>
 #include <chrono>
@@ -74,11 +74,11 @@ namespace
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "ta_node")).status == yomk::payload::ResStatus::Succeeded,
               "创建 ta_node(domain 200) → eOk");
         check(testInvoke(svc, "/register_sub_topic",
-                          yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{"ta_node", "shared_t", new YomkDdsStd::MInt32PubSubType(), nullptr}))
+                          yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{"ta_node", "shared_t", new yomk::dds_idl::std_msgs::MInt32PubSubType(), nullptr}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "A1 sub 先占用 shared_t(MInt32) → eOk（topics_[shared_t] 绑定 MInt32）");
         check(testInvoke(svc, "/register_pub_topic",
-                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"ta_node", "shared_t", new YomkDdsStd::MStringPubSubType()}))
+                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"ta_node", "shared_t", new yomk::dds_idl::std_msgs::MStringPubSubType()}))
                       .status == yomk::payload::ResStatus::Failed,
               "A1 pub 侧类型冲突 → eNo（getOrCreateTopic MInt32≠MString 返回 nullptr，L215；MString 孤儿类型由 participant 清理不泄漏）");
         check(testInvoke(svc, "/delete_node", yomk::msgs::String::shared("ta_node")).status == yomk::payload::ResStatus::Succeeded,
@@ -92,17 +92,17 @@ namespace
         int32_t lastValue = -1;
         auto cb = [&](const void *d)
         {
-            auto *m = static_cast<const YomkDdsStd::MInt32 *>(d);
+            auto *m = static_cast<const yomk::dds_idl::std_msgs::MInt32 *>(d);
             std::lock_guard<std::mutex> lk(mtx);
             lastValue = m->data();
             received++;
         };
         check(testInvoke(svc, "/register_sub_topic",
-                          yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{"tb_node", "reuse_t", new YomkDdsStd::MInt32PubSubType(), cb}))
+                          yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{"tb_node", "reuse_t", new yomk::dds_idl::std_msgs::MInt32PubSubType(), cb}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "A2 sub 先建 reuse_t(MInt32_1) → eOk");
         check(testInvoke(svc, "/register_pub_topic",
-                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"tb_node", "reuse_t", new YomkDdsStd::MInt32PubSubType()}))
+                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"tb_node", "reuse_t", new yomk::dds_idl::std_msgs::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "A2 pub 侧复用同类型 → eOk（getOrCreateTopic 复用 L183 + register_type PRECONDITION_NOT_MET，MInt32_2 由 pubTopics_ 持有不泄漏）");
 
@@ -111,7 +111,7 @@ namespace
         int pubOk = 0;
         for (int i = 0; i < N; ++i)
         {
-            YomkDdsStd::MInt32 m;
+            yomk::dds_idl::std_msgs::MInt32 m;
             m.data(777);
             if (testInvoke(svc, "/publish", yomk::msgs::dds::PublishRequest::shared(PublishRequest{"tb_node", "reuse_t", &m}))
                     .status == yomk::payload::ResStatus::Succeeded)
@@ -291,7 +291,7 @@ namespace
 
         // MFloat32：NaN / ±Inf / ±max / denormal / ±0.0（含 0.0 兜底 denormal flush 与 -0.0 符号）
         {
-            auto c = std::make_unique<Channel<YomkDdsStd::MFloat32, YomkDdsStd::MFloat32PubSubType, float>>();
+            auto c = std::make_unique<Channel<yomk::dds_idl::std_msgs::MFloat32, yomk::dds_idl::std_msgs::MFloat32PubSubType, float>>();
             c->label = "MFloat32";
             c->node = "types_node";
             c->topic = "t_f32";
@@ -303,7 +303,7 @@ namespace
         }
         // MFloat64：NaN / ±Inf / ±max / denormal / 0.0
         {
-            auto c = std::make_unique<Channel<YomkDdsStd::MFloat64, YomkDdsStd::MFloat64PubSubType, double>>();
+            auto c = std::make_unique<Channel<yomk::dds_idl::std_msgs::MFloat64, yomk::dds_idl::std_msgs::MFloat64PubSubType, double>>();
             c->label = "MFloat64";
             c->node = "types_node";
             c->topic = "t_f64";
@@ -315,7 +315,7 @@ namespace
         }
         // MInt64：极值 / -1 / 0 / 常规
         {
-            auto c = std::make_unique<Channel<YomkDdsStd::MInt64, YomkDdsStd::MInt64PubSubType, int64_t>>();
+            auto c = std::make_unique<Channel<yomk::dds_idl::std_msgs::MInt64, yomk::dds_idl::std_msgs::MInt64PubSubType, int64_t>>();
             c->label = "MInt64";
             c->node = "types_node";
             c->topic = "t_i64";
@@ -327,7 +327,7 @@ namespace
         }
         // MBool：true / false
         {
-            auto c = std::make_unique<Channel<YomkDdsStd::MBool, YomkDdsStd::MBoolPubSubType, bool>>();
+            auto c = std::make_unique<Channel<yomk::dds_idl::std_msgs::MBool, yomk::dds_idl::std_msgs::MBoolPubSubType, bool>>();
             c->label = "MBool";
             c->node = "types_node";
             c->topic = "t_bool";
@@ -338,7 +338,7 @@ namespace
         }
         // MString：空 / 超长(10000) / UTF-8 中文 / emoji / 转义字符（不含嵌入 \0，其 DDS 序列化语义不确定）
         {
-            auto c = std::make_unique<Channel<YomkDdsStd::MString, YomkDdsStd::MStringPubSubType, std::string>>();
+            auto c = std::make_unique<Channel<yomk::dds_idl::std_msgs::MString, yomk::dds_idl::std_msgs::MStringPubSubType, std::string>>();
             c->label = "MString";
             c->node = "types_node";
             c->topic = "t_str";
@@ -351,7 +351,7 @@ namespace
         }
         // MByteArray：空 / 大(100000 字节循环) / 边界字节(0x00,0xFF,0x7F,0x80)
         {
-            auto c = std::make_unique<Channel<YomkDdsStd::MByteArray, YomkDdsStd::MByteArrayPubSubType, std::vector<uint8_t>>>();
+            auto c = std::make_unique<Channel<yomk::dds_idl::std_msgs::MByteArray, yomk::dds_idl::std_msgs::MByteArrayPubSubType, std::vector<uint8_t>>>();
             c->label = "MByteArray";
             c->node = "types_node";
             c->topic = "t_barr";

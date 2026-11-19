@@ -2,7 +2,7 @@
 # YomkDds 测试树（独立 CMake 工程，与 examples/ 同构；测试程序仅供开发验证，不 install）
 #
 # 设计原则（用户决策）：
-#   1. 只测 YomkDds 自有源码（../src、../include）；第三方（FastDDS/YomkServer/YomkDdsStdMsgs）
+#   1. 只测 YomkDds 自有源码（../src、../include）；第三方（FastDDS/YomkServer/std_msgs）
 #      默认正确，只链接、不插桩、不修改。
 #   2. 为仅对自有源码插桩 sanitizer/coverage，测试树从源码重新编译 ../src/*.cpp 为被测目标
 #      yomkdds_under_test，而非链接已安装的 libYomkDds.so（后者无法单独插桩）。
@@ -38,12 +38,17 @@ list(APPEND CMAKE_PREFIX_PATH "${THIRD_PARTY_DIR}/Fast-DDS-3.6.1/install")
 find_package(fastdds 3 REQUIRED)
 message(STATUS "[test] fastdds found")
 
-# MC3+ 端到端收发需 YomkDdsStdMsgs 真实类型（MString/MInt32 等 PubSubType）；
-# YomkDdsStdMsgs 无导出包，沿用 examples 已验证方式：find_package(YomkDds) 取 lib 目录后裸库名链接。
-# 置于 vendored fastdds 之后：仅取 ${YomkDds_LIB_DIR} 供 link_directories，不链接 YomkDds::YomkDds
+# MC3+ 端到端收发需 std_msgs 真实类型（MString/MInt32 等 PubSubType）；
+# std_msgs 类型库由 scripts/build_idl.sh 编译 idl/std_msgs.idl 生成并安装
+# （头文件落安装前缀 include/yomk/dds_idl/，库落 lib/，无导出包）。
+# 置于 vendored fastdds 之后：find_package(YomkDds) 取安装前缀的 include 根
+# （YomkDds_INCLUDE_DIRS → <yomk/dds_idl/std_msgs.hpp>）与 lib 目录
+# （YomkDds_LIB_DIR 供 link_directories 裸库名链接），不链接 YomkDds::YomkDds
 # 导入目标（被测目标从源码重编），避免其 interface 依赖干扰已解析的 vendored fastdds。
 find_package(YomkDds REQUIRED)
+include_directories(${YomkDds_INCLUDE_DIRS})
 link_directories(${YomkDds_LIB_DIR})
+message(STATUS "[test] YomkDds include dirs: ${YomkDds_INCLUDE_DIRS}")
 message(STATUS "[test] YomkDds lib dir: ${YomkDds_LIB_DIR}")
 
 # ----------------------------- 被测目标 -----------------------------

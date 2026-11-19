@@ -1,6 +1,6 @@
 # ThreadSanitizer 抑制清单（仅抑制第三方 FastDDS 的死锁检测器噪声，绝不抑制 YomkDds 自有源码）
 #
-# 原则（用户决策）：第三方库（FastDDS / YomkServer / YomkDdsStdMsgs）默认正确，只链接不插桩不修改。
+# 原则（用户决策）：第三方库（FastDDS / YomkServer / std_msgs）默认正确，只链接不插桩不修改。
 # libfastdds.so 未经 TSan 插桩，其内部异步事件系统 ResourceEvent（dds.ev.* 线程）在并发创建/销毁
 # participant 时，被 TSan 死锁检测器（启发式）判为 lock-order-inversion 与 double-lock。
 #

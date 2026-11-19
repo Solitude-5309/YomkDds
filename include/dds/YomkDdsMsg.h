@@ -8,10 +8,10 @@
 // append one YOMK_DEFINE_MSG_NS here — never declare message packages elsewhere.
 // All messages register into the dds sub-root (yomk::msgs::dds::...) so the
 // suite's message names never collide with other suites in yomk::msgs.
-// User payload types (MString/MInt32..., namespace YomkDdsStd) are
-// fastddsgen-generated from msg/YomkDdsStdMsgs.idl and installed as the
-// separate entry <yomk/dds/YomkDdsStdMsgs.hpp> (types + PubSubTypes); include
-// it directly when needed, not through this header.
+// User payload types (MString/MInt32..., namespace yomk::dds_idl::std_msgs) are
+// fastddsgen-generated from idl/std_msgs.idl via scripts/build_idl.sh and
+// installed as the separate entry <yomk/dds_idl/std_msgs.hpp> (types +
+// PubSubTypes); include it directly when needed, not through this header.
 
 // clang-format off
 // YOMK_DEFINE_MSG_NS is a third-party YomkServer macro; cppcheck needs --library

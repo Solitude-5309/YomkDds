@@ -8,8 +8,8 @@
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 
-#include <yomk/dds/YomkDdsStdMsgs.hpp>
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
+#include <yomk/dds_idl/std_msgs.hpp>
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -44,11 +44,11 @@ int main(int argc, char* argv[])
     auto onMessage = [&](const void* data)
     {
         // data 为交付的消息实例指针（仅回调期间有效），转型为具体消息类型后读取
-        auto* msg = static_cast<const YomkDdsStd::MString*>(data);
+        auto* msg = static_cast<const yomk::dds_idl::std_msgs::MString*>(data);
         received++;
         yomk::log().tag("ExampleYomkDdsSub").info("[RECV] ", msg->data());
     };
-    resp = yomk::dds().node("sub_node").topic("hello_world").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
+    resp = yomk::dds().node("sub_node").topic("hello_world").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).sub_cb(onMessage).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         yomk::log().tag("ExampleYomkDdsSub").error("register sub topic failed: ", resp.msg);

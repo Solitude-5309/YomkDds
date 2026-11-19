@@ -7,8 +7,8 @@
 #include <yomk/server/YomkServerApi.h>
 #include <yomk/log/YomkLoggerApi.h>
 
-#include <yomk/dds/YomkDdsStdMsgs.hpp>
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
+#include <yomk/dds_idl/std_msgs.hpp>
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp>
 #include <atomic>
 #include <chrono>
 #include <mutex>
@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
 
     // 2. 注册发布主题（type 所有权移交 FastDDSNode）
     yomk::log().tag("ExampleYomkDdsTopic").info("=== YomkDdsHandler::registerPubTopic ===");
-    resp = yomk::dds().node("node0").topic("dds_demo_topic").type(new YomkDdsStd::MStringPubSubType()).create_pub();
+    resp = yomk::dds().node("node0").topic("dds_demo_topic").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).create_pub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         yomk::log().tag("ExampleYomkDdsTopic").error("register pub topic failed: ", resp.msg);
@@ -67,13 +67,13 @@ int main(int argc, char* argv[])
     auto onMessage = [&](const void* data)
     {
         // data 为交付的消息实例指针（仅回调期间有效），转型为具体消息类型后读取
-        auto* msg = static_cast<const YomkDdsStd::MString*>(data);
+        auto* msg = static_cast<const yomk::dds_idl::std_msgs::MString*>(data);
         std::lock_guard<std::mutex> lock(msgMtx);
         lastMsg = msg->data();
         received++;
         yomk::log().tag("ExampleYomkDdsTopic").info("[RECV] 收到消息: ", msg->data());
     };
-    resp = yomk::dds().node("node0").topic("dds_demo_topic").type(new YomkDdsStd::MStringPubSubType()).sub_cb(onMessage).create_sub();
+    resp = yomk::dds().node("node0").topic("dds_demo_topic").type(new yomk::dds_idl::std_msgs::MStringPubSubType()).sub_cb(onMessage).create_sub();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         yomk::log().tag("ExampleYomkDdsTopic").error("register sub topic failed: ", resp.msg);
@@ -86,7 +86,7 @@ int main(int argc, char* argv[])
     std::this_thread::sleep_for(std::chrono::seconds(1));
     for (int i = 0; i < 5; ++i)
     {
-        YomkDdsStd::MString msg;
+        yomk::dds_idl::std_msgs::MString msg;
         msg.data("Hello YomkDdsHandler " + std::to_string(i));
         resp = yomk::dds().node("node0").topic("dds_demo_topic").data(&msg).pub();
         if (resp.status != yomk::payload::ResStatus::Succeeded)

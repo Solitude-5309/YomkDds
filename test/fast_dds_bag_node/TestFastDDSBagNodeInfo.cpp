@@ -110,7 +110,7 @@ int main()
         {
             "topic_metadata": {
                 "name": "/rt/a",
-                "type": "YomkDdsStd::MString"
+                "type": "yomk::dds_idl::std_msgs::MString"
             },
             "message_count": 5
         }
@@ -140,7 +140,7 @@ int main()
         {
             const auto &topic = info.topics.front();
             check(topic.topicName == "/rt/a", "I1 topics[0].topicName");
-            check(topic.typeName == "YomkDdsStd::MString", "I1 topics[0].typeName 原样透传");
+            check(topic.typeName == "yomk::dds_idl::std_msgs::MString", "I1 topics[0].typeName 原样透传");
             check(topic.qos.empty(), "I1 无 qos 键 → qos 空串（旧 bag 兼容）");
             check(topic.messageCount == 5, "I1 topics[0].messageCount = 5");
         }
@@ -157,8 +157,8 @@ int main()
     "duration": {"nanoseconds": 12000000000},
     "message_count": 13,
     "topics_with_message_count": [
-        {"topic_metadata": {"name": "/rt/a", "type": "YomkDdsStd::MString"}, "message_count": 5},
-        {"topic_metadata": {"name": "/rt/b", "type": "YomkDdsStd::MString"}, "message_count": 8}
+        {"topic_metadata": {"name": "/rt/a", "type": "yomk::dds_idl::std_msgs::MString"}, "message_count": 5},
+        {"topic_metadata": {"name": "/rt/b", "type": "yomk::dds_idl::std_msgs::MString"}, "message_count": 8}
     ]
 }
 )";
@@ -187,7 +187,7 @@ int main()
     "duration": {"nanoseconds": 12000000000},
     "message_count": 13,
     "topics_with_message_count": [
-        {"topic_metadata": {"name": "/rt/a", "type": "YomkDdsStd::MString"}, "message_count": 13}
+        {"topic_metadata": {"name": "/rt/a", "type": "yomk::dds_idl::std_msgs::MString"}, "message_count": 13}
     ]
 }
 )";
@@ -312,7 +312,7 @@ int main()
     "duration": {"nanoseconds": 0},
     "message_count": 5,
     "topics_with_message_count": [
-        {"topic_metadata": {"name": "/rt/a", "type": "YomkDdsStd::MString",
+        {"topic_metadata": {"name": "/rt/a", "type": "yomk::dds_idl::std_msgs::MString",
                             "qos": "RELIABLE,TRANSIENT_LOCAL"}, "message_count": 5}
     ]
 }

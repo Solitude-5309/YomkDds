@@ -33,7 +33,7 @@
 #include "YomkDdsBagHandler.h" // 服务/BagCreateNodeRequest/BagRecordRequest/BagReindexRequest/yomk::ctrl::dds::g_bagRecordStop
 #include "YomkDdsMsg.h"
 
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（完整录制用例的远端发布端）
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp> // MStringPubSubType（完整录制用例的远端发布端）
 
 #include <mcap/writer.hpp>      // L3 造最小 mcap 分片（MCAP_IMPLEMENTATION 单译元在被测库内）
 #include <nlohmann/json.hpp>    // L3 手写 metadata.json（record 组装同款键集）
@@ -125,7 +125,7 @@ int main()
     auto *peerParticipant = dds::DomainParticipantFactory::get_instance()->create_participant(
         TEST_DOMAIN, dds::PARTICIPANT_QOS_DEFAULT);
     check(peerParticipant != nullptr, "远端发布端 participant 创建成功（完整录制用例）");
-    dds::TypeSupport ts(new YomkDdsStd::MStringPubSubType());
+    dds::TypeSupport ts(new yomk::dds_idl::std_msgs::MStringPubSubType());
     ts.register_type(peerParticipant);
     auto *pub = peerParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
     auto *topic = peerParticipant->create_topic(REC_TOPIC, ts.get_type_name(), dds::TOPIC_QOS_DEFAULT);
@@ -137,7 +137,7 @@ int main()
     std::atomic<bool> pubStop{false};
     std::thread pubThread([&]()
     {
-        YomkDdsStd::MString msg;
+        yomk::dds_idl::std_msgs::MString msg;
         uint32_t seq = 0;
         while (!pubStop.load())
         {
@@ -212,7 +212,7 @@ int main()
         options.compression = mcap::Compression::None;
         check(writer.open(playBagDir + "/bag_0.mcap", options).ok(), "L3 前置：mcap 分片打开成功");
         mcap::Channel channel("/rt/bag_svc_play", "cdr", 0,
-            mcap::KeyValueMap{{"type", "YomkDdsStd::MString"}, {"qos", "RELIABLE,TRANSIENT_LOCAL"}});
+            mcap::KeyValueMap{{"type", "yomk::dds_idl::std_msgs::MString"}, {"qos", "RELIABLE,TRANSIENT_LOCAL"}});
         writer.addChannel(channel);
         const std::string payload(5, 'x');
         for (uint32_t i = 0; i < 2; ++i)
@@ -239,7 +239,7 @@ int main()
         info["message_count"] = 2;
         info["topics_with_message_count"] = nlohmann::json::array({{
             {"topic_metadata",
-                {{"name", "/rt/bag_svc_play"}, {"type", "YomkDdsStd::MString"},
+                {{"name", "/rt/bag_svc_play"}, {"type", "yomk::dds_idl::std_msgs::MString"},
                     {"qos", "RELIABLE,TRANSIENT_LOCAL"}}},
             {"message_count", 2}}});
         std::ofstream out(playBagDir + "/metadata.json");
@@ -266,7 +266,7 @@ int main()
         {
             const auto &stat = played->msg.topics.front();
             check(stat.topicName == "/rt/bag_svc_play", "统计项 topicName = 发布名");
-            check(stat.typeName == "YomkDdsStd::MString", "统计项 typeName = bag 内类型名");
+            check(stat.typeName == "yomk::dds_idl::std_msgs::MString", "统计项 typeName = bag 内类型名");
             check(stat.count == 2, "统计项 count = 2（bag 内 2 条）");
             check(stat.bytes > 0, "统计项 bytes = 载荷字节（含 encapsulation header）");
         }

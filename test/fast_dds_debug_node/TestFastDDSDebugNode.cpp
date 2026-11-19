@@ -3,7 +3,7 @@
  * @brief FastDDSDebugNode：类型无关调试订阅节点（发现→动态类型→订阅→JSON 结构化输出）
  *
  * 范围：验证 FastDDSDebugNode 的公开契约与端到端链路。被测对象全程不依赖任何 IDL 生成
- *       类型——发布端经 FastDDSNode + YomkDdsStdMsgs 真实类型（MString）制造被观察流量，
+ *       类型——发布端经 FastDDSNode + std_msgs 真实类型（MString）制造被观察流量，
  *       FastDDSDebugNode 仅凭主题名经 DDS 发现机制取回远端 TypeInformation/TypeObject，
  *       生成 DynamicType 自动建订阅，收到消息后经内置 json_serialize 结构化输出。
  * 覆盖：
@@ -16,9 +16,9 @@
  *         入域后 listTopics(listed,1,50) → true 且空（stableRounds=1 单次快照，无 writer 空列表正常）；
  *         入域无 writer listTopics(listed,2,100) → true 且空（快照立即稳定收敛）；
  *   端到端 发布端持续 publish（MString "hello_debug"）→ 被测端捕获输出包含
- *         "topic=t_debug"（发现→建订阅）、"type=YomkDdsStd::MString"（远端类型解析成功）、
+ *         "topic=t_debug"（发现→建订阅）、"type=yomk::dds_idl::std_msgs::MString"（远端类型解析成功）、
  *         "hello_debug"（反序列化 + JSON 结构化输出成功）；
- *         listTopics 含 (t_debug, YomkDdsStd::MString)（发现缓存同步查询）；
+ *         listTopics 含 (t_debug, yomk::dds_idl::std_msgs::MString)（发现缓存同步查询）；
 *         listTopics(2,100ms) 收敛快照与 listTopics(1) 一致（含 t_debug 与类型名）。
  *   仅订阅者 纯订阅端仅建 DataReader（t_reader_only，无任何 writer）→ listTopics 同样
  *         列出该主题与类型名（远端 DataReader 发现缓存，writer 优先 reader 补缺）。
@@ -72,8 +72,8 @@
 #include "FastDDSNode.h"
 #include "YomkDdsDebugHandler.h" // yomk::ctrl::dds::g_debugPubStop.stop()/g_debugPubStop.reset()（topicPub 期望建匹配中断用例）
 
-#include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MString 数据类（仅发布端使用）
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（仅发布端使用）
+#include <yomk/dds_idl/std_msgs.hpp>            // yomk::dds_idl::std_msgs::MString 数据类（仅发布端使用）
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp> // MStringPubSubType（仅发布端使用）
 
 #include <fastdds/dds/core/policy/QosPolicies.hpp> // ReliabilityQosPolicy kind（topicPub 用例）
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp> // 纯订阅端 participant（仅订阅者用例）
@@ -407,11 +407,11 @@ int main()
     std::mutex mtx;
     std::string captured;
     {
-        // 发布端：真实 YomkDdsStdMsgs 类型制造被观察流量（RELIABLE 默认 QoS）
+        // 发布端：真实 std_msgs 类型制造被观察流量（RELIABLE 默认 QoS）
         FastDDSNode pub;
         check(pub.setDomainId(TEST_DOMAIN, "test-pub"),
               "发布端 setDomainId(200, \"test-pub\") → true（test 前缀命名）");
-        check(pub.registerPubTopic(TEST_TOPIC, new YomkDdsStd::MStringPubSubType()),
+        check(pub.registerPubTopic(TEST_TOPIC, new yomk::dds_idl::std_msgs::MStringPubSubType()),
               "发布端 registerPubTopic(t_debug, MString) → true");
 
         // 被测端：sink 注入（须在 subscribeTopic 之前调用，建订阅时按值捕获）
@@ -425,7 +425,7 @@ int main()
         check(dbg.subscribeTopic(TEST_TOPIC), "被测端 subscribeTopic(t_debug) → true");
 
         // 发布循环：每 100ms 一条（匹配建立前的样本会丢失），直至捕获到目标串或超时（约 5s）
-        YomkDdsStd::MString msg;
+        yomk::dds_idl::std_msgs::MString msg;
         msg.data(TEST_PAYLOAD);
         int pubOk = 0;
         bool found = false;
@@ -454,8 +454,8 @@ int main()
             snap = captured;
         }
         check(snap.find("topic=t_debug") != std::string::npos, "输出头部含 topic=t_debug");
-        check(snap.find("type=YomkDdsStd::MString") != std::string::npos,
-              "输出头部含 type=YomkDdsStd::MString（远端 TypeObject→DynamicType 解析成功）");
+        check(snap.find("type=yomk::dds_idl::std_msgs::MString") != std::string::npos,
+              "输出头部含 type=yomk::dds_idl::std_msgs::MString（远端 TypeObject→DynamicType 解析成功）");
         std::cout << "[OBSERVE] captured " << snap.size() << " bytes" << std::endl;
 
         // listTopics：订阅建立的前提是发现事件已入 seen_ 缓存（EDP 重放覆盖 late joiner），
@@ -465,12 +465,12 @@ int main()
         bool listedTopic = false;
         for (const auto& entry : listed)
         {
-            if (entry.first == TEST_TOPIC && entry.second == "YomkDdsStd::MString")
+            if (entry.first == TEST_TOPIC && entry.second == "yomk::dds_idl::std_msgs::MString")
             {
                 listedTopic = true;
             }
         }
-        check(listedTopic, "listTopics 含 (t_debug, YomkDdsStd::MString)（发现缓存同步查询）");
+        check(listedTopic, "listTopics 含 (t_debug, yomk::dds_idl::std_msgs::MString)（发现缓存同步查询）");
         std::cout << "[OBSERVE] listed topics=" << listed.size() << std::endl;
 
         // 自适应收敛：订阅已建立说明发现已稳定，收敛查询应快速返回且与单次快照结果一致
@@ -479,12 +479,12 @@ int main()
         bool waitedTopic = false;
         for (const auto& entry : waited)
         {
-            if (entry.first == TEST_TOPIC && entry.second == "YomkDdsStd::MString")
+            if (entry.first == TEST_TOPIC && entry.second == "yomk::dds_idl::std_msgs::MString")
             {
                 waitedTopic = true;
             }
         }
-        check(waitedTopic, "listTopics(2,100ms) 含 (t_debug, YomkDdsStd::MString)（收敛快照一致）");
+        check(waitedTopic, "listTopics(2,100ms) 含 (t_debug, yomk::dds_idl::std_msgs::MString)（收敛快照一致）");
         std::cout << "[OBSERVE] waited topics=" << waited.size() << std::endl;
     }
 
@@ -502,7 +502,7 @@ int main()
             auto* sub = subParticipant->create_subscriber(dds::SUBSCRIBER_QOS_DEFAULT);
             // TypeSupport 接管 PubSubType 所有权并完成 participant 内类型注册；
             // ts 须活过 reader 使用期（participant 类型表不接管所有权），块内声明于 dbg 之前
-            dds::TypeSupport ts(new YomkDdsStd::MStringPubSubType());
+            dds::TypeSupport ts(new yomk::dds_idl::std_msgs::MStringPubSubType());
             ts.register_type(subParticipant);
             auto* topic = subParticipant->create_topic(
                 READER_ONLY_TOPIC, ts.get_type_name(), dds::TOPIC_QOS_DEFAULT);
@@ -528,7 +528,7 @@ int main()
                     }
                 }
                 check(listedReaderOnly, "listTopics 含仅有订阅者的主题 t_reader_only（reader 缓存并入快照）");
-                check(readerTypeName == "YomkDdsStd::MString", "仅有订阅者主题的类型名正确列出（YomkDdsStd::MString）");
+                check(readerTypeName == "yomk::dds_idl::std_msgs::MString", "仅有订阅者主题的类型名正确列出（yomk::dds_idl::std_msgs::MString）");
                 std::cout << "[OBSERVE] reader-only topic listed, type=" << readerTypeName << std::endl;
             } // dbg 析构：reader/topic/subscriber/participant 逆序清理，随后 ts 析构
 
@@ -559,7 +559,7 @@ int main()
         if (countParticipant != nullptr)
         {
             // TypeSupport 须活过 topic/writer/reader 使用期（声明顺序同"仅有订阅者"块）
-            dds::TypeSupport ts(new YomkDdsStd::MStringPubSubType());
+            dds::TypeSupport ts(new yomk::dds_idl::std_msgs::MStringPubSubType());
             ts.register_type(countParticipant);
             auto* pub = countParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
             auto* sub = countParticipant->create_subscriber(dds::SUBSCRIBER_QOS_DEFAULT);
@@ -585,8 +585,8 @@ int main()
                 yomk::payload::dds::TopicInfo info;
                 check(dbg.topicInfo(COUNT_TOPIC, info, 5, 100),
                       "topicInfo(t_info_counts,5,100ms) → true（独立收敛查询命中）");
-                check(info.typeName == "YomkDdsStd::MString",
-                      "topicInfo 类型名为原始 DDS 类型名（YomkDdsStd::MString，无转换）");
+                check(info.typeName == "yomk::dds_idl::std_msgs::MString",
+                      "topicInfo 类型名为原始 DDS 类型名（yomk::dds_idl::std_msgs::MString，无转换）");
                 check(info.publisherCount == 2,
                       "topicInfo publisherCount == 2（同主题两个远端 DataWriter）");
                 check(info.subscriptionCount == 1,
@@ -705,13 +705,13 @@ int main()
         FastDDSNode peer;
         check(peer.setDomainId(TEST_DOMAIN, NODEINFO_PEER_NAME),
               "命名 peer setDomainId(200, test-nodeinfo-peer) → true（test 前缀命名）");
-        check(peer.registerPubTopic(NODEINFO_PUB_TOPIC, new YomkDdsStd::MStringPubSubType()),
+        check(peer.registerPubTopic(NODEINFO_PUB_TOPIC, new yomk::dds_idl::std_msgs::MStringPubSubType()),
               "命名 peer registerPubTopic(t_nodeinfo_pub, MString) → true");
-        check(peer.registerSubTopic(NODEINFO_SUB_TOPIC, new YomkDdsStd::MStringPubSubType(),
+        check(peer.registerSubTopic(NODEINFO_SUB_TOPIC, new yomk::dds_idl::std_msgs::MStringPubSubType(),
                   [](const void *) {}),
               "命名 peer registerSubTopic(t_nodeinfo_sub, MString) → true（空回调，本用例无流量）");
         check(peer.registerPubTopic(NODEINFO_NESTED_TOPIC,
-                  new YomkDdsStd::MUCharMultiArrayPubSubType()),
+                  new yomk::dds_idl::std_msgs::MUCharMultiArrayPubSubType()),
               "命名 peer registerPubTopic(t_nodeinfo_nested, MUCharMultiArray) → true（嵌套依赖用例）");
         // 匿名 peer（显式 qos.name("")）带一个发布端点：验证其他参与者的端点不串入命名 peer 清单
         dds::DomainParticipantQos anonQos = dds::PARTICIPANT_QOS_DEFAULT;
@@ -720,7 +720,7 @@ int main()
             TEST_DOMAIN, anonQos);
         check(anonParticipant != nullptr, "匿名 peer participant 创建成功（带端点，归属隔离用例）");
         // TypeSupport 须活过 writer 使用期（participant 类型表不接管所有权），块内声明于 dbg 之前
-        dds::TypeSupport anonTs(new YomkDdsStd::MStringPubSubType());
+        dds::TypeSupport anonTs(new yomk::dds_idl::std_msgs::MStringPubSubType());
         if (anonParticipant != nullptr)
         {
             anonTs.register_type(anonParticipant);
@@ -754,7 +754,7 @@ int main()
         bool noAnon = true;  // 匿名 peer 的主题不得出现在命名 peer 的任一清单中
         for (const auto& entry : nodeInfo1.publishers)
         {
-            if (entry.topicName == NODEINFO_PUB_TOPIC && entry.typeName == "YomkDdsStd::MString")
+            if (entry.topicName == NODEINFO_PUB_TOPIC && entry.typeName == "yomk::dds_idl::std_msgs::MString")
             {
                 hasPub = true;
             }
@@ -765,7 +765,7 @@ int main()
         }
         for (const auto& entry : nodeInfo1.subscribers)
         {
-            if (entry.topicName == NODEINFO_SUB_TOPIC && entry.typeName == "YomkDdsStd::MString")
+            if (entry.topicName == NODEINFO_SUB_TOPIC && entry.typeName == "yomk::dds_idl::std_msgs::MString")
             {
                 hasSub = true;
             }
@@ -774,8 +774,8 @@ int main()
                 noAnon = false;
             }
         }
-        check(hasPub, "nodeInfo publishers 含 (t_nodeinfo_pub, YomkDdsStd::MString)（writer GUID 前缀归属）");
-        check(hasSub, "nodeInfo subscribers 含 (t_nodeinfo_sub, YomkDdsStd::MString)（reader GUID 前缀归属）");
+        check(hasPub, "nodeInfo publishers 含 (t_nodeinfo_pub, yomk::dds_idl::std_msgs::MString)（writer GUID 前缀归属）");
+        check(hasSub, "nodeInfo subscribers 含 (t_nodeinfo_sub, yomk::dds_idl::std_msgs::MString)（reader GUID 前缀归属）");
         check(noAnon, "nodeInfo 不含匿名 peer 的 t_nodeinfo_anon（GUID 前缀归属隔离）");
         // 端点清单排序契约：(topicName, typeName) 升序（NodeEndpoint 无 operator<，显式比较）
         const auto endpointLess = [](const yomk::payload::dds::NodeEndpoint& a,
@@ -814,7 +814,7 @@ int main()
         yomk::payload::dds::TopicInfo vInfo;
         check(dbg.topicInfo(NODEINFO_PUB_TOPIC, vInfo, 5, 100),
             "topicInfo(t_nodeinfo_pub) → true（writer 端点详情命中）");
-        check(vInfo.typeName == "YomkDdsStd::MString" && vInfo.publisherCount == 1,
+        check(vInfo.typeName == "yomk::dds_idl::std_msgs::MString" && vInfo.publisherCount == 1,
             "topicInfo(t_nodeinfo_pub) 类型名与发布者计数正确");
         check(vInfo.publishers.size() == 1 && vInfo.publishers[0].nodeName == NODEINFO_PEER_NAME,
             "writer 端点归属节点名 == test-nodeinfo-peer（GUID 前缀归属）");
@@ -843,9 +843,9 @@ int main()
         // interface show：按类型名输出反射成员表 + struct 依赖闭包（TypeObject→DynamicType
         // 纯类型内省，不建订阅；peer 的 MString writer 在场，TypeInformation 经 TypeLookup 已就绪）
         yomk::payload::dds::InterfaceInfo iface;
-        check(dbg.interfaceShow("YomkDdsStd::MString", iface, 5, 100),
-              "interfaceShow(YomkDdsStd::MString,5,100ms) → true（writer 在场类型命中）");
-        check(iface.root.typeName == "YomkDdsStd::MString",
+        check(dbg.interfaceShow("yomk::dds_idl::std_msgs::MString", iface, 5, 100),
+              "interfaceShow(yomk::dds_idl::std_msgs::MString,5,100ms) → true（writer 在场类型命中）");
+        check(iface.root.typeName == "yomk::dds_idl::std_msgs::MString",
               "root.typeName 为查询类型名（不做风格转换）");
         check(iface.root.members.size() == 1, "root 成员表恰 1 个成员（data）");
         bool ifaceOk = iface.root.members.size() == 1 &&
@@ -872,7 +872,7 @@ int main()
         // 嵌套 struct 依赖闭包：MUCharMultiArray → MultiArrayLayout → sequence<MultiArrayDimension>
         // （dim 是序列元素类型中的 struct：验证容器穿透 + 去重 + 拓扑序）
         yomk::payload::dds::InterfaceInfo nested;
-        check(dbg.interfaceShow("YomkDdsStd::MUCharMultiArray", nested, 5, 100),
+        check(dbg.interfaceShow("yomk::dds_idl::std_msgs::MUCharMultiArray", nested, 5, 100),
               "interfaceShow(MUCharMultiArray) → true（嵌套 struct 类型命中）");
         check(nested.root.members.size() == 2 && nested.root.members[0].name == "layout",
               "root 成员表按声明序（layout / data）");
@@ -959,7 +959,7 @@ int main()
         {
             constexpr const char *PUB_TOPIC = "t_pub_once";
             auto *sub = pubParticipant->create_subscriber(dds::SUBSCRIBER_QOS_DEFAULT);
-            dds::TypeSupport pubTs(new YomkDdsStd::MStringPubSubType());
+            dds::TypeSupport pubTs(new yomk::dds_idl::std_msgs::MStringPubSubType());
             pubTs.register_type(pubParticipant);
             auto *topic = sub != nullptr ? pubParticipant->create_topic(
                 PUB_TOPIC, pubTs.get_type_name(), dds::TOPIC_QOS_DEFAULT) : nullptr;
@@ -1025,7 +1025,7 @@ int main()
         {
             constexpr const char *BE_TOPIC = "t_pub_besteff";
             auto *sub = beParticipant->create_subscriber(dds::SUBSCRIBER_QOS_DEFAULT);
-            dds::TypeSupport beTs(new YomkDdsStd::MStringPubSubType());
+            dds::TypeSupport beTs(new yomk::dds_idl::std_msgs::MStringPubSubType());
             beTs.register_type(beParticipant);
             auto *topic = sub != nullptr ? beParticipant->create_topic(
                 BE_TOPIC, beTs.get_type_name(), dds::TOPIC_QOS_DEFAULT) : nullptr;
@@ -1078,7 +1078,7 @@ int main()
             constexpr const char *GX_TOPIC = "t_pub_ghost";
             auto *sub = gxParticipant->create_subscriber(dds::SUBSCRIBER_QOS_DEFAULT);
             auto *pub = gxParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
-            dds::TypeSupport gxTs(new YomkDdsStd::MStringPubSubType());
+            dds::TypeSupport gxTs(new yomk::dds_idl::std_msgs::MStringPubSubType());
             gxTs.register_type(gxParticipant);
             // writer 用默认 QoS（RELIABLE+VOLATILE）：仅保证主题被发现（进调试节点缓存）
             auto *topic = (sub != nullptr && pub != nullptr) ? gxParticipant->create_topic(
@@ -1144,7 +1144,7 @@ int main()
             constexpr const char *OFF_TOPIC = "t_pub_offline";
             auto *sub = offParticipant->create_subscriber(dds::SUBSCRIBER_QOS_DEFAULT);
             auto *pub = offParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
-            dds::TypeSupport offTs(new YomkDdsStd::MStringPubSubType());
+            dds::TypeSupport offTs(new yomk::dds_idl::std_msgs::MStringPubSubType());
             offTs.register_type(offParticipant);
             auto *topic = (sub != nullptr && pub != nullptr) ? offParticipant->create_topic(
                 OFF_TOPIC, offTs.get_type_name(), dds::TOPIC_QOS_DEFAULT) : nullptr;
@@ -1214,7 +1214,7 @@ int main()
             constexpr const char *WS_TOPIC = "t_pub_wait_sub";
             auto *sub = wsParticipant->create_subscriber(dds::SUBSCRIBER_QOS_DEFAULT);
             auto *pub = wsParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
-            dds::TypeSupport wsTs(new YomkDdsStd::MStringPubSubType());
+            dds::TypeSupport wsTs(new yomk::dds_idl::std_msgs::MStringPubSubType());
             wsTs.register_type(wsParticipant);
             auto *topic = (sub != nullptr && pub != nullptr) ? wsParticipant->create_topic(
                 WS_TOPIC, wsTs.get_type_name(), dds::TOPIC_QOS_DEFAULT) : nullptr;
@@ -1274,7 +1274,7 @@ int main()
         {
             constexpr const char *WI_TOPIC = "t_pub_wait_intr";
             auto *pub = wiParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
-            dds::TypeSupport wiTs(new YomkDdsStd::MStringPubSubType());
+            dds::TypeSupport wiTs(new yomk::dds_idl::std_msgs::MStringPubSubType());
             wiTs.register_type(wiParticipant);
             auto *topic = (pub != nullptr) ? wiParticipant->create_topic(
                 WI_TOPIC, wiTs.get_type_name(), dds::TOPIC_QOS_DEFAULT) : nullptr;
@@ -1359,7 +1359,7 @@ int main()
         if (mtParticipant != nullptr)
         {
             auto *sub = mtParticipant->create_subscriber(dds::SUBSCRIBER_QOS_DEFAULT);
-            dds::TypeSupport mtTs(new YomkDdsStd::MStringPubSubType());
+            dds::TypeSupport mtTs(new yomk::dds_idl::std_msgs::MStringPubSubType());
             mtTs.register_type(mtParticipant);
             dds::DataReaderQos rqos;
             rqos.reliability().kind = dds::RELIABLE_RELIABILITY_QOS;
@@ -1695,7 +1695,7 @@ int main()
             FastDDSNode peer;
             check(peer.setDomainId(TEST_DOMAIN),
                   "topicPub QoS 用例发布端 peer setDomainId → true（制造发现数据）");
-            check(peer.registerPubTopic(BE_TOPIC, new YomkDdsStd::MStringPubSubType()),
+            check(peer.registerPubTopic(BE_TOPIC, new yomk::dds_idl::std_msgs::MStringPubSubType()),
                   "topicPub QoS 用例发布端 registerPubTopic（默认底座）→ true");
             std::this_thread::sleep_for(std::chrono::milliseconds(300));
             FastDDSDebugNode dbg;
@@ -1755,7 +1755,7 @@ int main()
             DDSQosProfile peerBeVo;  // 显式 BE+VOL：与被测 writer 的 RELIABLE+TRANSIENT_LOCAL 双差异
             peerBeVo.reliability = DDSReliability::BEST_EFFORT;
             peerBeVo.durability = DDSDurability::VOLATILE;
-            check(peer.registerPubTopic(DEF_TOPIC, new YomkDdsStd::MStringPubSubType(), peerBeVo),
+            check(peer.registerPubTopic(DEF_TOPIC, new yomk::dds_idl::std_msgs::MStringPubSubType(), peerBeVo),
                   "无参 topicPub 用例发布端 registerPubTopic 显式 BEST_EFFORT+VOLATILE → true");
             std::this_thread::sleep_for(std::chrono::milliseconds(300));
             FastDDSDebugNode dbg;
@@ -1793,7 +1793,7 @@ int main()
             FastDDSNode peer;
             check(peer.setDomainId(TEST_DOMAIN, "test-qos-pub"),
                   "reader QoS 用例发布端 setDomainId → true");
-            check(peer.registerPubTopic(SUB_TOPIC, new YomkDdsStd::MStringPubSubType()),
+            check(peer.registerPubTopic(SUB_TOPIC, new yomk::dds_idl::std_msgs::MStringPubSubType()),
                   "reader QoS 用例发布端 registerPubTopic（默认底座 RELIABLE offered）→ true");
 
             FastDDSDebugNode dbg;
@@ -1812,7 +1812,7 @@ int main()
                   "subscribeTopic 显式 RELIABLE+depth=10 → true（登记成功 qos 暂存）");
 
             // 发布循环直至收到 payload 或超时（匹配建立前的样本丢失，同端到端先例）
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             msg.data("qos_sub_payload");
             bool got = false;
             for (int i = 0; i < 50 && !got; ++i)
@@ -1857,7 +1857,7 @@ int main()
                   "反证用例发布端 setDomainId → true");
             DDSQosProfile beOffered;
             beOffered.reliability = DDSReliability::BEST_EFFORT;
-            check(peer.registerPubTopic(MS_TOPIC, new YomkDdsStd::MStringPubSubType(), beOffered),
+            check(peer.registerPubTopic(MS_TOPIC, new yomk::dds_idl::std_msgs::MStringPubSubType(), beOffered),
                   "反证用例发布端 registerPubTopic 显式 BEST_EFFORT offered → true");
 
             FastDDSDebugNode dbg;
@@ -1875,7 +1875,7 @@ int main()
                   "反证用例 subscribeTopic 显式 RELIABLE requested → true");
 
             // 观察窗：发布 30 条×100ms，requested>offered 不匹配 → 全部丢失
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             msg.data("mismatch_payload");
             for (int i = 0; i < 30; ++i)
             {
@@ -1905,7 +1905,7 @@ int main()
         FastDDSNode peer;
         check(peer.setDomainId(TEST_DOMAIN, "setname-peer"),
               "set_name 用例发布端 setDomainId → true");
-        auto *pubType = new YomkDdsStd::MStringPubSubType();
+        auto *pubType = new yomk::dds_idl::std_msgs::MStringPubSubType();
         pubType->set_name(kRosTypeName);
         check(peer.registerPubTopic(SN_TOPIC, pubType),
               "set_name 用例发布端 registerPubTopic(新名类型) → true（新名随发现传播）");

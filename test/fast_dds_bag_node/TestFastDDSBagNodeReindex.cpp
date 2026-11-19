@@ -139,7 +139,7 @@ int main()
         cleanupDir(dir);
         check(std::filesystem::create_directory(dir), "R1 前置：临时目录创建成功");
         check(makeMcapFile(dir + "/bag_0.mcap", "/rt/a", 3, kSecondNs, kSecondNs, false,
-                           "YomkDdsStd::MString", "RELIABLE,VOLATILE"),
+                           "yomk::dds_idl::std_msgs::MString", "RELIABLE,VOLATILE"),
               "R1 前置：单分片 3 条消息（Channel.metadata 带类型名+qos）");
         std::string error;
         check(FastDDSBagNode::bagReindex(dir, &error), "R1 bagReindex → true");
@@ -169,7 +169,7 @@ int main()
             check(topics[0].at("topic_metadata").at("name").get<std::string>() == "/rt/a",
                   "R1 topic name = /rt/a");
             check(topics[0].at("topic_metadata").at("type").get<std::string>() ==
-                      "YomkDdsStd::MString",
+                      "yomk::dds_idl::std_msgs::MString",
                   "R1 topic type 经 Channel.metadata 恢复");
             check(topics[0].at("topic_metadata").at("qos").get<std::string>() ==
                       "RELIABLE,VOLATILE",
@@ -185,16 +185,16 @@ int main()
         cleanupDir(dir);
         check(std::filesystem::create_directory(dir), "R2 前置：临时目录创建成功");
         check(makeMcapFile(dir + "/bag_0.mcap", "/rt/a", 2, kSecondNs, 2 * kSecondNs, false,
-                           "YomkDdsStd::MString"),
+                           "yomk::dds_idl::std_msgs::MString"),
               "R2 前置：bag_0（/rt/a 2 条 @1s,3s）造文件成功");
         check(makeMcapFile(dir + "/bag_1.mcap", "/rt/b", 1, 2 * kSecondNs, kSecondNs, false,
-                           "YomkDdsStd::MString"),
+                           "yomk::dds_idl::std_msgs::MString"),
               "R2 前置：bag_1（/rt/b 1 条 @2s）造文件成功");
         check(makeMcapFile(dir + "/bag_2.mcap", "/rt/c", 0, kSecondNs, kSecondNs, false,
-                           "YomkDdsStd::MString"),
+                           "yomk::dds_idl::std_msgs::MString"),
               "R2 前置：bag_2（/rt/c 空 channel 无消息）造文件成功");
         check(makeMcapFile(dir + "/bag_10.mcap", "/rt/a", 1, 10 * kSecondNs, kSecondNs, false,
-                           "YomkDdsStd::MString"),
+                           "yomk::dds_idl::std_msgs::MString"),
               "R2 前置：bag_10（/rt/a 1 条 @10s）造文件成功");
         check(FastDDSBagNode::bagReindex(dir, nullptr), "R2 bagReindex → true（error 出参可空）");
         nlohmann::json info;
@@ -220,13 +220,13 @@ int main()
                       topics[0].at("message_count").get<std::uint64_t>() == 3,
                   "R2 /rt/a count = 3（2+1 跨分片合并，升序首位）");
             check(topics[0].at("topic_metadata").at("type").get<std::string>() ==
-                      "YomkDdsStd::MString",
+                      "yomk::dds_idl::std_msgs::MString",
                   "R2 /rt/a type 恢复（跨分片同 Channel.metadata）");
             check(topics[1].at("topic_metadata").at("name").get<std::string>() == "/rt/b" &&
                       topics[1].at("message_count").get<std::uint64_t>() == 1,
                   "R2 /rt/b count = 1");
             check(topics[1].at("topic_metadata").at("type").get<std::string>() ==
-                      "YomkDdsStd::MString",
+                      "yomk::dds_idl::std_msgs::MString",
                   "R2 /rt/b type 恢复");
         }
         cleanupDir(dir);
@@ -238,7 +238,7 @@ int main()
         cleanupDir(dir);
         check(std::filesystem::create_directory(dir), "R3 前置：临时目录创建成功");
         check(makeMcapFile(dir + "/bag_0.mcap", "/rt/a", 2, 5 * kSecondNs, kSecondNs, false,
-                           "YomkDdsStd::MString"),
+                           "yomk::dds_idl::std_msgs::MString"),
               "R3 前置：单分片 2 条消息（@5s,6s）造文件成功");
         {
             std::ofstream broken(dir + "/metadata.json");
@@ -251,7 +251,7 @@ int main()
         const auto &r3Topics = info.at("topics_with_message_count");
         check(r3Topics.is_array() && r3Topics.size() == 1 &&
                   r3Topics[0].at("topic_metadata").at("type").get<std::string>() ==
-                      "YomkDdsStd::MString",
+                      "yomk::dds_idl::std_msgs::MString",
               "R3 覆盖重建后 type 经 Channel.metadata 恢复");
         cleanupDir(dir);
     }
@@ -262,7 +262,7 @@ int main()
         cleanupDir(dir);
         check(std::filesystem::create_directory(dir), "R4 前置：临时目录创建成功");
         check(makeMcapFile(dir + "/bag_0.mcap", "/rt/a", 3, kSecondNs, kSecondNs, false,
-                           "YomkDdsStd::MString"),
+                           "yomk::dds_idl::std_msgs::MString"),
               "R4 前置：单分片 3 条消息造文件成功（目录无 metadata.json）");
         std::string error;
         check(FastDDSBagNode::bagReindex(dir, &error), "R4 缺失 metadata 重建 → true");
@@ -277,7 +277,7 @@ int main()
         check(infoOut.durationNs == 2 * kSecondNs, "R4 durationNs = 2s（= End - Start）");
         check(infoOut.messageCount == 3, "R4 messageCount = 3");
         check(infoOut.topics.size() == 1 && infoOut.topics[0].topicName == "/rt/a" &&
-                  infoOut.topics[0].typeName == "YomkDdsStd::MString" &&
+                  infoOut.topics[0].typeName == "yomk::dds_idl::std_msgs::MString" &&
                   infoOut.topics[0].messageCount == 3,
               "R4 单主题条目的 name/type（恢复值）/count 与重建产物一致");
         cleanupDir(dir);

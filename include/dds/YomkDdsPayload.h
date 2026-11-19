@@ -570,7 +570,7 @@ struct InterfaceMember
 // @zh: 构建失败不会产出半成品类型
 struct InterfaceType
 {
-    std::string typeName;                  // fully qualified name, e.g. YomkDdsStd::MultiArrayLayout
+    std::string typeName;                  // fully qualified name, e.g. yomk::dds_idl::std_msgs::MultiArrayLayout
     std::vector<InterfaceMember> members;  // declaration order, empty for a member-less struct
 
     std::tuple<const std::string&, const std::vector<InterfaceMember>&> tie() const

@@ -202,7 +202,7 @@ int main()
         cleanupDir(outDir);
         ensureDir(inDir);
         check(makeMcapFile(inDir + "/bag_0.mcap", "/rt/c1", 3, kSecondNs, kSecondNs,
-                  "YomkDdsStd::MString", 5, "RELIABLE,VOLATILE"),
+                  "yomk::dds_idl::std_msgs::MString", 5, "RELIABLE,VOLATILE"),
               "C1 前置：输入分片造文件成功（Channel.metadata 带类型名+qos）");
         check(writeCfg(cfg, R"({"output_bags": [{"uri": ")" + outDir + R"("}]})"),
               "C1 前置：cfg 写入成功");
@@ -231,7 +231,7 @@ int main()
                   info.at("topics_with_message_count")[0].at("topic_metadata").at("name") ==
                       "/rt/c1" &&
                   info.at("topics_with_message_count")[0].at("topic_metadata").at("type") ==
-                      "YomkDdsStd::MString" &&
+                      "yomk::dds_idl::std_msgs::MString" &&
                   info.at("topics_with_message_count")[0].at("topic_metadata").at("qos") ==
                       "RELIABLE,VOLATILE" &&
                   info.at("topics_with_message_count")[0].at("message_count") == 3,
@@ -254,7 +254,7 @@ int main()
         {
             const auto &outMd = msgView.channel->metadata;
             channelQosOk = outMd.find("type") != outMd.end() &&
-                           outMd.at("type") == "YomkDdsStd::MString" &&
+                           outMd.at("type") == "yomk::dds_idl::std_msgs::MString" &&
                            outMd.find("qos") != outMd.end() &&
                            outMd.at("qos") == "RELIABLE,VOLATILE";
         }
@@ -267,7 +267,7 @@ int main()
         check(infoOut.storageId == "mcap" && infoOut.messageCount == 3 && infoOut.files.size() == 1 &&
                   infoOut.files[0] == "bag_0.mcap" && infoOut.topics.size() == 1 &&
                   infoOut.topics[0].topicName == "/rt/c1" &&
-                  infoOut.topics[0].typeName == "YomkDdsStd::MString" &&
+                  infoOut.topics[0].typeName == "yomk::dds_idl::std_msgs::MString" &&
                   infoOut.topics[0].qos == "RELIABLE,VOLATILE" &&
                   infoOut.topics[0].messageCount == 3,
               "C1 bagInfo 结构化字段与产物 metadata 对账");
@@ -575,7 +575,7 @@ int main()
         cleanupDir(outDir2);
         ensureDir(inDir);
         check(makeMcapFile(inDir + "/bag_0.mcap", "/rt/c7", 3, 2 * kSecondNs, kSecondNs,
-                  "YomkDdsStd::MString"),
+                  "yomk::dds_idl::std_msgs::MString"),
               "C7 前置：输入分片造文件成功（2s/3s/4s 三条）");
 
         // C7a 字符串形式与整数形式裁剪等价（2s..4s → 3 条含头含尾，对齐 C3 断言）

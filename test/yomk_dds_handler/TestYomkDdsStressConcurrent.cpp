@@ -46,8 +46,8 @@
 #include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
 
-#include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MInt32
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MInt32PubSubType
+#include <yomk/dds_idl/std_msgs.hpp>            // yomk::dds_idl::std_msgs::MInt32
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp> // MInt32PubSubType
 
 #include <dirent.h> // opendir/readdir 计数 /proc/self/fd
 
@@ -184,7 +184,7 @@ namespace
         for (int i = 0; i < NTOPICS; ++i)
         {
             if (testInvoke(svc, "/register_pub_topic",
-                            yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{node, "c1_topic_" + std::to_string(i), new YomkDdsStd::MInt32PubSubType()}))
+                            yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{node, "c1_topic_" + std::to_string(i), new yomk::dds_idl::std_msgs::MInt32PubSubType()}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regOk;
@@ -225,7 +225,7 @@ namespace
                     if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
                     {
                         loanOk.fetch_add(1, std::memory_order_relaxed);
-                        static_cast<YomkDdsStd::MInt32 *>(s)->data(static_cast<int32_t>(i & 0x7fffffff));
+                        static_cast<yomk::dds_idl::std_msgs::MInt32 *>(s)->data(static_cast<int32_t>(i & 0x7fffffff));
                         if (i % 2 == 0)
                         {
                             if (testInvoke(svc, "/publish", yomk::msgs::dds::PublishRequest::shared(PublishRequest{node, topic, s}))
@@ -276,7 +276,7 @@ namespace
         std::atomic<long> cbCount{0};
         auto cb = [&](const void *d)
         {
-            auto *m = static_cast<const YomkDdsStd::MInt32 *>(d);
+            auto *m = static_cast<const yomk::dds_idl::std_msgs::MInt32 *>(d);
             (void)m->data();
             cbCount.fetch_add(1, std::memory_order_relaxed);
         };
@@ -294,13 +294,13 @@ namespace
                     createOk.fetch_add(1, std::memory_order_relaxed);
                 }
                 if (testInvoke(svc, "/register_pub_topic",
-                                yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{name, "c2_topic", new YomkDdsStd::MInt32PubSubType()}))
+                                yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{name, "c2_topic", new yomk::dds_idl::std_msgs::MInt32PubSubType()}))
                         .status == yomk::payload::ResStatus::Succeeded)
                 {
                     regPubOk.fetch_add(1, std::memory_order_relaxed);
                 }
                 if (testInvoke(svc, "/register_sub_topic",
-                                yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{name, "c2_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
+                                yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{name, "c2_topic", new yomk::dds_idl::std_msgs::MInt32PubSubType(), cb}))
                         .status == yomk::payload::ResStatus::Succeeded)
                 {
                     regSubOk.fetch_add(1, std::memory_order_relaxed);
@@ -313,7 +313,7 @@ namespace
                     if (lr.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
                     {
                         loanOk.fetch_add(1, std::memory_order_relaxed);
-                        static_cast<YomkDdsStd::MInt32 *>(s)->data(i);
+                        static_cast<yomk::dds_idl::std_msgs::MInt32 *>(s)->data(i);
                         if (i % 2 == 0)
                         {
                             testInvoke(svc, "/publish", yomk::msgs::dds::PublishRequest::shared(PublishRequest{name, "c2_topic", s}));
@@ -400,7 +400,7 @@ namespace
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, node)).status == yomk::payload::ResStatus::Succeeded,
               "C3 创建 c3_node → eOk");
         check(testInvoke(svc, "/register_pub_topic",
-                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{node, topic, new YomkDdsStd::MInt32PubSubType()}))
+                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{node, topic, new yomk::dds_idl::std_msgs::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "C3 register_pub_topic c3_topic(MInt32) → eOk");
 
@@ -412,7 +412,7 @@ namespace
         {
             // 通用 take()：reader 线程 take()+return_loan 借出交付；MInt32 alignof≤4，
             // base+4 仍 4 字节对齐，可安全 deref
-            auto *m = static_cast<const YomkDdsStd::MInt32 *>(d);
+            auto *m = static_cast<const yomk::dds_idl::std_msgs::MInt32 *>(d);
             const int32_t v = m->data();
             const long tid = v / 1000000;
             const long seq = v % 1000000;
@@ -424,7 +424,7 @@ namespace
             }
         };
         check(testInvoke(svc, "/register_sub_topic",
-                          yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{node, topic, new YomkDdsStd::MInt32PubSubType(), cb}))
+                          yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{node, topic, new yomk::dds_idl::std_msgs::MInt32PubSubType(), cb}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "C3 register_sub_topic c3_topic(callback) → eOk");
 
@@ -440,7 +440,7 @@ namespace
         {
             ths.emplace_back([&, t]
                              {
-                YomkDdsStd::MInt32 msg; // 线程局部
+                yomk::dds_idl::std_msgs::MInt32 msg; // 线程局部
                 while (!go.load(std::memory_order_acquire)) { std::this_thread::yield(); }
                 for (long s = 0; s < perThread; ++s)
                 {

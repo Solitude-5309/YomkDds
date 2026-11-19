@@ -7,7 +7,7 @@
  *   S1 对称改名正验证：pub/sub 两端 MStringPubSubType 均先 set_name("std_msgs::msg::dds_::String_")
  *      再经 /register_pub_topic//register_sub_topic 注册，端到端收流 ≥1 条（改名即通）；debug
  *      节点 topicInfo 读回 Type == 新名（新名随发现数据传播的读回实证）。
- *   S2 不对称改名矩阵（实测固化）：pub 端 set_name 新名、sub 端保持原名 YomkDdsStd::MString，
+ *   S2 不对称改名矩阵（实测固化）：pub 端 set_name 新名、sub 端保持原名 yomk::dds_idl::std_msgs::MString，
  *      同主题对跑 → 收流 >0——两端 Fast DDS 3.x 均携带 TypeInformation，EDP 按 tid/TypeObject
  *      兼容性匹配而 tid 与名字无关（“tid 恒定”在匹配层的直接体现），set_name 改名在
  *      Fast DDS 内部对跑不隔离；与 ROS2 互通仍走名字匹配（ROS2 端不参与 XTypes，见
@@ -29,8 +29,8 @@
 #include "YomkDdsHandler.h"     // 服务 + RegisterPubTopicRequest/RegisterSubTopicRequest/Publish + String + YOMK_* 宏
 #include "YomkDdsMsg.h"
 
-#include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MString 数据类
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MStringPubSubType（set_name 主体）
+#include <yomk/dds_idl/std_msgs.hpp>            // yomk::dds_idl::std_msgs::MString 数据类
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp> // MStringPubSubType（set_name 主体）
 
 #include <fastdds/dds/log/Log.hpp> // S3 探针：SetVerbosity/SetCategoryFilter
 
@@ -64,14 +64,14 @@ namespace
 
     // 构造 /register_pub_topic 请求包（type 所有权移交服务端）
     YomkMsgPtr mkPub(const std::string &nodeName, const std::string &topicName,
-                     YomkDdsStd::MStringPubSubType *type)
+                     yomk::dds_idl::std_msgs::MStringPubSubType *type)
     {
         return yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{nodeName, topicName, type});
     }
 
     // 构造 /register_sub_topic 请求包
     YomkMsgPtr mkSub(const std::string &nodeName, const std::string &topicName,
-                     YomkDdsStd::MStringPubSubType *type,
+                     yomk::dds_idl::std_msgs::MStringPubSubType *type,
                      std::function<void(const void *)> cb)
     {
         return yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{nodeName, topicName, type, cb});
@@ -79,7 +79,7 @@ namespace
 
     // 构造 /publish 请求包（负载第三参为非 const 指针，与 Publish 契约一致）
     YomkMsgPtr mkPubMsg(const std::string &nodeName, const std::string &topicName,
-                        YomkDdsStd::MString *msg)
+                        yomk::dds_idl::std_msgs::MString *msg)
     {
         return yomk::msgs::dds::PublishRequest::shared(PublishRequest{nodeName, topicName, msg});
     }
@@ -206,7 +206,7 @@ namespace
               "S1 创建 setname_sub(domain 205) → eOk");
 
         // pub 端：类型对象 new 后、移交前 set_name（宏实参位内联 new 无法先改名）
-        auto *pubType = new YomkDdsStd::MStringPubSubType();
+        auto *pubType = new yomk::dds_idl::std_msgs::MStringPubSubType();
         pubType->set_name(kRosTypeName);
         check(testInvoke(svc, "/register_pub_topic", mkPub("setname_pub", SN_TOPIC, pubType))
                       .status == yomk::payload::ResStatus::Succeeded,
@@ -215,11 +215,11 @@ namespace
         std::atomic<int> received{0};
         std::string lastRecv;
         std::mutex mtx;
-        auto *subType = new YomkDdsStd::MStringPubSubType();
+        auto *subType = new yomk::dds_idl::std_msgs::MStringPubSubType();
         subType->set_name(kRosTypeName);
         check(testInvoke(svc, "/register_sub_topic",
                           mkSub("setname_sub", SN_TOPIC, subType, [&](const void *data) {
-                              auto *m = static_cast<const YomkDdsStd::MString *>(data);
+                              auto *m = static_cast<const yomk::dds_idl::std_msgs::MString *>(data);
                               std::lock_guard<std::mutex> lk(mtx);
                               lastRecv = m->data();
                               received++;
@@ -231,7 +231,7 @@ namespace
         constexpr int kPubCount = 5;
         for (int i = 0; i < kPubCount; ++i)
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             msg.data("setname-" + std::to_string(i));
             check(testInvoke(svc, "/publish", mkPubMsg("setname_pub", SN_TOPIC, &msg)).status ==
                       yomk::payload::ResStatus::Succeeded,
@@ -278,7 +278,7 @@ namespace
                   yomk::payload::ResStatus::Succeeded,
               "S2 创建 mismatch_sub(domain 205) → eOk");
 
-        auto *pubType = new YomkDdsStd::MStringPubSubType();
+        auto *pubType = new yomk::dds_idl::std_msgs::MStringPubSubType();
         pubType->set_name(kRosTypeName); // 仅 pub 端改名
         check(testInvoke(svc, "/register_pub_topic", mkPub("mismatch_pub", SN_TOPIC_MISMATCH, pubType))
                       .status == yomk::payload::ResStatus::Succeeded,
@@ -287,11 +287,11 @@ namespace
         std::atomic<int> received{0};
         std::string lastRecv;
         std::mutex mtx;
-        auto *subType = new YomkDdsStd::MStringPubSubType(); // sub 端保持原名
+        auto *subType = new yomk::dds_idl::std_msgs::MStringPubSubType(); // sub 端保持原名
         check(testInvoke(svc, "/register_sub_topic",
                           mkSub("mismatch_sub", SN_TOPIC_MISMATCH, subType,
                                 [&](const void *data) {
-                                    auto *m = static_cast<const YomkDdsStd::MString *>(data);
+                                    auto *m = static_cast<const yomk::dds_idl::std_msgs::MString *>(data);
                                     std::lock_guard<std::mutex> lk(mtx);
                                     lastRecv = m->data();
                                     received++;
@@ -302,7 +302,7 @@ namespace
         std::this_thread::sleep_for(std::chrono::seconds(1));
         for (int i = 0; i < 5; ++i)
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             msg.data("mismatch-" + std::to_string(i));
             check(testInvoke(svc, "/publish", mkPubMsg("mismatch_pub", SN_TOPIC_MISMATCH, &msg))
                           .status == yomk::payload::ResStatus::Succeeded,
@@ -353,14 +353,14 @@ namespace
                   yomk::payload::ResStatus::Succeeded,
               "S3 创建 probe_sub(domain 205) → eOk");
 
-        auto *pubType = new YomkDdsStd::MStringPubSubType();
+        auto *pubType = new yomk::dds_idl::std_msgs::MStringPubSubType();
         pubType->set_name(kRosTypeName);
         check(testInvoke(svc, "/register_pub_topic", mkPub("probe_pub", "/chatter_probe", pubType))
                       .status == yomk::payload::ResStatus::Succeeded,
               "S3 probe pub 注册 → eOk");
 
         std::atomic<int> received{0};
-        auto *subType = new YomkDdsStd::MStringPubSubType();
+        auto *subType = new yomk::dds_idl::std_msgs::MStringPubSubType();
         subType->set_name(kRosTypeName);
         check(testInvoke(svc, "/register_sub_topic",
                           mkSub("probe_sub", "/chatter_probe", subType,
@@ -371,7 +371,7 @@ namespace
         std::this_thread::sleep_for(std::chrono::seconds(1));
         for (int i = 0; i < 3; ++i)
         {
-            YomkDdsStd::MString msg;
+            yomk::dds_idl::std_msgs::MString msg;
             msg.data("probe-" + std::to_string(i));
             testInvoke(svc, "/publish", mkPubMsg("probe_pub", "/chatter_probe", &msg));
             std::this_thread::sleep_for(std::chrono::milliseconds(100));

@@ -19,7 +19,7 @@ set_tests_properties(TestYomkDdsHandlerContract PROPERTIES
 # =============================================================================
 add_executable(TestYomkDdsNodeLifecycle TestYomkDdsNodeLifecycle.cpp)
 # 闭环 4 Part F 连通性：spawn 项目自带 discovery server（路径编译期注入，避免依赖工作目录）
-target_link_libraries(TestYomkDdsNodeLifecycle PRIVATE yomkdds_under_test YomkDdsStdMsgs)
+target_link_libraries(TestYomkDdsNodeLifecycle PRIVATE yomkdds_under_test std_msgs)
 target_compile_definitions(TestYomkDdsNodeLifecycle PRIVATE
     TEST_FASTDDS_DISCOVERY_BIN="${THIRD_PARTY_DIR}/Fast-DDS-3.6.1/install/bin/fastdds")
 
@@ -43,12 +43,12 @@ set_tests_properties(TestYomkDdsHandlerLifecycle PROPERTIES
 )
 
 # =============================================================================
-# MC3：主题注册 + 端到端发布订阅（真实 DDS + YomkDdsStdMsgs 真实类型指针）
+# MC3：主题注册 + 端到端发布订阅（真实 DDS + std_msgs 真实类型指针）
 # 首次功能触达 registerPubTopic/registerSubTopic/getOrCreateTopic/publish/on_data_available
-# 与 F1 SubResGuard 所在的 registerSubTopic happy-path；首次引入 YomkDdsStdMsgs 依赖。
+# 与 F1 SubResGuard 所在的 registerSubTopic happy-path；首次引入 std_msgs 依赖。
 # =============================================================================
 add_executable(TestYomkDdsTopic TestYomkDdsTopic.cpp)
-target_link_libraries(TestYomkDdsTopic PRIVATE yomkdds_under_test YomkDdsStdMsgs)
+target_link_libraries(TestYomkDdsTopic PRIVATE yomkdds_under_test std_msgs)
 
 add_test(NAME TestYomkDdsTopic COMMAND ${YOMKDDS_TEST_LAUNCHER} $<TARGET_FILE:TestYomkDdsTopic>)
 set_tests_properties(TestYomkDdsTopic PROPERTIES
@@ -61,7 +61,7 @@ set_tests_properties(TestYomkDdsTopic PROPERTIES
 # 不同即隔离收 0）/ S3 typename 探针（库日志观察窗，断言从宽，[OBSERVE] 固化）。
 # =============================================================================
 add_executable(TestYomkDdsSetNaming TestYomkDdsSetNaming.cpp)
-target_link_libraries(TestYomkDdsSetNaming PRIVATE yomkdds_under_test YomkDdsStdMsgs)
+target_link_libraries(TestYomkDdsSetNaming PRIVATE yomkdds_under_test std_msgs)
 
 add_test(NAME TestYomkDdsSetNaming COMMAND ${YOMKDDS_TEST_LAUNCHER} $<TARGET_FILE:TestYomkDdsSetNaming>)
 set_tests_properties(TestYomkDdsSetNaming PROPERTIES
@@ -74,7 +74,7 @@ set_tests_properties(TestYomkDdsSetNaming PROPERTIES
 # loan→池内填值→publish 免序列化端到端、discard 归还与守卫；loan sample 为 writer 池借出。
 # =============================================================================
 add_executable(TestYomkDdsLoan TestYomkDdsLoan.cpp)
-target_link_libraries(TestYomkDdsLoan PRIVATE yomkdds_under_test YomkDdsStdMsgs)
+target_link_libraries(TestYomkDdsLoan PRIVATE yomkdds_under_test std_msgs)
 
 add_test(NAME TestYomkDdsLoan COMMAND ${YOMKDDS_TEST_LAUNCHER} $<TARGET_FILE:TestYomkDdsLoan>)
 set_tests_properties(TestYomkDdsLoan PROPERTIES
@@ -88,7 +88,7 @@ set_tests_properties(TestYomkDdsLoan PROPERTIES
 # (NaN/±Inf/整数极值/空超长串/空大 sequence)经 publish 端到端的透传健壮性与数据完整回环。
 # =============================================================================
 add_executable(TestYomkDdsTypes TestYomkDdsTypes.cpp)
-target_link_libraries(TestYomkDdsTypes PRIVATE yomkdds_under_test YomkDdsStdMsgs)
+target_link_libraries(TestYomkDdsTypes PRIVATE yomkdds_under_test std_msgs)
 
 add_test(NAME TestYomkDdsTypes COMMAND ${YOMKDDS_TEST_LAUNCHER} $<TARGET_FILE:TestYomkDdsTypes>)
 set_tests_properties(TestYomkDdsTypes PROPERTIES
@@ -101,7 +101,7 @@ set_tests_properties(TestYomkDdsTypes PROPERTIES
 # 回调路径并发下数据完整性、delete_node 与活跃回调 teardown 竞态安全；off/asan/tsan 三模式验证。
 # =============================================================================
 add_executable(TestYomkDdsConcurrency TestYomkDdsConcurrency.cpp)
-target_link_libraries(TestYomkDdsConcurrency PRIVATE yomkdds_under_test YomkDdsStdMsgs)
+target_link_libraries(TestYomkDdsConcurrency PRIVATE yomkdds_under_test std_msgs)
 
 add_test(NAME TestYomkDdsConcurrency COMMAND ${YOMKDDS_TEST_LAUNCHER} $<TARGET_FILE:TestYomkDdsConcurrency>)
 set_tests_properties(TestYomkDdsConcurrency PROPERTIES
@@ -115,7 +115,7 @@ set_tests_properties(TestYomkDdsConcurrency PROPERTIES
 # 旋钮 STRESS_ITERS/STRESS_CYCLES（父 CACHE 选项）经 compile definitions 注入；TIMEOUT 放宽兜底 asan 10 万级。
 # =============================================================================
 add_executable(TestYomkDdsStressSerial TestYomkDdsStressSerial.cpp)
-target_link_libraries(TestYomkDdsStressSerial PRIVATE yomkdds_under_test YomkDdsStdMsgs)
+target_link_libraries(TestYomkDdsStressSerial PRIVATE yomkdds_under_test std_msgs)
 target_compile_definitions(TestYomkDdsStressSerial PRIVATE
     STRESS_ITERS=${STRESS_ITERS} STRESS_CYCLES=${STRESS_CYCLES})
 
@@ -132,7 +132,7 @@ set_tests_properties(TestYomkDdsStressSerial PROPERTIES
 # 通用 take() reader 高量无撕裂/句柄稳定；与 serial 独立进程隔离。LABELS stress（同上）。
 # =============================================================================
 add_executable(TestYomkDdsStressConcurrent TestYomkDdsStressConcurrent.cpp)
-target_link_libraries(TestYomkDdsStressConcurrent PRIVATE yomkdds_under_test YomkDdsStdMsgs)
+target_link_libraries(TestYomkDdsStressConcurrent PRIVATE yomkdds_under_test std_msgs)
 target_compile_definitions(TestYomkDdsStressConcurrent PRIVATE
     STRESS_ITERS=${STRESS_ITERS} STRESS_CYCLES=${STRESS_CYCLES})
 

@@ -46,8 +46,8 @@
 #include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
 
-#include <yomk/dds/YomkDdsStdMsgs.hpp>            // YomkDdsStd::MInt32
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp> // MInt32PubSubType
+#include <yomk/dds_idl/std_msgs.hpp>            // yomk::dds_idl::std_msgs::MInt32
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp> // MInt32PubSubType
 
 #include <atomic>
 #include <chrono>
@@ -134,7 +134,7 @@ namespace
                     while (!go.load(std::memory_order_acquire)) { std::this_thread::yield(); }
                     // 每线程 new 一个 type；loser 的 type 由 registerPubTopic 首守卫在锁内 delete（P1 契约）
                     if (testInvoke(svc, "/register_pub_topic",
-                            yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"a2_node", topic, new YomkDdsStd::MInt32PubSubType()}))
+                            yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"a2_node", topic, new yomk::dds_idl::std_msgs::MInt32PubSubType()}))
                             .status == yomk::payload::ResStatus::Succeeded)
                     {
                         okCount.fetch_add(1);
@@ -175,12 +175,12 @@ namespace
                 while (!go.load(std::memory_order_acquire)) { std::this_thread::yield(); }
                 // 并发注册各自唯一主题（node mtx_ 序列化 pubTopics_/topics_ map 插入与 register_type）
                 if (testInvoke(svc, "/register_pub_topic",
-                        yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"a3_node", topic, new YomkDdsStd::MInt32PubSubType()}))
+                        yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"a3_node", topic, new yomk::dds_idl::std_msgs::MInt32PubSubType()}))
                         .status == yomk::payload::ResStatus::Succeeded)
                 {
                     regOk.fetch_add(1);
                 }
-                YomkDdsStd::MInt32 msg; // 线程局部：publish 于 node mtx_ 内在本线程同步序列化读取，无跨线程竞争
+                yomk::dds_idl::std_msgs::MInt32 msg; // 线程局部：publish 于 node mtx_ 内在本线程同步序列化读取，无跨线程竞争
                 for (int i = 0; i < K; ++i)
                 {
                     const int32_t v = t * 1000 + i;
@@ -197,7 +197,7 @@ namespace
                     if (lresp.status == yomk::payload::ResStatus::Succeeded && s != nullptr)
                     {
                         loanOk.fetch_add(1);
-                        static_cast<YomkDdsStd::MInt32 *>(s)->data(v);
+                        static_cast<yomk::dds_idl::std_msgs::MInt32 *>(s)->data(v);
                         if (testInvoke(svc, "/discard_loan", yomk::msgs::dds::DiscardLoanRequest::shared(DiscardLoanRequest{"a3_node", topic, s}))
                                 .status == yomk::payload::ResStatus::Succeeded)
                         {
@@ -231,7 +231,7 @@ namespace
         check(testInvoke(svc, "/create_node", mkNode(TEST_DOMAIN, "b_node")).status == yomk::payload::ResStatus::Succeeded,
               "B 创建 b_node → eOk");
         check(testInvoke(svc, "/register_pub_topic",
-                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"b_node", "b_topic", new YomkDdsStd::MInt32PubSubType()}))
+                          yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"b_node", "b_topic", new yomk::dds_idl::std_msgs::MInt32PubSubType()}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "B register_pub_topic b_topic(MInt32) → eOk");
 
@@ -241,13 +241,13 @@ namespace
         {
             // 通用 take()：reader 线程 take()+return_loan 借出交付；MInt32 alignof≤4，
             // base+4 仍 4 字节对齐，可安全 deref
-            auto *m = static_cast<const YomkDdsStd::MInt32 *>(d);
+            auto *m = static_cast<const yomk::dds_idl::std_msgs::MInt32 *>(d);
             const int32_t v = m->data();
             std::lock_guard<std::mutex> lk(mtx);
             got.push_back(v);
         };
         check(testInvoke(svc, "/register_sub_topic",
-                          yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{"b_node", "b_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
+                          yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{"b_node", "b_topic", new yomk::dds_idl::std_msgs::MInt32PubSubType(), cb}))
                       .status == yomk::payload::ResStatus::Succeeded,
               "B register_sub_topic b_topic(callback) → eOk");
 
@@ -263,7 +263,7 @@ namespace
         {
             ths.emplace_back([&, t]
                              {
-                YomkDdsStd::MInt32 msg; // 线程局部
+                yomk::dds_idl::std_msgs::MInt32 msg; // 线程局部
                 while (!go.load(std::memory_order_acquire)) { std::this_thread::yield(); }
                 for (int i = 0; i < K; ++i)
                 {
@@ -319,7 +319,7 @@ namespace
 
         auto cb = [&](const void *d)
         {
-            auto *m = static_cast<const YomkDdsStd::MInt32 *>(d);
+            auto *m = static_cast<const yomk::dds_idl::std_msgs::MInt32 *>(d);
             (void)m->data();
             std::lock_guard<std::mutex> lk(mtx);
             ++totalReceived;
@@ -332,13 +332,13 @@ namespace
                 ++createOk;
             }
             if (testInvoke(svc, "/register_sub_topic",
-                            yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{"c_node", "c_topic", new YomkDdsStd::MInt32PubSubType(), cb}))
+                            yomk::msgs::dds::RegisterSubTopicRequest::shared(RegisterSubTopicRequest{"c_node", "c_topic", new yomk::dds_idl::std_msgs::MInt32PubSubType(), cb}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regSubOk;
             }
             if (testInvoke(svc, "/register_pub_topic",
-                            yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"c_node", "c_topic", new YomkDdsStd::MInt32PubSubType()}))
+                            yomk::msgs::dds::RegisterPubTopicRequest::shared(RegisterPubTopicRequest{"c_node", "c_topic", new yomk::dds_idl::std_msgs::MInt32PubSubType()}))
                     .status == yomk::payload::ResStatus::Succeeded)
             {
                 ++regPubOk;
@@ -349,7 +349,7 @@ namespace
             std::atomic<bool> stop{false};
             std::thread pub([&] // 按值捕获 r（轮内 join，r 稳定）；svc/stop 按引用
                             {
-                YomkDdsStd::MInt32 msg;
+                yomk::dds_idl::std_msgs::MInt32 msg;
                 while (!stop.load(std::memory_order_acquire))
                 {
                     msg.data(r);

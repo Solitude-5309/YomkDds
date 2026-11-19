@@ -43,7 +43,7 @@
 #include "FastDDSDebugNode.h"    // qos 下传用例的直连 observer（发现 QoS 行读回）
 
 // 引 MStringPubSubType（仅 topic_info/node_info 命中用例的最小远端发布端）
-#include <yomk/dds/YomkDdsStdMsgsPubSubTypes.hpp>
+#include <yomk/dds_idl/std_msgsPubSubTypes.hpp>
 
 #include <fastdds/dds/domain/DomainParticipant.hpp>        // 直连 FastDDS API 搭建远端发布端/订阅端（命中用例）
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp> // participant 创建/删除
@@ -293,7 +293,7 @@ int main()
         if (hitParticipant != nullptr)
         {
             // TypeSupport 须活过 topic/writer 使用期（声明顺序同 TestFastDDSDebugNode 计数用例）
-            dds::TypeSupport ts(new YomkDdsStd::MStringPubSubType());
+            dds::TypeSupport ts(new yomk::dds_idl::std_msgs::MStringPubSubType());
             ts.register_type(hitParticipant);
             auto *pub = hitParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
             auto *topic = hitParticipant->create_topic(
@@ -319,7 +319,7 @@ int main()
                 {
                     const auto &ti = info->msg;
                     check(ti.topicName == HIT_TOPIC, "topicInfo topicName 回填被查询主题名");
-                    check(ti.typeName == "YomkDdsStd::MString",
+                    check(ti.typeName == "yomk::dds_idl::std_msgs::MString",
                           "topicInfo typeName 为原始 DDS 类型名（无转换）");
                     check(ti.publisherCount == 1 && ti.publishers.size() == 1,
                           "topicInfo 发布端计数与清单一致（1）");
@@ -356,7 +356,7 @@ int main()
                 }
                 check(listRows.size() == 1 &&
                           listRows[0].topicName == HIT_TOPIC &&
-                          listRows[0].typeName == "YomkDdsStd::MString" &&
+                          listRows[0].typeName == "yomk::dds_idl::std_msgs::MString" &&
                           listRows[0].publisherCount == 1 &&
                           listRows[0].subscriptions.empty(),
                       "list_topics 唯一项结构化回填 topicName/typeName/计数");
@@ -364,9 +364,9 @@ int main()
                 // topic find：按类型名精确匹配反查（域 200 纯净唯一类型）→ 唯一行 HIT_TOPIC；
                 // 未匹配类型报错退出（info 族语义，可发现类型名拼写错误）
                 auto findHit = testInvoke(svc,
-                        "/find_topics", yomk::msgs::dds::DebugFindTopicsRequest::shared(DebugFindTopicsRequest{"YomkDdsStd::MString", 5, 100}));
+                        "/find_topics", yomk::msgs::dds::DebugFindTopicsRequest::shared(DebugFindTopicsRequest{"yomk::dds_idl::std_msgs::MString", 5, 100}));
                 check(findHit.status == yomk::payload::ResStatus::Succeeded,
-                      "topic_find(YomkDdsStd::MString,5,100ms) → eOk（按类型反查命中）");
+                      "topic_find(yomk::dds_idl::std_msgs::MString,5,100ms) → eOk（按类型反查命中）");
                 auto findArr = yomk::msgs::unpack<yomk::msgs::StringArray>(findHit.data);;
                 check(findArr != nullptr && findArr->d.size() == 1 && findArr->d[0] == HIT_TOPIC,
                       "topic_find 命中唯一行为主题名（类型精确匹配，按主题名排序）");
@@ -379,11 +379,11 @@ int main()
                 // interface show：按类型名输出反射成员表 + struct 依赖闭包（域 200 纯净唯一类型，
                 // TypeObject 经 TypeLookup 已就绪）→ root 成员恰一个 data/string 且无依赖；
                 // 未发现类型报错（find 族语义）
-                auto ifaceHit = testInvoke(svc, "/show_interface", yomk::msgs::dds::DebugShowInterfaceRequest::shared(DebugShowInterfaceRequest{"YomkDdsStd::MString", 5, 100}));
+                auto ifaceHit = testInvoke(svc, "/show_interface", yomk::msgs::dds::DebugShowInterfaceRequest::shared(DebugShowInterfaceRequest{"yomk::dds_idl::std_msgs::MString", 5, 100}));
                 check(ifaceHit.status == yomk::payload::ResStatus::Succeeded,
-                      "interface_show(YomkDdsStd::MString,5,100ms) → eOk（按类型名命中）");
+                      "interface_show(yomk::dds_idl::std_msgs::MString,5,100ms) → eOk（按类型名命中）");
                 auto ifacePkg = yomk::msgs::unpack<yomk::msgs::dds::InterfaceInfo>(ifaceHit.data);
-                check(ifacePkg != nullptr && ifacePkg->msg.root.typeName == "YomkDdsStd::MString",
+                check(ifacePkg != nullptr && ifacePkg->msg.root.typeName == "yomk::dds_idl::std_msgs::MString",
                       "interface_show 载荷为 InterfaceInfo 且 root.typeName 为查询类型名");
                 check(ifacePkg != nullptr && ifacePkg->msg.root.members.size() == 1 &&
                           ifacePkg->msg.root.members[0].name == "data" &&
@@ -412,8 +412,8 @@ int main()
                       "interface_list 命中 → eOk（发现缓存收集类型名）");
                 auto ifaceListArr = yomk::msgs::unpack<yomk::msgs::StringArray>(ifaceListHit.data);;
                 check(ifaceListArr != nullptr && ifaceListArr->d.size() == 1 &&
-                          ifaceListArr->d[0] == "YomkDdsStd::MString",
-                      "interface_list 去重清单唯一行 == YomkDdsStd::MString");
+                          ifaceListArr->d[0] == "yomk::dds_idl::std_msgs::MString",
+                      "interface_list 去重清单唯一行 == yomk::dds_idl::std_msgs::MString");
                 for (const auto &l : ifaceListArr->d)
                 {
                     std::cout << "[OBSERVE] interface list: " << l << std::endl;
@@ -430,7 +430,7 @@ int main()
                 {
                     const auto &ex = examplePkg->msg;
                     check(ex.topicName == HIT_TOPIC, "topic_example topicName 回填被查询主题名");
-                    check(ex.typeName == "YomkDdsStd::MString",
+                    check(ex.typeName == "yomk::dds_idl::std_msgs::MString",
                           "topic_example typeName 为原始 DDS 类型名（无转换）");
                     check(ex.interfaceInfo.root.typeName == ex.typeName,
                           "topic_example interfaceInfo.root.typeName 与平铺 typeName 同值");
@@ -546,7 +546,7 @@ int main()
                 {
                     const auto &tm = msgPkg->msg;
                     check(tm.topicName == HIT_TOPIC, "topic_msg topicName 回填被查询主题名");
-                    check(tm.typeName == "YomkDdsStd::MString",
+                    check(tm.typeName == "yomk::dds_idl::std_msgs::MString",
                           "topic_msg typeName 为原始 DDS 类型名（无转换）");
                     check(!tm.json.empty() && tm.json.front() == '{' && tm.json.back() == '}' &&
                               tm.json.find("\"data\"") != std::string::npos,
@@ -589,7 +589,7 @@ int main()
         if (nodeinfoParticipant != nullptr)
         {
             // TypeSupport 须活过 topic/writer/reader 使用期（声明顺序同 topic_info 命中用例）
-            dds::TypeSupport ts(new YomkDdsStd::MStringPubSubType());
+            dds::TypeSupport ts(new yomk::dds_idl::std_msgs::MStringPubSubType());
             ts.register_type(nodeinfoParticipant);
             auto *pub = nodeinfoParticipant->create_publisher(dds::PUBLISHER_QOS_DEFAULT);
             auto *pubTopic = nodeinfoParticipant->create_topic(
@@ -624,12 +624,12 @@ int main()
                     check(ni.nodeName == PEER_NAME, "nodeInfo nodeName 为 participant_name 原样");
                     check(ni.subscribers.size() == 1 &&
                               ni.subscribers[0].topicName == HIT_SUB_TOPIC &&
-                              ni.subscribers[0].typeName == "YomkDdsStd::MString",
-                          "nodeInfo subscribers 命中 (t_nodeinfo_hit_sub, YomkDdsStd::MString)");
+                              ni.subscribers[0].typeName == "yomk::dds_idl::std_msgs::MString",
+                          "nodeInfo subscribers 命中 (t_nodeinfo_hit_sub, yomk::dds_idl::std_msgs::MString)");
                     check(ni.publishers.size() == 1 &&
                               ni.publishers[0].topicName == HIT_PUB_TOPIC &&
-                              ni.publishers[0].typeName == "YomkDdsStd::MString",
-                          "nodeInfo publishers 命中 (t_nodeinfo_hit_pub, YomkDdsStd::MString)");
+                              ni.publishers[0].typeName == "yomk::dds_idl::std_msgs::MString",
+                          "nodeInfo publishers 命中 (t_nodeinfo_hit_pub, yomk::dds_idl::std_msgs::MString)");
                     std::cout << "[OBSERVE] node_info node=" << ni.nodeName
                               << " pubs=" << ni.publishers.size()
                               << " subs=" << ni.subscribers.size() << std::endl;

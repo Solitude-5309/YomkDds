@@ -5,7 +5,7 @@ include(cmake/AbiInfo.cmake)
 # YomkServer 版本检测模块：find_package(YomkServer) 之后调用 yomk_server_version_check()
 include(cmake/YomkServerVersionCheck.cmake)
 
-project(YomkDds VERSION 2.6.2 LANGUAGES CXX)
+project(YomkDds VERSION 2.7.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -109,11 +109,8 @@ install(FILES
     DESTINATION lib/cmake/${PROJECT_NAME}
 )
 
-install(FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/msg/YomkDdsStdMsgs.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/msg/YomkDdsStdMsgsPubSubTypes.hpp"
-    DESTINATION include/yomk/dds
-)
+# msg 类型 C++ 头文件/库不再由本工程编译安装：改由 scripts/build_idl.sh 编译
+# idl/std_msgs.idl 生成并安装（C++ 头文件落 include/yomk/dds_idl/，库落 lib/）
 
 install(DIRECTORY thirdparty/Fast-DDS-3.6.1/install/
     DESTINATION .

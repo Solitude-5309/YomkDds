@@ -130,8 +130,10 @@ Python-only 用户不装 C++ YomkDds 库，其 Fast-DDS 运行时依赖由本扩
 不使用源码 `thirdparty/` 中的：
 
 ```bash
-bash scripts/install_idl.sh scripts/rpc.idl
-# 请输入安装路径 [默认: /opt/yomk]:        ← 直接回车用默认，输入即改
+bash scripts/install_idl.sh scripts/rpc.idl                      # 交互输入安装路径
+bash scripts/install_idl.sh scripts/rpc.idl -p /opt/yomk         # 推荐：-p 指定（可 tab 补全）
+# 交互输入时若前缀父目录不存在会判定为疑似拼写错误并拒绝；调试输入链路:
+# INSTALL_IDL_DEBUG=1 bash scripts/install_idl.sh ...
 ```
 
 流程与产物：
@@ -148,9 +150,15 @@ bash scripts/install_idl.sh scripts/rpc.idl
 | 安装前缀 | Python 模块落点 | 导入形态 |
 | --- | --- | --- |
 | 默认（`$YOMK_PREFIX_PATH`，与框架同前缀） | `<前缀>/lib/pythonX.Y/site-packages/yomk/dds/` | `yomk.dds.<IDL文件名>`；IDL 含 `module` 声明时为 `yomk.dds.<IDL模块>.<IDL文件名>`（与主库同域） |
-| 自定义前缀 | `<前缀>/lib/pythonX.Y/site-packages/`（保持生成布局） | `<IDL文件名>`；含 `module` 声明时为 `<IDL模块>.<IDL文件名>` |
+| 自定义前缀 | `<前缀>/lib/pythonX.Y/site-packages/yomk/dds/`（同上） | 同上 |
 
 脚本收尾会打印本次实际的落点与导入形态（无需自行推导）。
+
+**自定义前缀注意**：该前缀若仅含 msg 模块（未用 `build_ubuntu.sh` 完整部署扩展域），
+与框架同时挂载时，框架侧的 `yomk.dds` 常规包（PEP 420）会遮蔽本前缀的
+`yomk/dds` 命名空间段，无法以 `yomk.dds.<模块>` 导入——需向该前缀完整部署
+扩展域，并将其 site-packages 挂在框架之前；脚本验证会检测此情况并降级为
+"直挂 `yomk/dds` 校验模块文件"同时给出警告。
 
    自定义前缀不在系统 PYTHONPATH 内，使用前需自行挂载：
 

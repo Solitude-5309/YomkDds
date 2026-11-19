@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.14)
 # project(VERSION) → YOMK_DDS_VERSION → configure_file 生成 yomk/dds/_version.py
 # 的 __version__ → yomk.dds.__version__（DdsService.version 端点暴露）。
 # 本行即版本唯一来源，发布时手动 bump。
-project(YomkDds VERSION 0.0.6 LANGUAGES NONE)
+project(YomkDds VERSION 0.0.7 LANGUAGES NONE)
 
 set(YOMK_DDS_VERSION "${PROJECT_VERSION}")
 
@@ -84,11 +84,11 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Fast-DDS-Gen-4.3.0/"
     DESTINATION .)
 
 # ---------- 7. msg C++ 头文件安装（对齐 C++ YomkDds main 根 CMakeLists 逻辑） ----------
-# msg/ 类型库本体不在根构建内（根 CMake 无 add_subdirectory(msg)），由 build_ubuntu.sh
+# idl/ 类型库本体不在根构建内（根 CMake 无 add_subdirectory(idl)），由 build_ubuntu.sh
 # 独立构建安装（见其 3.1 步）；根构建仅随库安装两个 C++ 类型头文件供下游 C++ 消费
 # （与 main 分支根 CMakeLists 同款 install(FILES)）
 install(FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/msg/YomkDdsStdMsgs.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/msg/YomkDdsStdMsgsPubSubTypes.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/idl/YomkDdsStdMsgs.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/idl/YomkDdsStdMsgsPubSubTypes.hpp"
     DESTINATION include/yomk/dds
 )

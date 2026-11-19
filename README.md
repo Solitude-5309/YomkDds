@@ -38,7 +38,7 @@ YomkDdsPython/                  # 扩展仓库根
 │   ├── Fast-DDS-3.6.1/install      #   Fast-DDS C++ 库（libfastdds/libfastcdr 等动态库）
 │   ├── Fast-DDS-python-2.6.1/install #   fastdds Python 绑定模块（SWIG，落 site-packages/fastdds）
 │   └── Fast-DDS-Gen-4.3.0          #   IDL 代码生成器（运行需 java 17）
-├── msg/                        # fastddsgen 生成类型库工程（对齐 C++ YomkDds main，build_ubuntu.sh 独立构建）
+├── idl/                        # fastddsgen 生成类型库工程（对齐 C++ YomkDds main，build_ubuntu.sh 独立构建）
 │   ├── CMakeLists.txt              #   C++ 类型库 + SWIG Python 绑定（校正后装至 site-packages/yomk/dds/YomkDdsStdMsgs，与主库同域）
 │   ├── YomkDdsStdMsgs.idl          #   IDL 源
 │   └── YomkDdsStdMsgs*             #   fastddsgen 生成物（C++ 类型支持源码 + SWIG 接口）

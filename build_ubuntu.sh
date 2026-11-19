@@ -76,7 +76,7 @@ ${SUDO} cmake --install "${BUILD_DIR}" || fail "cmake 安装失败"
 # 经 CMAKE_PREFIX_PATH 指向前缀解析；msg 库同样安装到前缀（与 main 分支同逻辑）。
 # 编译以调用者身份执行、仅 install 走特权（与主安装相同的特权边界，
 # 避免构建产物 root 属主残留破坏后续重建）
-MSG_DIR="${SCRIPT_DIR}/msg"
+MSG_DIR="${SCRIPT_DIR}/idl"
 MSG_BUILD_DIR="${SCRIPT_DIR}/build/msg"
 echo "-- 编译安装 msg 类型库..."
 cmake -S "${MSG_DIR}" -B "${MSG_BUILD_DIR}" \
@@ -88,8 +88,8 @@ cmake --build "${MSG_BUILD_DIR}" -j"$(nproc)" || fail "msg 编译失败"
 ${SUDO} cmake --install "${MSG_BUILD_DIR}" || fail "msg 安装失败"
 # -------------el 3.1 编译安装 msg 类型库 ----------------
 
-# -------------sl 3.1a msg 模块安装目的地校正（不改 msg/ 生成文件的前提下） ----------------
-# msg/CMakeLists（fastddsgen 生成物，不得修改）在 configure 期用 sysconfig
+# -------------sl 3.1a msg 模块安装目的地校正（不改 idl/ 生成文件的前提下） ----------------
+# idl/CMakeLists（fastddsgen 生成物，不得修改）在 configure 期用 sysconfig
 # purelib(vars={'base': 前缀}) 计算模块目的地，Debian/Ubuntu 系统 Python 为
 # posix_local scheme，得到 <前缀>/local/lib/pythonX.Y/dist-packages——不在
 # PYTHONPATH（<前缀>/lib/pythonX.Y/site-packages）内，模块不可导入。

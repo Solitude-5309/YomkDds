@@ -64,6 +64,8 @@ done
 [ -n "${IDL_FILE}" ] || fail "用法: bash scripts/build_idl.sh <idl 文件路径> [-p|--prefix 安装前缀]"
 IDL_FILE="$(_normalize_path "${IDL_FILE}")"
 [ -f "${IDL_FILE}" ] || fail "IDL 文件不存在: ${IDL_FILE}"
+IDL_STEM="$(basename "${IDL_FILE}")"
+IDL_STEM="${IDL_STEM%.idl}"
 
 # 生成工具：优先 -p 指定的安装前缀（build_ubuntu 调用场景，Fast-DDS-Gen 已随
 # 主安装落入前缀），回退 $YOMK_PREFIX_PATH；均不用源码 thirdparty 中的
@@ -158,6 +160,14 @@ if [ ! -d "${INSTALL_PREFIX}" ] || [ ! -w "${INSTALL_PREFIX}" ]; then
 fi
 echo "-- 安装到 ${INSTALL_PREFIX} ..."
 ${SUDO} cmake --install "${GENDIR}/build" || fail "msg 类型工程安装失败"
+
+# C++ 类型头文件随库安装（<前缀>/include/yomk/dds/，供下游 C++ 消费；
+# fastddsgen 生成于 GENDIR：<文件名>.hpp + <文件名>PubSubTypes.hpp）
+HDR_DIR="${INSTALL_PREFIX}/include/yomk/dds"
+echo "-- 安装 C++ 头文件: ${IDL_STEM}.hpp / ${IDL_STEM}PubSubTypes.hpp -> ${HDR_DIR}"
+${SUDO} mkdir -p "${HDR_DIR}"
+${SUDO} cp -f "${GENDIR}/${IDL_STEM}.hpp" "${GENDIR}/${IDL_STEM}PubSubTypes.hpp" "${HDR_DIR}/" \
+    || fail "C++ 头文件安装失败"
 # -------------el 6. 安装 ----------------
 
 # -------------sl 7. 目的地校正（确定性路径，幂等） ----------------
@@ -168,8 +178,6 @@ ${SUDO} cmake --install "${GENDIR}/build" || fail "msg 类型工程安装失败"
 # <site-packages>/yomk/dds/<文件名>/（与主库同域、单层，导入 yomk.dds.<文件名>；
 # IDL 的 module 声明层级由目的地本身表达，不重复落盘）
 IMPORT_NS="yomk.dds"
-IDL_STEM="$(basename "${IDL_FILE}")"
-IDL_STEM="${IDL_STEM%.idl}"
 MODULE_CHAIN="$(sed -nE 's/^[[:space:]]*module[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\1/p' "${IDL_FILE}" | paste -sd/ -)"
 EXPECTED_REL="${MODULE_CHAIN:+${MODULE_CHAIN}/}${IDL_STEM}"
 MODULE_DIR="${MODULE_SRC_BASE}/${EXPECTED_REL}"
@@ -262,6 +270,7 @@ echo " 安装路径:      ${INSTALL_PREFIX}"
 echo " Python 模块:   ${DDS_DIR}/{${PLACED% }}"
 echo " 导入形态:      ${MOVED_IMPORTS% }"
 echo " C++ 类型库:    ${INSTALL_PREFIX}/lib/"
+echo " C++ 头文件:    ${INSTALL_PREFIX}/include/yomk/dds/"
 if [ "${INSTALL_PREFIX}" != "${INSTALL_PREFIX_DEFAULT}" ]; then
     echo " 提示: 自定义前缀不在系统 PYTHONPATH 内，使用时请将其 site-packages 挂入"
     echo "       PYTHONPATH 框架之前（否则框架侧 yomk.dds 常规包会遮蔽本前缀扩展域）"

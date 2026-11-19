@@ -141,7 +141,8 @@ bash scripts/build_idl.sh idl/std_idl.idl -p /opt/yomk           # 推荐：-p �
    工程可重复编译，留作源码归档或删除均可
 2. **编译**：生成目录内 cmake 配置/编译；自定义前缀无 Fast-DDS 安装树时，
    依赖解析自动回退框架前缀（`$YOMK_PREFIX_PATH`）
-3. **安装 + 校正**：C++ 类型库落 `<前缀>/lib/`（ldconfig 刷新，免密 sudo 可用
+3. **安装 + 校正**：C++ 类型库落 `<前缀>/lib/`、C++ 头文件（`<IDL文件名>.hpp` /
+   `<IDL文件名>PubSubTypes.hpp`）落 `<前缀>/include/yomk/dds/`（ldconfig 刷新，免密 sudo 可用
    则自动执行）；Python 模块自动校正 Debian `posix_local` scheme 的
    `local/.../dist-packages` 偏移，目的地按前缀分派：
 
@@ -150,10 +151,32 @@ bash scripts/build_idl.sh idl/std_idl.idl -p /opt/yomk           # 推荐：-p �
 | 默认（`$YOMK_PREFIX_PATH`，与框架同前缀） | `<前缀>/lib/pythonX.Y/site-packages/yomk/dds/` | `yomk.dds.<IDL文件名>`（与主库同域） |
 | 自定义前缀 | `<前缀>/lib/pythonX.Y/site-packages/yomk/dds/`（同上） | 同上 |
 
-安装脚本会自动消除 module 声明带来的多余层级：IDL 的 module 声明（如
-`module yomk { module dds {`）与扩展域 `yomk/dds` 同名的父目录、以及剩余
-module 层与文件名工程目录同名（如 `std_idl/std_idl`）的同名层，都会在安装
-时被剥离/合并，最终一律单层落在 `yomk/dds/<IDL文件名>/`。
+### 命名空间设计（重要，先读这段再写 IDL）
+
+**Python 模块名只由 IDL 文件名决定，IDL 里声明的 module 链不体现在 Python 侧。**
+
+以 `idl/std_idl.idl`（`module yomk { module dds { module std_idl { struct MString ... } } }`）为例：
+
+| 消费侧 | 命名空间形态 |
+| --- | --- |
+| C++（生成的头文件/库） | 完整保留 module 层级：`namespace yomk::dds::std_idl`，`#include <yomk/dds/std_idl.hpp>` |
+| Python（安装后的模块） | 只剩文件名一层：`from yomk.dds.std_idl import MString` |
+
+**为什么这样设计**：安装目的地 `yomk/dds/` 本身已经表达了扩展域层级；若再把
+IDL 的 module 链叠加为目录层级，会得到 `yomk/dds/yomk/dds/std_idl/std_idl`
+这样的重复双层（实际踩过的坑）。且 SWIG 生成的 Python 代理本来就是扁平的——
+module 声明在 Python 侧从来不产生类的命名空间，只产生目录嵌套，保留它徒增层级。
+
+由此两条使用约束：
+
+1. **IDL 文件名必须全局唯一**：Python 模块目录按文件名落位，且安装时覆盖
+   同名目录——两个 module 链不同但文件名相同的 IDL，后装的覆盖先装的
+2. **不要指望用 module 声明做 Python 侧的业务分层**：想按业务拆分模块，就
+   拆成多个 `.idl` 文件（每个文件 = `yomk/dds/` 下一个模块）
+
+安装脚本会自动完成上述剥离/合并（含 module 链与扩展域同名的父目录、剩余
+module 层与文件名工程目录同名如 `std_idl/std_idl` 的情况），用户无需关心
+module 声明怎么写——**最终一律单层落在 `yomk/dds/<IDL文件名>/`**。
 
 脚本收尾会打印本次实际的落点与导入形态（无需自行推导）。
 
@@ -163,24 +186,37 @@ module 层与文件名工程目录同名（如 `std_idl/std_idl`）的同名层�
 扩展域，并将其 site-packages 挂在框架之前；脚本验证会检测此情况并降级为
 "直挂 `yomk/dds` 校验模块文件"同时给出警告。
 
-   自定义前缀不在系统 PYTHONPATH 内，使用前需自行挂载：
+   自定义前缀不在系统 PYTHONPATH 内，使用前需自行挂载（且须挂在框架
+   site-packages 之前，避免框架侧 `yomk.dds` 常规包遮蔽，见上方注意）：
 
 ```bash
 export PYTHONPATH=<自定义前缀>/lib/pythonX.Y/site-packages:$PYTHONPATH
 ```
 
-   说明：默认前缀下模块并入 `yomk/dds/`；自定义前缀下若也子挂 `yomk/dds/`，
-   会被框架侧的 `yomk.dds` 常规包（PEP 420）遮蔽而不可导入，故保持生成布局。
-
 脚本收尾打印实际落点与导入形态，并做导入冒烟（通过才 exit 0）。
-安装后即可用生成的类型收发数据（示例，以实测过的 `module TestMsg { struct Demo ... }` 为例）：
+
+## 新增一个 IDL 消息库的标准流程
+
+```bash
+# 1. 编写 .idl 放入 idl/ 目录（module 声明层级随意，安装时会自动剥离/合并）
+$EDITOR idl/std_idl_a.idl
+
+# 2. 编译安装（二选一）
+bash scripts/build_idl.sh idl/std_idl_a.idl -p /opt/yomk   # 单独安装该 IDL（推荐）
+./build_ubuntu.sh                                          # 或全量重建（对 idl/*.idl 逐个执行）
+
+# 3. 使用（导入形态 yomk.dds.<文件名>，类型字段走 getter/setter）
+python3 -c "from yomk.dds.std_idl_a import <类型名>"
+```
+
+安装后即可用生成的类型收发数据（示例，以 `idl/std_idl.idl` 的实测为准）：
 
 ```python
-from yomk.dds.TestMsg.demo import Demo   # 默认前缀安装后的导入形态
+from yomk.dds.std_idl import MString
 
-data = Demo()
-data.payload("hello")    # 字段写入走 setter
-data.payload()           # 字段读取走 getter，返回 'hello'
+data = MString()
+data.data("hello")    # 字段写入走 setter
+data.data()           # 字段读取走 getter，返回 'hello'
 ```
 
 ## 版本号管理

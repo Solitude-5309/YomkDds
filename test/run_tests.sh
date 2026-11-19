@@ -99,7 +99,7 @@ PY_SITE_DIR=$(ls -d "${PREFIX}"/lib/python*[0-9].[0-9]*/site-packages 2>/dev/nul
 for f in yomk/server/__init__.py \
          yomk/dds/__init__.py yomk/dds/_version.py yomk/dds/DdsService.py \
          yomk/msgs/dds/__init__.py yomk/url/dds/__init__.py \
-         fastdds/__init__.py yomk/dds/std_idl/__init__.py; do
+         fastdds/__init__.py yomk/dds_idl/std_msgs/__init__.py; do
     [ -f "${PY_SITE_DIR}/${f}" ] || fail "未找到 ${PY_SITE_DIR}/${f}，请先安装扩展: $(install_hint)"
 done
 

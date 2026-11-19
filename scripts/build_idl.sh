@@ -11,7 +11,7 @@
 #      （CMAKE_PREFIX_PATH 指向安装前缀，find_package(fastcdr/fastdds) 经前缀内
 #      Fast-DDS 安装树解析）
 #   3. 安装：默认 $YOMK_PREFIX_PATH（交互询问，支持修改），与现有安装一致：
-#      C++ 类型库落 <前缀>/lib，SWIG Python 模块并入扩展域 yomk/dds/
+#      C++ 类型库落 <前缀>/lib，SWIG Python 模块并入类型域 yomk/dds_idl/（与服务域 yomk/dds 并列）
 #      （Debian posix_local scheme 使 sysconfig purelib 算出 <前缀>/local/.../dist-packages，
 #      安装后自动校正搬移并清 local/ 空壳），随后刷新动态库缓存
 
@@ -115,16 +115,22 @@ if [ ! -d "${INSTALL_PREFIX}" ]; then
     esac
 fi
 
+# 特权边界检测：前缀不可写时目录创建/安装走 sudo（须在第 3 节目录创建前确定）
+SUDO=""
+if [ ! -d "${INSTALL_PREFIX}" ] || [ ! -w "${INSTALL_PREFIX}" ]; then
+    SUDO="sudo"
+fi
+
 # site-packages 不存在时自动生成（安装前缀可自定义，不必预先存在）
 SITE_PACKAGES="$(ls -d "${INSTALL_PREFIX}"/lib/python*/site-packages 2>/dev/null | head -1)"
 if [ -z "${SITE_PACKAGES}" ]; then
     PY_VER="$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")"
     SITE_PACKAGES="${INSTALL_PREFIX}/lib/python${PY_VER}/site-packages"
     echo "-- 自动生成 site-packages: ${SITE_PACKAGES}"
-    mkdir -p "${SITE_PACKAGES}" || fail "site-packages 创建失败: ${SITE_PACKAGES}"
+    ${SUDO} mkdir -p "${SITE_PACKAGES}" || fail "site-packages 创建失败: ${SITE_PACKAGES}"
 fi
-DDS_DIR="${SITE_PACKAGES}/yomk/dds"
-mkdir -p "${DDS_DIR}" || fail "扩展域目录创建失败: ${DDS_DIR}"
+DDS_DIR="${SITE_PACKAGES}/yomk/dds_idl"
+${SUDO} mkdir -p "${DDS_DIR}" || fail "扩展域目录创建失败: ${DDS_DIR}"
 # -------------el 3. 交互确定安装路径 ----------------
 
 # -------------sl 4. 生成（./build_idl_<时间戳>，支持 loan） ----------------
@@ -154,16 +160,12 @@ cmake --build "${GENDIR}/build" -j"$(nproc)" || fail "msg 类型工程编译失�
 # -------------el 5. 编译 ----------------
 
 # -------------sl 6. 安装（默认 YOMK_PREFIX_PATH） ----------------
-SUDO=""
-if [ ! -d "${INSTALL_PREFIX}" ] || [ ! -w "${INSTALL_PREFIX}" ]; then
-    SUDO="sudo"
-fi
 echo "-- 安装到 ${INSTALL_PREFIX} ..."
 ${SUDO} cmake --install "${GENDIR}/build" || fail "msg 类型工程安装失败"
 
-# C++ 类型头文件随库安装（<前缀>/include/yomk/dds/，供下游 C++ 消费；
+# C++ 类型头文件随库安装（<前缀>/include/yomk/dds_idl/，与 IDL namespace yomk::dds_idl 对应；
 # fastddsgen 生成于 GENDIR：<文件名>.hpp + <文件名>PubSubTypes.hpp）
-HDR_DIR="${INSTALL_PREFIX}/include/yomk/dds"
+HDR_DIR="${INSTALL_PREFIX}/include/yomk/dds_idl"
 echo "-- 安装 C++ 头文件: ${IDL_STEM}.hpp / ${IDL_STEM}PubSubTypes.hpp -> ${HDR_DIR}"
 ${SUDO} mkdir -p "${HDR_DIR}"
 ${SUDO} cp -f "${GENDIR}/${IDL_STEM}.hpp" "${GENDIR}/${IDL_STEM}PubSubTypes.hpp" "${HDR_DIR}/" \
@@ -175,9 +177,9 @@ ${SUDO} cp -f "${GENDIR}/${IDL_STEM}.hpp" "${GENDIR}/${IDL_STEM}PubSubTypes.hpp"
 # Debian posix_local 下 purelib = <前缀>/local/.../dist-packages（sys.path 外不可
 # 导入），且该目录可能带历次运行残留——不用快照差集，按 IDL 推导的确定性路径
 # 直接定位搬移（幂等，重装自愈）。统一搬移模块目录 →
-# <site-packages>/yomk/dds/<文件名>/（与主库同域、单层，导入 yomk.dds.<文件名>；
+# <site-packages>/yomk/dds_idl/<文件名>/（类型域，与服务域 yomk/dds 并列；单层，导入 yomk.dds_idl.<文件名>；
 # IDL 的 module 声明层级由目的地本身表达，不重复落盘）
-IMPORT_NS="yomk.dds"
+IMPORT_NS="yomk.dds_idl"
 MODULE_CHAIN="$(sed -nE 's/^[[:space:]]*module[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\1/p' "${IDL_FILE}" | paste -sd/ -)"
 EXPECTED_REL="${MODULE_CHAIN:+${MODULE_CHAIN}/}${IDL_STEM}"
 MODULE_DIR="${MODULE_SRC_BASE}/${EXPECTED_REL}"
@@ -249,7 +251,7 @@ for m in ${MOVED_IMPORTS}; do
             echo "-- ${m} 导入通过（命中安装前缀）"
         elif LD_LIBRARY_PATH="${INSTALL_PREFIX}/lib:${INSTALL_PREFIX_DEFAULT}/lib" \
                 PYTHONPATH="${DDS_DIR}:${FRAMEWORK_SITE}" \
-                python3 -c "import ${m#yomk.dds.}" 2>/dev/null; then
+                python3 -c "import ${m#${IMPORT_NS}.}" 2>/dev/null; then
             echo "-- ${m##*.} 模块文件校验通过（直挂 yomk/dds）"
             echo "-- 警告: 与框架同时挂载时 ${m} 命中的是框架前缀副本（PEP 420 常规包遮蔽），" >&2
             echo "       本前缀需用 build_ubuntu.sh 完整部署扩展域并将其 site-packages 置于框架之前" >&2
@@ -270,7 +272,7 @@ echo " 安装路径:      ${INSTALL_PREFIX}"
 echo " Python 模块:   ${DDS_DIR}/{${PLACED% }}"
 echo " 导入形态:      ${MOVED_IMPORTS% }"
 echo " C++ 类型库:    ${INSTALL_PREFIX}/lib/"
-echo " C++ 头文件:    ${INSTALL_PREFIX}/include/yomk/dds/"
+echo " C++ 头文件:    ${INSTALL_PREFIX}/include/yomk/dds_idl/"
 if [ "${INSTALL_PREFIX}" != "${INSTALL_PREFIX_DEFAULT}" ]; then
     echo " 提示: 自定义前缀不在系统 PYTHONPATH 内，使用时请将其 site-packages 挂入"
     echo "       PYTHONPATH 框架之前（否则框架侧 yomk.dds 常规包会遮蔽本前缀扩展域）"

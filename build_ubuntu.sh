@@ -100,7 +100,7 @@ sudo ldconfig || fail "ldconfig 执行失败"
 PY_SITE_DIR="$(ls -d "${INSTALL_PREFIX}"/lib/python*/site-packages 2>/dev/null | head -1)"
 [ -n "${PY_SITE_DIR}" ] || fail "安装后未找到 site-packages 目录: ${INSTALL_PREFIX}/lib/pythonX.Y/site-packages"
 echo "-- 扩展导入验证（PYTHONPATH=${PY_SITE_DIR}）..."
-PYTHONPATH="${PY_SITE_DIR}${PYTHONPATH:+:${PYTHONPATH}}" python3 -c "import yomk.dds, yomk.msgs.dds, yomk.url.dds, fastdds, yomk.dds.std_idl; print('-- 扩展导入验证通过, 版本:', yomk.dds.__version__, ', fastdds 绑定:', fastdds.__file__ is not None, ', msg 类型库:', yomk.dds.std_idl.__file__ is not None)" \
+PYTHONPATH="${PY_SITE_DIR}${PYTHONPATH:+:${PYTHONPATH}}" python3 -c "import yomk.dds, yomk.msgs.dds, yomk.url.dds, fastdds, yomk.dds_idl.std_msgs; print('-- 扩展导入验证通过, 版本:', yomk.dds.__version__, ', fastdds 绑定:', fastdds.__file__ is not None, ', msg 类型库:', yomk.dds_idl.std_msgs.__file__ is not None)" \
     || fail "扩展安装后导入验证失败（若为依赖缺失，请确认当前用户已安装框架运行时依赖）"
 # -------------el 3.5 安装后 import 冒烟 ----------------
 

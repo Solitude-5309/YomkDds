@@ -1,8 +1,8 @@
 module yomk
 {
-    module dds
+    module dds_idl
     {
-        module std_idl
+        module std_msgs
         {
             struct MBool
             {

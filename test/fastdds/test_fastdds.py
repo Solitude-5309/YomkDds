@@ -25,7 +25,7 @@ if SITE not in sys.path:
     sys.path.insert(0, SITE)
 
 import fastdds                              # noqa: E402  # 安装树导入
-import yomk.dds.std_idl as YomkDdsStd  # noqa: E402  # idl/std_idl.idl 生成的类型模块
+import yomk.dds_idl.std_msgs as YomkDdsStd  # noqa: E402  # idl/std_msgs.idl 生成的类型模块
 
 DOMAIN = 77  # 独立测试域，避免与机器上其他 DDS 应用串扰
 FAILURES = []

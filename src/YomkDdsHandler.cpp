@@ -4,6 +4,7 @@
 //   sample（DiscardLoanRequest.sample/LoanSample.sample）从 writer 池借出，经 write（发布）或 discard（归还）交回中间件。
 #include "YomkDdsHandler.h"
 #include "YomkDdsMsg.h"
+#include "YomkDdsUrl.h"  // installFunc 第四参语义描述常量（yomk::url::dds::*Desc）
 
 #include "FastDDSNode.h"
 // 显式引入 yomkdds_xml::ParticipantQosSpec（FastDDSNode.h 传递亦可得，对齐 IWYU）
@@ -40,15 +41,15 @@ YomkDdsHandler::~YomkDdsHandler() = default;
 
 int YomkDdsHandler::init()
 {
-    installFunc("/get_version", &YomkDdsHandler::getVersion);
-    installFunc("/load_xml", &YomkDdsHandler::loadXml);
-    installFunc("/create_node", &YomkDdsHandler::createNode);
-    installFunc("/delete_node", &YomkDdsHandler::deleteNode);
-    installFunc("/register_pub_topic", &YomkDdsHandler::registerPubTopic);
-    installFunc("/register_sub_topic", &YomkDdsHandler::registerSubTopic);
-    installFunc("/publish", &YomkDdsHandler::publish);
-    installFunc("/loan", &YomkDdsHandler::loan);
-    installFunc("/discard_loan", &YomkDdsHandler::discardLoan);
+    installFunc("/get_version", &YomkDdsHandler::getVersion, "", yomk::url::dds::GetVersionDesc);
+    installFunc("/load_xml", &YomkDdsHandler::loadXml, yomk::msgs::dds::LoadXmlRequest::kName, yomk::url::dds::LoadXmlDesc);
+    installFunc("/create_node", &YomkDdsHandler::createNode, yomk::msgs::dds::CreateNodeRequest::kName, yomk::url::dds::CreateNodeDesc);
+    installFunc("/delete_node", &YomkDdsHandler::deleteNode, yomk::msgs::String::kName, yomk::url::dds::DeleteNodeDesc);
+    installFunc("/register_pub_topic", &YomkDdsHandler::registerPubTopic, yomk::msgs::dds::RegisterPubTopicRequest::kName, yomk::url::dds::RegisterPubTopicDesc);
+    installFunc("/register_sub_topic", &YomkDdsHandler::registerSubTopic, yomk::msgs::dds::RegisterSubTopicRequest::kName, yomk::url::dds::RegisterSubTopicDesc);
+    installFunc("/publish", &YomkDdsHandler::publish, yomk::msgs::dds::PublishRequest::kName, yomk::url::dds::PublishDesc);
+    installFunc("/loan", &YomkDdsHandler::loan, yomk::msgs::dds::LoanRequest::kName, yomk::url::dds::LoanDesc);
+    installFunc("/discard_loan", &YomkDdsHandler::discardLoan, yomk::msgs::dds::DiscardLoanRequest::kName, yomk::url::dds::DiscardLoanDesc);
     return 0;
 }
 

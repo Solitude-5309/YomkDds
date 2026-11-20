@@ -100,7 +100,7 @@ YOMK_DEFINE_MSG(MyData, MyData, d);   // 生成 yomk::msgs::MyData / MyDataPtr�
   **注意**：模板形参 `A&&...` 无法从花括号初始化列表推导，传聚合对象须带类型：`MyData::shared(MyData{"a", 1})`、`Int32Array::shared(std::vector<std::int32_t>{1,2,3})`。
 - `yomk::msgs::MyData::shared(std::move(data))` — 右值重载移动入包，大对象免拷贝。
 - `yomk::msgs::unpack<yomk::msgs::MyData>(pkg)` — 按运行期类型名解包，pkg 为空或类型不匹配返回 `nullptr`（不自动 return，调用方手动判空），不抛异常。
-- 消息名（宏第二参）即运行期类型名 `kName`；各处声明的"期望消息类型名"字符串（`installFunc` 第三参、`fn_pool().msg_name()`、`event_loop().msg_name()`）与其保持一致，仅作内省元数据、不拦截调用。
+- 运行期类型名 `kName` 为全限定名（根级 `"yomk::msgs::MsgName"`、NS 形式 `"yomk::msgs::NS::MsgName"`），恒等于 C++ 全限定名；是类型身份唯一权威常量（`name()`/`typeOf()` 为实例携带串、可伪造，仅用于错误文案展示）。各处声明的"期望消息类型名"（`installFunc` 第三参、`fn_pool().msg_name()`、`event_loop().msg_name()`）一律引用 `T::kName`、禁止手写字符串；仅作内省元数据、不拦截调用。
 
 **内置标准类型**（成员名均为 `d`，共 30 种）：`Bool`、`Char`、`UChar`、`Byte`、`Int8`、`Uint8`、`Int16`、`Uint16`、`Int32`、`Uint32`、`Int64`、`Uint64`、`Float32`、`Float64`、`String` 及对应 `XxxArray`（如 `StringArray`、`Int32Array`）。
 
@@ -108,10 +108,12 @@ YOMK_DEFINE_MSG(MyData, MyData, d);   // 生成 yomk::msgs::MyData / MyDataPtr�
 
 ```cpp
 installFunc("/x", &C::m)                         // 成员函数直装本服务 funcMap（内部自动 weakFunc 包装）
-installFunc("/x", &C::m, "MsgName")              // 第三参：期望消息类型名（字符串字面量，仅内省元数据）
-installFunc("/x", &C::m, "MsgName", "Description")  // 第四参：函数说明（自由字符串，透传不解析）
+installFunc("/x", &C::m, yomk::msgs::MsgName::kName)              // 第三参：期望消息类型名（引用 T::kName 禁手写，仅内省元数据）
+installFunc("/x", &C::m, yomk::msgs::MsgName::kName, "Description")  // 第四参：语义描述（惯例见下）
 weakFunc(&Class::Method)                         // 弱绑定成员函数（不装 funcMap），注册到外部子系统必用
 ```
+
+**第四参语义描述惯例**（非强制约束，语义澄清，越清晰越好）：描述常量与 URL 常量同置各域 `XxxUrl.h`（URL 常量集中在前、语义描述常量集中在后按序一一对应，命名对称 `<常量名>Desc`，`inline constexpr const char*`），installFunc 第四参仅引用常量，安装表一行一端点。复杂端点（副作用/状态变更/失败模式多样）用六字段 R"(...)" 块，字段序 `Semantic → Returns → Precond → Idempotent → SideEffect → Fail`；纯查询端点单行 `"Semantic: …；Returns: …"`。文案必须与实现相符（依据处理函数真实分支写，不确定的分支不写）；`Fail` 按三态归因（Invalid=入参非法，Failed=业务未命中/冲突）。框架全部内置端点已按此填写，见 `src/` 各文件描述常量块与 `docs/YomkServer.md`「内省描述惯例」。
 
 弱绑定判活：回调触发时先 `weak_ptr.lock()`，服务已删除则安全丢弃，不会悬垂 `this`。同一 `weakFunc` 是泛型模板，按调用处目标 `std::function` 类型自动适配全部回调签名，丢弃行为按返回类型（所有丢弃分支统一前置记录错误日志 "service has been deleted or unregistered, callback ignored"）：功能函数/FunctionPool/EventLoop（`Response(YomkMsgPtr)` → `Failed`）、异步响应（`void(Response)` → 丢弃）、checker（`CheckStatus(const Context&)` → 放行 `Accept`）、void monitor（→ 丢弃）。其他返回类型 → `Ret{}` 默认值。构造期绑定（init 之前）永久无效。
 

@@ -55,6 +55,29 @@ inline constexpr std::string_view Loan = "/YomkDdsHandler/loan";
 // @zh: 归还未发布的借出缓冲端点
 inline constexpr std::string_view DiscardLoan = "/YomkDdsHandler/discard_loan";
 
+// 语义描述常量：与上方 URL 常量按序一一对应（installFunc 第四参引用；格式惯例见 skills/yomkserver-modular/reference.md「installFunc / weakFunc」）
+inline constexpr const char* GetVersionDesc = "Semantic: 返回扩展版本串（三套件共用——同一库同一版本串）；Returns: String 包";
+inline constexpr const char* LoadXmlDesc =
+        "Semantic: 加载 Fast DDS XML profiles 文件并缓存 raw 串（节点层 QoS 提取链吃 raw 串而非文件路径）；Returns: data 无负载；"
+        "Failed=路径空/文件不可读/文件为空/load_XML_profiles_file 失败（rc 整值回显便于对照官方错误码）";
+inline constexpr const char* CreateNodeDesc =
+        "Semantic: 创建命名 DDS 节点（domainId [0,232]；应用已加载 XML 缓存与 UDP/TCP discovery server 直配，空串=不直配）；Returns: data 无负载；"
+        "Failed=节点名空/domainId 越界/节点重名/setDomainId 失败（非法 serverSpec 项回显于 msg）";
+inline constexpr const char* DeleteNodeDesc = "Semantic: 按名称删除节点并释放资源；Returns: data 无负载；Failed=节点不存在";
+inline constexpr const char* RegisterPubTopicDesc =
+        "Semantic: 在节点注册发布主题；type 所有权无条件接管（caller new、服务全路径负责释放，成败皆然）；Returns: data 无负载；"
+        "Failed=节点不存在/注册失败";
+inline constexpr const char* RegisterSubTopicDesc =
+        "Semantic: 在节点注册订阅主题（携带逐条回调）；type 所有权无条件接管（caller new、服务全路径负责释放，成败皆然）；Returns: data 无负载；"
+        "Failed=节点不存在/注册失败";
+inline constexpr const char* PublishDesc =
+        "Semantic: 经节点同步发布一条消息（data 借用非所有权，写入后归 caller 管理）；Returns: data 无负载；Failed=节点不存在/发布失败";
+inline constexpr const char* LoanDesc =
+        "Semantic: 从 writer 池借出发布缓冲（零拷贝；非 plain 类型或池耗尽即失败，回退普通发布）；Returns: LoanSample 包（sample 从池借出，"
+        "caller 经 /publish 发布或 /discard_loan 归还交回中间件）；Failed=节点不存在/借出失败";
+inline constexpr const char* DiscardLoanDesc =
+        "Semantic: 归还未发布的借出缓冲（sample 从 writer 池借出，归还即交回中间件）；Returns: data 无负载；Failed=节点不存在/归还失败";
+
 // --- YomkDdsDebugHandler ---
 
 /** @brief Create the debug node endpoint (single node per process) */
@@ -113,6 +136,50 @@ inline constexpr std::string_view DebugListNodes = "/YomkDdsDebugHandler/list_no
 // @zh: 查询节点发布/订阅清单端点
 inline constexpr std::string_view DebugGetNodeInfo = "/YomkDdsDebugHandler/get_node_info";
 
+// 语义描述常量：与上方 URL 常量按序一一对应（installFunc 第四参引用）
+inline constexpr const char* DebugCreateNodeDesc =
+        "Semantic: 创建调试节点（单节点模型；domainId [0,232]；应用已加载 XML 缓存与 UDP/TCP discovery server 直配，空串=不直配）；Returns: data 无负载；"
+        "Failed=domainId 越界/节点已存在/setDomainId 失败";
+inline constexpr const char* DebugDeleteNodeDesc =
+        "Semantic: 删除调试节点并按节点层顺序清理（停工作线程 → reader → topic → subscriber → participant）；Returns: data 无负载；Failed=节点未建";
+inline constexpr const char* DebugPrintTopicDesc =
+        "Semantic: 登记主题观察（output 回调经 setOutputSink 原样转交节点，须先于订阅就位，逐条投递收到的消息）；Returns: data 无负载；"
+        "Failed=回调空/节点未建/订阅失败（拒绝原因由节点层归类透传）";
+inline constexpr const char* DebugListTopicsDesc =
+        "Semantic: 列出域内已发现主题（topicName+typeName；收敛等待约 stableRounds*intervalMs）；Returns: TopicInfoList 包";
+inline constexpr const char* DebugGetTopicInfoDesc =
+        "Semantic: 查询单主题详情（含端点详情，展示与否由调用方决定）；Returns: TopicInfo 包；Failed=节点未建/主题未发现";
+inline constexpr const char* DebugFindTopicsDesc =
+        "Semantic: 按数据类型名反查主题名清单（find 族语义：无匹配按失败，便于暴露类型名拼写错误）；Returns: StringArray 包；"
+        "Failed=节点未建/类型无匹配主题";
+inline constexpr const char* DebugShowInterfaceDesc =
+        "Semantic: 按类型名经 TypeObject 反射采集 IDL 结构（find 族语义：类型未出现按失败）；Returns: InterfaceInfo 包；"
+        "Failed=节点未建/类型未发现/TypeObject 不可得/顶层非 struct/反射采集失败（原因由节点层归类透传）";
+inline constexpr const char* DebugListInterfacesDesc =
+        "Semantic: 列出域内全部已发现数据类型名（字典序去重；find 族语义：空结果按失败，便于暴露域号或收敛参数配置错误）；Returns: StringArray 包；"
+        "Failed=节点未建/域内无任何类型";
+inline constexpr const char* DebugGetTopicExampleDesc =
+        "Semantic: 查询主题发布示例（info 族语义：主题未发现按失败）；Returns: TopicExampleInfo 包（段头/IDL 语法/发布命令由调用方渲染）；"
+        "Failed=节点未建/主题未发现/类型侧/示例生成失败（原因由节点层按步归类透传）";
+inline constexpr const char* DebugGetTopicMsgDesc =
+        "Semantic: 查询消息描述两要素（类型名+JSON 模板；info 族语义：主题未发现按失败）；Returns: TopicMessageInfo 包；"
+        "Failed=节点未建/主题未发现/JSON 模板生成失败（原因由节点层按步归类透传）";
+inline constexpr const char* DebugStartPubDesc = R"(
+Semantic: 向主题发布 JSON 载荷消息；repeatIntervalMs>0 为持续发布模式，周期发送至 g_debugPubStop 置位（/stop_pub 或 Ctrl+C）或发满 maxTimes 条
+Returns: TopicPublishInfo 包（发布计数含首轮，单次发布同样非空）
+Precond: 调试节点已创建；主题类型已出现在域内
+Idempotent: false —— 每次调用都真实发布
+SideEffect: 持锁长驻阻塞（repeat 模式期间本服务其他带锁端点串行化）；向域内发布数据
+Fail: Failed=节点未建/发布失败（原因由节点层归类透传；期望建匹配等待期被置位中断同样报错返回）
+)";
+inline constexpr const char* DebugStopPubDesc =
+        "Semantic: 协议桥接置位进程内控制面标志 g_debugPubStop（无锁直置，绝不取 mtx_——start_pub 持锁长驻阻塞期间本端点必须可调度）；"
+        "Returns: data 无负载，msg \"stop requested\"；被阻塞的 start_pub 随之收尾带回发布计数";
+inline constexpr const char* DebugListNodesDesc =
+        "Semantic: 列出域内命名参与者（空列表合法——域内暂无命名参与者）；Returns: StringArray 包";
+inline constexpr const char* DebugGetNodeInfoDesc =
+        "Semantic: 查询命名参与者的发布/订阅主题清单；Returns: NodeInfo 包；Failed=节点未建/参与者未发现";
+
 // --- YomkDdsBagHandler ---
 
 /** @brief Create the bag node endpoint (single node per process) */
@@ -170,4 +237,53 @@ inline constexpr std::string_view BagResumePlay = "/YomkDdsBagHandler/resume_pla
 /** @brief Set the playback rate endpoint (protocol bridge to the ctrl flag) */
 // @zh: 设置回放速率端点（协议桥接到进程内控制面标志）
 inline constexpr std::string_view BagSetPlayRate = "/YomkDdsBagHandler/set_play_rate";
+
+// 语义描述常量：与上方 URL 常量按序一一对应（installFunc 第四参引用）
+inline constexpr const char* BagCreateNodeDesc =
+        "Semantic: 创建 bag 节点（单节点模型；domainId [0,232]；应用已加载 XML 缓存与 UDP/TCP discovery server 直配，空串=不直配）；Returns: data 无负载；"
+        "Failed=domainId 越界/节点已存在/setDomainId 失败";
+inline constexpr const char* BagDeleteNodeDesc =
+        "Semantic: 删除 bag 节点并按节点层顺序清理（reader → data → topic → subscriber → participant）；Returns: data 无负载；Failed=节点未建";
+inline constexpr const char* BagRecordDesc = R"(
+Semantic: 录制主题至 mcap bag（长驻阻塞至 g_bagRecordStop 置位——/stop_record 或 SIGINT——触发节点层收尾返回；/pause_record 冻结订阅写路径）
+Returns: RecordResult 包（bag 目录+逐主题统计，通配项已展开，保持录制清单顺序）
+Precond: bag 节点已创建；topics 非空且无空主题名
+Idempotent: false —— 每次调用产生新录制会话
+SideEffect: 持锁长驻阻塞（录制期间本服务其他带锁端点串行化）；向输出目录写 bag 文件
+Fail: Failed=topics 空/含空主题名/节点未建/启动校验失败（无端点主题，节点层逐主题列于 msg）
+)";
+inline constexpr const char* BagGetInfoDesc =
+        "Semantic: 读取 bag 元信息（metadata.json 字段+目录递归总字节；静态纯文件操作，不依赖节点不取锁）；Returns: BagInfo 包（行标签/单位/人类可读时间由调用方渲染）；"
+        "Failed=bagDir 空/读取失败";
+inline constexpr const char* BagReindexDesc =
+        "Semantic: 重建 bag 元信息（静态纯文件操作，不依赖节点不取锁）；Returns: data 无负载；Failed=bagDir 空/重建失败";
+inline constexpr const char* BagConvertDesc =
+        "Semantic: 按 output_bags 配置转换/合并 bag（静态纯文件操作，不依赖节点不取锁）；Returns: ConvertResult 包（逐输出 bag 统计，保持配置序）；"
+        "Failed=inputs 空/cfgPath 空/转换失败";
+inline constexpr const char* BagPlayDesc = R"(
+Semantic: 回放 mcap bag（长驻阻塞至 EOS 或 g_bagPlayStop 置位——/stop_play 或 SIGINT——触发节点层收尾返回；/pause_play 冻结时间轴）
+Returns: PlayResult 包（bag 目录+逐主题统计，bag 预扫序，topicName 为发布名）
+Precond: bag 节点已创建；bagDir 非空；playbackRate>0；startOffset/delay 非负
+Idempotent: false —— 每次调用都真实发布 bag 数据
+SideEffect: 持锁长驻阻塞（回放期间本服务其他带锁端点串行化）；向域内发布 bag 数据
+Fail: Failed=bagDir 空/playbackRate<=0/startOffset<0/delay<0/节点未建/预扫失败（目录不存在/旧 bag 拒播/qos 非法/topics 未命中 bag 清单，节点层列于 msg）
+)";
+inline constexpr const char* BagStopRecordDesc =
+        "Semantic: 协议桥接置位进程内控制面标志 g_bagRecordStop（无锁直置，绝不取 mtx_——/record 持锁长驻阻塞期间本端点必须可调度）；"
+        "Returns: data 无负载，msg \"stop requested\"；录制循环轮询到置位即收尾返回并带回逐主题统计";
+inline constexpr const char* BagPauseRecordDesc =
+        "Semantic: 置位 g_bagRecordPaused 冻结订阅写路径（无锁直置同 stop_record；恢复由 /resume_record 语义侧控制）；"
+        "Returns: data 无负载，msg \"pause requested\"";
+inline constexpr const char* BagResumeRecordDesc =
+        "Semantic: 恢复 g_bagRecordPaused，订阅写路径继续落盘（无锁直置同 stop_record）；Returns: data 无负载，msg \"resume requested\"";
+inline constexpr const char* BagStopPlayDesc =
+        "Semantic: 协议桥接置位进程内控制面标志 g_bagPlayStop（无锁直置，绝不取 mtx_——/play 持锁长驻阻塞期间本端点必须可调度）；"
+        "Returns: data 无负载，msg \"stop requested\"；回放线程在各阻塞处轮询到置位即收尾返回并带回逐主题统计";
+inline constexpr const char* BagPausePlayDesc =
+        "Semantic: 置位 g_bagPlayPaused 冻结时间轴（无锁直置同 stop_play；读线程被队列满反压自然停住）；Returns: data 无负载，msg \"pause requested\"";
+inline constexpr const char* BagResumePlayDesc =
+        "Semantic: 恢复 g_bagPlayPaused 并重锚时间基准（无锁直置同 stop_play；对齐 ros2 PlayerClock 语义）；Returns: data 无负载，msg \"resume requested\"";
+inline constexpr const char* BagSetPlayRateDesc =
+        "Semantic: 经 bagPlaySetRate 设置回放速率（无锁直置同 stop_play；rate<=0 由节点层校验拒绝并保持原值）；Returns: data 无负载，msg \"rate set\"；"
+        "Failed=rate<=0";
 }  // namespace yomk::url::dds

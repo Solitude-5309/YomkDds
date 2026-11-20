@@ -15,8 +15,10 @@ ProjectName/
 │   └── MyBoot.cpp
 ├── config/
 │   └── config.txt
-├── msgs/
-│   └── YomkMsg.h
+├── interfaces/
+│   ├── ProjectPayload.h
+│   ├── ProjectMsg.h
+│   └── ConfigServiceUrl.h
 ├── services/
 │   ├── ConfigService.h
 │   └── ConfigService.cpp
@@ -128,7 +130,7 @@ int MyBoot::after()
     }
     yomk::log().tag("MyBoot::after").info("started successfully.");
 
-    resp = yomk::server().url("/ConfigService/get").msg(yomk::msgs::ConfigKey::shared(ConfigKey{"name"})).request();
+    resp = yomk::server().url("/ConfigService/get").msg(yomk::msgs::prj::ConfigKey::shared(yomk::payload::prj::ConfigKey{"name"})).request();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         yomk::log().tag("MyBoot::after").error("get config name failed: ", resp.msg);
@@ -149,7 +151,7 @@ int MyBoot::after()
     auto version = yomk::msgs::unpack<yomk::msgs::String>(resp.data);
     yomk::log().tag("MyBoot::after").info("project version: ", version->d);
 
-    resp = yomk::server().url("/ConfigService/get").msg(yomk::msgs::ConfigKey::shared(ConfigKey{"description"})).request();
+    resp = yomk::server().url("/ConfigService/get").msg(yomk::msgs::prj::ConfigKey::shared(yomk::payload::prj::ConfigKey{"description"})).request();
     if (resp.status != yomk::payload::ResStatus::Succeeded)
     {
         yomk::log().tag("MyBoot::after").error("get config description failed: ", resp.msg);
@@ -159,11 +161,33 @@ int MyBoot::after()
     auto description = yomk::msgs::unpack<yomk::msgs::String>(resp.data);
     yomk::log().tag("MyBoot::after").info("config description: ", description->d);
 
+    // 内省演示：经 /YomkServerInfo 查询 ConfigService 函数清单——
+    // 不读服务源码即可获得每个端点的期望消息类型与语义描述（installFunc 第三/四参，
+    // 描述常量见 interfaces/ConfigServiceUrl.h）。agent/运维据此理解端点契约、自纠调用行为。
+    resp = yomk::srv_info().srv_name("/ConfigService").functions();
+    if (resp.status != yomk::payload::ResStatus::Succeeded)
+    {
+        yomk::log().tag("MyBoot::after").error("introspect functions failed: ", resp.msg);
+        return -1;
+    }
+    auto funcs = yomk::msgs::unpack<yomk::msgs::FuncInfoList>(resp.data);
+    if (!funcs)
+    {
+        yomk::log().tag("MyBoot::after").error("introspect functions: unexpected data type");
+        return -1;
+    }
+    yomk::log().tag("MyBoot::after").info("---- ConfigService 内省（/functions，", funcs->d.size(), " 个端点）----");
+    for (const auto& fn : funcs->d)
+    {
+        // description 为多行语义块（Semantic/Returns/Precond/Idempotent/SideEffect/Fail），原样透出
+        yomk::log().tag("MyBoot::after").info(fn.funcName, "  期望消息: ", fn.msgName.empty() ? "(无)" : fn.msgName, "\n", fn.description);
+    }
+
     return 0;
 }
 ```
 
-### typedefine/TypeDefine.h
+> 内省消费链：`yomk::srv_info()` 需包含 `<yomk/srv_info/YomkServerInfoApi.h>`；返回的 `FuncInfoList` 逐条携带 funcName / msgName / description——description 即 installFunc 第四参的多行语义块，写端点的人填、调端点的人读，无需读源码。
 ```cpp
 #pragma once
 #include <string>
@@ -177,19 +201,20 @@ int MyBoot::after()
 constexpr const char* const CTX_CONFIG_PATH = "config_path";
 ```
 
-### msgs/YomkMsg.h
+### interfaces/ProjectPayload.h
 ```cpp
 #pragma once
-#include <yomk/msg/YomkMsg.h>
+#include <string>
 
-// ConfigService 消息包
-// 配置键：用于 /get 和 /reload
+#include "yomk/server/YomkServerPayload.h"
+
+namespace yomk::payload::prj
+{
+// 配置键：用于 /get
 struct ConfigKey
 {
     std::string key;
 };
-YOMK_DEFINE_MSG(::ConfigKey, ConfigKey, req);
-// 访问: ptr->req.key
 
 // 配置键值：用于 /set
 struct ConfigKeyValue
@@ -197,7 +222,18 @@ struct ConfigKeyValue
     std::string key;
     std::string value;
 };
-YOMK_DEFINE_MSG(::ConfigKeyValue, ConfigKeyValue, req);
+}  // namespace yomk::payload::prj
+```
+
+### interfaces/ProjectMsg.h
+```cpp
+#pragma once
+#include <yomk/msg/YomkMsg.h>
+#include "ProjectPayload.h"
+
+YOMK_DEFINE_MSG_NS(prj, yomk::payload::prj::ConfigKey, ConfigKey, req);
+// 访问: ptr->req.key
+YOMK_DEFINE_MSG_NS(prj, yomk::payload::prj::ConfigKeyValue, ConfigKeyValue, req);
 // 访问: ptr->req.key, ptr->req.value
 ```
 
@@ -208,7 +244,7 @@ YOMK_DEFINE_MSG(::ConfigKeyValue, ConfigKeyValue, req);
 
 #include <unordered_map>
 
-#include "msgs/YomkMsg.h"
+#include "interfaces/ProjectMsg.h"
 
 using namespace yomk::payload;
 
@@ -261,11 +297,11 @@ ConfigService::ConfigService(YomkServer* server) : YomkService(server)
 int ConfigService::init()
 {
     // 安装功能函数
-    installFunc("/load", &ConfigService::loadConfig);
-    installFunc("/get", &ConfigService::getConfig);
-    installFunc("/set", &ConfigService::setConfig);
-    installFunc("/reload", &ConfigService::reloadConfig);
-    installFunc("/version", &ConfigService::version);
+    installFunc("/load", &ConfigService::loadConfig, "", yomk::url::cfgLoadDesc);
+    installFunc("/get", &ConfigService::getConfig, yomk::msgs::prj::ConfigKey::kName, yomk::url::cfgGetDesc);
+    installFunc("/set", &ConfigService::setConfig, yomk::msgs::prj::ConfigKeyValue::kName, yomk::url::cfgSetDesc);
+    installFunc("/reload", &ConfigService::reloadConfig, "", yomk::url::cfgReloadDesc);
+    installFunc("/version", &ConfigService::version, "", yomk::url::cfgVersionDesc);
     yomk::log().tag("ConfigService::init").info("install func [ /load /get /set /reload /version ] to", name());
     return 0;
 }
@@ -304,10 +340,11 @@ yomk::payload::Response ConfigService::loadConfig(YomkMsgPtr pkg)
 
 yomk::payload::Response ConfigService::getConfig(YomkMsgPtr pkg)
 {
-    auto data = yomk::msgs::unpack<yomk::msgs::ConfigKey>(pkg);
+    auto data = yomk::msgs::unpack<yomk::msgs::prj::ConfigKey>(pkg);
     if (!data)
     {
-        return {yomk::payload::ResStatus::Failed, "pkg is null or pkg is not ConfigKey"};
+        return {yomk::payload::ResStatus::Failed,
+                std::string("pkg is not ") + yomk::msgs::prj::ConfigKey::kName + ", got '" + yomk::msgs::typeOf(pkg) + "'"};
     }
 
     auto it = m_configMap.find(data->req.key);
@@ -321,10 +358,11 @@ yomk::payload::Response ConfigService::getConfig(YomkMsgPtr pkg)
 
 yomk::payload::Response ConfigService::setConfig(YomkMsgPtr pkg)
 {
-    auto data = yomk::msgs::unpack<yomk::msgs::ConfigKeyValue>(pkg);
+    auto data = yomk::msgs::unpack<yomk::msgs::prj::ConfigKeyValue>(pkg);
     if (!data)
     {
-        return {yomk::payload::ResStatus::Failed, "pkg is null or pkg is not ConfigKeyValue"};
+        return {yomk::payload::ResStatus::Failed,
+                std::string("pkg is not ") + yomk::msgs::prj::ConfigKeyValue::kName + ", got '" + yomk::msgs::typeOf(pkg) + "'"};
     }
 
     m_configMap[data->req.key] = data->req.value;
@@ -514,7 +552,7 @@ ProjectName
 |------|------|
 | `boot/` | 生命周期管理（before/start/after） |
 | `config/` | 配置文件 |
-| `msgs/` | 消息包定义 |
+| `interfaces/` | 载荷（ProjectPayload.h）+ 消息包注册（ProjectMsg.h）+ URL/语义描述常量（按服务分子文件） |
 | `services/` | 服务实现 |
 | `typedefine/` | 公共常量/宏/类型定义 |
 | `test/` | 单元测试文件 |
@@ -527,9 +565,11 @@ ProjectName
 
 演示在示例0基础上添加 `UserService`，展示完整的扩展流程。
 
-### 1. 添加消息包（msgs/YomkMsg.h 追加）
+### 1. 添加消息包（interfaces/ProjectPayload.h + interfaces/ProjectMsg.h 追加）
 ```cpp
-// 定义完所有的结构体后，统一注册 YOMK_DEFINE_MSG
+// ProjectPayload.h：定义完所有的结构体后，统一在 ProjectMsg.h 注册
+namespace yomk::payload::prj
+{
 // UserService 消息包
 struct UserQuery
 {
@@ -542,9 +582,12 @@ struct UserInfo
     std::string name;
     int age;
 };
-
-YOMK_DEFINE_MSG(UserQuery, UserQuery, req);
-YOMK_DEFINE_MSG(UserInfo, UserInfo, d);
+}  // namespace yomk::payload::prj
+```
+```cpp
+// ProjectMsg.h
+YOMK_DEFINE_MSG_NS(prj, yomk::payload::prj::UserQuery, UserQuery, req);
+YOMK_DEFINE_MSG_NS(prj, yomk::payload::prj::UserInfo, UserInfo, d);
 ```
 
 ### 2. 创建服务（services/UserService.h）
@@ -552,7 +595,7 @@ YOMK_DEFINE_MSG(UserInfo, UserInfo, d);
 #pragma once
 #include <yomk/server/YomkServerApi.h>
 
-#include "msgs/YomkMsg.h"
+#include "interfaces/ProjectMsg.h"
 
 using namespace yomk::payload;
 
@@ -580,18 +623,19 @@ UserService::UserService(YomkServer* server) : YomkService(server)
 
 int UserService::init()
 {
-    installFunc("/get_user", &UserService::getUser);
-    installFunc("/create_user", &UserService::createUser);
+    installFunc("/get_user", &UserService::getUser, yomk::msgs::prj::UserQuery::kName, yomk::url::usrGetUserDesc);
+    installFunc("/create_user", &UserService::createUser, yomk::msgs::prj::UserInfo::kName, yomk::url::usrCreateUserDesc);
     yomk::log().tag("UserService::init").info("install func [ /get_user /create_user ] to", name());
     return 0;
 }
 
 yomk::payload::Response UserService::getUser(YomkMsgPtr pkg)
 {
-    auto query = yomk::msgs::unpack<yomk::msgs::UserQuery>(pkg);
+    auto query = yomk::msgs::unpack<yomk::msgs::prj::UserQuery>(pkg);
     if (!query)
     {
-        return {yomk::payload::ResStatus::Failed, "pkg is null or pkg is not UserQuery"};
+        return {yomk::payload::ResStatus::Failed,
+            std::string("pkg is not ") + yomk::msgs::prj::UserQuery::kName + ", got '" + yomk::msgs::typeOf(pkg) + "'"};
     }
     yomk::log().tag("UserService::getUser").info("query user: ", query->req.userId);
 
@@ -602,16 +646,17 @@ yomk::payload::Response UserService::getUser(YomkMsgPtr pkg)
 
 yomk::payload::Response UserService::createUser(YomkMsgPtr pkg)
 {
-    auto user = yomk::msgs::unpack<yomk::msgs::UserInfo>(pkg);
+    auto user = yomk::msgs::unpack<yomk::msgs::prj::UserInfo>(pkg);
     if (!user)
     {
-        return {yomk::payload::ResStatus::Failed, "pkg is null or pkg is not UserInfo"};
+        return {yomk::payload::ResStatus::Failed,
+            std::string("pkg is not ") + yomk::msgs::prj::UserInfo::kName + ", got '" + yomk::msgs::typeOf(pkg) + "'"};
     }
     yomk::log().tag("UserService::createUser").info("create user: ", user->d.name);
 
     // 跨服务调用示例：读取配置（请求域链，单表达式内联）
     yomk::payload::Response cfgResp = yomk::server().url("/ConfigService/get")
-                                         .msg(yomk::msgs::ConfigKey::shared(ConfigKey{"server.name"})).request();
+                                         .msg(yomk::msgs::prj::ConfigKey::shared(yomk::payload::prj::ConfigKey{"server.name"})).request();
 
     return yomk::payload::Response(yomk::payload::ResStatus::Succeeded, "user created");
 }
@@ -718,14 +763,15 @@ yomk::payload::Response taskHandler(YomkMsgPtr pkg)
     auto taskData = yomk::msgs::unpack<yomk::msgs::String>(pkg);
     if (!taskData)
     {
-        return {yomk::payload::ResStatus::Failed, "pkg is null or pkg is not String"};
+        return {yomk::payload::ResStatus::Failed,
+            std::string("pkg is not ") + yomk::msgs::String::kName + ", got '" + yomk::msgs::typeOf(pkg) + "'"};
     }
     yomk::log().tag("TaskHandler").debug("processing in thread: ", std::this_thread::get_id());
     return {yomk::payload::ResStatus::Succeeded, "task done"};
 }
 
 // 启动事件循环（handle_fn = 循环默认处理函数；msg_name 可加声明期望类型，仅内省元数据）
-yomk::event_loop().loop("worker_loop").handle_fn(taskHandler).msg_name("String").start();
+yomk::event_loop().loop("worker_loop").handle_fn(taskHandler).msg_name(yomk::msgs::String::kName).start();
 
 // 异步投递（走默认处理函数；tag 可选，仅内省可见）
 yomk::event_loop().msg(yomk::msgs::String::shared("task_1")).loop("worker_loop").post();
@@ -763,7 +809,8 @@ yomk::payload::Response validateAmount(YomkMsgPtr pkg)
     auto amountStr = yomk::msgs::unpack<yomk::msgs::String>(pkg);
     if (!amountStr)
     {
-        return {yomk::payload::ResStatus::Failed, "pkg is null or pkg is not String"};
+        return {yomk::payload::ResStatus::Failed,
+            std::string("pkg is not ") + yomk::msgs::String::kName + ", got '" + yomk::msgs::typeOf(pkg) + "'"};
     }
     double amount = std::stod(amountStr->d);
     if (amount <= 0)
@@ -772,7 +819,7 @@ yomk::payload::Response validateAmount(YomkMsgPtr pkg)
 }
 
 // 注册（msg_name/description 可省略，仅内省元数据）+ 调用（阻塞至函数执行完成）
-yomk::fn_pool().fn_name("validate_amount").fn(validateAmount).msg_name("String").install();
+yomk::fn_pool().fn_name("validate_amount").fn(validateAmount).msg_name(yomk::msgs::String::kName).install();
 yomk::payload::Response resp = yomk::fn_pool().fn_name("validate_amount").msg(yomk::msgs::String::shared("100.5")).call();
 
 // 同名重复 install 即运行时热替换，无需先注销（返回 Succeeded）
@@ -798,14 +845,14 @@ void MyService::deinit() {
 
 ## 示例5：服务内省（调试）
 
-内省类型元数据由 installFunc 第三参声明、函数说明由第四参声明（手写字符串字面量，仅作内省元数据，不参与运行时校验）：
+内省类型元数据由 installFunc 第三参声明（引用 `T::kName`、禁手写）、函数说明由第四参声明（自由字符串，仅作内省元数据，不参与运行时校验）：
 
 ```cpp
 int DemoService::init()
 {
-    installFunc("/with_type", &DemoService::withType, "String");  // 内省可见类型 String
-    installFunc("/with_desc", &DemoService::withType, "String", "对函数的说明");  // 四参：内省可见类型 + 说明
-    installFunc("/no_type", &DemoService::noType);                // 不声明类型，内省无类型
+    installFunc("/with_type", &DemoService::withType, yomk::msgs::String::kName);  // 内省可见类型 String
+    installFunc("/with_desc", &DemoService::withType, yomk::msgs::String::kName, "对函数的说明");  // 四参：内省可见类型 + 说明
+    installFunc("/no_type", &DemoService::noType, "", "Semantic: 无类型演示端点");  // 不声明类型，内省无类型
     return 0;
 }
 
@@ -850,11 +897,11 @@ resp = yomk::ctx().all();
 
 ### EventLoop 模块内省
 
-Event 可携带 tag 标记（`post` 链上 `.tag(t)` 可选，缺省空）；启动时可用 `.msg_name("String")` 声明默认处理函数期望的消息类型（仅内省元数据）：
+Event 可携带 tag 标记（`post` 链上 `.tag(t)` 可选，缺省空）；启动时可用 `.msg_name(yomk::msgs::String::kName)` 声明默认处理函数期望的消息类型（引用 T::kName 禁手写，仅内省元数据）：
 
 ```cpp
 yomk::event_loop().loop("loop_a").start();
-yomk::event_loop().loop("loop_b").handle_fn(defaultHandle).msg_name("String").start();
+yomk::event_loop().loop("loop_b").handle_fn(defaultHandle).msg_name(yomk::msgs::String::kName).start();
 
 // 投递事件时可选打 tag（仅内省标记，不参与路由/处理）
 yomk::event_loop().msg(yomk::msgs::String::shared("data")).loop("loop_a").handle_fn(myHandle).tag("tag1").post();
@@ -879,8 +926,8 @@ resp = yomk::event_loop().all();
 注册时可用 `.msg_name(m)` 声明期望消息类型、`.description(d)` 追加函数说明（与 installFunc 第三/四参同款语义，仅内省元数据）：
 
 ```cpp
-yomk::fn_pool().fn_name("func_a").fn(funcA).msg_name("String").install();
-yomk::fn_pool().fn_name("func_desc").fn(funcA).msg_name("String").description("函数说明").install();
+yomk::fn_pool().fn_name("func_a").fn(funcA).msg_name(yomk::msgs::String::kName).install();
+yomk::fn_pool().fn_name("func_desc").fn(funcA).msg_name(yomk::msgs::String::kName).description("函数说明").install();
 yomk::fn_pool().fn_name("func_b").fn(funcB).install();
 
 // 注册函数名清单（StringArray）
@@ -982,7 +1029,7 @@ ExtensionName/
 │       ├── ExtensionApi.h    // 模块 API：链式域入口 yomk::ext()（四件套，参考 include/yomk 各域设计）
 │       ├── ExtensionMsg.h    // 模块消息包目录（YOMK_DEFINE_MSG_NS，消息落 yomk::msgs::ext）
 │       ├── ExtensionPayload.h // 模块专属载荷目录（namespace yomk::payload::ext）
-│       └── ExtensionUrl.h    // 模块 URL 常量（namespace yomk::url::ext）
+│       └── ExtensionUrl.h    // 模块 URL 常量与语义描述常量（namespace yomk::url::ext）
 ├── src/
 │   └── ExtensionService.cpp
 ├── test/
@@ -1008,8 +1055,14 @@ ExtensionName/
 // 域已由命名空间表达，常量名不再自我前缀（version 而非 extVersion）。
 namespace yomk::url::ext
 {
-// /ExtensionService/*
+// /ExtensionService/*（语义描述与 URL 常量同置：installFunc 第四参引用 versionDesc）
 inline constexpr std::string_view version = "/ExtensionService/version";
+inline constexpr const char* versionDesc = R"(
+Semantic: 返回扩展版本号
+Returns: data 为 String 包（"extension v<版本号>"）
+Idempotent: true
+SideEffect: 无（纯读）
+)";
 }  // namespace yomk::url::ext
 ```
 
@@ -1134,7 +1187,7 @@ ExtensionService::ExtensionService(YomkServer* server) : YomkService(server)
 
 int ExtensionService::init()
 {
-    installFunc("/version", &ExtensionService::version);
+    installFunc("/version", &ExtensionService::version, "", yomk::url::ext::versionDesc);
     yomk::log().tag("ExtensionService::init").info("install func [ /version ] to", name());
     return 0;
 }

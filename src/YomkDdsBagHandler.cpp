@@ -4,6 +4,7 @@
 #include "YomkDdsBagHandler.h"
 #include "YomkDdsMsg.h"
 #include "YomkDdsHandler.h"  // YomkDdsHandler::xmlCache()（XML profiles raw 串单例访问；本头未 include 公共头）
+#include "YomkDdsUrl.h"      // installFunc 第四参语义描述常量（yomk::url::dds::*Desc）
 
 #include "FastDDSBagNode.h"
 // 显式引入 yomkdds_xml::ParticipantQosSpec（FastDDSBagNode.h 传递亦可得，对齐 IWYU）
@@ -25,21 +26,21 @@ YomkDdsBagHandler::~YomkDdsBagHandler() = default;
 
 int YomkDdsBagHandler::init()
 {
-    installFunc("/get_version", &YomkDdsBagHandler::getVersion);
-    installFunc("/create_node", &YomkDdsBagHandler::createNode);
-    installFunc("/record", &YomkDdsBagHandler::record);
-    installFunc("/get_info", &YomkDdsBagHandler::getInfo);
-    installFunc("/reindex", &YomkDdsBagHandler::reindex);
-    installFunc("/convert", &YomkDdsBagHandler::convert);
-    installFunc("/play", &YomkDdsBagHandler::play);
-    installFunc("/stop_record", &YomkDdsBagHandler::stopRecord);
-    installFunc("/pause_record", &YomkDdsBagHandler::pauseRecord);
-    installFunc("/resume_record", &YomkDdsBagHandler::resumeRecord);
-    installFunc("/stop_play", &YomkDdsBagHandler::stopPlay);
-    installFunc("/pause_play", &YomkDdsBagHandler::pausePlay);
-    installFunc("/resume_play", &YomkDdsBagHandler::resumePlay);
-    installFunc("/set_play_rate", &YomkDdsBagHandler::setPlayRate);
-    installFunc("/delete_node", &YomkDdsBagHandler::deleteNode);
+    installFunc("/get_version", &YomkDdsBagHandler::getVersion, "", yomk::url::dds::GetVersionDesc);
+    installFunc("/create_node", &YomkDdsBagHandler::createNode, yomk::msgs::dds::BagCreateNodeRequest::kName, yomk::url::dds::BagCreateNodeDesc);
+    installFunc("/record", &YomkDdsBagHandler::record, yomk::msgs::dds::BagRecordRequest::kName, yomk::url::dds::BagRecordDesc);
+    installFunc("/get_info", &YomkDdsBagHandler::getInfo, yomk::msgs::dds::BagInfoRequest::kName, yomk::url::dds::BagGetInfoDesc);
+    installFunc("/reindex", &YomkDdsBagHandler::reindex, yomk::msgs::dds::BagReindexRequest::kName, yomk::url::dds::BagReindexDesc);
+    installFunc("/convert", &YomkDdsBagHandler::convert, yomk::msgs::dds::BagConvertRequest::kName, yomk::url::dds::BagConvertDesc);
+    installFunc("/play", &YomkDdsBagHandler::play, yomk::msgs::dds::BagPlayRequest::kName, yomk::url::dds::BagPlayDesc);
+    installFunc("/stop_record", &YomkDdsBagHandler::stopRecord, "", yomk::url::dds::BagStopRecordDesc);
+    installFunc("/pause_record", &YomkDdsBagHandler::pauseRecord, "", yomk::url::dds::BagPauseRecordDesc);
+    installFunc("/resume_record", &YomkDdsBagHandler::resumeRecord, "", yomk::url::dds::BagResumeRecordDesc);
+    installFunc("/stop_play", &YomkDdsBagHandler::stopPlay, "", yomk::url::dds::BagStopPlayDesc);
+    installFunc("/pause_play", &YomkDdsBagHandler::pausePlay, "", yomk::url::dds::BagPausePlayDesc);
+    installFunc("/resume_play", &YomkDdsBagHandler::resumePlay, "", yomk::url::dds::BagResumePlayDesc);
+    installFunc("/set_play_rate", &YomkDdsBagHandler::setPlayRate, yomk::msgs::dds::BagPlayRateRequest::kName, yomk::url::dds::BagSetPlayRateDesc);
+    installFunc("/delete_node", &YomkDdsBagHandler::deleteNode, "", yomk::url::dds::BagDeleteNodeDesc);
     return 0;
 }
 

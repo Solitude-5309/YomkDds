@@ -3,6 +3,7 @@
 // createNode 的 setDomainId 即 create_participant，必须在 mtx_ 内串行（同 YomkDdsHandler::createNode 注释）。
 #include "YomkDdsDebugHandler.h"
 #include "YomkDdsMsg.h"
+#include "YomkDdsUrl.h"  // installFunc 第四参语义描述常量（yomk::url::dds::*Desc）
 
 #include "FastDDSDebugNode.h"
 // 显式引入 yomkdds_xml::ParticipantQosSpec（FastDDSDebugNode.h 传递亦可得，对齐 IWYU）
@@ -26,21 +27,21 @@ YomkDdsDebugHandler::~YomkDdsDebugHandler() = default;
 
 int YomkDdsDebugHandler::init()
 {
-    installFunc("/get_version", &YomkDdsDebugHandler::getVersion);
-    installFunc("/create_node", &YomkDdsDebugHandler::createNode);
-    installFunc("/print_topic", &YomkDdsDebugHandler::printTopic);
-    installFunc("/list_topics", &YomkDdsDebugHandler::listTopics);
-    installFunc("/get_topic_info", &YomkDdsDebugHandler::getTopicInfo);
-    installFunc("/find_topics", &YomkDdsDebugHandler::findTopics);
-    installFunc("/show_interface", &YomkDdsDebugHandler::showInterface);
-    installFunc("/list_interfaces", &YomkDdsDebugHandler::listInterfaces);
-    installFunc("/get_topic_example", &YomkDdsDebugHandler::getTopicExample);
-    installFunc("/get_topic_msg", &YomkDdsDebugHandler::getTopicMsg);
-    installFunc("/start_pub", &YomkDdsDebugHandler::startPub);
-    installFunc("/stop_pub", &YomkDdsDebugHandler::stopPub);
-    installFunc("/list_nodes", &YomkDdsDebugHandler::listNodes);
-    installFunc("/get_node_info", &YomkDdsDebugHandler::getNodeInfo);
-    installFunc("/delete_node", &YomkDdsDebugHandler::deleteNode);
+    installFunc("/get_version", &YomkDdsDebugHandler::getVersion, "", yomk::url::dds::GetVersionDesc);
+    installFunc("/create_node", &YomkDdsDebugHandler::createNode, yomk::msgs::dds::DebugCreateNodeRequest::kName, yomk::url::dds::DebugCreateNodeDesc);
+    installFunc("/print_topic", &YomkDdsDebugHandler::printTopic, yomk::msgs::dds::DebugPrintTopicRequest::kName, yomk::url::dds::DebugPrintTopicDesc);
+    installFunc("/list_topics", &YomkDdsDebugHandler::listTopics, yomk::msgs::dds::DebugListTopicsRequest::kName, yomk::url::dds::DebugListTopicsDesc);
+    installFunc("/get_topic_info", &YomkDdsDebugHandler::getTopicInfo, yomk::msgs::dds::DebugGetTopicInfoRequest::kName, yomk::url::dds::DebugGetTopicInfoDesc);
+    installFunc("/find_topics", &YomkDdsDebugHandler::findTopics, yomk::msgs::dds::DebugFindTopicsRequest::kName, yomk::url::dds::DebugFindTopicsDesc);
+    installFunc("/show_interface", &YomkDdsDebugHandler::showInterface, yomk::msgs::dds::DebugShowInterfaceRequest::kName, yomk::url::dds::DebugShowInterfaceDesc);
+    installFunc("/list_interfaces", &YomkDdsDebugHandler::listInterfaces, yomk::msgs::dds::DebugListInterfacesRequest::kName, yomk::url::dds::DebugListInterfacesDesc);
+    installFunc("/get_topic_example", &YomkDdsDebugHandler::getTopicExample, yomk::msgs::dds::DebugGetTopicExampleRequest::kName, yomk::url::dds::DebugGetTopicExampleDesc);
+    installFunc("/get_topic_msg", &YomkDdsDebugHandler::getTopicMsg, yomk::msgs::dds::DebugGetTopicMsgRequest::kName, yomk::url::dds::DebugGetTopicMsgDesc);
+    installFunc("/start_pub", &YomkDdsDebugHandler::startPub, yomk::msgs::dds::DebugTopicPubRequest::kName, yomk::url::dds::DebugStartPubDesc);
+    installFunc("/stop_pub", &YomkDdsDebugHandler::stopPub, "", yomk::url::dds::DebugStopPubDesc);
+    installFunc("/list_nodes", &YomkDdsDebugHandler::listNodes, yomk::msgs::dds::DebugListNodesRequest::kName, yomk::url::dds::DebugListNodesDesc);
+    installFunc("/get_node_info", &YomkDdsDebugHandler::getNodeInfo, yomk::msgs::dds::DebugGetNodeInfoRequest::kName, yomk::url::dds::DebugGetNodeInfoDesc);
+    installFunc("/delete_node", &YomkDdsDebugHandler::deleteNode, "", yomk::url::dds::DebugDeleteNodeDesc);
     return 0;
 }
 

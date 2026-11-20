@@ -97,7 +97,7 @@ PY_SITE_DIR=$(ls -d "${PREFIX}"/lib/python*[0-9].[0-9]*/site-packages 2>/dev/nul
 
 # 产物校验：框架就位 + 扩展三域就位（含版本注入产物 _version.py）+ 第三方 fastdds 绑定 + msg 类型库
 for f in yomk/server/__init__.py \
-         yomk/dds/__init__.py yomk/dds/_version.py yomk/dds/DdsService.py \
+         yomk/dds/__init__.py yomk/dds/_version.py yomk/dds/YomkDdsHandler.py \
          yomk/msgs/dds/__init__.py yomk/url/dds/__init__.py \
          fastdds/__init__.py yomk/dds_idl/std_msgs/__init__.py; do
     [ -f "${PY_SITE_DIR}/${f}" ] || fail "未找到 ${PY_SITE_DIR}/${f}，请先安装扩展: $(install_hint)"
@@ -111,8 +111,8 @@ export PYTHONPATH="${PY_SITE_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 # 当前登记总数: 2 项（数组闭合后有自检守卫，声明与清单漂移即报错退出，
 # 作为登记数漂移的结构性防御）
 TESTS=(
-    # dds 模块（YomkDds 扩展运行时服务）
-    test_dds
+    # yomk_dds_handler 模块（核心通信服务层契约 + dds().version() 冒烟：对齐 C++ TestYomkDdsHandlerContract T1 组）
+    yomk_dds_handler/test_yomk_dds_handler_contract
     # fastdds 模块（绑定可用性：msg 类型发布/订阅互通）
     fastdds/test_fastdds
 )

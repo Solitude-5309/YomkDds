@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.14)
 # 版本号策略（与 YomkServerPy 同构，编译期注入的单一来源链）：
 # project(VERSION) → YOMK_DDS_VERSION → configure_file 生成 yomk/dds/_version.py
-# 的 __version__ → yomk.dds.__version__（DdsService.version 端点暴露）。
+# 的 __version__ → yomk.dds.__version__（YomkDdsHandler /get_version 端点暴露）。
 # 本行即版本唯一来源，发布时手动 bump。
-project(YomkDds VERSION 0.1.5 LANGUAGES NONE)
+project(YomkDds VERSION 0.2.0 LANGUAGES NONE)
 
 set(YOMK_DDS_VERSION "${PROJECT_VERSION}")
 

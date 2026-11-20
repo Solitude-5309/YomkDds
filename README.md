@@ -12,26 +12,26 @@
 ```text
 YomkDdsPython/                  # 扩展仓库根
 ├── src/yomk/                   # 扩展源树（与框架同构：只写自己的叶子目录）
-│   ├── msgs/dds/               # 消息子包（并入框架 yomk.msgs 命名空间段）
-│   │   ├── __init__.py             #   导出 DdsRequest / DdsResponse
-│   │   ├── DdsMsg.py               #   消息类型定义
+│   ├── msgs/dds/               # 消息子包（并入框架 yomk.msgs 命名空间段；载荷结构随各接口逐步登记）
+│   │   ├── __init__.py             #   载荷登记进度注释（msg 守卫用 kName 类属性）
 │   │   └── py.typed
 │   ├── dds/                    # 运行时域子包（并入框架 yomk 命名空间段，与框架各域同构：builder + 类型桩）
-│   │   ├── __init__.py             #   try/except 导入 _version + 导出 dds/DdsBuilder/DdsService
+│   │   ├── __init__.py             #   try/except 导入 _version + 导出 dds/DdsBuilder/YomkDdsHandler
 │   │   ├── __init__.pyi            #   类型桩
 │   │   ├── _version.py.in          #   版本模板（CMake configure_file 生成 _version.py）
 │   │   ├── builder.py              #   dds 域 builder（可选件：只封装本模块自有接口）
 │   │   ├── builder.pyi             #   类型桩
-│   │   ├── DdsService.py           #   运行时服务（YomkService 子类，/echo 与 /version 端点）
+│   │   ├── YomkDdsHandler.py       #   核心通信服务（YomkService 子类，/YomkDdsHandler 服务名；逐端点渐进对齐 C++ main）
 │   │   └── py.typed
 │   └── url/dds/                # URL 常量池子包（并入框架 yomk.url 常量池，与 yomk/url/ctx 同构）
-│       ├── __init__.py             #   ECHO / GET_VERSION 端点常量（注明功能作用与统一请求形态）
+│       ├── __init__.py             #   GET_VERSION 端点常量（注明功能作用与统一请求形态）
 │       ├── __init__.pyi            #   端点常量类型桩
 │       └── py.typed
 ├── cmake/                      # CMake 模块
 │   └── YomkServerPyVersionCheck.cmake  # 框架版本下限校验（对齐 C++ YomkServerVersionCheck.cmake 职责）
 ├── test/run_tests.sh           # 全量测试运行器（与 YomkServerPy run_tests.sh 同构）
-├── test/test_dds.py
+├── test/yomk_dds_handler/      # 核心通信服务层契约测试（对齐 C++ test/yomk_dds_handler/）
+│   └── test_yomk_dds_handler_contract.py   #   T1/T1b/T3b：/get_version 契约 + dds().version() 冒烟（DDS-free）
 ├── test/fastdds/               # fastdds 绑定基础测试
 │   └── test_fastdds.py             #   发布者/订阅者互通（msg 类型）+ 安装树导入来源校验
 ├── thirdparty/                 # 第三方预编译安装树（与 C++ YomkDds main 同款，随库安装）
@@ -65,10 +65,10 @@ YomkDdsPython/                  # 扩展仓库根
 
 ```python
 from yomk.server import server
-from yomk.dds import DdsService
+from yomk.dds import YomkDdsHandler
 
 server().async_thread(1).init()
-server().srv(DdsService).create()   # 显式注册后 /DdsService/* 才可达
+server().srv(YomkDdsHandler).create()   # 显式注册后 /YomkDdsHandler/* 才可达
 ```
 
 ## 安装与验证
@@ -84,31 +84,30 @@ server().srv(DdsService).create()   # 显式注册后 /DdsService/* 才可达
 
 ```bash
 cmake -S . -B build -DCMAKE_INSTALL_PREFIX=/opt/yomk
-sudo cmake --install build   # 安装期校验框架就位（import 冒烟以普通用户身份运行 test/test_dds.py 即可）
+sudo cmake --install build   # 安装期校验框架就位（import 冒烟以普通用户身份运行 test/yomk_dds_handler/test_yomk_dds_handler_contract.py 即可）
 ```
 
 安装后可用：
 
 ```python
-from yomk.msgs.dds import DdsRequest, DdsResponse   # 扩展消息
-from yomk.dds import DdsService, dds                # 扩展运行时 + dds 域 builder
-from yomk.url.dds import ECHO                       # 扩展 URL 常量（并入框架 yomk.url 常量池）
+from yomk.dds import YomkDdsHandler, dds            # 核心通信服务 + dds 域 builder
+from yomk.url.dds import GET_VERSION                # 扩展 URL 常量（并入框架 yomk.url 常量池）
 
-server().url(ECHO).msg(DdsRequest("hi")).request()
-dds().version()   # dds 版本查询终结，返回 Response
+server().url(GET_VERSION).msg(None).request()       # 统一请求形态
+dds().version()   # dds 版本查询终结，返回 Response（data 为 "YomkDds v<版本>" 字符串）
 ```
 
 dds 域 builder 与框架各域同构，遵循三条 API 形态纪律：
 
-1. **builder 是模块自己的 API**——只封装本模块自有接口（模板仅版本查询终结
-   `dds().version()`），不重复框架通用请求链路；新增业务终结方法时在
-   `yomk/dds/builder.py` 按同风格追加。
+1. **builder 是模块自己的 API**——只封装本模块自有接口（当前仅版本查询终结
+   `dds().version()`，其余终结随各接口计划段逐步追加），不重复框架通用请求链路；
+   新增业务终结方法时在 `yomk/dds/builder.py` 按同风格追加。
 2. **builder 可省略**（可选件）：不提供时须在运行时域 `__init__` 或 URL 常量池
    注释中写明统一请求调用形态并说明各 URL 常量的功能作用。
 3. **推荐优先使用统一请求接口**（框架封装好的统一请求形态，屏蔽 URL 之下的路由细节）：
 
 ```python
-server().url(ECHO).msg(DdsRequest("hi")).request()
+server().url(GET_VERSION).msg(None).request()
 ```
 
 ## 第三方依赖（随库安装）
@@ -226,13 +225,15 @@ data.data()           # 字段读取走 getter，返回 'hello'
 版本机制与 YomkServerPy 完全同构，编译期注入的单一来源链：
 `CMakeLists.txt` 的 `project(YomkDds VERSION x.y.z)` → `YOMK_DDS_VERSION` →
 `configure_file` 生成 `yomk/dds/_version.py` → `yomk.dds.__version__`
-（`DdsService.version()` 端点暴露）。改版本 = 改 [CMakeLists.txt:8](CMakeLists.txt#L8)
+（`YomkDdsHandler` 的 `/get_version` 端点暴露）。改版本 = 改 [CMakeLists.txt:8](CMakeLists.txt#L8)
 的 `project(VERSION)` 一行，重跑 `./build_ubuntu.sh` 即生效；
 源树直用（未经安装注入）时 `__version__` 回退 `"unknown"`（与框架各域一致）。
 
 ## 功能端点
 
+核心通信服务 `/YomkDdsHandler`（对齐 C++ main 分支 9 端点，逐端点渐进登记）：
+
 | 端点 | URL 常量 | 请求包 | 回包 |
 | --- | --- | --- | --- |
-| 回显 | `ECHO` (`/DdsService/echo`) | `DdsRequest` | `Response.data` 位承载 `DdsResponse` |
-| 版本查询 | `GET_VERSION` (`/DdsService/version`) | 无（msg 可省略） | `Response.data` 为 `"dds v<版本>"` 字符串 |
+| 版本查询 | `GET_VERSION` (`/YomkDdsHandler/get_version`) | 无（msg 可省略，忽略载荷） | `Response.data` 为 `"YomkDds v<版本>"` 字符串 |
+| load_xml / create_node / delete_node / register_pub_topic / register_sub_topic / publish / loan / discard_loan | — | — | 待后续接口计划段 |

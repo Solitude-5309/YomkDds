@@ -8,11 +8,11 @@ try:
 except ImportError:
     __version__ = "unknown"
 
-from .DdsService import DdsService
+from .YomkDdsHandler import YomkDdsHandler
 from .builder import DdsBuilder, dds
 
 __all__ = [
     "__version__",
     "dds", "DdsBuilder",
-    "DdsService",
+    "YomkDdsHandler",
 ]

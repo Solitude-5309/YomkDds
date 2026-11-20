@@ -5,20 +5,21 @@
 #      写明统一请求调用形态，并说明各 URL 常量的功能作用，保证使用方无 builder
 #      也有文档可循；
 #   3. 推荐优先使用框架封装好的统一请求接口（屏蔽 URL 之下的路由细节）：
-#        server().url(ECHO).msg(DdsRequest("hello dds")).request()
+#        server().url(GET_VERSION).msg(None).request()
 #      builder 终结仅作模块自有便捷入口。
-# 模板接口最小化，仅提供版本查询终结；新增业务终结方法时按同风格在本文件追加
-# （内部仍走 _facade.api_request）
+# 终结方法随各接口计划段逐步追加（内部仍走 _facade.api_request）：
+#   version()                    —— 版本查询（/get_version，纯查询不碰 DDS）
 from yomk.server import _facade
 from yomk.url.dds import GET_VERSION
 
 
 class DdsBuilder:
     def version(self):
-        # dds 版本查询终结，返回 Response
+        # dds 版本查询终结（对齐 C++ yomk::dds().version()）：
+        # 纯查询不碰 DDS，返回 Response，data 位为 "YomkDds v<版本>" 字符串
         return _facade.api_request(GET_VERSION, None)
 
 
 def dds():
-    # dds 域链式入口（对齐 C++ yomk::dds() 公开入口）
+    # dds 域链式入口（对齐 C++ yomk::dds() 公开入口；builder 禁止缓存复用）
     return DdsBuilder()
